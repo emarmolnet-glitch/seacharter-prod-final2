@@ -4,44 +4,33 @@ import test from 'node:test';
 
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 
-test('chat assistant keeps four deterministic checklist phases in local state', () => {
-  assert.match(frontendSource, /const NLP_CHECKLIST_PROMPTS = Object\.freeze/);
-  assert.match(frontendSource, /let nlpChecklistStep = 1;/);
-  assert.match(frontendSource, /let nlpChecklistData = \{\};/);
-  assert.match(frontendSource, /if \(nlpChecklistStep === 1\)/);
-  assert.match(frontendSource, /nlpChecklistStep = 2;/);
-  assert.match(frontendSource, /if \(nlpChecklistStep === 2\)/);
-  assert.match(frontendSource, /nlpChecklistStep = 3;/);
-  assert.match(frontendSource, /if \(nlpChecklistStep === 3\)/);
-  assert.match(frontendSource, /nlpChecklistStep = 4;/);
+test('chat assistant has no deterministic checklist state', () => {
+  assert.doesNotMatch(frontendSource, /NLP_CHECKLIST_PROMPTS/);
+  assert.doesNotMatch(frontendSource, /nlpChecklistStep/);
+  assert.doesNotMatch(frontendSource, /nlpChecklistData/);
+  assert.doesNotMatch(frontendSource, /processNlpChecklistInput/);
+  assert.doesNotMatch(frontendSource, /resetNlpChecklist/);
 });
 
-test('chat assistant uses fixed imperative prompts in the required order', () => {
-  assert.match(frontendSource, /Indica obligatoriamente la ruta y las toneladas/);
-  assert.match(frontendSource, /Indica obligatoriamente la categoría de la carga/);
-  assert.match(frontendSource, /Indica obligatoriamente el producto/);
-  assert.match(frontendSource, /Indica obligatoriamente ambos ritmos/);
-  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[1\] \}/);
-  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[2\] \}/);
-  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[3\] \}/);
-  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[4\] \}/);
+test('chat assistant does not impose fixed freight prompts', () => {
+  assert.doesNotMatch(frontendSource, /Indica obligatoriamente la ruta y las toneladas/);
+  assert.doesNotMatch(frontendSource, /Indica obligatoriamente la categoría de la carga/);
+  assert.doesNotMatch(frontendSource, /Indica obligatoriamente el producto/);
+  assert.doesNotMatch(frontendSource, /Indica obligatoriamente ambos ritmos/);
 });
 
-test('checklist parsing is local and does not call the generative endpoint', () => {
-  const processorStart = frontendSource.indexOf('const processNlpChecklistInput = (userText) =>');
-  const processorEnd = frontendSource.indexOf('\n  try {', processorStart);
-  assert.ok(processorStart >= 0 && processorEnd > processorStart);
-  assert.equal(frontendSource.slice(processorStart, processorEnd).includes('fetch('), false);
-  assert.match(frontendSource, /extractChecklistRouteAndTonnage\(userText\)/);
-  assert.match(frontendSource, /extractChecklistProduct\(userText\)/);
-  assert.match(frontendSource, /extractChecklistRates\(userText\)/);
+test('every submitted message calls the generative endpoint directly', () => {
+  assert.match(frontendSource, /const response = await requestAssistantResponse\(userText, history, controller\.signal\)/);
+  assert.doesNotMatch(frontendSource, /extractChecklistRouteAndTonnage/);
+  assert.doesNotMatch(frontendSource, /extractChecklistProduct/);
+  assert.doesNotMatch(frontendSource, /extractChecklistRates/);
 });
 
-test('the final rates response executes the headless NLP engine immediately', () => {
-  assert.match(frontendSource, /const nlpEngine = await waitForHeadlessNlpEngine\(\)/);
-  assert.match(frontendSource, /const executionResult = await nlpEngine\.execute\(checklistResult\.payload\)/);
-  assert.match(frontendSource, /Ruta, costes y mapa calculados automáticamente/);
-  assert.match(frontendSource, /sea-assistant:nlp-checklist-completed/);
-  assert.match(frontendSource, /resetNlpChecklist\(\);/);
-  assert.doesNotMatch(frontendSource, /Datos pre-grabados\. ¿Estás conforme\?/);
+test('the backend response drives visible text and screen actions', () => {
+  assert.match(frontendSource, /const actionableResponse = extractActionableAiResponse\(response\.respuesta\)/);
+  assert.match(frontendSource, /const action = response\.action && typeof response\.action === "object"/);
+  assert.match(frontendSource, /: actionableResponse\.action/);
+  assert.match(frontendSource, /if \(action\) await executeActionableAiAction\(action\)/);
+  assert.match(frontendSource, /actionableResponse\.visibleText \|\| "Acción completada\."/);
+  assert.doesNotMatch(frontendSource, /waitForHeadlessNlpEngine/);
 });

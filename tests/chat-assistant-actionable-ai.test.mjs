@@ -44,13 +44,13 @@ test('Core PRO strips and executes hidden update_field JSON before rendering', (
   assert.match(frontendSource, /field\.dispatchEvent\(new Event\("change", \{ bubbles: true \}\)\)/);
   assert.match(frontendSource, /window\.recalcularDiasPuerto\?\.\(\)/);
   assert.match(frontendSource, /window\.runEngine\?\.\(\)/);
-  assert.match(frontendSource, /extractActionableAiResponse\(payload\.respuesta\)[\s\S]*executeActionableAiAction\(actionableResponse\.action\)[\s\S]*replaceWithAssistantMessage\(thinkingMessage, assistantText/);
-  assert.match(frontendSource, /actionableResponse\.action \? "¡Hecho!"/);
+  assert.match(frontendSource, /extractActionableAiResponse\(response\.respuesta\)[\s\S]*executeActionableAiAction\(action\)[\s\S]*replaceWithAssistantMessage\(/);
+  assert.match(frontendSource, /actionableResponse\.visibleText \|\| "Acción completada\."/);
 });
 
 test('Core PRO executes hidden calculate_route actions through the existing map workflow', () => {
-  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form"\]\.includes\(action\?\.action\)/);
-  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form"\]\.includes\(parsed\?\.action\)/);
+  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(action\?\.action\)/);
+  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(parsed\?\.action\)/);
   assert.match(frontendSource, /function executeActionableAiRoute\(action\)/);
   assert.match(frontendSource, /document\.getElementById\("map-port-pol"\)/);
   assert.match(frontendSource, /document\.getElementById\("map-port-pod"\)/);
@@ -63,7 +63,7 @@ test('Core PRO executes hidden calculate_route actions through the existing map 
   assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pod\)\)/);
   assert.match(frontendSource, /setActionableAiInputValue\(cargoInput, tonnage\)/);
   assert.match(frontendSource, /routeButton\.click\(\)/);
-  assert.match(frontendSource, /await executeActionableAiAction\(actionableResponse\.action\)/);
+  assert.match(frontendSource, /if \(action\) await executeActionableAiAction\(action\)/);
 });
 
 test('complete-form chat actions validate both ports through WPI autocomplete before injection', () => {
