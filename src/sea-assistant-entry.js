@@ -10,6 +10,12 @@ const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
 const AI_USER_CONTEXT_MAX_CHARS = 8_000;
 const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
+const NLP_CHECKLIST_PROMPTS = Object.freeze({
+  1: "Indica obligatoriamente la ruta y las toneladas con este formato: POL: puerto de carga; POD: puerto de descarga; Toneladas: cantidad.",
+  2: "Indica obligatoriamente la categoría de la carga.",
+  3: "Indica obligatoriamente el producto. Incluye también la especificación si aplica.",
+  4: "Indica obligatoriamente ambos ritmos con este formato: Ritmo de carga: toneladas/día; Ritmo de descarga: toneladas/día.",
+});
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -70,6 +76,94 @@ const icons = {
       <path d="m17 7-10 10" />
     </svg>`,
 };
+
+function parseChecklistPositiveNumber(value = "") {
+  const compact = String(value).replace(/\s/g, "");
+  if (!compact) return 0;
+  const hasComma = compact.includes(",");
+  const hasDot = compact.includes(".");
+  let normalized = compact;
+  if (hasComma && hasDot) {
+    const decimalSeparator = compact.lastIndexOf(",") > compact.lastIndexOf(".") ? "," : ".";
+    normalized = compact
+      .split(decimalSeparator === "," ? "." : ",")
+      .join("")
+      .replace(decimalSeparator, ".");
+  } else if (/^\d+[,.]\d{3}$/.test(compact)) {
+    normalized = compact.replace(/[,.]/g, "");
+  } else {
+    normalized = compact.replace(",", ".");
+  }
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function cleanChecklistValue(value = "") {
+  return String(value).replace(/^[\s:;,.-]+|[\s:;,.-]+$/g, "").replace(/\s+/g, " ").trim();
+}
+
+function extractChecklistLabeledValue(text, labels) {
+  const labelPattern = labels.join("|");
+  const match = String(text).match(new RegExp(`(?:^|[;\\n])\\s*(?:${labelPattern})\\s*[:=-]\\s*([^;\\n]+)`, "i"));
+  return cleanChecklistValue(match?.[1] || "");
+}
+
+function extractChecklistRouteAndTonnage(text) {
+  const source = String(text || "").trim();
+  let pol = extractChecklistLabeledValue(source, ["pol", "puerto de carga", "loading port"]);
+  let pod = extractChecklistLabeledValue(source, ["pod", "puerto de descarga", "discharge port"]);
+  if (!pol || !pod) {
+    const naturalRoute = source.match(/(?:desde|from)\s+(.+?)\s+(?:hasta|to|a)\s+(.+?)(?=\s+(?:con|y)\s+[\d.,]|[;\n]|$)/i);
+    pol ||= cleanChecklistValue(naturalRoute?.[1] || "");
+    pod ||= cleanChecklistValue(naturalRoute?.[2] || "");
+  }
+  const labeledTonnage = source.match(/(?:toneladas|tonnage|cantidad|cargo(?:_qty)?)\s*[:=-]?\s*([\d.,\s]+)/i);
+  const unitTonnage = source.match(/([\d.,\s]+)\s*(?:mt|tm|tons?|tonnes?|toneladas)\b/i);
+  return {
+    pol,
+    pod,
+    cargo_qty: parseChecklistPositiveNumber(labeledTonnage?.[1] || unitTonnage?.[1] || ""),
+  };
+}
+
+function extractChecklistProduct(text) {
+  const source = String(text || "").trim();
+  const product = extractChecklistLabeledValue(source, ["producto", "product"]);
+  const specification = extractChecklistLabeledValue(source, ["especificaci[oó]n", "specification", "spec"]);
+  if (product) return { product, specification };
+  const [rawProduct, ...rawSpecification] = source.split(";");
+  return {
+    product: cleanChecklistValue(rawProduct),
+    specification: cleanChecklistValue(rawSpecification.join(";")),
+  };
+}
+
+function extractChecklistRates(text) {
+  const source = String(text || "");
+  const loadingMatch = source.match(/(?:ritmo\s+(?:de\s+)?carga|loading(?:\s+rate)?|rate\s*pol)\s*[:=-]?\s*([\d.,\s]+)/i);
+  const dischargeMatch = source.match(/(?:ritmo\s+(?:de\s+)?descarga|discharg(?:e|ing)(?:\s+rate)?|rate\s*pod)\s*[:=-]?\s*([\d.,\s]+)/i);
+  const numbers = Array.from(source.matchAll(/[\d]+(?:[.,][\d]+)?/g), (match) => parseChecklistPositiveNumber(match[0]));
+  return {
+    loading_rate: parseChecklistPositiveNumber(loadingMatch?.[1] || "") || numbers[0] || 0,
+    discharge_rate: parseChecklistPositiveNumber(dischargeMatch?.[1] || "") || numbers[1] || 0,
+  };
+}
+
+function waitForHeadlessNlpEngine(timeoutMs = 5_000) {
+  if (window.SeaCharterNlpEngine?.execute) return Promise.resolve(window.SeaCharterNlpEngine);
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      window.removeEventListener("seacharter:nlp-engine-ready", handleReady);
+      reject(new Error("El Motor NLP headless todavía no está disponible."));
+    }, timeoutMs);
+    const handleReady = () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("seacharter:nlp-engine-ready", handleReady);
+      resolve(window.SeaCharterNlpEngine);
+    };
+    window.addEventListener("seacharter:nlp-engine-ready", handleReady);
+  });
+}
 
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
@@ -1220,6 +1314,54 @@ function mountSeaAssistant() {
   let isSpeaking = false;
   let activeRequestController = null;
   let stoppedByUser = false;
+  let nlpChecklistStep = 1;
+  let nlpChecklistData = {};
+
+  const resetNlpChecklist = () => {
+    nlpChecklistStep = 1;
+    nlpChecklistData = {};
+  };
+
+  const processNlpChecklistInput = (userText) => {
+    if (nlpChecklistStep === 1) {
+      const routeData = extractChecklistRouteAndTonnage(userText);
+      nlpChecklistData = {
+        ...nlpChecklistData,
+        ...(routeData.pol ? { pol: routeData.pol } : {}),
+        ...(routeData.pod ? { pod: routeData.pod } : {}),
+        ...(routeData.cargo_qty > 0 ? { cargo_qty: routeData.cargo_qty } : {}),
+      };
+      if (!nlpChecklistData.pol || !nlpChecklistData.pod || !(nlpChecklistData.cargo_qty > 0)) {
+        return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[1] };
+      }
+      nlpChecklistStep = 2;
+      return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[2] };
+    }
+
+    if (nlpChecklistStep === 2) {
+      const category = extractChecklistLabeledValue(userText, ["categor[ií]a", "category"])
+        || cleanChecklistValue(userText);
+      if (!category) return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[2] };
+      nlpChecklistData.category = category;
+      nlpChecklistStep = 3;
+      return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[3] };
+    }
+
+    if (nlpChecklistStep === 3) {
+      const productData = extractChecklistProduct(userText);
+      if (!productData.product) return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[3] };
+      Object.assign(nlpChecklistData, productData);
+      nlpChecklistStep = 4;
+      return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[4] };
+    }
+
+    const rates = extractChecklistRates(userText);
+    if (!(rates.loading_rate > 0) || !(rates.discharge_rate > 0)) {
+      return { complete: false, prompt: NLP_CHECKLIST_PROMPTS[4] };
+    }
+    Object.assign(nlpChecklistData, rates);
+    return { complete: true, payload: { ...nlpChecklistData } };
+  };
 
   try {
     speechEnabled = supportsSpeechSynthesis && window.localStorage.getItem(SPEECH_PREFERENCE_KEY) === "true";
@@ -1594,31 +1736,29 @@ function mountSeaAssistant() {
     setPending(true);
     const thinkingMessage = createThinkingMessage();
     appendMessage(thinkingMessage);
-    const controller = new AbortController();
-    activeRequestController = controller;
-    stoppedByUser = false;
-    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const payload = await requestAssistantResponse(userText, history, controller.signal);
-      const actionableResponse = extractActionableAiResponse(payload.respuesta);
-      if (actionableResponse.action) await executeActionableAiAction(actionableResponse.action);
-      const assistantText = actionableResponse.visibleText
-        || (actionableResponse.action ? "¡Hecho!" : "No encontré información suficiente para responder.");
-      replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });
-      if (payload.action?.type === "calculator_autofill") {
-        appendMessage(createCalculatorAutofillActionCard(payload.action));
+      const checklistResult = processNlpChecklistInput(userText);
+      if (!checklistResult.complete) {
+        replaceWithAssistantMessage(thinkingMessage, checklistResult.prompt, { meta: formatTime() });
+        return;
       }
+
+      const nlpEngine = await waitForHeadlessNlpEngine();
+      const executionResult = await nlpEngine.execute(checklistResult.payload);
+      if (!executionResult?.applied) throw new Error("El Motor NLP no pudo aplicar el escenario completo.");
+      const completionMessage = executionResult.requiresPortSelection
+        ? "Datos completos enviados. Debes seleccionar una coincidencia WPI válida para terminar la ruta."
+        : "Datos completos enviados. Ruta, costes y mapa calculados automáticamente.";
+      replaceWithAssistantMessage(thinkingMessage, completionMessage, { meta: formatTime() });
+      window.dispatchEvent(new CustomEvent("sea-assistant:nlp-checklist-completed", {
+        detail: { payload: checklistResult.payload, result: executionResult },
+      }));
+      resetNlpChecklist();
     } catch (error) {
-      const errorText = error?.name === "AbortError"
-        ? stoppedByUser
-          ? "Generación detenida. Puedes reformular la consulta cuando quieras."
-          : "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
-        : error?.message || "No pude conectar con el asistente en este momento.";
+      const errorText = error?.message || "No se pudo ejecutar el Motor NLP en este momento.";
       thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
     } finally {
-      window.clearTimeout(timeoutId);
-      if (activeRequestController === controller) activeRequestController = null;
       stoppedByUser = false;
       setPending(false);
       input.focus();

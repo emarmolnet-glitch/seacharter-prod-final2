@@ -4,70 +4,44 @@ import test from 'node:test';
 
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 
-test('chat assistant captures six strict wizard phases in local state', () => {
-  assert.match(frontendSource, /let wizardStep = 1;/);
-  assert.match(frontendSource, /const wizardData = \{\};/);
-  assert.match(frontendSource, /wizardData\.routeAndVolume = userText;[\s\S]*wizardStep = 2;/);
-  assert.match(frontendSource, /wizardData\.rates = userText;[\s\S]*wizardStep = 3;/);
-  assert.match(frontendSource, /wizardData\.rateMode = "manual";/);
-  assert.match(frontendSource, /wizardData\.cargoDescription = userText;[\s\S]*wizardStep = 4;/);
-  assert.match(frontendSource, /wizardData\.packaging = userText;[\s\S]*wizardStep = 5;/);
-  assert.match(frontendSource, /wizardData\.craneDetails = userText;[\s\S]*wizardStep = 6;/);
-  assert.match(frontendSource, /let wizardStatus = "conversacional";/);
-  assert.match(frontendSource, /const WIZARD_ACTIVE_STATUS = "simulacion_flete_activa";/);
-  assert.match(frontendSource, /let pendingWizardPayload = null;/);
+test('chat assistant keeps four deterministic checklist phases in local state', () => {
+  assert.match(frontendSource, /const NLP_CHECKLIST_PROMPTS = Object\.freeze/);
+  assert.match(frontendSource, /let nlpChecklistStep = 1;/);
+  assert.match(frontendSource, /let nlpChecklistData = \{\};/);
+  assert.match(frontendSource, /if \(nlpChecklistStep === 1\)/);
+  assert.match(frontendSource, /nlpChecklistStep = 2;/);
+  assert.match(frontendSource, /if \(nlpChecklistStep === 2\)/);
+  assert.match(frontendSource, /nlpChecklistStep = 3;/);
+  assert.match(frontendSource, /if \(nlpChecklistStep === 3\)/);
+  assert.match(frontendSource, /nlpChecklistStep = 4;/);
 });
 
-test('chat assistant returns locally before the single extraction in steps one through five', () => {
-  const firstStep = frontendSource.indexOf('if (wizardStep === 1)');
-  const sixthStep = frontendSource.indexOf('const wizardPrompt = [', firstStep);
-  const requestStart = frontendSource.indexOf('const controller = new AbortController();', firstStep);
-
-  assert.ok(firstStep >= 0);
-  assert.ok(sixthStep > firstStep);
-  assert.ok(requestStart > sixthStep);
-  assert.equal(frontendSource.slice(firstStep, sixthStep).includes('fetch('), false);
+test('chat assistant uses fixed imperative prompts in the required order', () => {
+  assert.match(frontendSource, /Indica obligatoriamente la ruta y las toneladas/);
+  assert.match(frontendSource, /Indica obligatoriamente la categoría de la carga/);
+  assert.match(frontendSource, /Indica obligatoriamente el producto/);
+  assert.match(frontendSource, /Indica obligatoriamente ambos ritmos/);
+  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[1\] \}/);
+  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[2\] \}/);
+  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[3\] \}/);
+  assert.match(frontendSource, /return \{ complete: false, prompt: NLP_CHECKLIST_PROMPTS\[4\] \}/);
 });
 
-test('chat assistant asks for route dependencies in strict order', () => {
-  assert.match(frontendSource, /ritmos de carga en POL y descarga en POD/);
-  assert.match(frontendSource, /Qué mercancía transportas/);
-  assert.match(frontendSource, /Cómo va presentada la carga/);
-  assert.match(frontendSource, /Si conoces la maquinaria de POL o POD/);
-  assert.match(frontendSource, /aplicaré la opción marítima recomendada/);
+test('checklist parsing is local and does not call the generative endpoint', () => {
+  const processorStart = frontendSource.indexOf('const processNlpChecklistInput = (userText) =>');
+  const processorEnd = frontendSource.indexOf('\n  try {', processorStart);
+  assert.ok(processorStart >= 0 && processorEnd > processorStart);
+  assert.equal(frontendSource.slice(processorStart, processorEnd).includes('fetch('), false);
+  assert.match(frontendSource, /extractChecklistRouteAndTonnage\(userText\)/);
+  assert.match(frontendSource, /extractChecklistProduct\(userText\)/);
+  assert.match(frontendSource, /extractChecklistRates\(userText\)/);
 });
 
-test('step six renders the retained payload summary before any store injection', () => {
-  assert.match(frontendSource, /const wizardPrompt = \[/);
-  assert.match(frontendSource, /await extractVoyageScenario\(wizardPrompt, controller\.signal\)/);
-  assert.match(frontendSource, /validateSixStepWizardPayload\(wizardData, voyageExtraction\.scenario\)/);
-  assert.match(frontendSource, /pendingWizardPayload = validatedScenario;/);
-  assert.match(frontendSource, /getCargoMethodLabel\(payload\.methodPOL\)/);
-  assert.match(frontendSource, /getCargoMethodLabel\(payload\.methodPOD\)/);
-  assert.match(frontendSource, /wizardStatus = WIZARD_CONFIRMATION_STATUS;/);
-  assert.match(frontendSource, /formatWizardPayloadSummary\(pendingWizardPayload\)/);
-  const preparationStart = frontendSource.indexOf('const wizardPrompt = [');
-  const confirmationAssignment = frontendSource.indexOf('wizardStatus = WIZARD_CONFIRMATION_STATUS;', preparationStart);
-  assert.equal(frontendSource.slice(preparationStart, confirmationAssignment).includes('window.injectVoyageScenario('), false);
-  assert.match(frontendSource, /📍 Ruta:/);
-  assert.match(frontendSource, /📦 Mercancía:/);
-  assert.match(frontendSource, /⚙️ Método Carga \(POL\):/);
-  assert.match(frontendSource, /⚙️ Método Descarga \(POD\):/);
-  assert.match(frontendSource, /⏱️ Laytime:/);
-  assert.match(frontendSource, /Datos pre-grabados\. ¿Estás conforme\? Escribe \"sí\", \"ok\" o \"calcular\" para validar y lanzar la simulación\./);
-});
-
-test('confirmation listener performs the only real DraftVoyage injection', () => {
-  const confirmationStart = frontendSource.indexOf('if (wizardStatus === WIZARD_CONFIRMATION_STATUS)');
-  const injectionStart = frontendSource.indexOf('window.injectVoyageScenario(pendingWizardPayload, { deferFinalActions: true })', confirmationStart);
-  const preparationStart = frontendSource.indexOf('const wizardPrompt = [', confirmationStart);
-
-  assert.ok(confirmationStart >= 0);
-  assert.ok(injectionStart > confirmationStart);
-  assert.ok(preparationStart > injectionStart);
-  assert.equal(frontendSource.slice(preparationStart).includes('window.injectVoyageScenario(validatedScenario)'), false);
-  assert.match(frontendSource, /\["si", "ok", "calcular"\]\.includes\(normalizedValue\)/);
-  assert.match(frontendSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult\)/);
-  assert.match(frontendSource, /finally \{[\s\S]*setPending\(false\);/);
-  assert.match(frontendSource, /¡Datos inyectados! Mapa y Calculadora actualizados\./);
+test('the final rates response executes the headless NLP engine immediately', () => {
+  assert.match(frontendSource, /const nlpEngine = await waitForHeadlessNlpEngine\(\)/);
+  assert.match(frontendSource, /const executionResult = await nlpEngine\.execute\(checklistResult\.payload\)/);
+  assert.match(frontendSource, /Ruta, costes y mapa calculados automáticamente/);
+  assert.match(frontendSource, /sea-assistant:nlp-checklist-completed/);
+  assert.match(frontendSource, /resetNlpChecklist\(\);/);
+  assert.doesNotMatch(frontendSource, /Datos pre-grabados\. ¿Estás conforme\?/);
 });

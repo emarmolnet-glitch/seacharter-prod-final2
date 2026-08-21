@@ -21,24 +21,18 @@ function normalizeCompleteFormDate(value) {
   return sandbox.result;
 }
 
-test('assistant retains the validated payload until explicit human confirmation', () => {
-  assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
-  assert.match(assistantSource, /await extractVoyageScenario\(wizardPrompt, controller\.signal\)/);
-  assert.match(assistantSource, /validateSixStepWizardPayload/);
-  assert.match(assistantSource, /pendingWizardPayload = validatedScenario/);
-  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedPayload, \{ deferFinalActions: true \}\)/);
-  assert.match(assistantSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult\)/);
-  assert.match(assistantSource, /WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion"/);
-  assert.match(assistantSource, /Sí, inyectar y calcular/);
+test('assistant executes the validated checklist payload without human confirmation', () => {
+  assert.match(assistantSource, /processNlpChecklistInput\(userText\)/);
+  assert.match(assistantSource, /waitForHeadlessNlpEngine\(\)/);
+  assert.match(assistantSource, /await nlpEngine\.execute\(checklistResult\.payload\)/);
+  assert.match(assistantSource, /Ruta, costes y mapa calculados automáticamente/);
+  assert.doesNotMatch(assistantSource, /WIZARD_CONFIRMATION_STATUS/);
   assert.match(assistantSource, /window\.injectVoyageScenario\(validatedScenario\)/);
-  assert.match(assistantSource, /validateScenarioPortsWithWpi/);
   assert.match(assistantSource, /Inyectar datos y revisar puertos/);
   assert.match(assistantSource, /sca-voyage-action__warning/);
-  assert.match(assistantSource, /hasMinimumVoyageRoute\(scenario\)/);
   assert.match(assistantSource, /He detectado tu ruta/);
   assert.match(assistantSource, /ruta preliminar y calculamos el resto después/);
-  assert.match(assistantFunctionSource, /POL y POD son suficientes para continuar/);
-  assert.match(assistantFunctionSource, /no interrogues al usuario ni pidas fechas, cantidad, mercancía o ritmos/);
+  assert.match(assistantFunctionSource, /Enrutador de Intenciones/);
 });
 
 test('voyage injection updates DraftVoyage, calculator fields and starts the engine', () => {
@@ -103,8 +97,8 @@ test('assistant route cards select WPI dropdown options before injecting the voy
   assert.match(assistantSource, /button\.addEventListener\("click", async \(\) => \{/);
   assert.match(assistantSource, /const selectedPorts = await selectActionableAiWpiRoute\(scenario\.pol, scenario\.pod\)/);
   assert.match(assistantSource, /const result = window\.injectVoyageScenario\(validatedScenario\)/);
-  assert.match(assistantSource, /const selectedPorts = await selectActionableAiWpiRoute\(pendingWizardPayload\.pol, pendingWizardPayload\.pod\)/);
-  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedPayload, \{ deferFinalActions: true \}\)/);
+  assert.match(assistantSource, /const nlpEngine = await waitForHeadlessNlpEngine\(\)/);
+  assert.match(assistantSource, /await nlpEngine\.execute\(checklistResult\.payload\)/);
 });
 
 test('complete-form action maps every field and forces route plus cost calculation', () => {

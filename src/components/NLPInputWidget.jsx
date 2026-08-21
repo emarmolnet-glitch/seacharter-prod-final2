@@ -168,15 +168,15 @@ function extractScenario(text) {
 
 function normalizeScenarioPayload(payload) {
   const source = payload?.scenario || payload?.extraction || payload?.data || payload || {};
-  const loadingRate = parsePositiveNumber(source.ratePOL ?? source.loading_rate ?? source.loadingRate ?? source.load_rate ?? "");
-  const dischargeRate = parsePositiveNumber(source.ratePOD ?? source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? "");
+  const loadingRate = parsePositiveNumber(source.ratePOL ?? source.loading_rate ?? source.loadingRate ?? source.load_rate ?? source.rates?.loading ?? source.ritmos?.carga ?? "");
+  const dischargeRate = parsePositiveNumber(source.ratePOD ?? source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? source.rates?.discharge ?? source.ritmos?.descarga ?? "");
   return applyVoyageScenarioDefaults({
     ...source,
-    pol: cleanCapture(source.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
-    pod: cleanCapture(source.pod ?? source.port_of_discharge ?? source.discharge_port ?? ""),
+    pol: cleanCapture(source.pol ?? source.route?.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
+    pod: cleanCapture(source.pod ?? source.route?.pod ?? source.port_of_discharge ?? source.discharge_port ?? ""),
     laydays: normalizeDate(source.laydays ?? source.layday ?? source.laycan_start ?? ""),
     cancelling: normalizeDate(source.cancelling ?? source.canceling ?? source.laycan_end ?? ""),
-    cargo_qty: parsePositiveNumber(source.cargo_qty ?? source.cargoQty ?? source.quantity ?? source.qty ?? ""),
+    cargo_qty: parsePositiveNumber(source.cargo_qty ?? source.cargoQty ?? source.tonnage ?? source.toneladas ?? source.quantity ?? source.qty ?? ""),
     cargo_type: cleanCapture(source.cargo_type ?? source.cargoType ?? source.commodity ?? ""),
     loading_rate: loadingRate,
     discharge_rate: dischargeRate,
@@ -347,8 +347,7 @@ function NLPInputWidget() {
   const [missingFields, setMissingFields] = useState([]);
   const [manualValues, setManualValues] = useState({});
   const [portWarning, setPortWarning] = useState("");
-  const [panelStyle, setPanelStyle] = useState({ visibility: "hidden" });
-  const sectionRef = useRef(null);
+  const analyzeAndDispatchRef = useRef(null);
 
   const productOptions = useMemo(
     () => (CARGO_PRODUCTS[category] || []).map((value) => ({ value, label: value })),
@@ -368,67 +367,38 @@ function NLPInputWidget() {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const sourcePanel = document.getElementById("map-input-overlay");
-    const shell = document.getElementById("map-command-shell");
-    if (!sourcePanel || !shell) return undefined;
-
-    const alignWithSource = () => {
-      const isGeoInputOpen = !shell.classList.contains("input-collapsed");
-      const isMobileLayout = window.matchMedia("(max-width: 767px)").matches;
-      const top = isMobileLayout && isGeoInputOpen
-        ? sourcePanel.offsetTop + sourcePanel.offsetHeight + 12
-        : sourcePanel.offsetTop;
-      const left = isMobileLayout || !isGeoInputOpen
-        ? sourcePanel.offsetLeft
-        : sourcePanel.offsetLeft + sourcePanel.offsetWidth + 16;
-      sectionRef.current?.style.setProperty("top", `${top}px`, "important");
-      sectionRef.current?.style.setProperty("left", `${left}px`, "important");
-      sectionRef.current?.style.setProperty("right", "auto", "important");
-      sectionRef.current?.style.setProperty("width", `${sourcePanel.offsetWidth}px`, "important");
-      sectionRef.current?.style.setProperty(
-        "max-height",
-        isMobileLayout
-          ? `max(10rem, calc(100% - ${top + 116}px))`
-          : `${sourcePanel.offsetHeight}px`,
-        "important",
-      );
-      setPanelStyle({
-        visibility: "visible",
-      });
-    };
-
-    alignWithSource();
-    const resizeObserver = new ResizeObserver(alignWithSource);
-    resizeObserver.observe(sourcePanel);
-    resizeObserver.observe(shell);
-    const collapseObserver = new MutationObserver(alignWithSource);
-    collapseObserver.observe(shell, { attributes: true, attributeFilter: ["class"] });
-    window.addEventListener("resize", alignWithSource);
-    return () => {
-      resizeObserver.disconnect();
-      collapseObserver.disconnect();
-      window.removeEventListener("resize", alignWithSource);
-    };
-  }, []);
-
   const showValidationAlert = (message) => {
     if (typeof window.showToast === "function") window.showToast(message, false, "error");
   };
 
-  const analyzeAndDispatch = async () => {
-    if (!requestText.trim()) {
+  const analyzeAndDispatch = async (injectedPayload = null) => {
+    const isProgrammaticRequest = injectedPayload && typeof injectedPayload === "object";
+    const analysisText = isProgrammaticRequest
+      ? JSON.stringify(injectedPayload)
+      : String(injectedPayload || requestText).trim();
+    if (!analysisText) {
       showValidationAlert("Introduce un requerimiento para analizar.");
-      return;
+      return { applied: false, reason: "empty-payload" };
     }
 
-    const extracted = await requestScenarioExtraction(requestText);
+    let extracted;
+    if (isProgrammaticRequest) {
+      const normalizedPayload = normalizeScenarioPayload(injectedPayload);
+      try {
+        extracted = await validateScenarioPortsWithWpi(normalizedPayload);
+      } catch (error) {
+        console.warn("WPI catalog is not ready for headless validation.", error);
+        extracted = normalizedPayload;
+      }
+    } else {
+      extracted = await requestScenarioExtraction(analysisText);
+    }
     const scenario = normalizeNlpVoyagePayload({
       ...extracted,
-      cargo_category: category || extracted.cargo_category,
-      cargo_product: product || extracted.cargo_product,
-      cargo_specification: specification || extracted.cargo_specification,
-    }, requestText);
+      cargo_category: injectedPayload?.category || injectedPayload?.categoria || injectedPayload?.cargo_category || category || extracted.cargo_category,
+      cargo_product: injectedPayload?.product || injectedPayload?.producto || injectedPayload?.cargo_product || product || extracted.cargo_product,
+      cargo_specification: injectedPayload?.specification || injectedPayload?.especificacion || injectedPayload?.cargo_specification || specification || extracted.cargo_specification,
+    }, analysisText);
     CRITICAL_FIELDS.forEach(([field]) => {
       if ((!scenario[field] || missingFields.includes(field)) && manualValues[field]) {
         scenario[field] = field.includes("rate") || field === "cargo_qty"
@@ -444,12 +414,12 @@ function NLPInputWidget() {
     if (missing.length || !hasMinimumVoyageRoute(scenario)) {
       const labels = CRITICAL_FIELDS.filter(([field]) => missing.includes(field)).map(([, label]) => label);
       showValidationAlert(`Faltan los datos mínimos de ruta: ${labels.join(", ")}.`);
-      return;
+      return { applied: false, reason: "missing-route", missing };
     }
     if (scenario.cancelling < scenario.laydays) {
       setMissingFields(["cancelling"]);
       showValidationAlert("Cancelling no puede ser anterior a Laydays.");
-      return;
+      return { applied: false, reason: "invalid-laycan" };
     }
     setPortWarning(scenario.port_validation?.clarification || "");
 
@@ -545,6 +515,7 @@ function NLPInputWidget() {
     }
     if (scenario.port_validation?.valid) {
       await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
+      await window.handleMasterValidationAndCalculate?.();
     }
     const usesPortCrane = optimizedMethods?.pol.equipment === "port-crane"
       || optimizedMethods?.pod.equipment === "port-crane";
@@ -559,13 +530,35 @@ function NLPInputWidget() {
       false,
       scenario.port_validation?.valid ? "success" : "warning",
     );
+    return {
+      applied: true,
+      routeCalculated: Boolean(scenario.port_validation?.valid),
+      requiresPortSelection: !scenario.port_validation?.valid,
+      scenario,
+    };
   };
+
+  analyzeAndDispatchRef.current = analyzeAndDispatch;
+
+  useEffect(() => {
+    const engine = Object.freeze({
+      execute: (payload) => analyzeAndDispatchRef.current?.(payload),
+      inject: (payload) => analyzeAndDispatchRef.current?.(payload),
+      analyzeAndDispatch: (payload) => analyzeAndDispatchRef.current?.(payload),
+      getStatus: () => ({ ready: true, mode: "headless" }),
+    });
+    window.SeaCharterNlpEngine = engine;
+    window.dispatchEvent(new CustomEvent("seacharter:nlp-engine-ready"));
+    return () => {
+      if (window.SeaCharterNlpEngine === engine) delete window.SeaCharterNlpEngine;
+    };
+  }, []);
 
   return (
     <section
-      ref={sectionRef}
       className="map-floating-panel route-sync-card ecosystem-panel space-y-4"
-      style={panelStyle}
+      style={{ display: "none" }}
+      aria-hidden="true"
       aria-label="Motor NLP"
     >
       <div>
@@ -695,7 +688,7 @@ function NLPInputWidget() {
           <button
             type="button"
             className="btn-light-action w-full text-xs font-bold py-2 rounded"
-            onClick={analyzeAndDispatch}
+            onClick={() => analyzeAndDispatch()}
           >
             <i className="fa-solid fa-wand-magic-sparkles mr-1" aria-hidden="true" /> Analizar y Generar Escenario
           </button>

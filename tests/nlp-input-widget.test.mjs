@@ -7,11 +7,18 @@ const functionSource = fs.readFileSync("netlify/functions/nlp-voyage-extract.ts"
 const indexSource = fs.readFileSync("index.html", "utf8");
 const wpiClientSource = fs.readFileSync("src/wpi-catalog-client.js", "utf8");
 
-test("NLPInputWidget awaits the real voyage extractor before validation", () => {
-  assert.match(widgetSource, /await requestScenarioExtraction\(requestText\)/);
+test("NLPInputWidget keeps text extraction and adds a deterministic headless path", () => {
+  assert.match(widgetSource, /await requestScenarioExtraction\(analysisText\)/);
   assert.match(widgetSource, /fetch\("\/api\/nlp-voyage-extract"/);
+  assert.match(widgetSource, /const isProgrammaticRequest = injectedPayload && typeof injectedPayload === "object"/);
+  assert.match(widgetSource, /normalizeScenarioPayload\(injectedPayload\)/);
+  assert.match(widgetSource, /window\.SeaCharterNlpEngine = engine/);
+  assert.match(widgetSource, /execute: \(payload\) => analyzeAndDispatchRef\.current\?\.\(payload\)/);
+  assert.match(widgetSource, /style=\{\{ display: "none" \}\}/);
+  assert.match(widgetSource, /seacharter:nlp-engine-ready/);
+  assert.match(widgetSource, /await window\.runOnDemandMapRouteWorkflow[\s\S]*await window\.handleMasterValidationAndCalculate\?\.\(\)/);
 
-  const extractionIndex = widgetSource.indexOf("await requestScenarioExtraction(requestText)");
+  const extractionIndex = widgetSource.indexOf("await requestScenarioExtraction(analysisText)");
   const validationIndex = widgetSource.indexOf("const missing = CRITICAL_FIELDS.filter");
   assert.ok(extractionIndex >= 0 && validationIndex > extractionIndex);
 });
