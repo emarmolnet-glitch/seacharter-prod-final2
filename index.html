@@ -57812,6 +57812,41 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return 30;
         }
 
+        function getEstimatedCraneLiftMt() {
+            const estimatedInput = document.getElementById('crane-swl-mt');
+            const estimatedLift = parseFloat(estimatedInput?.value);
+            return Number.isFinite(estimatedLift) && estimatedLift > 0 ? estimatedLift : 0;
+        }
+
+        function ensureCraneLiftValue(side = 'pol', label = '') {
+            const methodLabel = label || getSelectedMethodLabel(side);
+            if (!isCraneMethod(methodLabel)) return 0;
+
+            const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+            const swlEl = document.getElementById(swlId);
+            if (!swlEl) return 0;
+
+            if (isBigBagsPortCraneMethod(methodLabel)) {
+                const fixedLift = getBigBagsPortCraneLiftCapacityMt();
+                swlEl.value = String(fixedLift);
+                return fixedLift;
+            }
+
+            const currentLift = parseFloat(swlEl.value);
+            if (Number.isFinite(currentLift) && currentLift > 0) return currentLift;
+
+            const estimatedLift = getEstimatedCraneLiftMt();
+            const nextLift = estimatedLift > 0 ? estimatedLift : getSwlForMethod(methodLabel);
+            if (!(nextLift > 0)) return 0;
+
+            swlEl.value = String(nextLift);
+            swlEl.dataset.autoEstimatedLift = estimatedLift > 0 ? 'true' : 'false';
+            if (typeof updateSection2LocalState === 'function') {
+                updateSection2LocalState(swlId, swlEl.value);
+            }
+            return nextLift;
+        }
+
         function getTaraForMethod(label = '') {
             const l = String(label || '');
             // El peso de referencia de 1.5 MT por big bag ya incluye la bolsa, de
@@ -58214,14 +58249,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             validarCompatibilidadMetodo(side);
 
             if (isCraneMethod(label)) {
-                const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
                 const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
                 const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
-                const swlEl = document.getElementById(swlId);
                 const taraEl = document.getElementById(taraId);
                 const ciclosEl = document.getElementById(ciclosId);
 
-                if (swlEl) swlEl.value = String(getSwlForMethod(label));
+                ensureCraneLiftValue(side, label);
                 if (taraEl) taraEl.value = String(getTaraForMethod(label));
                 if (ciclosEl) ciclosEl.value = String(getCiclosForMethod(label));
 
@@ -58538,6 +58571,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const deferEngine = options.deferEngine === true;
             const label = getSelectedMethodLabel(side);
             if (!isCraneMethod(label)) return;
+
+            ensureCraneLiftValue(side, label);
 
             const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
             const rateInput = document.getElementById(rateInputId);
@@ -58918,6 +58953,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function handlePortMethodChange(side = 'pol') {
             setRitmoManualIndicator(side, false);
+            const label = getSelectedMethodLabel(side);
+            if (isCraneMethod(label)) ensureCraneLiftValue(side, label);
             renderMethodPills(side);
             validarCompatibilidadMetodo(side);
             actualizarDesviacionDeltaManual(side);
