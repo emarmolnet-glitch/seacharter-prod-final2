@@ -403,7 +403,7 @@ function findActionableAiJsonObject(responseText) {
       const rawJson = text.slice(start, end + 1);
       try {
         const parsed = JSON.parse(rawJson);
-        if (["update_field", "calculate_route", "fill_complete_form"].includes(parsed?.action)) {
+        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(parsed?.action)) {
           return { action: parsed, start, end: end + 1 };
         }
       } catch {}
@@ -419,7 +419,7 @@ function extractActionableAiResponse(responseText) {
   if (jsonBlock) {
     try {
       const action = JSON.parse(jsonBlock[1]);
-      if (["update_field", "calculate_route", "fill_complete_form"].includes(action?.action)) {
+      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(action?.action)) {
         return {
           visibleText: originalText.replace(jsonBlock[0], "").trim(),
           action,
@@ -480,6 +480,58 @@ function executeActionableAiUpdate(action) {
   window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
     detail: { field: normalizeActionFieldName(action.field), value: numericValue, inputId: field.id },
   }));
+  return true;
+}
+
+async function executeActionableAiUpdateFields(action) {
+  if (action?.action !== "update_fields" || !action.payload) return false;
+  const { payload } = action;
+  const updateInputs = (ids, value) => {
+    if (value === undefined || value === null) return;
+    ids.forEach((id) => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      input.value = String(value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+
+  updateInputs(["map-port-pol", "port-pol"], payload.pol);
+  updateInputs(["map-port-pod", "port-pod"], payload.pod);
+  updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], payload.tonnage);
+  updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], payload.laydayStart);
+  updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], payload.cancelling);
+  updateInputs(["cargo-type", "input-categoria"], payload.category);
+  updateInputs(["cargo-product", "input-producto"], payload.product);
+  updateInputs(["metodo_carga"], payload.loadingMethod);
+  updateInputs(["metodo_descarga_pod"], payload.dischargeMethod ?? payload.loadingMethod);
+  updateInputs(["rate-load", "gc-laytime-load-val"], payload.loadingRate);
+  updateInputs(["rate-disch", "gc-laytime-disch-val"], payload.dischargeRate);
+
+  if (payload.pol !== undefined && payload.pol !== null
+    && payload.pod !== undefined && payload.pod !== null
+    && payload.tonnage !== undefined && payload.tonnage !== null) {
+    if (!window.State) window.State = {};
+    Object.assign(window.State, {
+      pol: payload.pol,
+      pod: payload.pod,
+      tonnage: payload.tonnage,
+    });
+    document.getElementById("btn-map-locate-route")?.click();
+  }
+
+  if ((payload.loadingRate !== undefined && payload.loadingRate !== null)
+    || (payload.dischargeRate !== undefined && payload.dischargeRate !== null)) {
+    window.recalcularDiasPuerto?.();
+  }
+  window.runEngine?.();
+  return true;
+}
+
+async function executeActionableAiSearchVessel(action) {
+  if (action?.action !== "search_vessel") return false;
+  document.getElementById("btn-sync-neon-matching")?.click();
   return true;
 }
 
@@ -594,6 +646,8 @@ async function executeActionableAiCompleteForm(action) {
 }
 
 async function executeActionableAiAction(action) {
+  if (action?.action === "update_fields") return executeActionableAiUpdateFields(action);
+  if (action?.action === "search_vessel") return executeActionableAiSearchVessel(action);
   if (action?.action === "fill_complete_form") return executeActionableAiCompleteForm(action);
   if (action?.action === "calculate_route") return executeActionableAiRoute(action);
   return executeActionableAiUpdate(action);
