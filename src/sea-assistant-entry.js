@@ -449,9 +449,9 @@ async function executeActionableAiUpdateFields(actionObj) {
     updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
     updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
     updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
-    updateInputs(["cargo-product", "nlp-cargo-product", "input-producto"], p.product);
-    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val"], p.loadingRate);
-    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
+    updateInputs(["cargo-product", "nlp-cargo-product", "input-producto", "producto-especifico", "product-select", "input-product"], p.product);
+    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate", "ritmo-carga", "ritmo-pol", "ritmo-carga-pol", "input-loading-rate", "loadingRate"], p.loadingRate);
+    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "ritmo-descarga", "ritmo-pod", "ritmo-descarga-pod", "input-discharge-rate", "dischargeRate"], p.dischargeRate);
     updateInputs(["metodo_carga"], p.loadingMethod);
     updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
 
