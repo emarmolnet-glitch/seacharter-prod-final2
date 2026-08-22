@@ -277,7 +277,7 @@
     <link rel="stylesheet" href="./assets/css/datalastic-credit-counter.css?v=20260815-shared-balance">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <link rel="stylesheet" href="./assets/css/sea-assistant.css?v=20260820-chat-footer">
-    <script defer src="./network-resilience.js?v=20260807-circuit-breaker"></script>
+    <script defer src="/network-resilience.js?v=20260807-circuit-breaker"></script>
     <script type="module" src="./cargo-taxonomy.mjs"></script>
     <script type="module">
         import * as OpenTonnagePredictor from './open-tonnage-predictor.mjs';
@@ -309,7 +309,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script defer src="./public/components.js"></script>
+    <script src="./public/components.js"></script>
     <script defer src="/contract-reference.js"></script>
     <script defer src="./npl-data-analysis-engine.js"></script>
     <script defer src="./npl-secret-module.js"></script>
@@ -8520,10 +8520,9 @@
                         <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <h2 id="route-header-title" class="text-sm font-bold text-blue-400 uppercase"><i class="fa-solid fa-route mr-2"></i> 1. Derrota y Puertos Geográficos</h2>
                             <div class="collapsible-section-actions flex items-center gap-2">
-                                <input type="file" id="wpi-upload" accept=".csv" class="hidden" onchange="handleWPILoad(event)">
-                                <button onclick="document.getElementById('wpi-upload').click()" id="btn-wpi" class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-3 py-1.5 rounded flex items-center gap-1.5 transition border border-emerald-700/50" title="Sube el archivo WPI.csv">
-                                    <i class="fa-solid fa-database"></i> Integrar WPI.csv
-                                </button>
+                                <div id="btn-wpi" class="text-xs bg-teal-900/50 text-teal-200 px-3 py-1.5 rounded flex items-center gap-1.5 border border-teal-700/50" title="Búsqueda segura mediante Datalastic Port Finder/Info">
+                                    <i class="fa-solid fa-satellite-dish"></i> Datalastic activo
+                                </div>
                                 <button id="btn-locate-route" onclick="geocodeAllPorts()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded text-white flex items-center gap-1.5 transition border border-slate-700">
                                     <i class="fa-solid fa-satellite-dish text-sky-400"></i> Localizar Ruta
                                 </button>
@@ -15158,12 +15157,8 @@
             }
         }
 
-        // --- BASE DE DATOS LOCAL DE PUERTOS (Será sobreescrita por el WPI.csv) ---
-        let PORT_DB = {
-            "Valencia (ES)": { lat: 39.4699, lon: -0.3774, countryCode: 'ES', source: 'WPI' },
-            "Barcelona (ES)": { lat: 41.3851, lon: 2.1734, countryCode: 'ES', source: 'WPI' },
-            "Algeciras (ES)": { lat: 36.1268, lon: -5.4385, countryCode: 'ES', source: 'WPI' }
-        };
+        // Caché de sesión de puertos confirmados por Datalastic. Mantiene el contrato {lat, lon} usado por Leaflet.
+        let PORT_DB = {};
 
         const WpiCatalogStore = (() => {
             let state = { status: 'idle', ports: [], error: '', loadedAt: null };
@@ -15194,7 +15189,7 @@
                         countryCode: String(port?.countryCode || '').trim().toUpperCase(),
                         latitude: Number(port?.lat),
                         longitude: Number(port?.lon),
-                        source: 'WPI'
+                        source: port?.source || 'DATALASTIC'
                     };
                     [officialLabel, name].forEach(value => {
                         const key = normalizeKey(value);
@@ -15215,7 +15210,7 @@
                     return () => listeners.delete(listener);
                 },
                 setLoading: () => setState({ status: 'loading', error: '' }),
-                setError: error => setState({ status: 'error', error: String(error?.message || error || 'WPI unavailable') }),
+                setError: error => setState({ status: 'error', error: String(error?.message || error || 'Datalastic unavailable') }),
                 replaceCatalog,
                 findExactPort: query => {
                     const matches = exactIndex.get(normalizeKey(query)) || [];
@@ -25761,167 +25756,9 @@
             }
         }
 
-        // --- LECTURA DE WPI.CSV Y POBLACIÓN DE PUERTOS (Carga asíncrona en micro-chunks) ---
-        function parseCSVLine(line) {
-            let result = [];
-            let startValueBnd = 0;
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-                if (line[i] === '"') {
-                    inQuotes = !inQuotes;
-                } else if (line[i] === ',' && !inQuotes) {
-                    result.push(line.substring(startValueBnd, i));
-                    startValueBnd = i + 1;
-                }
-            }
-            result.push(line.substring(startValueBnd));
-            return result.map(s => s.replace(/^"|"$/g, '').trim());
-        }
-
-        async function parseWPIInChunks(lines) {
-            let added = 0;
-            const CHUNK_SIZE = 300;
-            let index = 1;
-
-            return new Promise((resolve) => {
-                function processNextChunk() {
-                    const end = Math.min(index + CHUNK_SIZE, lines.length);
-                    for (; index < end; index++) {
-                        const line = lines[index];
-                        if (!line || !line.trim()) continue;
-                        const data = parseCSVLine(line);
-                        // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                        if (data.length > 20 && data[2]) {
-                            const portName = `${data[2]} (${data[3] || 'INT'})`;
-                            const lat = parseFloat(data[4]);
-                            const lon = parseFloat(data[5]);
-                            if (!isNaN(lat) && !isNaN(lon)) {
-                                PORT_DB[portName] = {
-                                    indexNo: Number.parseInt(data[0], 10) || null,
-                                    lat: lat,
-                                    lon: lon,
-                                    chanDepth: data[22] || '',
-                                    anchDepth: data[23] || '',
-                                    cargoDepth: data[24] || '',
-                                    oilDepth: data[25] || '',
-                                    maxVessel: data[27] || '',
-                                    harborSize: data[14] || '',
-                                    harborType: data[15] || '',
-                                    countryCode: String(data[3] || '').trim().toUpperCase(),
-                                    source: 'WPI'
-                                };
-                                added++;
-                            }
-                        }
-                    }
-
-                    if (index < lines.length) {
-                        if ('requestIdleCallback' in window) {
-                            window.requestIdleCallback(processNextChunk, { timeout: 100 });
-                        } else {
-                            setTimeout(processNextChunk, 0);
-                        }
-                    } else {
-                        resolve(added);
-                    }
-                }
-
-                processNextChunk();
-            });
-        }
-
-        async function handleWPILoad(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const btn = document.getElementById('btn-wpi');
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI...';
-            btn.disabled = true;
-
-            try {
-                const text = await file.text();
-                const lines = text.split('\n');
-                
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-                const added = await parseWPIInChunks(lines);
-                WpiCatalogStore.replaceCatalog(PORT_DB);
-
-                refreshPortDatalist();
-                if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
-                if (typeof runEngine === 'function') runEngine();
-                showToast(`✅ Base de datos Mundial WPI cargada: ${added.toLocaleString()} puertos.`);
-                btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
-                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
-                btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
-            } catch (error) {
-                console.error(error);
-                showToast("❌ Error al leer el archivo WPI.csv");
-                btn.innerHTML = origHtml;
-            } finally {
-                btn.disabled = false;
-                event.target.value = ""; // Resetear input
-            }
-        }
-
-        async function autoLoadWPI() {
-            const btn = document.getElementById('btn-wpi');
-            const origHtml = btn?.innerHTML || '';
-            if (btn) {
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI Aut...';
-                btn.disabled = true;
-            }
-
-            try {
-                const wpiPaths = ['/WPI.csv'];
-                let response = null;
-                for (const path of wpiPaths) {
-                    response = await fetch(path, { cache: 'force-cache' });
-                    if (response.ok) break;
-                }
-                if (!response || !response.ok) {
-                    throw new Error(`HTTP error! status: ${response ? response.status : 'no-response'}`);
-                }
-                const text = await response.text();
-                const lines = text.split('\n');
-                
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-                const added = await parseWPIInChunks(lines);
-                WpiCatalogStore.replaceCatalog(PORT_DB);
-
-                refreshPortDatalist();
-                if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
-                if (btn) {
-                    btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
-                    btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
-                    btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
-                }
-                return added;
-            } catch (error) {
-                console.error("No se pudo cargar WPI.csv automáticamente:", error);
-                WpiCatalogStore.setError(error);
-                if (btn) btn.innerHTML = origHtml;
-                throw error;
-            } finally {
-                if (btn) btn.disabled = false;
-            }
-        }
-
-        let wpiLoaded = false;
-        let wpiLoadingPromise = null;
-
+        // Alias de compatibilidad: Datalastic se consulta bajo demanda y no precarga un catálogo local.
         function ensureWpiCatalogLoaded() {
-            if (wpiLoaded) return Promise.resolve();
-            if (wpiLoadingPromise) return wpiLoadingPromise;
-            WpiCatalogStore.setLoading();
-            wpiLoadingPromise = autoLoadWPI().then(() => {
-                wpiLoaded = true;
-            }).catch((err) => {
-                console.warn("WPI global preload error:", err);
-                wpiLoadingPromise = null;
-                throw err;
-            });
-            return wpiLoadingPromise;
+            return Promise.resolve();
         }
         window.ensureWpiCatalogLoaded = ensureWpiCatalogLoaded;
         window.ensureWpiLoadedOnDemand = ensureWpiCatalogLoaded;
@@ -25930,14 +25767,14 @@
             return ensureWpiCatalogLoaded();
         }
         window.bindOnDemandWpiLoaders = bindOnDemandWpiLoaders;
-        void ensureWpiCatalogLoaded().catch(() => {});
+        WpiCatalogStore.replaceCatalog(PORT_DB);
 
         const UNIVERSAL_PORT_INPUT_IDS = [
             'port-ballast', 'port-pol', 'port-pod',
             'map-port-ballast', 'map-port-pol', 'map-port-pod',
             'tracking-input-ballast', 'tracking-input-pol', 'tracking-input-pod'
         ];
-        const WPI_SEARCH_DEBOUNCE_MS = 300;
+        const DATALASTIC_SEARCH_DEBOUNCE_MS = 300;
         const portAutocompleteTimers = new WeakMap();
         const portAutocompleteOptions = new WeakMap();
         const portAutocompleteActiveIndexes = new WeakMap();
@@ -25952,6 +25789,136 @@
                 .replace(/\s+/g, ' ')
                 .trim();
         }
+
+        function prioritizeDatalasticPortResults(ports = []) {
+            const validPorts = (Array.isArray(ports) ? ports : []).filter(port => (
+                Number.isFinite(Number(port?.latitude)) && Number.isFinite(Number(port?.longitude))
+            ));
+            const commercialPorts = validPorts.filter(port => String(port?.portType || '').trim().toLowerCase() === 'port');
+            return commercialPorts.length ? commercialPorts : validPorts;
+        }
+
+        function toPortTitleCase(value) {
+            const rawValue = String(value || '').trim();
+            if (!rawValue) return '';
+            const suffixMatch = rawValue.match(/\s*(\([A-Za-z]{2,3}\))\s*$/);
+            const suffix = suffixMatch ? ` ${suffixMatch[1].toUpperCase()}` : '';
+            const name = (suffixMatch ? rawValue.slice(0, suffixMatch.index) : rawValue)
+                .toLocaleLowerCase()
+                .replace(/(^|[\s\-'/])([a-zà-ÿ])/g, (_, separator, letter) => `${separator}${letter.toLocaleUpperCase()}`);
+            return `${name}${suffix}`.trim();
+        }
+        window.toPortTitleCase = toPortTitleCase;
+
+        let wpiEngineeringCatalogPromise = null;
+
+        function parseWpiCsvRow(line) {
+            const cells = [];
+            let cell = '';
+            let quoted = false;
+            for (let index = 0; index < line.length; index += 1) {
+                const character = line[index];
+                if (character === '"') {
+                    if (quoted && line[index + 1] === '"') {
+                        cell += '"';
+                        index += 1;
+                    } else {
+                        quoted = !quoted;
+                    }
+                } else if (character === ',' && !quoted) {
+                    cells.push(cell);
+                    cell = '';
+                } else {
+                    cell += character;
+                }
+            }
+            cells.push(cell);
+            return cells;
+        }
+
+        function buildWpiEngineeringCatalog(csvText) {
+            const lines = String(csvText || '').split(/\r?\n/).filter(Boolean);
+            const headers = parseWpiCsvRow(lines.shift() || '').map(header => String(header).split(',')[0].trim().toUpperCase());
+            const column = (...names) => names.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1;
+            const columns = {
+                indexNo: column('INDEX_NO'),
+                name: column('PORT_NAME'),
+                countryCode: column('COUNTRY'),
+                channelDepth: column('CHAN_DEPTH'),
+                cargoDepth: column('CARGODEPTH'),
+                maxVessel: column('MAX_VESSEL'),
+                unlocode: column('UNLOCODE', 'UN_LOCODE', 'LOCODE')
+            };
+            const byName = new Map();
+            const byNameAndCountry = new Map();
+            const byUnlocode = new Map();
+
+            lines.forEach(line => {
+                const cells = parseWpiCsvRow(line);
+                const name = String(cells[columns.name] || '').trim();
+                if (!name) return;
+                const countryCode = String(cells[columns.countryCode] || '').trim().toUpperCase();
+                const unlocode = columns.unlocode >= 0 ? String(cells[columns.unlocode] || '').trim().toUpperCase() : '';
+                const cargoDepth = String(cells[columns.cargoDepth] || '').trim().toUpperCase();
+                const channelDepth = String(cells[columns.channelDepth] || '').trim().toUpperCase();
+                const depthCode = cargoDepth || channelDepth;
+                const maxVessel = String(cells[columns.maxVessel] || '').trim().toUpperCase();
+                const record = {
+                    indexNo: Number(cells[columns.indexNo]) || null,
+                    name,
+                    countryCode,
+                    unlocode,
+                    cargoDepth,
+                    channelDepth,
+                    depthCode,
+                    maxOperationalDraftMeters: Number(depthCodeToMeters[depthCode]) || 0,
+                    maxVessel,
+                    maxVesselLengthLabel: maxVessel === 'M' ? '≤ 152.4 m' : maxVessel === 'L' ? '> 152.4 m' : 'N/A',
+                    engineeringSource: 'WPI'
+                };
+                const nameKey = normalizePortSearchText(name);
+                const matches = byName.get(nameKey) || [];
+                matches.push(record);
+                byName.set(nameKey, matches);
+                if (countryCode) byNameAndCountry.set(`${nameKey}|${countryCode}`, record);
+                if (unlocode) byUnlocode.set(unlocode, record);
+            });
+            return { byName, byNameAndCountry, byUnlocode };
+        }
+
+        async function ensureWpiEngineeringCatalog() {
+            if (!wpiEngineeringCatalogPromise) {
+                wpiEngineeringCatalogPromise = fetch('/WPI.csv', { cache: 'force-cache' })
+                    .then(response => {
+                        if (!response.ok) throw new Error(`WPI.csv HTTP ${response.status}`);
+                        return response.text();
+                    })
+                    .then(buildWpiEngineeringCatalog)
+                    .catch(error => {
+                        console.warn('[WPI] Metadatos de ingeniería no disponibles.', error);
+                        return { byName: new Map(), byNameAndCountry: new Map(), byUnlocode: new Map() };
+                    });
+            }
+            return wpiEngineeringCatalogPromise;
+        }
+
+        async function resolveWpiEngineeringRecord(port = {}) {
+            const catalog = await ensureWpiEngineeringCatalog();
+            const unlocode = String(port.unlocode || port.portUnlocode || '').trim().toUpperCase();
+            if (unlocode && catalog.byUnlocode.has(unlocode)) return catalog.byUnlocode.get(unlocode);
+            const rawName = String(port.portName || port.name || port.placeName || port.officialLabel || port.label || '')
+                .replace(/\s*\([A-Za-z]{2,3}\)\s*$/, '')
+                .trim();
+            const nameKey = normalizePortSearchText(rawName);
+            const countryCode = String(port.countryCode || port.country_code || '').trim().toUpperCase();
+            if (countryCode && catalog.byNameAndCountry.has(`${nameKey}|${countryCode}`)) {
+                return catalog.byNameAndCountry.get(`${nameKey}|${countryCode}`);
+            }
+            const matches = catalog.byName.get(nameKey) || [];
+            return matches.length === 1 ? matches[0] : null;
+        }
+        window.ensureWpiEngineeringCatalog = ensureWpiEngineeringCatalog;
+        window.resolveWpiEngineeringRecord = resolveWpiEngineeringRecord;
 
         function getPortCountryCode(label, port = {}) {
             const explicitCode = String(port.countryCode || port.country_code || '').trim().toUpperCase();
@@ -26022,6 +25989,9 @@
 
         function clearUniversalPortCoordinates(input) {
             delete input.dataset.selectedPortIndexNo;
+            delete input.dataset.selectedPortUuid;
+            delete input.dataset.selectedPortUnlocode;
+            delete input.dataset.selectedPortDraft;
             const role = getUniversalPortRole(input.id);
             if (role === 'BALLAST') {
                 SeaCharterStore.set({
@@ -26135,14 +26105,24 @@
             const lon = parseFloat(result?.lon);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
             const countryCode = String(result.countryCode || 'XX').toUpperCase();
-            const label = String(result.label || `${result.placeName} (${countryCode})`).trim();
+            const label = toPortTitleCase(result.label || `${result.placeName} (${countryCode})`);
+            const selectedPortDraft = Number(result.maxOperationalDraftMeters) || 0;
+            const selectedPortMaxVessel = String(result.maxVesselLengthLabel || 'N/A');
+            const engineeringSource = result.engineeringSource === 'WPI' ? 'WPI' : 'N/A';
             PORT_DB[label] = {
                 ...(PORT_DB[label] || {}),
                 ...(result.port || {}),
                 lat,
                 lon,
                 countryCode,
-                source: result.source || 'WPI',
+                source: result.source || 'DATALASTIC',
+                uuid: result.uuid || result.port?.uuid || '',
+                unlocode: result.unlocode || result.port?.unlocode || '',
+                maxOperationalDraftMeters: selectedPortDraft,
+                maxVesselLengthLabel: selectedPortMaxVessel,
+                engineeringSource,
+                cargoDepth: result.cargoDepth || '',
+                chanDepth: result.channelDepth || '',
                 displayName: result.displayName || label
             };
 
@@ -26151,7 +26131,17 @@
             input.dataset.selectedLatitude = String(lat);
             input.dataset.selectedLongitude = String(lon);
             input.dataset.selectedCountryCode = countryCode;
-            const selectedPortIndexNo = Number(result?.port?.indexNo);
+            const selectedPortUuid = String(result.uuid || result.port?.uuid || '').trim();
+            const selectedPortUnlocode = String(result.unlocode || result.port?.unlocode || '').trim().toUpperCase();
+            if (selectedPortUuid) input.dataset.selectedPortUuid = selectedPortUuid;
+            else delete input.dataset.selectedPortUuid;
+            if (selectedPortUnlocode) input.dataset.selectedPortUnlocode = selectedPortUnlocode;
+            else delete input.dataset.selectedPortUnlocode;
+            input.dataset.selectedPortDraft = selectedPortDraft > 0 ? String(selectedPortDraft) : '0';
+            input.dataset.selectedPortMaxVessel = selectedPortMaxVessel;
+            input.dataset.selectedPortEngineeringSource = engineeringSource;
+            input.dataset.selectedPortDepthCode = String(result.depthCode || '');
+            const selectedPortIndexNo = Number(result.indexNo ?? result?.port?.indexNo);
             if (Number.isInteger(selectedPortIndexNo) && selectedPortIndexNo > 0) {
                 input.dataset.selectedPortIndexNo = String(selectedPortIndexNo);
             } else {
@@ -26177,14 +26167,20 @@
                 }
                 syncGlobalStateToForms();
             }
+            clearTimeout(portAutocompleteTimers.get(input));
+            portAutocompleteTimers.delete(input);
+            setPortSearchState(input, false);
             return true;
         }
 
         function selectUniversalPortSuggestion(input, result) {
             if (!commitUniversalPortCoordinates(input, result)) return false;
+            clearTimeout(portAutocompleteTimers.get(input));
+            portAutocompleteTimers.delete(input);
             setPortSearchState(input, false);
             closePortAutocomplete(input);
             input.dispatchEvent(new Event('change', { bubbles: true }));
+            setPortSearchState(input, false);
             if (!input.id.startsWith('tracking-input-') && typeof syncCalculatorAndMatching === 'function') {
                 syncCalculatorAndMatching('calculator');
             }
@@ -26195,6 +26191,9 @@
                     label: input.value,
                     countryCode: input.dataset.selectedCountryCode,
                     portIndexNo: Number(input.dataset.selectedPortIndexNo) || null,
+                    portUuid: input.dataset.selectedPortUuid || null,
+                    portUnlocode: input.dataset.selectedPortUnlocode || null,
+                    maxOperationalDraftMeters: Number(input.dataset.selectedPortDraft) || 0,
                     lat: parseFloat(input.dataset.selectedLatitude),
                     lon: parseFloat(input.dataset.selectedLongitude)
                 }
@@ -26212,18 +26211,50 @@
                 return;
             }
 
-            setPortSearchState(input, true, 'Buscando en WPI...');
-            renderPortAutocomplete(input, [], 'Buscando en WPI...');
+            setPortSearchState(input, true, 'Buscando en Datalastic...');
+            renderPortAutocomplete(input, [], 'Buscando en Datalastic...');
             try {
-                await ensureWpiCatalogLoaded();
-                if (input.value !== query) return;
-                const localResults = searchLocalWpiPorts(query);
+                const [response] = await Promise.all([
+                    fetch(`/api/v1/ports/search?q=${encodeURIComponent(query)}`, {
+                        headers: { Accept: 'application/json' }
+                    }),
+                    ensureWpiEngineeringCatalog()
+                ]);
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload?.error || 'Datalastic no disponible');
+                if (input.value !== query) {
+                    if (input.dataset.selectedPortLabel === input.value) setPortSearchState(input, false);
+                    return;
+                }
+                const localResults = await Promise.all(prioritizeDatalasticPortResults(payload?.ports).map(async port => {
+                    const engineering = await resolveWpiEngineeringRecord(port);
+                    const countryCode = String(port.countryCode || 'XX').toUpperCase();
+                    const placeName = toPortTitleCase(port.portName);
+                    return {
+                        label: toPortTitleCase(port.officialLabel || `${placeName} (${countryCode})`),
+                        placeName,
+                        countryCode,
+                        lat: port.latitude,
+                        lon: port.longitude,
+                        source: 'Datalastic',
+                        uuid: port.uuid,
+                        unlocode: port.unlocode,
+                        indexNo: engineering?.indexNo || null,
+                        maxOperationalDraftMeters: engineering?.maxOperationalDraftMeters || 0,
+                        maxVesselLengthLabel: engineering?.maxVesselLengthLabel || 'N/A',
+                        cargoDepth: engineering?.cargoDepth || '',
+                        channelDepth: engineering?.channelDepth || '',
+                        depthCode: engineering?.depthCode || '',
+                        engineeringSource: engineering ? 'WPI' : 'N/A',
+                        port
+                    };
+                }));
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, localResults, localResults.length ? '' : 'Sin coincidencias en WPI');
+                renderPortAutocomplete(input, localResults, localResults.length ? '' : 'Sin coincidencias en Datalastic');
             } catch (error) {
-                console.warn('[Input Geográfico] No se pudo cargar el catálogo WPI.', error);
+                console.warn('[Input Geográfico] No se pudo consultar Datalastic.', error);
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, [], 'Sin coincidencias en WPI');
+                renderPortAutocomplete(input, [], 'Datalastic no disponible');
             }
         }
 
@@ -26271,7 +26302,7 @@
             // Aplicar siempre debouncing de 300ms al escribir para evitar stuttering y sobrecarga de CPU
             if (event.type === 'input') {
                 setPortSearchState(input, true);
-                const timer = setTimeout(() => runUniversalPortSearch(input), WPI_SEARCH_DEBOUNCE_MS);
+                const timer = setTimeout(() => runUniversalPortSearch(input), DATALASTIC_SEARCH_DEBOUNCE_MS);
                 portAutocompleteTimers.set(input, timer);
             } else if (event.type === 'focus' && input.value.trim().length >= 2) {
                 // Al hacer foco con texto existente, mostrar opciones sin sobrescribir el input
@@ -28218,12 +28249,42 @@
                 };
             }
 
-            await ensureWpiCatalogLoaded().catch(() => {});
-            const result = searchLocalWpiPorts(query, 1)[0];
-            if (result) {
-                const lat = result.lat;
-                const lon = result.lon;
-                return { lat, lon, name: result.label, countryCode: result.countryCode };
+            try {
+                const response = await fetch(`/api/v1/ports/search?q=${encodeURIComponent(query)}`, {
+                    headers: { Accept: 'application/json' }
+                });
+                const payload = await response.json().catch(() => ({}));
+                const port = prioritizeDatalasticPortResults(payload?.ports)[0] || null;
+                if (response.ok && port && Number.isFinite(Number(port.latitude)) && Number.isFinite(Number(port.longitude))) {
+                    const engineering = await resolveWpiEngineeringRecord(port);
+                    const countryCode = String(port.countryCode || 'XX').toUpperCase();
+                    const placeName = toPortTitleCase(port.portName);
+                    const result = {
+                        label: toPortTitleCase(port.officialLabel || `${placeName} (${countryCode})`),
+                        placeName,
+                        countryCode,
+                        lat: Number(port.latitude),
+                        lon: Number(port.longitude),
+                        source: 'Datalastic',
+                        uuid: port.uuid,
+                        unlocode: port.unlocode,
+                        indexNo: engineering?.indexNo || null,
+                        maxOperationalDraftMeters: engineering?.maxOperationalDraftMeters || 0,
+                        maxVesselLengthLabel: engineering?.maxVesselLengthLabel || 'N/A',
+                        cargoDepth: engineering?.cargoDepth || '',
+                        channelDepth: engineering?.channelDepth || '',
+                        depthCode: engineering?.depthCode || '',
+                        engineeringSource: engineering ? 'WPI' : 'N/A',
+                        port
+                    };
+                    const targetInput = ['port-pol', 'port-pod', 'port-ballast']
+                        .map(id => document.getElementById(id))
+                        .find(input => input?.value === query);
+                    if (targetInput) commitUniversalPortCoordinates(targetInput, result);
+                    return { lat: result.lat, lon: result.lon, name: result.label, countryCode: result.countryCode };
+                }
+            } catch (error) {
+                console.warn('[Input Geográfico] Datalastic no pudo resolver las coordenadas.', error);
             }
             return null;
         }

@@ -262,14 +262,20 @@ function normalizeDataBridgeAssistantResponse(payload) {
   ];
   const respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
   if (!respuesta) throw new Error("Data Bridge no devolvió una respuesta analítica para el chat.");
+  const rawAction = payload?.action ?? payload?.data?.action ?? null;
+  const actionPayload = payload?.payload ?? payload?.data?.payload ?? null;
   return {
     success: true,
     respuesta,
-    action: payload?.action || payload?.data?.action || null,
+    action: typeof rawAction === "string"
+      ? { action: rawAction, payload: actionPayload || {} }
+      : rawAction,
   };
 }
 
 const ACTIONABLE_AI_JSON_BLOCK = /```json\s*(\{[\s\S]*?\})\s*```/i;
+const processedUpdateFieldsActions = new WeakSet();
+let updateFieldsActionInProgress = false;
 const ACTIONABLE_AI_FIELD_IDS = Object.freeze({
   pol_rate: "rate-load",
   rate_pol: "rate-load",
@@ -427,7 +433,7 @@ async function executeActionableAiUpdateFields(actionObj) {
         return false;
     }
 
-    const updateInputs = (ids, value, type = 'text') => {
+    const updateInputs = (ids, value, dispatchEvents = true) => {
         if (value === undefined || value === null || value === "") return;
         
         ids.forEach((id) => {
@@ -451,6 +457,8 @@ async function executeActionableAiUpdateFields(actionObj) {
                 } else {
                     input.value = String(value);
                 }
+
+                if (!dispatchEvents) return;
                 
                 input.dispatchEvent(new Event("input", { bubbles: true }));
                 input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -460,8 +468,8 @@ async function executeActionableAiUpdateFields(actionObj) {
     };
 
     // 4. Inyección de datos
-    updateInputs(["map-port-pol", "port-pol"], p.pol);
-    updateInputs(["map-port-pod", "port-pod"], p.pod);
+    updateInputs(["map-port-pol", "port-pol"], p.pol, false);
+    updateInputs(["map-port-pod", "port-pod"], p.pod, false);
     updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
     updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
     updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
@@ -541,7 +549,12 @@ async function executeActionableAiUpdateFields(actionObj) {
             pod: p.pod,
             tonnage: p.tonnage,
         });
-        document.getElementById("btn-map-locate-route")?.click();
+        const routeButton = document.getElementById("btn-map-locate-route");
+        if (typeof window.runOnDemandMapRouteWorkflow === "function") {
+            await window.runOnDemandMapRouteWorkflow(routeButton);
+        } else {
+            routeButton?.click();
+        }
     }
 
     if (p.loadingRate || p.dischargeRate) {
@@ -574,20 +587,21 @@ function normalizeSelectedWpiPort(result) {
   if (!officialLabel || !name || !countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return {
     ...(result.port || {}),
-    indexNo: Number(result.port?.indexNo) || null,
-    regionNo: Number(result.port?.regionNo) || null,
+    uuid: String(result.uuid || result.port?.uuid || '').trim(),
+    unlocode: String(result.unlocode || result.port?.unlocode || '').trim().toUpperCase(),
+    maxOperationalDraftMeters: Number(result.maxOperationalDraftMeters ?? result.port?.maxOperationalDraftMeters) || null,
     name,
     officialLabel,
     countryCode,
     latitude,
     longitude,
-    source: "WPI",
+    source: "DATALASTIC",
   };
 }
 
 async function selectActionableAiWpiRoute(pol, pod) {
   if (typeof window.selectFirstWpiAutocompleteMatch !== "function") {
-    throw new Error("El catálogo WPI todavía no está disponible.");
+    throw new Error("La búsqueda de Datalastic todavía no está disponible.");
   }
 
   const selections = {};
@@ -677,10 +691,17 @@ async function executeActionableAiAction(actionObj) {
     // 2. Extraer la acción, venga en el formato que venga
     const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
     
-    // 3. Forzar la inyección si vemos que es update_fields O si simplemente trae puertos
-    if (actionName === "update_fields" || actionObj.pol || actionObj.payload?.pol) {
+    // 3. La inyección múltiple pertenece exclusivamente a update_fields.
+    if (actionName === "update_fields") {
+        if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) return false;
+        processedUpdateFieldsActions.add(actionObj);
+        updateFieldsActionInProgress = true;
         console.log("🚀 [MOTOR AI] Acción reconocida. Disparando inyección de campos...");
-        return executeActionableAiUpdateFields(actionObj);
+        try {
+            return await executeActionableAiUpdateFields(actionObj);
+        } finally {
+            updateFieldsActionInProgress = false;
+        }
     }
 
     if (actionName === "search_vessel") return executeActionableAiSearchVessel(actionObj);

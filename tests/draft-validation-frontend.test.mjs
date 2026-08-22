@@ -25,10 +25,11 @@ test("route configurator render failures stay isolated behind a local ErrorBound
   assert.match(routeEntrySource, /<RouteConfiguratorErrorBoundary>[\s\S]*<RouteConfigurator \/>/);
 });
 
-test("NGA validator follows reactive POL/POD state without a fixed port", () => {
+test("WPI validator follows reactive POL/POD state without a fixed port", () => {
   assert.match(routeConfiguratorSource, /SeaCharterStore\?\.subscribe/);
   assert.match(routeConfiguratorSource, /route:port-coordinates-updated/);
-  assert.match(routeConfiguratorSource, /portIndexNo: selection\.portIndexNo/);
+  assert.match(routeConfiguratorSource, /portUuid: selection\.portUuid/);
+  assert.match(routeConfiguratorSource, /portUnlocode: selection\.portUnlocode/);
   assert.match(routeConfiguratorSource, /portName: selection\.portName/);
   assert.match(routeConfiguratorSource, /document\.getElementById\("current-draft"\)/);
   assert.match(routeConfiguratorSource, /actualDraft: selection\.actualDraft \|\| null/);
@@ -38,13 +39,19 @@ test("NGA validator follows reactive POL/POD state without a fixed port", () => 
   assert.match(indexSource, /draftInput\.dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
 });
 
-test("NGA validation keeps a unified light corporate card in every state", () => {
+test("WPI validation stays local and exposes the non-fatal warning state", () => {
   assert.match(routeConfiguratorSource, /border border-slate-200 bg-white shadow-/);
   assert.match(routeConfiguratorSource, /rounded-lg border bg-white px-4 py-3 text-slate-700/);
   assert.match(routeConfiguratorSource, /border-amber-200 bg-amber-50 text-amber-800/);
-  assert.match(routeConfiguratorSource, /validationStatusLabel = isCleared \? "CALADO OK" : "OVERSIZED"/);
+  assert.match(routeConfiguratorSource, /isDraftWarning \? "CALADO PENDIENTE"/);
+  assert.match(routeConfiguratorSource, /Aceptar riesgo de calado no informado y continuar/);
+  assert.match(routeConfiguratorSource, /Validar manualmente/);
   assert.match(routeConfiguratorSource, /validation\.draftBasis === "ACTUAL" \? "Calado operativo calculado" : "Calado máximo \(fallback\)"/);
   assert.match(routeConfiguratorSource, /onClick=\{\(\) => void validateActivePort\(\)\}/);
+  assert.match(routeConfiguratorSource, /const wpiDraft = Number\(selection\.portDraftMeters\) \|\| 0/);
+  assert.match(routeConfiguratorSource, /depthSource = hasManualDraft \? "MANUAL" : wpiDraft > 0 \? "WPI" : "UNKNOWN"/);
+  assert.match(routeConfiguratorSource, /Matriz de riesgo · WPI/);
+  assert.doesNotMatch(routeConfiguratorSource, /fetch\("\/api\/v1\/ports\/validate-draft"/);
   assert.doesNotMatch(routeConfiguratorSource, /bg-slate-9|bg-black|text-slate-100|text-slate-200/);
   assert.match(routeConfiguratorSource, /role="alert" className="rounded-lg border border-red-300 bg-red-50/);
 });

@@ -3,7 +3,8 @@ import { voyageStore } from "../stores/voyage-store.js";
 import { workflowProgressStore } from "../stores/workflow-progress-store.js";
 
 export interface DraftValidationResponse {
-  portIndexNo?: number;
+  portUuid?: string;
+  portUnlocode?: string;
   portName: string;
   portDepthCode: string;
   safeDepthMeters: number;
@@ -11,8 +12,14 @@ export interface DraftValidationResponse {
   actualDraft: number | null;
   maxDraft: number | null;
   draftBasis: "ACTUAL" | "MAXIMUM";
-  status: "CLEARED" | "OVERSIZED";
+  status: "CLEARED" | "OVERSIZED" | "DRAFT_REQUIRED" | "RISK_ACCEPTED";
   message: string;
+  depthSource: "WPI" | "MANUAL" | "UNKNOWN";
+  requiresManualDraft: boolean;
+  riskAccepted: boolean;
+  providerDraftMeters?: number | null;
+  manualPortDraftMeters?: number | null;
+  source?: "WPI";
 }
 
 type PortRole = "POL" | "POD";
@@ -21,6 +28,9 @@ interface RouteSelection {
   role: PortRole;
   portName: string;
   portIndexNo?: number;
+  portUuid?: string;
+  portUnlocode?: string;
+  portDraftMeters?: number;
   vesselDraft: number;
   actualDraft: number;
   maxDraft: number;
@@ -240,6 +250,15 @@ function readPortIndex(input: HTMLInputElement | null) {
   return Number.isInteger(portIndexNo) && portIndexNo > 0 ? portIndexNo : undefined;
 }
 
+function readPortMetadata(input: HTMLInputElement | null) {
+  const portDraftMeters = Number(input?.dataset.selectedPortDraft);
+  return {
+    portUuid: String(input?.dataset.selectedPortUuid || "").trim() || undefined,
+    portUnlocode: String(input?.dataset.selectedPortUnlocode || "").trim().toUpperCase() || undefined,
+    portDraftMeters: Number.isFinite(portDraftMeters) && portDraftMeters > 0 ? portDraftMeters : undefined,
+  };
+}
+
 function readRouteSelection(role: PortRole): RouteSelection {
   const calculatorWindow = window as CalculatorWindow;
   const calculatorState = calculatorWindow.SeaCharterStore?.getState?.() || {};
@@ -259,6 +278,7 @@ function readRouteSelection(role: PortRole): RouteSelection {
     role,
     portName: String(portInput?.value || statePortName || "").trim(),
     portIndexNo: readPortIndex(portInput),
+    ...readPortMetadata(portInput),
     vesselDraft: normalizedActualDraft || normalizedMaxDraft,
     actualDraft: normalizedActualDraft,
     maxDraft: normalizedMaxDraft,
@@ -282,6 +302,9 @@ function routeSelectionEqual(left: RouteSelection, right: RouteSelection) {
   return left.role === right.role
     && left.portName === right.portName
     && left.portIndexNo === right.portIndexNo
+    && left.portUuid === right.portUuid
+    && left.portUnlocode === right.portUnlocode
+    && left.portDraftMeters === right.portDraftMeters
     && left.vesselDraft === right.vesselDraft
     && left.actualDraft === right.actualDraft
     && left.maxDraft === right.maxDraft;
@@ -294,6 +317,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [manualPortDraft, setManualPortDraft] = useState("");
   const activeRoleRef = useRef<PortRole>(selection.role);
   const hasValidatedRef = useRef(false);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -365,7 +389,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
     };
   }, [syncSelection]);
 
-  const validateActivePort = useCallback(async () => {
+  const validateActivePort = useCallback(async (options: { acceptUnknownDraft?: boolean; manualDraft?: number | null } = {}) => {
     if (!selection.portName) {
       setError(`Selecciona un puerto ${selection.role} antes de validar.`);
       return;
@@ -375,60 +399,66 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       return;
     }
 
-    requestControllerRef.current?.abort();
-    const controller = new AbortController();
-    requestControllerRef.current = controller;
     hasValidatedRef.current = true;
     setIsLoading(true);
     setError(null);
     setValidation(null);
 
-    try {
-      const response = await fetch("/api/v1/ports/validate-draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          portName: selection.portName,
-          portIndexNo: selection.portIndexNo,
-          vesselDraft: selection.vesselDraft,
-          actualDraft: selection.actualDraft || null,
-          maxDraft: selection.maxDraft || null,
-        }),
-      });
+    const manualDraft = Number(options.manualDraft);
+    const hasManualDraft = Number.isFinite(manualDraft) && manualDraft > 0;
+    const wpiDraft = Number(selection.portDraftMeters) || 0;
+    const safeDepthMeters = hasManualDraft ? manualDraft : wpiDraft;
+    const draftBasis = selection.actualDraft > 0 ? "ACTUAL" : "MAXIMUM";
+    const depthSource = hasManualDraft ? "MANUAL" : wpiDraft > 0 ? "WPI" : "UNKNOWN";
+    let status: DraftValidationResponse["status"] = "DRAFT_REQUIRED";
+    let message = "WPI no informa calado operativo para este puerto. Introduce un valor manual o acepta el riesgo para continuar.";
 
-      if (!response.ok) {
-        const apiError = await response.json().catch(() => ({})) as ApiErrorResponse;
-        throw new Error(apiError.error || "No fue posible validar el puerto activo.");
-      }
-
-      setValidation(await response.json() as DraftValidationResponse);
-    } catch (requestError) {
-      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-      setError(requestError instanceof Error
-        ? requestError.message
-        : "No fue posible validar el puerto activo.");
-    } finally {
-      if (requestControllerRef.current === controller) {
-        requestControllerRef.current = null;
-        setIsLoading(false);
-      }
+    if (safeDepthMeters > 0) {
+      status = selection.vesselDraft <= safeDepthMeters ? "CLEARED" : "OVERSIZED";
+      message = status === "CLEARED"
+        ? `Calado del buque validado frente al límite ${depthSource === "WPI" ? "WPI" : "manual"} del puerto.`
+        : `El calado del buque supera el límite ${depthSource === "WPI" ? "WPI" : "manual"} del puerto.`;
+    } else if (options.acceptUnknownDraft === true) {
+      status = "RISK_ACCEPTED";
+      message = "Calado no disponible en WPI. Riesgo aceptado manualmente para continuar.";
     }
+
+    setValidation({
+      portUuid: selection.portUuid,
+      portUnlocode: selection.portUnlocode,
+      portName: selection.portName,
+      portDepthCode: "",
+      safeDepthMeters,
+      vesselDraft: selection.vesselDraft,
+      actualDraft: selection.actualDraft || null,
+      maxDraft: selection.maxDraft || null,
+      draftBasis,
+      status,
+      message,
+      depthSource,
+      requiresManualDraft: status === "DRAFT_REQUIRED",
+      riskAccepted: status === "RISK_ACCEPTED",
+      providerDraftMeters: wpiDraft || null,
+      manualPortDraftMeters: hasManualDraft ? manualDraft : null,
+      source: "WPI",
+    });
+    setIsLoading(false);
   }, [selection]);
 
   useEffect(() => {
     setValidation(null);
     setError(null);
     setSuccessMessage(null);
+    setManualPortDraft("");
     requestControllerRef.current?.abort();
 
     if (!hasValidatedRef.current || !selection.portName || selection.vesselDraft <= 0) return;
     const timer = window.setTimeout(() => void validateActivePort(), 450);
     return () => window.clearTimeout(timer);
-  }, [selection.actualDraft, selection.maxDraft, selection.portIndexNo, selection.portName, selection.role, selection.vesselDraft, validateActivePort]);
+  }, [selection.actualDraft, selection.maxDraft, selection.portName, selection.portUnlocode, selection.portUuid, selection.role, selection.vesselDraft, validateActivePort]);
 
   const confirmCharterParty = async () => {
-    if (!validation || validation.status !== "CLEARED") return;
+    if (!validation || !["CLEARED", "RISK_ACCEPTED"].includes(validation.status)) return;
 
     setIsSaving(true);
     setError(null);
@@ -502,20 +532,24 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
   };
 
   const isCleared = validation?.status === "CLEARED";
-  const validationStatusLabel = isCleared ? "CALADO OK" : "OVERSIZED";
+  const isDraftWarning = validation?.status === "DRAFT_REQUIRED";
+  const isRiskAccepted = validation?.status === "RISK_ACCEPTED";
+  const validationStatusLabel = isCleared
+    ? "CALADO OK"
+    : isDraftWarning ? "CALADO PENDIENTE" : isRiskAccepted ? "RIESGO ACEPTADO" : "OVERSIZED";
   const canValidate = Boolean(selection.portName && selection.vesselDraft > 0 && !isLoading);
-  const canConfirm = Boolean(isCleared && !isLoading && !isSaving);
+  const canConfirm = Boolean((isCleared || isRiskAccepted) && !isLoading && !isSaving);
 
   return (
     <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-teal-700">NGA World Port Index</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-teal-700">Datalastic Port Intelligence</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Validación reactiva de profundidad y calado</h3>
           <p className="mt-1 text-xs text-slate-600">
             <span className="font-bold text-slate-800">{selection.role}</span>
             {" · "}{selection.portName || "Sin puerto seleccionado"}
-            {selection.portIndexNo ? ` · NGA #${selection.portIndexNo}` : ""}
+            {selection.portUnlocode ? ` · ${selection.portUnlocode}` : ""}
             {selection.actualDraft > 0
               ? ` · Calado operativo ${selection.actualDraft.toFixed(2)} m`
               : ` · Calado máximo ${selection.maxDraft > 0 ? `${selection.maxDraft.toFixed(2)} m` : "pendiente"}`}
@@ -562,7 +596,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         {validation && (
           <div className={`rounded-lg border bg-white px-4 py-3 text-slate-700 ${isCleared
             ? "border-teal-200 shadow-[inset_3px_0_0_rgba(15,118,110,0.65)]"
-            : "border-slate-200 shadow-[inset_3px_0_0_rgba(180,83,9,0.5)]"
+            : "border-amber-300 bg-amber-50/30 shadow-[inset_3px_0_0_rgba(217,119,6,0.72)]"
           }`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -574,7 +608,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
                 </span>
                 <div>
                   <strong className="text-sm text-slate-900">{validation.portName}</strong>
-                  <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">Auditoría técnica NGA · {selection.role}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">Matriz de riesgo · WPI · {selection.role}</p>
                 </div>
               </div>
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-widest ${isCleared
@@ -585,11 +619,42 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
               </span>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-xs sm:grid-cols-3">
-              <div><dt className="text-slate-500">Código NGA</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.portDepthCode || "VACÍO"}</dd></div>
-              <div><dt className="text-slate-500">Profundidad segura</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.safeDepthMeters.toFixed(1)} m</dd></div>
+              <div><dt className="text-slate-500">Fuente</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.depthSource === "MANUAL" ? "Manual" : validation.depthSource === "WPI" ? "WPI" : "N/A"}</dd></div>
+              <div><dt className="text-slate-500">Calado operativo máximo</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.safeDepthMeters > 0 ? `${validation.safeDepthMeters.toFixed(2)} m` : "N/A"}</dd></div>
               <div><dt className="text-slate-500">{validation.draftBasis === "ACTUAL" ? "Calado operativo calculado" : "Calado máximo (fallback)"}</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.vesselDraft.toFixed(2)} m</dd></div>
             </dl>
             <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-relaxed text-slate-600">{validation.message}</p>
+            {isDraftWarning && (
+              <div className="mt-3 grid gap-3 border-t border-amber-200 pt-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="text-xs font-semibold text-amber-950">
+                  Calado operativo máximo manual (m)
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.01"
+                    value={manualPortDraft}
+                    onChange={(event) => setManualPortDraft(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none transition focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20"
+                    placeholder="Ej. 12.50"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={!(Number(manualPortDraft) > 0) || isLoading}
+                  onClick={() => void validateActivePort({ manualDraft: Number(manualPortDraft) })}
+                  className="self-end rounded-lg border border-amber-700 bg-amber-700 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:border-amber-200 disabled:bg-amber-100 disabled:text-amber-400"
+                >
+                  Validar manualmente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void validateActivePort({ acceptUnknownDraft: true, manualDraft: null })}
+                  className="rounded-lg border border-amber-400 bg-amber-100 px-4 py-2 text-xs font-bold text-amber-950 transition hover:bg-amber-200 sm:col-span-2"
+                >
+                  Aceptar riesgo de calado no informado y continuar
+                </button>
+              </div>
+            )}
           </div>
         )}
 

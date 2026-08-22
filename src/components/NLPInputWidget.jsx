@@ -245,7 +245,7 @@ async function typeIntoControl(id, value) {
 
 async function resolveAndSelectWpiPort(portRecord, inputId) {
   const input = document.getElementById(inputId);
-  if (!portRecord || portRecord.source !== "WPI" || !(input instanceof HTMLInputElement)) return null;
+  if (!portRecord || portRecord.source !== "DATALASTIC" || !(input instanceof HTMLInputElement)) return null;
 
   await window.ensureWpiLoadedOnDemand?.();
   const selectedPort = {
@@ -254,12 +254,21 @@ async function resolveAndSelectWpiPort(portRecord, inputId) {
     countryCode: portRecord.countryCode,
     lat: Number(portRecord.latitude),
     lon: Number(portRecord.longitude),
-    source: "WPI",
+    source: "Datalastic",
+    uuid: portRecord.uuid,
+    unlocode: portRecord.unlocode,
+    maxOperationalDraftMeters: portRecord.maxOperationalDraftMeters,
+    maxVesselLengthLabel: portRecord.maxVesselLengthLabel || "N/A",
+    engineeringSource: portRecord.engineeringSource || "N/A",
+    depthCode: portRecord.depthCode || "",
+    cargoDepth: portRecord.cargoDepth || "",
+    channelDepth: portRecord.channelDepth || "",
+    indexNo: portRecord.indexNo || null,
     port: {
-      indexNo: Number(portRecord.indexNo) || null,
-      regionNo: Number(portRecord.regionNo) || null,
+      uuid: portRecord.uuid,
+      unlocode: portRecord.unlocode,
       countryCode: portRecord.countryCode,
-      source: "WPI",
+      source: "DATALASTIC",
     },
   };
   if (!selectedPort || !window.selectUniversalPortSuggestion?.(input, selectedPort)) return null;
@@ -268,7 +277,7 @@ async function resolveAndSelectWpiPort(portRecord, inputId) {
     country: selectedPort.countryCode || "",
     lat: Number(selectedPort.lat),
     lng: Number(selectedPort.lon),
-    source: selectedPort.source || "WPI",
+    source: selectedPort.source || "Datalastic",
     port: selectedPort.port || null,
   };
 }

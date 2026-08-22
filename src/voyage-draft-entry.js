@@ -128,19 +128,28 @@ function normalizeAssistantFormDate(value) {
 
 function selectValidatedWpiPort(inputId, port) {
     const input = document.getElementById(inputId);
-    if (!input || !port || port.source !== 'WPI' || typeof window.selectUniversalPortSuggestion !== 'function') return false;
+    if (!input || !port || port.source !== 'DATALASTIC' || typeof window.selectUniversalPortSuggestion !== 'function') return false;
     return window.selectUniversalPortSuggestion(input, {
         label: port.officialLabel,
         placeName: port.name,
         countryCode: port.countryCode,
         lat: Number(port.latitude),
         lon: Number(port.longitude),
-        source: 'WPI',
+        source: 'Datalastic',
+        uuid: port.uuid,
+        unlocode: port.unlocode,
+        maxOperationalDraftMeters: port.maxOperationalDraftMeters,
+        maxVesselLengthLabel: port.maxVesselLengthLabel || 'N/A',
+        engineeringSource: port.engineeringSource || 'N/A',
+        depthCode: port.depthCode || '',
+        cargoDepth: port.cargoDepth || '',
+        channelDepth: port.channelDepth || '',
+        indexNo: port.indexNo || null,
         port: {
-            indexNo: Number(port.indexNo) || null,
-            regionNo: Number(port.regionNo) || null,
+            uuid: port.uuid,
+            unlocode: port.unlocode,
             countryCode: port.countryCode,
-            source: 'WPI',
+            source: 'DATALASTIC',
         },
     });
 }
