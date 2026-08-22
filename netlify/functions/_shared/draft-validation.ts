@@ -20,7 +20,7 @@ export const NGA_CARGO_DEPTH_METERS = Object.freeze({
   UNKNOWN: 0.0,
 } as const);
 
-export type DraftValidationStatus = "CLEARED" | "OVERSIZED";
+export type DraftValidationStatus = "CLEARED" | "OVERSIZED" | "DRAFT_REQUIRED" | "RISK_ACCEPTED";
 export type DraftValidationBasis = "ACTUAL" | "MAXIMUM";
 
 export interface DraftValidationResult {
@@ -33,6 +33,9 @@ export interface DraftValidationResult {
   draftBasis: DraftValidationBasis;
   status: DraftValidationStatus;
   message: string;
+  depthSource: "DATALASTIC" | "MANUAL" | "UNKNOWN";
+  requiresManualDraft: boolean;
+  riskAccepted: boolean;
 }
 
 type CargoDepthCode = keyof typeof NGA_CARGO_DEPTH_METERS;
@@ -61,28 +64,39 @@ function firstPositiveDraft(...values: unknown[]) {
 
 export function validatePortDraft(input: {
   portName: string;
-  portDepthCode: unknown;
+  portDepthCode?: unknown;
+  safeDepthMeters?: unknown;
+  depthSource?: "DATALASTIC" | "MANUAL";
+  acceptUnknownDraft?: boolean;
   vesselDraft?: number;
   actualDraft?: number | null;
   calculatedDraft?: number | null;
   maxDraft?: number | null;
 }): DraftValidationResult {
   const portDepthCode = normalizeCargoDepthCode(input.portDepthCode);
-  const safeDepthMeters = NGA_CARGO_DEPTH_METERS[portDepthCode];
+  const explicitSafeDepth = firstPositiveDraft(input.safeDepthMeters);
+  const legacySafeDepth = NGA_CARGO_DEPTH_METERS[portDepthCode];
+  const safeDepthMeters = explicitSafeDepth ?? (input.portDepthCode === undefined ? 0 : legacySafeDepth);
   const actualDraft = firstPositiveDraft(input.actualDraft, input.calculatedDraft);
   const maxDraft = firstPositiveDraft(input.maxDraft, input.vesselDraft);
   const draftBasis: DraftValidationBasis = actualDraft !== null ? "ACTUAL" : "MAXIMUM";
   const vesselDraft = actualDraft ?? maxDraft ?? 0;
-  const status: DraftValidationStatus = vesselDraft > safeDepthMeters
-    ? "OVERSIZED"
-    : "CLEARED";
+  const hasSafeDepth = safeDepthMeters > 0;
+  const riskAccepted = !hasSafeDepth && input.acceptUnknownDraft === true;
+  const status: DraftValidationStatus = !hasSafeDepth
+    ? (riskAccepted ? "RISK_ACCEPTED" : "DRAFT_REQUIRED")
+    : vesselDraft > safeDepthMeters ? "OVERSIZED" : "CLEARED";
   const draftDescription = draftBasis === "ACTUAL"
     ? "calado operativo calculado"
     : "calado máximo del buque";
 
   const message = status === "CLEARED"
-    ? `Calado OK: El ${draftDescription} (${vesselDraft.toFixed(2)} m) está dentro del límite seguro NGA de ${input.portName} (${safeDepthMeters.toFixed(1)} m).`
-    : `${input.portName}: el ${draftDescription} (${vesselDraft.toFixed(2)} m) supera el límite seguro NGA (${safeDepthMeters.toFixed(1)} m).`;
+    ? `Calado OK: El ${draftDescription} (${vesselDraft.toFixed(2)} m) está dentro del calado operativo máximo de ${input.portName} (${safeDepthMeters.toFixed(2)} m).`
+    : status === "OVERSIZED"
+      ? `${input.portName}: el ${draftDescription} (${vesselDraft.toFixed(2)} m) supera el calado operativo máximo (${safeDepthMeters.toFixed(2)} m).`
+      : status === "RISK_ACCEPTED"
+        ? `${input.portName}: Datalastic no informó un calado operativo válido. El usuario aceptó continuar bajo riesgo operativo.`
+        : `${input.portName}: Datalastic encontró el puerto y sus coordenadas, pero no informó un calado operativo válido. Introduce el calado manualmente o acepta el riesgo para continuar.`;
 
   return {
     portName: input.portName,
@@ -94,5 +108,8 @@ export function validatePortDraft(input: {
     draftBasis,
     status,
     message,
+    depthSource: explicitSafeDepth !== null ? (input.depthSource || "DATALASTIC") : "UNKNOWN",
+    requiresManualDraft: status === "DRAFT_REQUIRED",
+    riskAccepted,
   };
 }

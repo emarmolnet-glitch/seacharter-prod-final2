@@ -30,15 +30,31 @@ test('geographic inputs allow natural text and spaces without per-keystroke rout
   assert.match(autocompleteSource, /event\.type === 'input'[\s\S]*clearUniversalPortCoordinates\(input\)/);
 });
 
-test('universal autocomplete searches only the preloaded WPI catalog', () => {
+test('universal autocomplete searches Datalastic through the secure Netlify proxy', () => {
   const cascadeStart = autocompleteSource.indexOf('async function runUniversalPortSearch(input)');
   const cascadeEnd = autocompleteSource.indexOf('function handlePortAutocomplete(event)', cascadeStart);
   const cascadeSource = autocompleteSource.slice(cascadeStart, cascadeEnd);
-  assert.match(autocompleteSource, /function searchLocalWpiPorts\(query, limit = 12\)/);
-  assert.match(cascadeSource, /await ensureWpiCatalogLoaded\(\)/);
-  assert.match(cascadeSource, /const localResults = searchLocalWpiPorts\(query\)/);
-  assert.match(cascadeSource, /Sin coincidencias en WPI/);
-  assert.doesNotMatch(cascadeSource, /Nominatim|openstreetmap\.org|fetch\(/i);
+  assert.match(cascadeSource, /fetch\(`\/api\/v1\/ports\/search\?q=/);
+  assert.match(cascadeSource, /source: 'Datalastic'/);
+  assert.match(autocompleteSource, /function prioritizeDatalasticPortResults\(ports = \[\]\)/);
+  assert.match(autocompleteSource, /commercialPorts\.length \? commercialPorts : validPorts/);
+  assert.match(cascadeSource, /prioritizeDatalasticPortResults\(payload\?\.ports\)/);
+  assert.match(cascadeSource, /ensureWpiEngineeringCatalog\(\)/);
+  assert.match(cascadeSource, /resolveWpiEngineeringRecord\(port\)/);
+  assert.match(cascadeSource, /maxOperationalDraftMeters: engineering\?\.maxOperationalDraftMeters \|\| 0/);
+  assert.doesNotMatch(cascadeSource, /port\.maxOperationalDraftMeters/);
+  assert.match(cascadeSource, /Sin coincidencias en Datalastic/);
+  assert.doesNotMatch(cascadeSource, /Nominatim|openstreetmap\.org/i);
+});
+
+
+test('WPI engineering metadata loads once and missing values resolve to static N/A', () => {
+  assert.match(autocompleteSource, /let wpiEngineeringCatalogPromise = null/);
+  assert.match(autocompleteSource, /fetch\('\/WPI\.csv', \{ cache: 'force-cache' \}\)/);
+  assert.match(autocompleteSource, /maxVesselLengthLabel: engineering\?\.maxVesselLengthLabel \|\| 'N\/A'/);
+  assert.match(autocompleteSource, /engineeringSource: engineering \? 'WPI' : 'N\/A'/);
+  assert.match(autocompleteSource, /input\.dataset\.selectedPortEngineeringSource = engineeringSource/);
+  assert.match(autocompleteSource, /function toPortTitleCase\(value\)/);
 });
 
 test('programmatic WPI injection types, searches, and clicks the first rendered option', () => {
@@ -54,14 +70,14 @@ test('programmatic WPI injection types, searches, and clicks the first rendered 
   assert.match(autocompleteSource, /window\.selectFirstWpiAutocompleteMatch = selectFirstWpiAutocompleteMatch/);
 });
 
-test('WPI searches are debounced without external request controllers', () => {
+test('Datalastic searches are debounced without external request controllers', () => {
   const handlerStart = autocompleteSource.indexOf('function handlePortAutocomplete(event)');
   const handlerEnd = autocompleteSource.indexOf('function bindUniversalPortAutocomplete(input)', handlerStart);
   const handlerSource = autocompleteSource.slice(handlerStart, handlerEnd);
-  assert.match(autocompleteSource, /const WPI_SEARCH_DEBOUNCE_MS = 300;/);
+  assert.match(autocompleteSource, /const DATALASTIC_SEARCH_DEBOUNCE_MS = 300;/);
   assert.match(handlerSource, /clearTimeout\(portAutocompleteTimers\.get\(input\)\)/);
   assert.doesNotMatch(autocompleteSource, /AbortController|NOMINATIM_/);
-  assert.match(handlerSource, /setPortSearchState\(input, true\);[\s\S]*setTimeout\(\(\) => runUniversalPortSearch\(input\), WPI_SEARCH_DEBOUNCE_MS\)/);
+  assert.match(handlerSource, /setPortSearchState\(input, true\);[\s\S]*setTimeout\(\(\) => runUniversalPortSearch\(input\), DATALASTIC_SEARCH_DEBOUNCE_MS\)/);
   assert.doesNotMatch(handlerSource, /setTimeout\([^,]+,\s*450\)/);
 });
 
@@ -97,6 +113,11 @@ test('selected suggestions inject parsed coordinates into route and global state
   assert.match(autocompleteSource, /window\.GlobalStore\[coordinateKey\] = null/);
   assert.match(autocompleteSource, /lat: parseFloat\(input\.dataset\.selectedLatitude\)/);
   assert.match(autocompleteSource, /lon: parseFloat\(input\.dataset\.selectedLongitude\)/);
-  assert.match(geocoderSource, /searchLocalWpiPorts\(query, 1\)/);
-  assert.match(geocoderSource, /return \{ lat, lon, name: result\.label, countryCode: result\.countryCode \}/);
+  assert.match(autocompleteSource, /portAutocompleteTimers\.delete\(input\)/);
+  assert.match(autocompleteSource, /commitUniversalPortCoordinates\(input, result\)[\s\S]*setPortSearchState\(input, false\)[\s\S]*return true/);
+  assert.match(autocompleteSource, /input\.dataset\.selectedPortDraft = selectedPortDraft > 0 \? String\(selectedPortDraft\) : '0'/);
+  assert.match(autocompleteSource, /input\.dataset\.selectedPortLabel === input\.value[\s\S]*setPortSearchState\(input, false\)/);
+  assert.match(geocoderSource, /fetch\(`\/api\/v1\/ports\/search\?q=/);
+  assert.match(geocoderSource, /commitUniversalPortCoordinates\(targetInput, result\)/);
+  assert.match(geocoderSource, /return \{ lat: result\.lat, lon: result\.lon, name: result\.label, countryCode: result\.countryCode \}/);
 });

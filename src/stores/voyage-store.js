@@ -63,14 +63,15 @@ function normalizePort(port, fallbackName = '') {
         name,
         lat: Number.isFinite(lat) ? lat : null,
         lng: Number.isFinite(lng) ? lng : null,
-        ...(source.source === 'WPI' ? {
-            indexNo: Number(source.indexNo) || null,
-            regionNo: Number(source.regionNo) || null,
+        ...(source.source === 'DATALASTIC' || source.source === 'Datalastic' ? {
+            uuid: cleanText(source.uuid),
+            unlocode: cleanText(source.unlocode).toUpperCase(),
+            maxOperationalDraftMeters: Number(source.maxOperationalDraftMeters) || null,
             officialLabel: cleanText(source.officialLabel),
             countryCode: cleanText(source.countryCode).toUpperCase(),
             latitude: Number.isFinite(lat) ? lat : null,
             longitude: Number.isFinite(lng) ? lng : null,
-            source: 'WPI',
+            source: 'DATALASTIC',
         } : {}),
     };
 }

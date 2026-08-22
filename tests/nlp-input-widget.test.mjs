@@ -49,12 +49,12 @@ test("voyage extractor uses Netlify AI Gateway with strict JSON schema", () => {
   assert.match(functionSource, /valid: hasMinimumVoyageRoute\(scenario\)/);
 });
 
-test("NLPInputWidget validates extracted port strings against the global WPI catalog", () => {
+test("NLPInputWidget validates extracted port strings through Datalastic", () => {
   assert.match(widgetSource, /validateScenarioPortsWithWpi/);
-  assert.match(wpiClientSource, /await window\.ensureWpiCatalogLoaded\?\.\(\)/);
-  assert.match(wpiClientSource, /catalog\?\.findExactPort\?\.\(polText\)/);
+  assert.match(wpiClientSource, /fetch\(`\/api\/v1\/ports\/search\?q=/);
+  assert.match(wpiClientSource, /source: "DATALASTIC"/);
   assert.doesNotMatch(widgetSource, /searchLocalWpiPorts/);
-  assert.match(widgetSource, /portRecord\.source !== "WPI"/);
+  assert.match(widgetSource, /portRecord\.source !== "DATALASTIC"/);
   assert.match(widgetSource, /scenario\.port_validation\?\.valid/);
   assert.match(widgetSource, /window\.selectUniversalPortSuggestion\?\.\(input, selectedPort\)/);
   assert.match(widgetSource, /await window\.runOnDemandMapRouteWorkflow\?\.\(document\.getElementById\("btn-map-locate-route"\)\)/);
@@ -70,10 +70,12 @@ test("NLPInputWidget validates extracted port strings against the global WPI cat
   assert.ok(wpiIndex >= 0 && storeIndex > wpiIndex && routeIndex > storeIndex);
 });
 
-test("WPI catalog preloads globally during application initialization", () => {
+test("Datalastic identity lookup shares one local WPI engineering catalog", () => {
   assert.match(indexSource, /window\.WpiCatalogStore = WpiCatalogStore/);
-  assert.match(indexSource, /void ensureWpiCatalogLoaded\(\)\.catch/);
-  assert.match(indexSource, /WpiCatalogStore\.replaceCatalog\(PORT_DB\)/);
+  assert.match(indexSource, /fetch\('\/WPI\.csv', \{ cache: 'force-cache' \}\)/);
+  assert.match(indexSource, /let wpiEngineeringCatalogPromise = null/);
+  assert.match(indexSource, /resolveWpiEngineeringRecord/);
+  assert.match(indexSource, /\/api\/v1\/ports\/search\?q=/);
   assert.doesNotMatch(indexSource, /addEventListener\('focus', trigger/);
 });
 

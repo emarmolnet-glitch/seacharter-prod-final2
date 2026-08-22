@@ -18,7 +18,7 @@ async function loadDraftValidationModule() {
   return import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 }
 
-test("draft validation clears drafts equal to the NGA safe depth", async () => {
+test("draft validation clears drafts equal to the Datalastic safe depth", async () => {
   const { validatePortDraft } = await loadDraftValidationModule();
   const result = validatePortDraft({
     portName: "Test Port",
@@ -30,7 +30,7 @@ test("draft validation clears drafts equal to the NGA safe depth", async () => {
   assert.equal(result.status, "CLEARED");
 });
 
-test("draft validation flags drafts above the NGA safe depth", async () => {
+test("draft validation flags drafts above the Datalastic safe depth", async () => {
   const { validatePortDraft } = await loadDraftValidationModule();
   const result = validatePortDraft({
     portName: "Test Port",
@@ -58,7 +58,7 @@ test("draft validation prioritizes the calculated operational draft over maximum
   assert.equal(result.draftBasis, "ACTUAL");
   assert.equal(result.status, "CLEARED");
   assert.match(result.message, /calado operativo calculado \(6\.39 m\)/i);
-  assert.match(result.message, /límite seguro NGA de Valencia \(7\.9 m\)/i);
+  assert.match(result.message, /calado operativo máximo de Valencia \(7\.90 m\)/i);
 });
 
 test("draft validation falls back to maximum draft only when operational draft is zero", async () => {
@@ -91,7 +91,7 @@ test("draft validation accepts calculated draft when an empty actual draft is re
   assert.equal(result.status, "CLEARED");
 });
 
-test("unknown depth codes use the conservative zero-meter limit", async () => {
+test("missing Datalastic depth produces a non-fatal manual-review state", async () => {
   const { validatePortDraft } = await loadDraftValidationModule();
   const result = validatePortDraft({
     portName: "Unclassified Port",
@@ -101,5 +101,32 @@ test("unknown depth codes use the conservative zero-meter limit", async () => {
 
   assert.equal(result.portDepthCode, "UNKNOWN");
   assert.equal(result.safeDepthMeters, 0);
-  assert.equal(result.status, "OVERSIZED");
+  assert.equal(result.status, "DRAFT_REQUIRED");
+  assert.equal(result.requiresManualDraft, true);
+});
+
+test("missing Datalastic depth can continue after explicit risk acceptance", async () => {
+  const { validatePortDraft } = await loadDraftValidationModule();
+  const result = validatePortDraft({
+    portName: "Unclassified Port",
+    safeDepthMeters: 0,
+    vesselDraft: 8.4,
+    acceptUnknownDraft: true,
+  });
+
+  assert.equal(result.status, "RISK_ACCEPTED");
+  assert.equal(result.riskAccepted, true);
+});
+
+test("manual port draft replaces an absent provider depth", async () => {
+  const { validatePortDraft } = await loadDraftValidationModule();
+  const result = validatePortDraft({
+    portName: "Manual Port",
+    safeDepthMeters: 11.2,
+    depthSource: "MANUAL",
+    vesselDraft: 10.8,
+  });
+
+  assert.equal(result.status, "CLEARED");
+  assert.equal(result.depthSource, "MANUAL");
 });

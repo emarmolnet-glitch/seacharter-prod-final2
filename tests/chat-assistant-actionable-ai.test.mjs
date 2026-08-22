@@ -48,6 +48,33 @@ test('Core PRO strips and executes hidden update_field JSON before rendering', (
   assert.match(frontendSource, /actionableResponse\.visibleText \|\| "Acción completada\."/);
 });
 
+test('update_fields preserves the server payload and awaits the map workflow', () => {
+  assert.match(frontendSource, /const rawAction = payload\?\.action \?\? payload\?\.data\?\.action \?\? null/);
+  assert.match(frontendSource, /typeof rawAction === "string"[\s\S]*\{ action: rawAction, payload: actionPayload \|\| \{\} \}/);
+  assert.match(frontendSource, /async function executeActionableAiUpdateFields\(actionObj\)/);
+  assert.match(frontendSource, /let p = actionObj\.payload \|\| actionObj/);
+  assert.match(frontendSource, /await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
+  assert.match(frontendSource, /window\.runEngine\?\.\(\)/);
+});
+
+test('update_fields is processed once per completed assistant response', () => {
+  assert.match(frontendSource, /const processedUpdateFieldsActions = new WeakSet\(\)/);
+  assert.match(frontendSource, /let updateFieldsActionInProgress = false/);
+  assert.match(frontendSource, /updateFieldsActionInProgress \|\| processedUpdateFieldsActions\.has\(actionObj\)/);
+  assert.match(frontendSource, /processedUpdateFieldsActions\.add\(actionObj\)/);
+  assert.match(frontendSource, /if \(actionName === "update_fields"\)/);
+  assert.doesNotMatch(frontendSource, /actionName === "update_fields" \|\| actionObj\.pol/);
+  assert.match(frontendSource, /try \{[\s\S]*await executeActionableAiUpdateFields\(actionObj\)[\s\S]*finally \{[\s\S]*updateFieldsActionInProgress = false/);
+});
+
+test('update_fields writes POL and POD without triggering autocomplete events', () => {
+  assert.match(frontendSource, /const updateInputs = \(ids, value, dispatchEvents = true\) =>/);
+  assert.match(frontendSource, /if \(!dispatchEvents\) return/);
+  assert.match(frontendSource, /updateInputs\(\["map-port-pol", "port-pol"\], p\.pol, false\)/);
+  assert.match(frontendSource, /updateInputs\(\["map-port-pod", "port-pod"\], p\.pod, false\)/);
+  assert.match(frontendSource, /input\.dispatchEvent\(new Event\("input", \{ bubbles: true \}\)\)/);
+});
+
 test('Core PRO executes hidden calculate_route actions through the existing map workflow', () => {
   assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(action\?\.action\)/);
   assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(parsed\?\.action\)/);

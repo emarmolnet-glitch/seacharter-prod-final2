@@ -139,6 +139,7 @@ test('NLP schema includes cargo type and supports Spanish natural dates', () => 
   assert.match(draftEntrySource, /applyManualOperationalRate/);
   assert.match(dictionarySource, /toneladas/);
   assert.doesNotMatch(extractorSource, /validateWpiVoyagePorts|wpi-port-resolver|WPI\.csv/);
-  assert.match(wpiClientSource, /findExactPort/);
+  assert.match(wpiClientSource, /\/api\/v1\/ports\/search\?q=/);
+  assert.match(wpiClientSource, /source: "DATALASTIC"/);
   assert.match(extractorSource, /netlify-ai-gateway/);
 });
