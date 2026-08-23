@@ -13137,539 +13137,164 @@
         </div>
     </div>
 
-    <!-- MODAL MANUAL DE USUARIO Y FAQ -->
-    <div id="faq-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden pointer-events-none flex items-start justify-center px-3 pb-4 pt-20 sm:px-6 sm:pb-6 sm:pt-24 no-print" role="dialog" aria-modal="true" aria-labelledby="faq-modal-title" onclick="if (event.target === this) closeFaqModal()">
-        <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh] overflow-hidden text-slate-100">
-            <!-- Modal Header -->
-            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-800 bg-slate-950 shrink-0">
-                <div class="flex items-center gap-3 min-w-0">
-                    <div class="bg-sky-600/20 text-sky-400 p-2 rounded-lg border border-sky-500/30 shrink-0">
-                        <i class="fa-solid fa-book-open text-base" aria-hidden="true"></i>
-                    </div>
-                    <div>
-                        <h3 id="faq-modal-title" class="font-bold text-white text-sm sm:text-base tracking-tight truncate">
-                            Manual de Usuario y Referencia Técnica — SeaCharter Core PRO
-                        </h3>
-                        <p class="text-xs text-slate-400 hidden sm:block">
-                            Documentación oficial, guías operativas paso a paso, arquitectura sandbox y anexo matemático
-                        </p>
-                    </div>
+    <!-- MODAL FAQ Y AYUDA CORE PRO -->
+    <!-- 1. EL FONDO DESENFOCADO -->
+    <div id="faq-modal" class="fixed inset-0 z-50 hidden pointer-events-none flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md no-print" role="dialog" aria-modal="true" aria-labelledby="faq-modal-title" onclick="if (event.target === this) closeFaqModal()">
+        <!-- 2. EL CONTENEDOR DEL MODAL -->
+        <div class="flex w-full max-w-5xl h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <!-- 3. BARRA LATERAL -->
+            <div class="w-[35%] bg-slate-800 p-8 flex flex-col relative overflow-hidden text-white" aria-label="Navegación del centro de ayuda">
+                <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-slate-700 rounded-full opacity-50 blur-3xl"></div>
+
+                <div class="relative z-10 mb-8">
+                    <span class="text-[10px] font-bold tracking-widest text-slate-300 uppercase">SeaCharter Core PRO</span>
+                    <h2 class="text-3xl font-bold mt-2 leading-tight">Operativa<br>clara, datos<br>confiables.</h2>
+                    <p class="text-sm mt-4 text-slate-300">Una referencia rápida para revisar flota, validar fichas y completar cada flujo.</p>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                    <button
-                        id="btn-export-faq-pdf"
-                        type="button"
-                        onclick="exportFaqToPdf()"
-                        class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow transition flex items-center gap-2 cursor-pointer"
-                        title="Descargar Manual en PDF"
-                        aria-label="Descargar Manual en PDF"
-                    >
-                        <i class="fa-solid fa-file-pdf text-sm" aria-hidden="true"></i>
-                        <span>Descargar Manual en PDF</span>
+
+                <!-- 4. BOTONES LATERALES -->
+                <div class="space-y-2 relative z-10 flex-1 overflow-y-auto pr-1">
+                    <button type="button" onclick="document.getElementById('faq-step-tce').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-slate-700/60 border border-slate-600/50 rounded-lg text-sm text-left text-white transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900 rounded text-xs mr-3 font-semibold text-slate-300">01</span> Calculadora TCE
                     </button>
-                    <button
-                        type="button"
-                        onclick="closeFaqModal()"
-                        class="text-slate-400 hover:text-white w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-slate-800 transition cursor-pointer"
-                        aria-label="Cerrar modal FAQ"
-                        title="Cerrar (Esc)"
-                    >
+                    <button type="button" onclick="document.getElementById('faq-step-bunker').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-transparent border border-transparent hover:bg-slate-700/30 rounded-lg text-sm text-left text-slate-300 transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900/50 rounded text-xs mr-3 font-semibold text-slate-400">02</span> Búnker
+                    </button>
+                    <button type="button" onclick="document.getElementById('faq-step-globe').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-transparent border border-transparent hover:bg-slate-700/30 rounded-lg text-sm text-left text-slate-300 transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900/50 rounded text-xs mr-3 font-semibold text-slate-400">03</span> Mapa Globe.gl
+                    </button>
+                    <button type="button" onclick="document.getElementById('faq-step-risks').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-transparent border border-transparent hover:bg-slate-700/30 rounded-lg text-sm text-left text-slate-300 transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900/50 rounded text-xs mr-3 font-semibold text-slate-400">04</span> Riesgos portuarios
+                    </button>
+                    <button type="button" onclick="document.getElementById('faq-step-bdi').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-transparent border border-transparent hover:bg-slate-700/30 rounded-lg text-sm text-left text-slate-300 transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900/50 rounded text-xs mr-3 font-semibold text-slate-400">05</span> BDI
+                    </button>
+                    <button type="button" onclick="document.getElementById('faq-step-cbam').scrollIntoView({ behavior: 'smooth', block: 'start' })" class="w-full flex items-center px-4 py-3 bg-transparent border border-transparent hover:bg-slate-700/30 rounded-lg text-sm text-left text-slate-300 transition-colors">
+                        <span class="w-6 h-6 flex items-center justify-center bg-slate-900/50 rounded text-xs mr-3 font-semibold text-slate-400">06</span> CBAM
+                    </button>
+                </div>
+
+                <button id="btn-export-faq-pdf" type="button" onclick="exportFaqToPdf()" class="relative z-10 mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-transparent border border-slate-600/50 rounded-lg text-xs font-bold text-slate-300 transition-colors hover:bg-slate-700/30 hover:text-white" title="Descargar guía en PDF" aria-label="Descargar guía en PDF">
+                    <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
+                    <span>DESCARGAR GUÍA PDF</span>
+                </button>
+            </div>
+
+            <!-- 5. ZONA DE TARJETAS -->
+            <div id="faq-manual-content-wrapper" class="w-[65%] flex flex-col bg-white relative">
+                <div class="flex justify-between items-start p-8 pb-6 bg-white sticky top-0 z-10">
+                    <div>
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Centro de Ayuda</span>
+                        <h2 id="faq-modal-title" class="text-2xl font-extrabold text-slate-800 mt-1">FAQ y Guía de Uso</h2>
+                    </div>
+                    <button type="button" onclick="closeFaqModal()" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" aria-label="Cerrar modal FAQ" title="Cerrar (Esc)">
                         <i class="fa-solid fa-xmark text-lg" aria-hidden="true"></i>
                     </button>
                 </div>
-            </div>
 
-            <!-- Modal Body (Scrollable) -->
-            <div class="p-4 sm:p-8 overflow-y-auto flex-1 bg-slate-900" id="faq-manual-content-wrapper">
-                <article id="faq-manual-content" class="bg-white text-slate-900 p-6 sm:p-10 rounded-xl shadow-md space-y-8 font-sans max-w-none">
-                    
-                    <!-- HEADER CORPORATIVO -->
-                    <header class="border-b-2 border-slate-900 pb-3 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                        <div>
-                            <div class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-800 text-[10px] font-extrabold uppercase tracking-wider mb-1">
-                                <i class="fa-solid fa-shield-halved"></i> Documentación Oficial
-                            </div>
-                            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">
-                                Documentación de SeaCharter Core PRO
-                            </h1>
-                            <p class="text-xs text-slate-600 mt-0.5 font-medium leading-normal">
-                                Guía operativa integral, especificaciones de arquitectura sandbox y especificaciones matemáticas de fletamento marítimo.
-                            </p>
-                        </div>
-                        <div class="text-right text-[11px] text-slate-500 font-mono shrink-0 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                            <div><strong>Versión:</strong> 1.0.0 Enterprise</div>
-                            <div><strong>Contrato Base:</strong> GENCON 94</div>
-                        </div>
-                    </header>
-
-                    <!-- SECCIÓN 1: VISIÓN GENERAL CORPORATIVA -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">1</span>
-                            Visión General Corporativa
-                        </h2>
-                        <p class="text-slate-700 text-sm leading-relaxed">
-                            <strong>SeaCharter Core PRO</strong> constituye la plataforma tecnológica oficial y centralizada de fletamento marítimo (<em>chartering</em>) para <strong>Rodahmar Shipping SL</strong> y sus entidades comerciales asociadas. El sistema ha sido concebido para optimizar la toma de decisiones comerciales y operativas en el transporte marítimo de mercancías a granel (<em>dry bulk</em>) y carga general en regímenes de fletamento por viaje (<em>trip charter</em>) y contratos de volumen (<em>COA - Contract of Affreightment</em>).
-                        </p>
-                        <p class="text-slate-700 text-sm leading-relaxed">
-                            La plataforma integra algoritmos avanzados para la determinación automatizada del <strong>Flete Justo (Fair Freight Rate)</strong>, simulación de márgenes comerciales mediante modelos <em>Cost-Plus</em> y cotizaciones de mercado, aplicación estricta de términos internacionales <strong>Incoterms</strong> (FOB, CFR, CIF, FIOST), gestión integral de tiempo de plancha (<em>laytime/demurrage</em>), estibado, impuestos sobre emisiones <strong>CBAM/ETS</strong> y emisión normalizada de contratos según el estándar internacional <strong>GENCON 94</strong> de BIMCO.
-                        </p>
-                    </section>
-
-                    <!-- SECCIÓN 2: MÓDULOS DEL SISTEMA -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">2</span>
-                            Módulos de la Interfaz y Lógica Interna
-                        </h2>
-                        <p class="text-slate-700 text-sm leading-relaxed">
-                            SeaCharter Core PRO se estructura en siete módulos de trabajo interconectados, accesibles desde la barra de navegación superior:
-                        </p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-earth-americas text-blue-600"></i> Mapa y Estado Geográfico
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Representación cartográfica 3D/2D con motor Globe.gl y Leaflet. Permite definir visualmente las rutas de navegación entre los puertos de carga (<strong>POL</strong>) y descarga (<strong>POD</strong>), calculando distancias ortodrómicas y tramos de navegación en lastre (<em>ballast</em>) y en carga (<em>laden</em>) en millas náuticas (NM).
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-calculator text-emerald-600"></i> Calculadora (Voyage Estimator)
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Núcleo de cálculo financiero de viajes. Evalúa costes de combustible (VLSFO, LSMGO, Scrubber), costes de puerto (PDA), gastos de estiba por método (Grúa Barco, Cinta, Camión Tolva, Cuchara), OPEX diario del buque, comisiones comerciales, contingencias y recargos regulatorios CBAM/ETS, determinando el Flete Justo, el Break-Even ($/TM) y el TCE ($/día).
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-brain text-amber-600"></i> Decisiones (DSS)
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Sistema de Apoyo a la Decisión (<em>Decision Support System</em>) para simulación y análisis de escenarios de riesgo de viaje. Controla la eficiencia de reposicionamiento calculando el Ratio de Lastre (%), gestiona la alerta de Déficit de Exportación (<em>Backhaul Risk</em>), evalúa primas de riesgo de guerra JWC y permite la fijación de condiciones definitivas e inmutables pre-contrato.
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-satellite-dish text-sky-600"></i> Densidad de Flota AIS
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Telemetría e inteligencia de posicionamiento satelital de buques en tiempo real. Analiza la concentración de flota por macrocategorías de tamaño (Coaster, Handysize, Supramax, Panamax) y subcategorías de mercancía (Bulk Carrier, Cement Carrier, General Cargo) alrededor de las coordenadas de POL/POD.
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-filter text-purple-600"></i> Coincidencia (Matching Engine)
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Algoritmo defensivo de selección de buques candidatos para una carga dada. Valida tolerancias de capacidad DWT (±15%), volumen de bodega en CBM (factor de estibado), idoneidad de equipamiento de elevación (grúas/cucharas) y requisitos de clase/inspecciones de seguridad PSC.
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-file-signature text-amber-600"></i> Editor Contractual (GENCON 94)
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Generador y personalizador de pólizas de fletamento (<em>Charterparties</em>) basadas en el formulario normalizado GENCON 94. Importa automáticamente los datos de la estimación activa, inyecta cláusulas especiales (CBAM, SHINC/SSHEX, War Risk) y permite la exportación a formato digital.
-                                </p>
-                            </div>
-
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                    <i class="fa-solid fa-clipboard-check text-rose-600"></i> Auditoría de Riesgo y Ofertas
-                                </h3>
-                                <p class="text-xs text-slate-600 leading-relaxed">
-                                    Panel de control de calidad contractual e inspección de ofertas recibidas de fletadores y armadores. Genera reportes ejecutivos congelados (<em>Frozen Reports</em>) inmutables y los sincroniza de manera segura con el <em>Data Bridge</em> corporativo.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="overflow-x-auto mt-4">
-                            <table class="w-full text-xs text-left text-slate-700 border border-slate-200 rounded-lg overflow-hidden">
-                                <thead class="bg-slate-100 text-slate-900 uppercase font-bold text-[11px] border-b border-slate-200">
-                                    <tr>
-                                        <th class="p-3 border-r border-slate-200">Módulo</th>
-                                        <th class="p-3 border-r border-slate-200">Inputs Principales</th>
-                                        <th class="p-3 border-r border-slate-200">Lógica Interna</th>
-                                        <th class="p-3">Métricas de Salida</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-200 bg-white">
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Mapa</td>
-                                        <td class="p-3 border-r border-slate-200">Coordenadas POL/POD, Puerto de Lastre</td>
-                                        <td class="p-3 border-r border-slate-200">Cálculo de rutas ortodrómicas y geofencing marítimo</td>
-                                        <td class="p-3">Distancia (NM), Trazado de ruta Lastre/Carga</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Calculadora</td>
-                                        <td class="p-3 border-r border-slate-200">TM Carga, Precios Bunker, PDAs, Ritmos Carga/Descarga</td>
-                                        <td class="p-3 border-r border-slate-200">Simulación financiera, balance de consumo y laytime</td>
-                                        <td class="p-3">Flete Justo ($/TM), Break-Even, TCE ($/día), Días de Viaje</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Decisiones (DSS)</td>
-                                        <td class="p-3 border-r border-slate-200">Días de Lastre, Flag/Monto Prima JWC, Tonelaje Objetivo/Real, Precios Bunker, OPEX</td>
-                                        <td class="p-3 border-r border-slate-200">Simulación de escenarios de riesgo, control de Ratio de Lastre (%), detección de Déficit de Exportación y Gross-Up con comisiones</td>
-                                        <td class="p-3">Flete Neto Base ($/TM), Recargos Totales ($), All-In Rate Gross ($/TM), Score de Eficiencia (0-100)</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Densidad</td>
-                                        <td class="p-3 border-r border-slate-200">Filtro de Taxonomía, Radio de Búsqueda</td>
-                                        <td class="p-3 border-r border-slate-200">Procesamiento de tráficos AIS y clasificación por DWT/Tipo</td>
-                                        <td class="p-3">Mapa de calor, Conteo de flota en radio, Lista AIS</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Coincidencia</td>
-                                        <td class="p-3 border-r border-slate-200">Criterios de Carga (TM, CBM, Grúas, PSC)</td>
-                                        <td class="p-3 border-r border-slate-200">Evaluación de elegibilidad técnica y scoring de flota</td>
-                                        <td class="p-3">Ranking de buques compatibles, Badges de elegibilidad</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Editor</td>
-                                        <td class="p-3 border-r border-slate-200">Datos de la Estimación, Cláusulas adicionales</td>
-                                        <td class="p-3 border-r border-slate-200">Mapeo de variables en plantilla estandarizada GENCON 94</td>
-                                        <td class="p-3">Borrador de Póliza de Fletamento (.doc/.pdf)</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Auditoría</td>
-                                        <td class="p-3 border-r border-slate-200">Oferta comercial o Contrato adjunto</td>
-                                        <td class="p-3 border-r border-slate-200">Validación de riesgos por IA y congelado de estado</td>
-                                        <td class="p-3">Frozen Report, Score de riesgo, Sincronización Data Bridge</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <!-- SECCIÓN 3: MENÚS DESPLEGABLES Y HERRAMIENTAS AVANZADAS -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">3</span>
-                            Menús Desplegables y Herramientas Avanzadas
-                        </h2>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-                            <!-- Menú de Configuración -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2.5">
-                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-200 pb-2">
-                                    <i class="fa-solid fa-gear text-slate-700"></i> Menú de Configuración (Icono de Engranaje)
-                                </h3>
-                                <ul class="text-xs text-slate-700 space-y-2 leading-relaxed">
-                                    <li><strong>FCL:</strong> Módulo de utilidades para carga contenerizada (<em>Full Container Load</em>) y simulación de fletes por TEU/FEU.</li>
-                                    <li><strong>Editor ASBATANKVOY:</strong> Herramienta especializada de redacción y edición de pólizas de fletamento para buques tanque (<em>tankers</em>) bajo el estándar internacional ASBATANKVOY.</li>
-                                    <li><strong>CBAM:</strong> Panel de gestión, cálculo y configuración del Mecanismo de Ajuste Fronterizo de Carbono (CBAM) y derechos de emisión ETS de la Unión Europea.</li>
-                                    <li><strong>Tracking Live (Premium):</strong> Consola operativa PRO para auditar el viaje completo desde la aproximación al POL hasta el cierre en POD, cruzando Charter Party, AIS, geofencing, plancha y alertas contractuales.</li>
-                                    <li><strong>Modo Dual - Trading & Chartering:</strong> Conmutador que adapta la interfaz y el motor de cálculo para gestionar simultáneamente la compraventa de la mercancía (Trading) y la contratación del flete (Chartering), calculando el margen comercial bruto en tiempo real.</li>
-                                </ul>
-                            </div>
-
-                            <!-- Menú de Sesión y Data Bridge -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2.5">
-                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-200 pb-2">
-                                    <i class="fa-solid fa-ellipsis-vertical text-slate-700"></i> Menú de Sesión y Data Bridge (Icono de 3 Puntos)
-                                </h3>
-                                <ul class="text-xs text-slate-700 space-y-2 leading-relaxed">
-                                    <li><strong>Reporte de Mercado:</strong> Acceso directo para generar el informe certificado de inteligencia de mercado en PDF (<em>Market Report</em>) con <em>Narrative Engine</em> cualitativo, diseño visual limpio sin fondos oscuros y autoría exclusiva de SeaCharter Core PRO.</li>
-                                    <li><strong>Guardar / Cargar Sesión:</strong> Permite almacenar el estado actual del área de trabajo en el navegador y recuperarlo posteriormente sin perder los datos introducidos.</li>
-                                    <li><strong>Data Bridge & Data Bridge Link:</strong> Panel de conexión directa y sincronización segura con la base de datos centralizada de la compañía.</li>
-                                    <li><strong>Motor NPL (Arma Secreta Data Bridge):</strong> Procesamiento de Lenguaje Natural para capturar foto, cargar ficha o introducir texto libre/fichas (ej. <em>"Fletamento de 20.000 TM de cemento..."</em>), extraer automáticamente los datos técnicos y formatear el JSON directo al Data Bridge.</li>
-                                    <li><strong>Salir:</strong> Cierra la sesión activa de forma segura.</li>
+                <div id="faq-manual-content" class="px-8 pb-8 overflow-y-auto space-y-4">
+                    <!-- TARJETA 01 -->
+                    <div id="faq-step-tce" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-teal-50 text-teal-600 font-bold text-sm mt-1">01</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rentabilidad</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">Calculadora TCE</h3>
+                                <p class="text-sm text-slate-600 mb-3">Construye una estimación completa del viaje antes de fijar una oferta.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-teal-500 mr-2 font-bold">•</span> Selecciona POL, POD y carga.</li>
+                                    <li class="flex items-start"><span class="text-teal-500 mr-2 font-bold">•</span> Introduce buque, días operativos y costes.</li>
+                                    <li class="flex items-start"><span class="text-teal-500 mr-2 font-bold">•</span> Revisa TCE, break-even y margen.</li>
                                 </ul>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Motor NPL -->
-                        <div class="border border-indigo-200 rounded-lg p-4 bg-indigo-50/50 space-y-2">
-                            <h3 class="font-bold text-indigo-950 text-sm flex items-center gap-2">
-                                <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> Motor NPL (Arma Secreta Data Bridge)
-                            </h3>
-                            <p class="text-xs text-slate-700 leading-relaxed">
-                                Herramienta avanzada de Procesamiento de Lenguaje Natural. Permite capturar una foto, cargar una ficha o introducir texto libre/fichas (ej. <em>"Fletamento de 20.000 TM de cemento..."</em>). El motor NPL extrae automáticamente los datos técnicos del buque o la carga y los formatea en un JSON listo para ser enviado directamente al Data Bridge, saltándose el Motor de Coincidencias tradicional.
-                            </p>
-                        </div>
-                    </section>
-
-                    <!-- SECCIÓN 4: PREGUNTAS FRECUENTES (FAQ) - GUÍAS PASO A PASO -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">4</span>
-                            Preguntas Frecuentes (FAQ) — Guías Paso a Paso
-                        </h2>
-                        
-                        <div class="space-y-4">
-                            <!-- FAQ 1 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo hacer una nueva estimación paso a paso?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>Para ejecutar un análisis financiero completo de viaje en SeaCharter Core PRO, siga estos pasos:</p>
-                                    <ol class="list-decimal pl-5 space-y-1.5 font-medium">
-                                        <li><strong>Iniciar Nueva Estimación:</strong> Haga clic en el botón verde <code>+ Nueva Estimación</code> ubicado en la esquina superior derecha del encabezado para limpiar el estado previo.</li>
-                                        <li><strong>Definir Puertos en el Mapa:</strong> Acceda al módulo <strong>Mapa</strong> e ingrese el puerto de origen (POL) y el puerto de destino (POD) en el panel flotante o seleccione directamente los puntos en el globo.</li>
-                                        <li><strong>Ingresar Especificaciones de la Carga:</strong> Vaya al módulo <strong>Calculadora</strong> e introduzca el volumen total de mercancía en toneladas métricas (TM), el factor de estibado (CBM/TM) y seleccione la categoría de mercancía (p.ej. Cemento, Grano, Mineral).</li>
-                                        <li><strong>Ajustar Ritmos Operativos y Costes PDA:</strong> Configure las tasas de carga y descarga (TM/día). Utilice el botón <code>✨ Auto</code> para calcular automáticamente los gastos de puerto (PDA) según el tamaño del buque (GT/LOA) o introduzca valores manualmente.</li>
-                                        <li><strong>Establecer Parámetros de Combustible y OPEX:</strong> Introduzca los precios actuales de bunker ($/TM para VLSFO/LSMGO) y el coste operativo diario del buque (OPEX).</li>
-                                        <li><strong>Calcular y Revisar Resultados:</strong> El sistema calculará instantáneamente el Flete Justo sugerido ($/TM), el Break-Even de costes y la distribución de días en mar y puerto.</li>
-                                    </ol>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 2 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo puedo cambiar de modo manual a modo automático en la introducción de datos?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        SeaCharter Core PRO permite alternar dinámicamente entre el motor de estimación automática basada en física marítima y la sobrescritura manual personalizada:
-                                    </p>
-                                    <ul class="list-disc pl-5 space-y-1.5 font-medium">
-                                        <li><strong>Costes de Puerto (PDA Dinámica):</strong> En la sección 2 de la Calculadora, junto a la etiqueta <em>PDAs/Puertos</em>, encontrará la etiqueta interactiva <code>✨ Auto</code>. Al hacer clic en ella, se abrirá el modal de edición de costes de puerto. Si modifica manualmente cualquier importe, la celda cambiará automáticamente al modo <strong>Manual</strong>. Para restaurar los datos derivados de las dimensiones del buque (GT/LOA), haga clic en el botón de refresco del modal.</li>
-                                        <li><strong>Ritmos de Carga y Descarga (TM/Día):</strong> Si selecciona un método de manipulación que emplee grúas de a bordo o equipos continuos (Cinta Transportadora / Camión Tolva), el sistema calculará dinámicamente el ritmo objetivo. Si escribe un valor diferente en la casilla de ritmo, el indicador de la fila cambiará a <em>Manual</em>, registrando la desviación operativa respecto al estándar teórico.</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 3 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo aplicar y auditar un contrato de fletamento GENCON 94?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        Una vez calculada la estimación financiera en la Calculadora, diríjase al módulo <strong>Editor (GENCON 94)</strong>. Haga clic en el botón <em>Importar Datos de Calculadora</em> para poblar automáticamente los campos de las partes, descripción del buque, tipo de carga, puertos, flete acordado y términos de laytime.
-                                    </p>
-                                    <p class="mt-1">
-                                        Posteriormente, navegue hasta el módulo <strong>Auditoría</strong> y pulse <em>Ejecutar Auditoría Legal IA</em>. El motor examinará el borrador generado frente a la base normativa de Rodahmar Shipping SL, verificando la inclusión de cláusulas protectoras críticas (CBAM/ETS, prueba de tanques/bodegas, libre práctica y responsabilidad de estiba FIOST) emitiendo un diagnóstico de riesgo contractual.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 4 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo verificar la densidad de la flota en tiempo real y filtrar por tipo de buque?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        Abra el módulo <strong>Densidad</strong>. En el selector de taxonomía de la barra superior, elija la categoría deseada (p.ej. <em>Handysize / Bulk Carrier</em>). El sistema filtrará instantáneamente las señales AIS recibidas alrededor del puerto de carga (POL), actualizando el contador de unidades disponibles en el radio operativo y la tabla de posiciones sin alterar la ruta global definida.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 5 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo exportar e integrar el reporte ejecutivo con el Data Bridge?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        Para consolidar la operación y compartirla con la infraestructura corporativa de la compañía, pulse el botón <code>Generar Informe Master</code> ubicado en la barra superior. El sistema compilará un resumen ejecutivo en pantalla. Desde ese mismo panel, haga clic en <em>Sincronizar con Data Bridge</em>; esto transmitirá un snapshot inmutable (<strong>Frozen Report</strong>) con su firma criptográfica y Sync ID a la base de datos central en Netlify.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 6 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo calcula el DSS los Días de Puerto y Navegación?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El DSS opera bajo una arquitectura de "Fuente de la Verdad Única". No realiza estimaciones brutas. Hereda los días exactos del motor de cálculo principal, integrando automáticamente los márgenes de clima para la navegación y las cláusulas complejas de laytime (SHEX, FHEX, Turn Time) estipuladas para las operaciones de carga y descarga.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 7 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Qué es la alerta de Déficit de Exportación (Backhaul Risk)?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        Es un radar de inteligencia de mercado a nivel global. El sistema detecta automáticamente si el Puerto de Destino (POD) o su región geopolítica (ej. África Occidental, naciones insulares) presenta un déficit histórico de carga de retorno. Si es así, alerta al operador para que considere añadir Días de Lastre y proteger el Break-Even ante el riesgo de reposicionamiento en vacío.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 8 -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿El sistema contempla riesgos geopolíticos?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        Sí. El módulo permite integrar cotizaciones de primas de riesgo para rutas que transitan por Zonas de Guerra (JWLA - Joint War Committee), consolidando este sobrecoste directamente en la auditoría financiera final.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 9: Market Report -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Qué es el Generador del Reporte de Mercado (Market Report) y quién lo emite?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El <strong>Market Report</strong> es el informe certificado de inteligencia marítima emitido con <strong>autoría exclusiva por SeaCharter Core PRO</strong>. Procesa e hiper-indexa dinámicamente el comportamiento de todas las categorías de carga (Minerales, Carga Siderúrgica, Fertilizantes, Biomasa, Breakbulk) y la totalidad de tipologías de buques (Coaster, Handysize, Supramax, Kamsarmax, Panamax, Capesize), consolidando promedios de flete All-In Gross, TCE global y métricas de riesgo operativo.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 10: Narrative Engine -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo funciona el Motor de Análisis Cualitativo (Narrative Engine)?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El <strong>Narrative Engine</strong> es una lógica backend avanzada que analiza los deltas semanales de los fletes All-In, días de lastre y rendimiento TCE. Con estos datos, ensambla de forma autónoma párrafos de análisis editorial cualitativo en el reporte, explicando el trasfondo de las tendencias de mercado, el impulso de rutas clave y los factores de distorsión comercial.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 11: Diseño Visual Minimalista -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Qué características presenta el diseño visual del Reporte PDF?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El reporte adopta una estética minimalista de alto rendimiento que <strong>elimina por completo los bloques de fondo oscuro pesados</strong>. Emplea superficies sobre fondos claros (#FFFFFF, #F8FAFC), líneas divisorias sutiles (#E2E8F0), tipografía de alta definición y acentos corporativos en verde esmeralda (#00875A) y azul marino (#0F172A), garantizando máxima legibilidad e impresiones impecables.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 12: Doble Modo de Ejecución -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo se ejecuta el informe en el Doble Modo (Automático y On-Demand)?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El sistema opera bajo una arquitectura híbrida de doble modo:
-                                    </p>
-                                    <ul class="list-disc pl-5 space-y-1 font-medium">
-                                        <li><strong>Modo Automático (Cron Job):</strong> Tarea programada en servidor para compilar y guardar en repositorio persistente cada viernes a las 08:00 AM.</li>
-                                        <li><strong>Modo On-Demand (Manual):</strong> Endpoint protegido accesible al instante mediante los botones interactivos en el módulo de <strong>Auditoría</strong> y en el menú desplegable (<code>...</code>) de la barra de navegación superior.</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 13: DSS Auto-Ballast & Backhaul Risk -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo monitoriza el DSS Auto-Ballast el riesgo de posicionamiento en vacío?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El módulo <strong>DSS Auto-Ballast</strong> evalúa la eficiencia de reposicionamiento calculando el Ratio de Lastre (%) y el Score de Eficiencia (0-100). Detecta automáticamente puertos con Déficit de Exportación (<em>Backhaul Risk</em>) asignando puertos de retorno óptimos desde la matriz de fallbacks y calculando los días de lastre proporcionales a la velocidad del buque.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- FAQ 14: Auditorías de Riesgo JWC y Congestión Portuaria -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
-                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
-                                    ¿Cómo se auditan e integran los riesgos geopolíticos JWC y la congestión portuaria?
-                                </h3>
-                                <div class="mt-2 text-xs text-slate-700 space-y-2">
-                                    <p>
-                                        El sistema realiza auditorías continuas detectando rutas que transitan por chokepoints o zonas de guerra reguladas por el <em>Joint War Committee</em> (Mar Rojo, Golfo de Adén, Mar Negro), inyectando sobrecostes unitarios por prima de riesgo ($/TM). Asimismo, cuantifica financieramente los días de espera en nodos con congestión portuaria (ej. Canal de Panamá, Santos), calculando su impacto directo en el TCE de la flota ($/día).
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- SECCIÓN 5: ARQUITECTURA SANDBOX -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">5</span>
-                            Arquitectura Sandbox y Aislamiento de Memoria
-                        </h2>
-                        <p class="text-slate-700 text-sm leading-relaxed">
-                            SeaCharter Core PRO implementa un principio estricto de <strong>Aislamiento en Sandbox</strong> para todas las operaciones exploratorias y búsquedas masivas de flota. Cuando el operador activa la función de <em>Barrido Exploratorio Excepcional</em> para analizar la disponibilidad de buques fuera del alcance inmediato de la ruta, el sistema ejecuta una estrategia de carga diferida (<strong>Lazy Loading</strong>).
-                        </p>
-
-                        <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg space-y-2">
-                            <h3 class="font-bold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-microchip"></i> Mecanismo Técnico de Protección (window.exploratoryVesselsCache)
-                            </h3>
-                            <p class="text-xs text-amber-800 leading-relaxed">
-                                Todos los datos procedentes de barridos especulativos se almacenan de manera aislada en el objeto volátil <code>window.exploratoryVesselsCache</code>. Esta memoria intermedia opera de forma completamente segregada respecto a la tabla persistente <code>vessels_master</code> de la base de datos principal y del flujo activo del <em>Data Bridge</em>.
-                            </p>
-                            <p class="text-xs text-amber-800 leading-relaxed">
-                                <strong>Garantía Operativa:</strong> Ningún buque o registro procedente del barrido exploratorio afectará los cálculos de flete de la estimación actual ni se transmitirá al servidor central a menos que el usuario lo seleccione expresamente y lo confirme como candidato de la operación.
-                            </p>
-                        </div>
-                    </section>
-
-                    <!-- SECCIÓN 6: ANEXO MATEMÁTICO -->
-                    <section class="space-y-4">
-                        <h2 class="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-                            <span class="bg-blue-900 text-white w-7 h-7 rounded-lg inline-flex items-center justify-center text-xs font-black">6</span>
-                            Anexo Matemático y Algoritmos de Flete
-                        </h2>
-                        
-                        <div class="space-y-4">
-                            <!-- Determinación del Flete Justo y Break-Even -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                                    <i class="fa-solid fa-calculator text-emerald-600"></i> Determinación del Flete Justo y Break-Even
-                                </h3>
-                                <p class="text-slate-700 text-xs leading-relaxed">
-                                    En lugar de depender de una fórmula opaca, el sistema ejecuta un balance financiero completo del viaje fase por fase:
-                                </p>
-                                <ul class="text-xs text-slate-700 space-y-1.5 pl-2 font-medium">
-                                    <li><strong>Fase 1 (Gastos de Viaje):</strong> Agrega los costes de combustible (navegación y puerto según los días estimados), los gastos portuarios (PDAs), el coste de estiba y los recargos regulatorios (CBAM/ETS).</li>
-                                    <li><strong>Fase 2 (Costes Fijos):</strong> Suma el coste operativo diario del buque (OPEX) multiplicado por la duración total del viaje.</li>
-                                    <li><strong>Fase 3 (Distribución):</strong> Divide el sumatorio de costes entre las toneladas métricas (TM) netas de carga, deduciendo las comisiones comerciales, para hallar el punto de equilibrio (Break-Even).</li>
-                                    <li><strong>Fase 4 (Margen):</strong> Proyecta el margen comercial objetivo sobre el Break-Even para emitir el Flete Justo final sugerido ($/TM).</li>
+                    <!-- TARJETA 02 -->
+                    <div id="faq-step-bunker" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 font-bold text-sm mt-1">02</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Combustible</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">Búnker</h3>
+                                <p class="text-sm text-slate-600 mb-3">Controla precios, consumos y costes de combustible del viaje.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-indigo-500 mr-2 font-bold">•</span> Consulta o ajusta VLSFO y MGO.</li>
+                                    <li class="flex items-start"><span class="text-indigo-500 mr-2 font-bold">•</span> Verifica consumos en navegación y puerto.</li>
+                                    <li class="flex items-start"><span class="text-indigo-500 mr-2 font-bold">•</span> Comprueba el impacto sobre el TCE.</li>
                                 </ul>
                             </div>
+                        </div>
+                    </div>
 
-                            <!-- Cálculo de Distancia Ortodrómica -->
-                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
-                                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                                    <i class="fa-solid fa-route text-blue-600"></i> Cálculo de Distancia Ortodrómica
-                                </h3>
-                                <p class="text-slate-700 text-xs leading-relaxed">
-                                    El motor de SeaCharter Core PRO no traza líneas rectas simples, sino que calcula la distancia náutica más corta sobre la superficie esférica terrestre (distancia ortodrómica) entre el puerto de carga (POL) y el de descarga (POD). Este cálculo base se ajusta internamente considerando la navegación obligatoria por puntos de estrangulamiento marítimo (chokepoints) y canales estratégicos (como Suez o Panamá) para ofrecer un cálculo de millas (NM) altamente preciso para el viaje en lastre y en carga.
-                                </p>
+                    <!-- TARJETA 03 -->
+                    <div id="faq-step-globe" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-amber-50 text-amber-600 font-bold text-sm mt-1">03</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Visualización</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">Mapa Globe.gl</h3>
+                                <p class="text-sm text-slate-600 mb-3">Explora rutas, puertos y posiciones de flota sobre el globo 3D.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-amber-500 mr-2 font-bold">•</span> Inspecciona corredores marítimos.</li>
+                                    <li class="flex items-start"><span class="text-amber-500 mr-2 font-bold">•</span> Selecciona buques y puertos.</li>
+                                    <li class="flex items-start"><span class="text-amber-500 mr-2 font-bold">•</span> Contrasta posición y densidad AIS.</li>
+                                </ul>
                             </div>
                         </div>
-                    </section>
+                    </div>
 
-                    <!-- FOOTER DEL MANUAL -->
-                    <footer class="pt-6 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
-                        SeaCharter Core PRO © 2026 Rodahmar Shipping SL — Todos los derechos reservados. Documento de referencia técnica interna.
-                    </footer>
-                </article>
+                    <!-- TARJETA 04 -->
+                    <div id="faq-step-risks" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-sky-50 text-sky-600 font-bold text-sm mt-1">04</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Evaluación operativa</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">Riesgos portuarios</h3>
+                                <p class="text-sm text-slate-600 mb-3">Evalúa congestión, demoras y exposición geopolítica de la ruta.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-sky-500 mr-2 font-bold">•</span> Revisa alertas JWC y chokepoints.</li>
+                                    <li class="flex items-start"><span class="text-sky-500 mr-2 font-bold">•</span> Valida esperas y sobrecostes.</li>
+                                    <li class="flex items-start"><span class="text-sky-500 mr-2 font-bold">•</span> Integra el riesgo en la decisión.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TARJETA 05 -->
+                    <div id="faq-step-bdi" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-rose-50 text-rose-600 font-bold text-sm mt-1">05</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mercado dry bulk</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">BDI</h3>
+                                <p class="text-sm text-slate-600 mb-3">Contextualiza la estimación con la tendencia del Baltic Dry Index.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-rose-500 mr-2 font-bold">•</span> Consulta el valor y su dirección reciente.</li>
+                                    <li class="flex items-start"><span class="text-rose-500 mr-2 font-bold">•</span> Relaciónalo con rutas y tamaños.</li>
+                                    <li class="flex items-start"><span class="text-rose-500 mr-2 font-bold">•</span> Úsalo como contexto de mercado.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TARJETA 06 -->
+                    <div id="faq-step-cbam" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm scroll-mt-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 text-purple-600 font-bold text-sm mt-1">06</div>
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cumplimiento</span>
+                                <h3 class="text-base font-bold text-slate-800 mb-2">CBAM</h3>
+                                <p class="text-sm text-slate-600 mb-3">Estima la exposición al ajuste europeo de carbono.</p>
+                                <ul class="space-y-1 text-sm text-slate-600">
+                                    <li class="flex items-start"><span class="text-purple-500 mr-2 font-bold">•</span> Confirma si la operación está sujeta.</li>
+                                    <li class="flex items-start"><span class="text-purple-500 mr-2 font-bold">•</span> Revisa emisiones y precio de carbono.</li>
+                                    <li class="flex items-start"><span class="text-purple-500 mr-2 font-bold">•</span> Incluye el ajuste en el cálculo final.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
