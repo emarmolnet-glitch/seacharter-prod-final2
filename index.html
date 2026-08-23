@@ -34120,17 +34120,22 @@
         }
 
         let reactiveEngineTimer = null;
-        function scheduleReactiveEngine() {
-            if (reactiveEngineTimer) {
-                clearTimeout(reactiveEngineTimer);
-            }
-            reactiveEngineTimer = setTimeout(() => {
-                reactiveEngineTimer = null;
-                if (typeof runEngine === 'function') runEngine();
-                if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
-                if (typeof saveEditedVesselParams === 'function') saveEditedVesselParams();
-            }, 500);
-        }
+function scheduleReactiveEngine() {
+    // Añade esta validación aquí mismo:
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        return;
+    }
+
+    if (reactiveEngineTimer) {
+        clearTimeout(reactiveEngineTimer);
+    }
+    reactiveEngineTimer = setTimeout(() => {
+        reactiveEngineTimer = null;
+        if (typeof runEngine === 'function') runEngine();
+        if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+        if (typeof saveEditedVesselParams === 'function') saveEditedVesselParams();
+    }, 500);
+}
 
         const PORT_RISK_HISTORY = {
             default: { avg_delta_dias: 0.35, avg_clima_dias: 0.45, avg_fondeo_dias: 0.30 },
