@@ -58332,10 +58332,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function validarCompatibilidadMetodo(side = 'pol') {
             const category = getActiveCargoCategory();
+            // NUEVO: Capturamos también el producto específico que ha elegido el usuario
+            const specificProductSelect = document.getElementById('product-sector'); 
+            const specificProduct = specificProductSelect?.options?.[specificProductSelect.selectedIndex]?.text || '';
+            
             const allowed = cargoCompatibilityMap[category] || equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
             const selectedLabel = getSelectedMethodLabel(side);
-
-            const isInvalid = Boolean(selectedLabel && !allowed.includes(selectedLabel));
+            
+            // Lógica original de invalidez
+            let isInvalid = Boolean(selectedLabel && !allowed.includes(selectedLabel));
+            
+            // NUEVO: El "Indulto" para los Big Bags. 
+            // Si el usuario elige "Big Bags" en el producto, Y el método incluye "Big Bags", perdonamos la alerta.
+            if (specificProduct.includes('Big Bags') && selectedLabel && selectedLabel.includes('Big Bags')) {
+                isInvalid = false;
+            }
 
             if (side === 'pol') metodoPolInvalido = isInvalid;
             else metodoPodInvalido = isInvalid;
@@ -58345,7 +58356,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (alertEl) {
                 if (isInvalid) {
-                    alertEl.textContent = '⚠️ Advertencia: El método seleccionado no es idóneo para la categoría de carga.';
+                    alertEl.textContent = ' ⚠️ Advertencia: El método seleccionado no es idóneo para la categoría de carga.';
                     alertEl.classList.remove('hidden');
                 } else {
                     alertEl.classList.add('hidden');
