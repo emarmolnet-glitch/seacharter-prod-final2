@@ -60,7 +60,7 @@ test("maps cement aliases to exact calculator taxonomy values", () => {
   assert.deepEqual(mapCargoDescription("25.000 TM de cemento"), {
     categoriaCarga: "Minerales y Construcción",
     productoEspecifico: "Cemento a granel",
-    especificacionCarga: "10 - Cemento, yeso, cal y clínker (25)",
+    especificacionCarga: "10 - Cemento, yeso, cal y clínker (25) (Envasado / Granel)",
     especificacionCargaId: "10",
     hasBigBags: false,
     rawCargo: "25.000 TM de cemento",
