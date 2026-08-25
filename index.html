@@ -31222,14 +31222,19 @@
 	            const fixedManeuverBase = gtParaCalculo * 1.25;
 	            const dailyBerthBase = gtParaCalculo * 0.15 * portDays;
 
-	            const baseCostes = agencyFeeBase + fixedManeuverBase + dailyBerthBase + tasasAutoridad;
+	            // 1. Aislamos los costes variables (sin sumar el Agency Fee todavía)
+    const variableCostes = fixedManeuverBase + dailyBerthBase + tasasAutoridad;
+    
+    const metricsEntry = getCargoMetricsEntry(cargoCategory, cargoMethod);
+    const pdaPremium = Number(metricsEntry?.pdaPremium) || 1.10;
+    
+    const mGeo = getRegionalPdaMultiplier(portName);
+    
+    // 2. Aplicamos el descuento geográfico SOLO a la parte variable
+    const adjustedVariableCostes = variableCostes * pdaPremium * mGeo;
 
-	            const metricsEntry = getCargoMetricsEntry(cargoCategory, cargoMethod);
-	            const pdaPremium = Number(metricsEntry?.pdaPremium) || 1.10;
-
-	            const mGeo = getRegionalPdaMultiplier(portName);
-
-	            const netTotalPda = baseCostes * pdaPremium * mGeo;
+    // 3. Sumamos el Agency Fee fijo al final para que no sufra recortes
+    const netTotalPda = adjustedVariableCostes + agencyFeeBase;
 
 	            return Math.round(netTotalPda);
 	        }
