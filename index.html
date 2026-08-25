@@ -65915,6 +65915,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 applyGlobalViewModePresentation();
             }
         })();
+        
+        <script>
+      // Escuchamos el evento del Algoritmo Live del panel derecho
+      window.addEventListener('MARKET_REFERENCE_UPDATED', (e) => {
+        const { tce, mode } = e.detail;
+        
+        if (tce !== null && !isNaN(tce)) {
+          // Buscamos el input de la calculadora donde se introduce el TCE objetivo
+          const tceInput = document.querySelector('input[name="tceTarget"]') || document.getElementById('tce-objetivo') || document.querySelector('input[type="number"]');
+          
+          if (tceInput) {
+            tceInput.value = tce;
+            
+            // Disparamos eventos nativos para que la calculadora detecte el cambio y recalcule
+            tceInput.dispatchEvent(new Event('input', { bubbles: true }));
+            tceInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
     </script>
 </body>
 </html>
