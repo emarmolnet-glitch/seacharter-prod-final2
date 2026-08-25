@@ -205,7 +205,7 @@ async function mountPanel() {
     const configuredData = window.SeaCharterMarketIntelligenceData;
     const pageSnapshot = readPageSnapshot();
     
-    // 1. Inicializamos el panel con lo que haya
+    // 1. Inicializamos el panel con valores base por defecto o locales
     const controller = createMarketIntelligencePanel(root, {
         ...MARKET_INTELLIGENCE_DEFAULTS,
         ...(configuredData && typeof configuredData === 'object' ? configuredData : {}),
@@ -216,30 +216,30 @@ async function mountPanel() {
 
     window.SeaCharterMarketIntelligencePanel = controller;
 
-    // 2. ¡NUEVO! Consultamos directamente a Neon (/api/market/latest) para traer el TCE Spot real
+    // 2. CONEXIÓN REAL CON NEON: Consultamos el endpoint de mercado más reciente
     try {
         const response = await fetch('/api/market/latest', { cache: 'no-store' });
         const payload = await response.json().catch(() => null);
         const record = payload?.data || payload;
 
         if (record) {
-            // Detectamos qué tipo de buque está activo en Core PRO para elegir su TCE Spot correspondiente
+            // Detectamos qué clase de buque está activa en Core PRO para extraer su TCE Spot exacto de la base de datos
             const vesselType = (document.getElementById('vessel-badge')?.textContent || '').toLowerCase();
-            let activeTceSpot = Number(record.handysize_tc) || 18712; // Fallback Handy
+            let activeTceSpot = Number(record.handysize_tc) || 18712; // Fallback Handy por defecto
 
             if (vesselType.includes('cape')) activeTceSpot = Number(record.capesize_tc) || 39437;
             else if (vesselType.includes('panamax') || vesselType.includes('kamsar')) activeTceSpot = Number(record.panamax_tc) || 19146;
             else if (vesselType.includes('supra') || vesselType.includes('ultra')) activeTceSpot = Number(record.supramax_tc) || 17178;
 
-            // Actualizamos el panel de inteligencia con el valor real de la base de datos
+            // Inyectamos los datos reales extraídos de Neon directamente en el panel de Core PRO
             controller.update({
                 spot: activeTceSpot,
-                coa: Math.round(activeTceSpot * 0.75),      // Aplicando factor COA
-                backhaul: Math.round(activeTceSpot * 0.55)  // Aplicando factor Backhaul
+                coa: Math.round(activeTceSpot * 0.75),      // Referencia COA derivada
+                backhaul: Math.round(activeTceSpot * 0.55)  // Referencia Backhaul derivada
             });
         }
     } catch (err) {
-        console.warn('[Market Intelligence] No se pudo sincronizar el Spot desde Neon, usando valores locales.', err);
+        console.warn('[Market Intelligence] No se pudo conectar con Neon para sincronizar el Spot:', err);
     }
 
     const offerInput = root.querySelector('[data-mi-offer-input]');
