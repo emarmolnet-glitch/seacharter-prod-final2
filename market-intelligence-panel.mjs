@@ -197,13 +197,15 @@ export function createMarketIntelligencePanel(root, initialData = MARKET_INTELLI
     });
 }
 
-function mountPanel() {
+async function mountPanel() {
     const root = document.getElementById(PANEL_ID);
     if (!root || root.dataset.mounted === 'true') return;
     root.dataset.mounted = 'true';
 
     const configuredData = window.SeaCharterMarketIntelligenceData;
     const pageSnapshot = readPageSnapshot();
+    
+    // 1. Inicializamos el panel con lo que haya
     const controller = createMarketIntelligencePanel(root, {
         ...MARKET_INTELLIGENCE_DEFAULTS,
         ...(configuredData && typeof configuredData === 'object' ? configuredData : {}),
@@ -213,17 +215,47 @@ function mountPanel() {
     if (!controller) return;
 
     window.SeaCharterMarketIntelligencePanel = controller;
+
+    // 2. ¡NUEVO! Consultamos directamente a Neon (/api/market/latest) para traer el TCE Spot real
+    try {
+        const response = await fetch('/api/market/latest', { cache: 'no-store' });
+        const payload = await response.json().catch(() => null);
+        const record = payload?.data || payload;
+
+        if (record) {
+            // Detectamos qué tipo de buque está activo en Core PRO para elegir su TCE Spot correspondiente
+            const vesselType = (document.getElementById('vessel-badge')?.textContent || '').toLowerCase();
+            let activeTceSpot = Number(record.handysize_tc) || 18712; // Fallback Handy
+
+            if (vesselType.includes('cape')) activeTceSpot = Number(record.capesize_tc) || 39437;
+            else if (vesselType.includes('panamax') || vesselType.includes('kamsar')) activeTceSpot = Number(record.panamax_tc) || 19146;
+            else if (vesselType.includes('supra') || vesselType.includes('ultra')) activeTceSpot = Number(record.supramax_tc) || 17178;
+
+            // Actualizamos el panel de inteligencia con el valor real de la base de datos
+            controller.update({
+                spot: activeTceSpot,
+                coa: Math.round(activeTceSpot * 0.75),      // Aplicando factor COA
+                backhaul: Math.round(activeTceSpot * 0.55)  // Aplicando factor Backhaul
+            });
+        }
+    } catch (err) {
+        console.warn('[Market Intelligence] No se pudo sincronizar el Spot desde Neon, usando valores locales.', err);
+    }
+
     const offerInput = root.querySelector('[data-mi-offer-input]');
     offerInput?.addEventListener('input', () => {
         controller.update({ ofertaCliente: offerInput.value === '' ? null : offerInput.value });
     }, { passive: true });
+    
     window.addEventListener(UPDATE_EVENT, (event) => controller.update(event.detail));
     window.addEventListener('AIS_MARKET_RATES_UPDATED', (event) => {
         controller.update({ spot: event.detail?.standard });
     });
+    
     const syncCalculatedFreight = () => {
         controller.update({ fleteCalculado: readInputRate('freight-sell') });
     };
+    
     document.addEventListener('input', syncCalculatedFreight, { passive: true });
     document.addEventListener('change', syncCalculatedFreight, { passive: true });
 }
