@@ -150,7 +150,7 @@ function renderStatus({ marketIndex, value = null, variation = null, label, tone
   }`;
 }
 
-// Renderizador sincronizado con la inteligencia unificada de Data Bridge
+// Renderizador sincronizado con la inteligencia unificada
 function renderActiveBenchmark() {
   const vesselType = getSelectedVesselType();
   const alibraRates = balticSpotState.alibraRates;
@@ -160,7 +160,7 @@ function renderActiveBenchmark() {
   else if (vesselType.includes('supra') || vesselType.includes('ultra')) vesselKey = 'supramax';
   else if (vesselType.includes('handy')) vesselKey = 'handysize';
 
-  const baseAlibraRate = alibraRates[vesselKey] || 20500;
+  const baseAlibraRate = alibraRates[vesselKey] || (vesselKey === 'capesize' ? 39500 : vesselKey === 'supramax' ? 20000 : vesselKey === 'handysize' ? 19000 : 20500);
 
   if (currentContractMode === 'COA' || currentContractMode === 'PERIOD') {
     renderStatus({
@@ -173,7 +173,7 @@ function renderActiveBenchmark() {
     return;
   }
 
-  // MODO SPOT: Usar el BDI vivo y los subíndices idénticos a Data Bridge
+  // MODO SPOT: Usar el BDI vivo y los subíndices de mercado
   const subIndices = {
     capesize:  { live: 4740, base: 4350, consumption: 52 },
     panamax:   { live: 2050, base: 2000, consumption: 32 },
@@ -208,24 +208,33 @@ function renderActiveBenchmark() {
 }
 
 async function refreshBalticSpotReference({ force = false } = {}) {
+  const requestKey = 'market-latest-bdi';
+  
+  if (!force && requestKey === lastRequestKey) {
+    renderActiveBenchmark();
+    return;
+  }
+  lastRequestKey = requestKey;
+
   activeRequestController?.abort();
   activeRequestController = new AbortController();
   
   const { statusElement } = getViewElements();
-  if (statusElement) statusElement.textContent = 'Sincronizando Data Bridge';
+  if (statusElement) statusElement.textContent = 'Sincronizando Base de Datos';
 
   try {
-    // Consultamos en paralelo /api/market/latest (Alibra) y /api/get-market-data (BDI y Búnker en vivo)
-    const [latestRes, spotRes] = await Promise.all([
-      fetch('/api/market/latest', { cache: 'no-store', signal: activeRequestController.signal }),
-      fetch('/api/get-market-data', { cache: 'no-store', signal: activeRequestController.signal })
-    ]);
-
+    // Consultamos SOLO el endpoint nativo de Core PRO para evitar el 404
+    const latestRes = await fetch('/api/market/latest', { 
+      cache: 'no-store', 
+      signal: activeRequestController.signal 
+    });
+    
+    if (!latestRes.ok) throw new Error('Network response was not ok');
+    
     const latestPayload = await latestRes.json().catch(() => null);
-    const spotPayload = await spotRes.json().catch(() => null);
-
     const dataRecord = latestPayload?.data || latestPayload || {};
 
+    // Extraer tarifas de periodo (Alibra)
     balticSpotState.alibraRates = {
       capesize: Number(dataRecord.capesize_tc) || 39500,
       panamax: Number(dataRecord.panamax_tc) || 20500,
@@ -233,19 +242,21 @@ async function refreshBalticSpotReference({ force = false } = {}) {
       handysize: Number(dataRecord.handysize_tc) || 19000,
     };
 
-    // Extraer búnker y BDI en vivo desde spotPayload (igual que Data Bridge)
+    // Extraer Búnker de la BBDD compartida
     balticSpotState.bunkerData = {
-      vlsfo: Number(spotPayload?.vlsfo ?? dataRecord.bunker_price_vlsfo ?? dataRecord.vlsfo) || 844.29,
-      hsfo: Number(spotPayload?.hsfo ?? dataRecord.bunker_price_hsfo ?? dataRecord.hsfo) || 629.60,
+      vlsfo: Number(dataRecord.bunker_price_vlsfo ?? dataRecord.vlsfo) || 844.29,
+      hsfo: Number(dataRecord.bunker_price_hsfo ?? dataRecord.hsfo) || 629.60,
     };
 
-    const liveBdi = spotPayload?.bdi_index ?? spotPayload?.bdiIndex ?? dataRecord.bdi_index ?? 2926;
-    balticSpotState.spotRate = Number(liveBdi);
-    balticSpotState.variation = null;
+    // Extraer el BDI almacenado
+    const spotEntry = findMarketEntryByIndex(latestPayload, 'BDI');
+    balticSpotState.spotRate = spotEntry?.rate || Number(dataRecord.bdi_index) || 2926;
+    balticSpotState.variation = spotEntry?.variation || null;
 
     renderActiveBenchmark();
   } catch (error) {
     if (error?.name === 'AbortError') return;
+    console.warn('[Core PRO Engine] Usando datos de respaldo locales debido a un error de red.', error);
     renderActiveBenchmark();
   }
 }
@@ -282,7 +293,15 @@ function initializeBalticSpotReference() {
   document.querySelectorAll('[data-flete-mode-tab], button').forEach((btn) => {
     const text = btn.textContent.trim().toUpperCase();
     if (text === 'SPOT' || text === 'COA') {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        // Opción para resaltar la pestaña activa visualmente si tu CSS lo soporta
+        document.querySelectorAll('[data-flete-mode-tab], button').forEach(b => {
+            if(b.textContent.trim().toUpperCase() === 'SPOT' || b.textContent.trim().toUpperCase() === 'COA') {
+                b.classList.remove('active', 'bg-slate-200'); // Adapta estas clases a tu Tailwind/CSS
+            }
+        });
+        e.currentTarget.classList.add('active', 'bg-slate-200');
+
         currentContractMode = text;
         renderActiveBenchmark();
       });
