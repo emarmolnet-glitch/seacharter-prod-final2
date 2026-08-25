@@ -4,7 +4,7 @@ let activeRequestController = null;
 let refreshTimer = null;
 let lastRequestKey = '';
 let lastObservedVesselType = '';
-let currentContractMode = 'SPOT'; // Estado global del modo: 'SPOT' o 'COA'
+let currentContractMode = 'SPOT'; // Estado global: 'SPOT' o 'COA'
 
 let balticSpotState = {
   vesselType: '',
@@ -150,21 +150,19 @@ function renderStatus({ marketIndex, value = null, variation = null, label, tone
   }`;
 }
 
-// Renderizador inteligente según el modo (SPOT vs COA) y la clase de buque
+// Renderizador sincronizado con la inteligencia unificada de Data Bridge
 function renderActiveBenchmark() {
   const vesselType = getSelectedVesselType();
   const alibraRates = balticSpotState.alibraRates;
   
-  // Mapeo de clases de buques a las propiedades de Alibra
   let vesselKey = 'panamax';
   if (vesselType.includes('cape')) vesselKey = 'capesize';
   else if (vesselType.includes('supra') || vesselType.includes('ultra')) vesselKey = 'supramax';
   else if (vesselType.includes('handy')) vesselKey = 'handysize';
 
-  const baseAlibraRate = alibraRates[vesselKey] || (vesselKey === 'capesize' ? 39500 : vesselKey === 'supramax' ? 20000 : vesselKey === 'handysize' ? 19000 : 20500);
+  const baseAlibraRate = alibraRates[vesselKey] || 20500;
 
   if (currentContractMode === 'COA' || currentContractMode === 'PERIOD') {
-    // MODO COA / PERIOD: Usar Alibra 1-Year T/C fijo
     renderStatus({
       marketIndex: `${vesselKey.toUpperCase()} · 1Y T/C`,
       value: baseAlibraRate,
@@ -175,7 +173,7 @@ function renderActiveBenchmark() {
     return;
   }
 
-  // MODO SPOT: Calcular Algoritmo Live (TCE Spot Teórico con Búnker y Ratio Baltic)
+  // MODO SPOT: Usar el BDI vivo y los subíndices idénticos a Data Bridge
   const subIndices = {
     capesize:  { live: 4740, base: 4350, consumption: 52 },
     panamax:   { live: 2050, base: 2000, consumption: 32 },
@@ -187,7 +185,6 @@ function renderActiveBenchmark() {
   const marketRatio = config.live / config.base;
   let liveTceSpot = Math.round(baseAlibraRate * marketRatio);
 
-  // Aplicar ajuste de búnker / scrubber si está disponible
   const vlsfo = balticSpotState.bunkerData.vlsfo || 844.29;
   const hsfo = balticSpotState.bunkerData.hsfo || 629.60;
   const useScrubber = document.getElementById('core-scrubber-toggle')?.checked || false;
@@ -211,35 +208,24 @@ function renderActiveBenchmark() {
 }
 
 async function refreshBalticSpotReference({ force = false } = {}) {
-  const { vesselType, marketReference, requestKey } = {
-    vesselType: getSelectedVesselType(),
-    marketReference: 'BDI',
-    requestKey: 'market-latest-bdi'
-  };
-
-  if (!force && requestKey === lastRequestKey) {
-    renderActiveBenchmark();
-    return;
-  }
-  lastRequestKey = requestKey;
-
   activeRequestController?.abort();
   activeRequestController = new AbortController();
   
-  const { indexElement, statusElement } = getViewElements();
-  if (statusElement) statusElement.textContent = 'Consultando mercado';
+  const { statusElement } = getViewElements();
+  if (statusElement) statusElement.textContent = 'Sincronizando Data Bridge';
 
   try {
-    const response = await fetch('/api/market/latest', {
-      cache: 'no-store',
-      signal: activeRequestController.signal,
-    });
-    const payload = await response.json().catch(() => null);
-    balticSpotState.rawPayload = payload;
-    
-    // Extraer datos de la respuesta (maneja tanto objetos directos como dentro de .data)
-    const dataRecord = payload?.data || payload || {};
-    
+    // Consultamos en paralelo /api/market/latest (Alibra) y /api/get-market-data (BDI y Búnker en vivo)
+    const [latestRes, spotRes] = await Promise.all([
+      fetch('/api/market/latest', { cache: 'no-store', signal: activeRequestController.signal }),
+      fetch('/api/get-market-data', { cache: 'no-store', signal: activeRequestController.signal })
+    ]);
+
+    const latestPayload = await latestRes.json().catch(() => null);
+    const spotPayload = await spotRes.json().catch(() => null);
+
+    const dataRecord = latestPayload?.data || latestPayload || {};
+
     balticSpotState.alibraRates = {
       capesize: Number(dataRecord.capesize_tc) || 39500,
       panamax: Number(dataRecord.panamax_tc) || 20500,
@@ -247,21 +233,20 @@ async function refreshBalticSpotReference({ force = false } = {}) {
       handysize: Number(dataRecord.handysize_tc) || 19000,
     };
 
+    // Extraer búnker y BDI en vivo desde spotPayload (igual que Data Bridge)
     balticSpotState.bunkerData = {
-      vlsfo: Number(dataRecord.bunker_price_vlsfo ?? dataRecord.vlsfo) || 844.29,
-      hsfo: Number(dataRecord.bunker_price_hsfo ?? dataRecord.hsfo) || 629.60,
+      vlsfo: Number(spotPayload?.vlsfo ?? dataRecord.bunker_price_vlsfo ?? dataRecord.vlsfo) || 844.29,
+      hsfo: Number(spotPayload?.hsfo ?? dataRecord.bunker_price_hsfo ?? dataRecord.hsfo) || 629.60,
     };
 
-    const spotEntry = findMarketEntryByIndex(payload, 'BDI');
-    balticSpotState.spotRate = spotEntry?.rate || Number(dataRecord.bdi_index) || 2926;
-    balticSpotState.variation = spotEntry?.variation || null;
-
-    if (!response.ok) throw new Error('Spot rate unavailable');
+    const liveBdi = spotPayload?.bdi_index ?? spotPayload?.bdiIndex ?? dataRecord.bdi_index ?? 2926;
+    balticSpotState.spotRate = Number(liveBdi);
+    balticSpotState.variation = null;
 
     renderActiveBenchmark();
   } catch (error) {
     if (error?.name === 'AbortError') return;
-    renderActiveBenchmark(); // Renderiza con respaldos locales si falla la red
+    renderActiveBenchmark();
   }
 }
 
@@ -293,7 +278,7 @@ function initializeBalticSpotReference() {
     });
   }
 
-  // Enlazar los botones / pestañas de SPOT y COA de la sección 7
+  // Vincular las pestañas de SPOT y COA de Core PRO
   document.querySelectorAll('[data-flete-mode-tab], button').forEach((btn) => {
     const text = btn.textContent.trim().toUpperCase();
     if (text === 'SPOT' || text === 'COA') {
