@@ -4,11 +4,15 @@ let activeRequestController = null;
 let refreshTimer = null;
 let lastRequestKey = '';
 let lastObservedVesselType = '';
+let currentContractMode = 'SPOT'; // Estado global del modo: 'SPOT' o 'COA'
+
 let balticSpotState = {
   vesselType: '',
   marketReference: 'BDI',
   spotRate: null,
   variation: null,
+  alibraRates: {},
+  bunkerData: {},
   rawPayload: null,
 };
 
@@ -109,16 +113,7 @@ function findMarketEntryByIndex(payload, marketIndex, visited = new Set()) {
 }
 
 function getSelectedVesselType() {
-  return String(document.getElementById('vessel-badge')?.textContent || '').trim();
-}
-
-function getCurrentReference() {
-  const vesselType = getSelectedVesselType();
-  return {
-    vesselType,
-    marketReference: 'BDI',
-    requestKey: 'market-latest-bdi',
-  };
+  return String(document.getElementById('vessel-badge')?.textContent || '').trim().toLowerCase();
 }
 
 function getViewElements() {
@@ -134,15 +129,17 @@ function renderStatus({ marketIndex, value = null, variation = null, label, tone
   if (!indexElement || !valueElement || !variationElement || !statusElement) return;
 
   indexElement.textContent = marketIndex;
-  valueElement.textContent = value === null ? 'N/A' : indexFormatter.format(value);
+  valueElement.textContent = value === null ? 'N/A' : `$${indexFormatter.format(value)} /DM`;
   valueElement.className = OCEAN_VALUE_CLASS;
-  variationElement.hidden = false;
-  variationElement.textContent = variation === null
-    ? 'Variación N/D'
-    : `${variation > 0 ? '+' : ''}${variation.toFixed(2)}%`;
-  variationElement.className = `mt-0.5 text-[10px] font-black ${
-    variation === null ? 'text-slate-400' : variation >= 0 ? 'text-emerald-600' : 'text-rose-600'
-  }`;
+  
+  if (variation !== null && variation !== undefined) {
+    variationElement.hidden = false;
+    variationElement.textContent = `${variation > 0 ? '+' : ''}${variation.toFixed(2)}%`;
+    variationElement.className = `mt-0.5 text-[10px] font-black ${variation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+  } else {
+    variationElement.hidden = true;
+  }
+
   statusElement.textContent = label;
   statusElement.className = `mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
     tone === 'success'
@@ -153,34 +150,84 @@ function renderStatus({ marketIndex, value = null, variation = null, label, tone
   }`;
 }
 
-function renderRegionalReference(regionalReference) {
-  const { indexElement, valueElement, variationElement, statusElement } = getViewElements();
-  if (!indexElement || !valueElement || !variationElement || !statusElement) return;
+// Renderizador inteligente según el modo (SPOT vs COA) y la clase de buque
+function renderActiveBenchmark() {
+  const vesselType = getSelectedVesselType();
+  const alibraRates = balticSpotState.alibraRates;
+  
+  // Mapeo de clases de buques a las propiedades de Alibra
+  let vesselKey = 'panamax';
+  if (vesselType.includes('cape')) vesselKey = 'capesize';
+  else if (vesselType.includes('supra') || vesselType.includes('ultra')) vesselKey = 'supramax';
+  else if (vesselType.includes('handy')) vesselKey = 'handysize';
 
-  indexElement.textContent = 'REGIONAL';
-  valueElement.textContent = 'No aplica índice global - Modelo Cost-Plus activo';
-  valueElement.className = REGIONAL_VALUE_CLASS;
-  variationElement.hidden = true;
-  statusElement.textContent = regionalReference.label;
-  statusElement.className = 'mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800';
+  const baseAlibraRate = alibraRates[vesselKey] || (vesselKey === 'capesize' ? 39500 : vesselKey === 'supramax' ? 20000 : vesselKey === 'handysize' ? 19000 : 20500);
+
+  if (currentContractMode === 'COA' || currentContractMode === 'PERIOD') {
+    // MODO COA / PERIOD: Usar Alibra 1-Year T/C fijo
+    renderStatus({
+      marketIndex: `${vesselKey.toUpperCase()} · 1Y T/C`,
+      value: baseAlibraRate,
+      variation: null,
+      label: 'Referencia Period (Alibra)',
+      tone: 'neutral',
+    });
+    return;
+  }
+
+  // MODO SPOT: Calcular Algoritmo Live (TCE Spot Teórico con Búnker y Ratio Baltic)
+  const subIndices = {
+    capesize:  { live: 4740, base: 4350, consumption: 52 },
+    panamax:   { live: 2050, base: 2000, consumption: 32 },
+    supramax:  { live: 2400, base: 2300, consumption: 26 },
+    handysize: { live: 3420, base: 3300, consumption: 22 }
+  };
+
+  const config = subIndices[vesselKey] || subIndices.panamax;
+  const marketRatio = config.live / config.base;
+  let liveTceSpot = Math.round(baseAlibraRate * marketRatio);
+
+  // Aplicar ajuste de búnker / scrubber si está disponible
+  const vlsfo = balticSpotState.bunkerData.vlsfo || 844.29;
+  const hsfo = balticSpotState.bunkerData.hsfo || 629.60;
+  const useScrubber = document.getElementById('core-scrubber-toggle')?.checked || false;
+
+  if (useScrubber) {
+    const dailyScrubberAdvantage = Math.round(config.consumption * (vlsfo - hsfo) * 0.55);
+    liveTceSpot += dailyScrubberAdvantage;
+  } else {
+    const bunkerBaseline = 650;
+    const bunkerDrag = Math.round(config.consumption * Math.max(0, vlsfo - bunkerBaseline) * 0.08);
+    liveTceSpot -= bunkerDrag;
+  }
+
+  renderStatus({
+    marketIndex: `${vesselKey.toUpperCase()} · SPOT LIVE`,
+    value: liveTceSpot,
+    variation: balticSpotState.variation,
+    label: useScrubber ? 'TCE Spot (HSFO Scrubber)' : 'TCE Spot (VLSFO Standard)',
+    tone: 'success',
+  });
 }
 
 async function refreshBalticSpotReference({ force = false } = {}) {
-  const { vesselType, marketReference, requestKey } = getCurrentReference();
-  if (!force && requestKey === lastRequestKey) return;
-  lastRequestKey = requestKey;
-  balticSpotState = {
-    vesselType,
-    marketReference,
-    spotRate: null,
-    variation: null,
-    rawPayload: null,
+  const { vesselType, marketReference, requestKey } = {
+    vesselType: getSelectedVesselType(),
+    marketReference: 'BDI',
+    requestKey: 'market-latest-bdi'
   };
 
+  if (!force && requestKey === lastRequestKey) {
+    renderActiveBenchmark();
+    return;
+  }
+  lastRequestKey = requestKey;
+
   activeRequestController?.abort();
-  const marketIndex = marketReference;
   activeRequestController = new AbortController();
-  renderStatus({ marketIndex, label: 'Consultando mercado', tone: 'loading' });
+  
+  const { indexElement, statusElement } = getViewElements();
+  if (statusElement) statusElement.textContent = 'Consultando mercado';
 
   try {
     const response = await fetch('/api/market/latest', {
@@ -189,29 +236,32 @@ async function refreshBalticSpotReference({ force = false } = {}) {
     });
     const payload = await response.json().catch(() => null);
     balticSpotState.rawPayload = payload;
-    console.log('[Step7 Baltic] /api/market/latest raw response:', payload);
+    
+    // Extraer datos de la respuesta (maneja tanto objetos directos como dentro de .data)
+    const dataRecord = payload?.data || payload || {};
+    
+    balticSpotState.alibraRates = {
+      capesize: Number(dataRecord.capesize_tc) || 39500,
+      panamax: Number(dataRecord.panamax_tc) || 20500,
+      supramax: Number(dataRecord.supramax_tc) || 20000,
+      handysize: Number(dataRecord.handysize_tc) || 19000,
+    };
+
+    balticSpotState.bunkerData = {
+      vlsfo: Number(dataRecord.bunker_price_vlsfo ?? dataRecord.vlsfo) || 844.29,
+      hsfo: Number(dataRecord.bunker_price_hsfo ?? dataRecord.hsfo) || 629.60,
+    };
+
     const spotEntry = findMarketEntryByIndex(payload, 'BDI');
-    console.log('[Step7 Baltic] filtered index:', 'BDI', spotEntry);
+    balticSpotState.spotRate = spotEntry?.rate || Number(dataRecord.bdi_index) || 2926;
+    balticSpotState.variation = spotEntry?.variation || null;
+
     if (!response.ok) throw new Error('Spot rate unavailable');
 
-    if (spotEntry === null) {
-      renderStatus({ marketIndex, label: 'Índice no disponible', tone: 'neutral' });
-      return;
-    }
-
-    balticSpotState.spotRate = spotEntry.rate;
-    balticSpotState.variation = spotEntry.variation;
-
-    renderStatus({
-      marketIndex,
-      value: balticSpotState.spotRate,
-      variation: balticSpotState.variation,
-      label: 'Market Latest',
-      tone: 'success',
-    });
+    renderActiveBenchmark();
   } catch (error) {
     if (error?.name === 'AbortError') return;
-    renderStatus({ marketIndex, label: 'Referencia no disponible', tone: 'neutral' });
+    renderActiveBenchmark(); // Renderiza con respaldos locales si falla la red
   }
 }
 
@@ -224,7 +274,7 @@ function refreshWhenVesselTypeChanges() {
   const vesselType = getSelectedVesselType();
   if (vesselType === lastObservedVesselType) return;
   lastObservedVesselType = vesselType;
-  refreshBalticSpotReference({ force: true });
+  renderActiveBenchmark();
 }
 
 function initializeBalticSpotReference() {
@@ -242,6 +292,17 @@ function initializeBalticSpotReference() {
       subtree: true,
     });
   }
+
+  // Enlazar los botones / pestañas de SPOT y COA de la sección 7
+  document.querySelectorAll('[data-flete-mode-tab], button').forEach((btn) => {
+    const text = btn.textContent.trim().toUpperCase();
+    if (text === 'SPOT' || text === 'COA') {
+      btn.addEventListener('click', () => {
+        currentContractMode = text;
+        renderActiveBenchmark();
+      });
+    }
+  });
 
   window.addEventListener('CALCULATION_EVENT', refreshWhenVesselTypeChanges);
   window.refreshBalticSpotReference = () => refreshBalticSpotReference({ force: true });
