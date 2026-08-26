@@ -3,7 +3,8 @@ import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 
-const DEFAULT_DATA_BRIDGE_AI_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+const DEFAULT_CEREBRO_IA_ENDPOINT = "[https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia](https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia)";
+const DEFAULT_CHAT_ASSISTANT_ENDPOINT = "[https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/chat-assistant](https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/chat-assistant)";
 const REQUEST_TIMEOUT_MS = 45_000;
 const AI_HISTORY_LIMIT = 6;
 const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
@@ -206,21 +207,56 @@ function createThinkingMessage() {
   return message;
 }
 
+// --- 1. DETECTOR DE INTENCIÓN ---
+function isSimulationQuery(mensaje) {
+  const msgLower = (mensaje || "").toLowerCase();
+  const simulationKeywords = ['transportar', 'viaje', 'cotizar', 'simular', 'calcular ruta', 'flete'];
+  const tieneToneladas = /\b\d+(\.\d+)?\s*(mt|tn|tons|toneladas)\b/.test(msgLower);
+  const tieneRuta = msgLower.includes('desde') && (msgLower.includes('a ') || msgLower.includes('hasta '));
+  if (tieneToneladas && tieneRuta) return true;
+  return simulationKeywords.some(keyword => msgLower.includes(keyword));
+}
+
+// --- 2. SELECTOR DE ENDPOINT ---
+function getDataBridgeAssistantEndpoint(isSimulation = true) {
+  if (isSimulation) {
+    const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
+    const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
+    return runtimeEndpoint || buildEndpoint || "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+  }
+  return "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/chat-assistant";
+}
+
+// --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
 async function requestAssistantResponse(userText, historyElement, signal) {
   const historial = collectConversationHistory(historyElement);
+  
   const requestPayload = {
     CalculationData: collectCalculationData(),
     MarketData: collectMarketData(),
     UserContext: userText,
     ConversationHistory: historial,
   };
+  
   const sanitizedPayload = sanitizePayloadForAI(requestPayload);
-  const response = await fetch(getDataBridgeAssistantEndpoint(), {
+  
+  // Añadimos el contexto de la pantalla y el mensaje original para chat-assistant
+  sanitizedPayload.contexto = collectChatContext();
+  sanitizedPayload.mensaje = userText;
+
+  // Enrutador Inteligente
+  const isSimulation = isSimulationQuery(userText);
+  const endpointUrl = getDataBridgeAssistantEndpoint(isSimulation);
+  
+  console.log(`🤖 [Enrutador AI] Enviando a: ${isSimulation ? 'CEREBRO-IA (Cálculos)' : 'CHAT-ASSISTANT (Consultas)'}`);
+
+  const response = await fetch(endpointUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(sanitizedPayload),
     signal,
   });
+  
   const responseText = await response.text();
   let payload = null;
   try {
@@ -234,12 +270,7 @@ async function requestAssistantResponse(userText, historyElement, signal) {
   return normalizeDataBridgeAssistantResponse(payload);
 }
 
-function getDataBridgeAssistantEndpoint() {
-  const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
-  const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
-  return runtimeEndpoint || buildEndpoint || DEFAULT_DATA_BRIDGE_AI_ENDPOINT;
-}
-
+// --- 4. SE MANTIENE TU FUNCIÓN ORIGINAL INTACTA ---
 function normalizeDataBridgeAssistantResponse(payload) {
   const candidates = [
     payload?.informe,
