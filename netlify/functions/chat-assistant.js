@@ -1,10 +1,4 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as xlsx from "xlsx"; 
-import mammoth from "mammoth"; 
-import { Buffer } from "node:buffer";
-
-// Importación específica de pdfjs-dist para entornos Node (Serverless)
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
@@ -122,137 +116,42 @@ function jsonResponse(status, body) {
   });
 }
 
-// Función auxiliar para leer PDFs de forma segura en Netlify
-async function extractTextFromPDF(buffer) {
-  try {
-    const data = new Uint8Array(buffer);
-    const pdfDocument = await pdfjsLib.getDocument({ data }).promise;
-    let text = "";
-    for (let i = 1; i <= pdfDocument.numPages; i++) {
-      const page = await pdfDocument.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(" ");
-      text += pageText + "\n";
-    }
-    return text;
-  } catch (err) {
-    console.error("Error extrayendo texto del PDF:", err);
-    return "";
-  }
-}
-
 export default async (req) => {
   if (req.method === "OPTIONS") return jsonResponse(200, { ok: true });
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
 
   try {
+    const body = await req.json();
+    const mensaje = body?.mensaje;
+    const rawContexto = body?.contexto || {};
+    const imagenData = body?.image; 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
 
-    let mensaje = "";
-    let rawContexto = {};
-    let imagenData = null; 
-    const imageParts = [];
-    const documentosExtraidos = []; 
-
-    const contentType = req.headers.get("content-type") || "";
-
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      mensaje = formData.get("mensaje") || "";
-      
-      const ctxStr = formData.get("contexto");
-      if (ctxStr) {
-        try { rawContexto = JSON.parse(ctxStr); } catch (e) {}
-      }
-
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          const arrayBuffer = await value.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const fileNameLower = value.name.toLowerCase();
-
-          // 1. PDF (Usando la nueva librería segura)
-          if (value.type === "application/pdf" || fileNameLower.endsWith(".pdf")) {
-            const pdfText = await extractTextFromPDF(buffer);
-            if (pdfText) {
-              documentosExtraidos.push(`--- Documento PDF: ${value.name} ---\n${pdfText}`);
-            }
-          } 
-          // 2. EXCEL / CSV
-          else if (
-            value.type.includes("spreadsheetml") || 
-            value.type.includes("excel") ||
-            fileNameLower.match(/\.(xlsx|xls|csv)$/)
-          ) {
-            try {
-              const workbook = xlsx.read(buffer, { type: "buffer" });
-              let excelText = `--- Excel/Packing List: ${value.name} ---\n`;
-              workbook.SheetNames.forEach(sheetName => {
-                const sheet = workbook.Sheets[sheetName];
-                const csvData = xlsx.utils.sheet_to_csv(sheet);
-                excelText += `\n[Hoja: ${sheetName}]\n${csvData.substring(0, 8000)}`; 
-              });
-              documentosExtraidos.push(excelText);
-            } catch (err) {
-              console.error(`Error Excel ${value.name}:`, err);
-            }
-          } 
-          // 3. WORD (.docx)
-          else if (
-            value.type.includes("wordprocessingml") || 
-            value.type.includes("msword") || 
-            fileNameLower.endsWith(".docx")
-          ) {
-            try {
-              const result = await mammoth.extractRawText({ buffer: buffer });
-              documentosExtraidos.push(`--- Documento Word: ${value.name} ---\n${result.value}`);
-            } catch (err) {
-              console.error(`Error Word ${value.name}:`, err);
-            }
-          }
-          // 4. TEXTO PLANO (.txt)
-          else if (value.type === "text/plain" || fileNameLower.endsWith(".txt")) {
-            documentosExtraidos.push(`--- Archivo de Texto: ${value.name} ---\n${buffer.toString("utf-8")}`);
-          }
-          // 5. FOTOS
-          else if (value.type.startsWith("image/")) {
-            imageParts.push({
-              inlineData: {
-                data: buffer.toString("base64"),
-                mimeType: value.type,
-              },
-            });
-          }
-        }
-      }
-    } else {
-      const body = await req.json();
-      mensaje = body?.mensaje;
-      rawContexto = body?.contexto || {};
-      imagenData = body?.image; 
+    if (typeof mensaje !== "string" && !imagenData?.data) {
+      return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
+    }
+    if (!apiKey) {
+      return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
     }
 
+    // --- BLINDAJE DE SEGURIDAD CONTRA REFERENCIAS CIRCULARES ---
     let normalizedContext = {};
-    try { normalizedContext = JSON.parse(JSON.stringify(rawContexto)); } 
-    catch (e) { normalizedContext = { nota: "Contexto simplificado" }; }
+    try {
+      normalizedContext = JSON.parse(JSON.stringify(rawContexto));
+    } catch (e) {
+      normalizedContext = { nota: "Contexto simplificado por seguridad técnica" };
+    }
+    // ------------------------------------------------------------
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
-    
-    let mensajeEnriquecido = (mensaje || "").trim();
-    if (documentosExtraidos.length > 0) {
-      mensajeEnriquecido += `\n\n[TEXTOS DE LOS DOCUMENTOS DEL PROYECTO]:\n${documentosExtraidos.join("\n\n")}`;
-    }
-
-    const intent = classifyChatIntent(mensajeEnriquecido || "Analiza estos documentos", { context: normalizedContext });
-    
+    const intent = classifyChatIntent(mensaje || "Analiza esta imagen", { context: normalizedContext });
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
-    
     const action = intent === CHAT_INTENTS.SIMULATION
-      ? buildCalculatorAutofillAction(mensajeEnriquecido, normalizedContext)
+      ? buildCalculatorAutofillAction(mensaje || "", normalizedContext)
       : null;
 
     const genAI = new GoogleGenerativeAI(apiKey);
+
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: finalInstruction,
@@ -261,12 +160,20 @@ export default async (req) => {
 
     const chat = model.startChat();
 
-    let messagePayload = mensajeEnriquecido || "Analiza este proyecto y propón la ruta/cálculo óptimo:";
-    if (imageParts.length > 0) {
-      messagePayload = [messagePayload, ...imageParts];
-    } else if (imagenData?.data) {
-      messagePayload = [messagePayload, { inlineData: { data: imagenData.data, mimeType: imagenData.mimeType } }];
+    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN OPCIONAL) ---
+    let messagePayload = (mensaje || "").trim();
+    if (imagenData?.data && imagenData?.mimeType) {
+      messagePayload = [
+        messagePayload || "Analiza esta imagen y valida los cálculos o datos mostrados en pantalla:",
+        {
+          inlineData: {
+            data: imagenData.data,
+            mimeType: imagenData.mimeType,
+          },
+        },
+      ];
     }
+    // -------------------------------------------------------------------
 
     let result = await chat.sendMessage(messagePayload);
     const functionCalls = result.response.functionCalls() || [];
@@ -283,15 +190,13 @@ export default async (req) => {
       result = await chat.sendMessage(functionResponses);
     }
 
-    return jsonResponse(200, { 
-      success: true, 
-      intent, 
-      respuesta: result.response.text(), 
-      action 
-    });
+    return jsonResponse(200, { success: true, intent, respuesta: result.response.text(), action });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);
-    return jsonResponse(500, { success: false, error: error.message });
+    return jsonResponse(500, {
+      success: false,
+      error: error instanceof Error ? error.message : "Error interno del servidor.",
+    });
   }
 };
