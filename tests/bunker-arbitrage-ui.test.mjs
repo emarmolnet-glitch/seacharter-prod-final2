@@ -8,22 +8,23 @@ const tceSource = await readFile(new URL('../TceCalculatorWorkspace.tsx', import
 test('bunker toolbar keeps synchronization and arbitrage actions unified', () => {
   const toolbar = source.match(/<div id="bunker-arbitrage-toolbar"[\s\S]*?<div id="bunker-arbitrage-results"/)?.[0] || '';
   assert.match(toolbar, /role="toolbar"/);
-  assert.match(toolbar, /Sincronizar Mercado Regional/);
+  assert.match(toolbar, /Sincronizar Oil Price API/);
   assert.match(toolbar, /Buscar Desvíos Rentables/);
   assert.doesNotMatch(toolbar, /<hr\b/i);
   assert.doesNotMatch(toolbar, /border-b/);
 });
 
-test('bunker market synchronization uses Market Latest on load and on demand', () => {
-  assert.match(source, /const BUNKER_MARKET_LATEST_ENDPOINT = '\/api\/market\/bunkers-latest'/);
+test('bunker market synchronization uses get-market-data on load and on demand', () => {
+  assert.match(source, /const BUNKER_MARKET_DATA_ENDPOINT = '\/api\/get-market-data'/);
   assert.match(source, /method: 'GET'/);
-  assert.match(source, /if \(initialBunkerRegion\.hasPol\)/);
   assert.match(source, /if \(!routeRegion\.hasPol && options\.allowWithoutPol !== true\)/);
-  assert.match(source, /Raw Bunkers Array extraído/);
+  assert.match(source, /const vlsfo = Number\(record\?\.vlsfo\)/);
+  assert.match(source, /const ifo380 = Number\(record\?\.hsfo\)/);
+  assert.match(source, /const mgo = Number\(record\?\.mgo\)/);
   assert.match(source, /function fetchRegionalBunkers\(regionName, options = \{\}\)/);
-  assert.match(source, /portInput\.addEventListener\('input'/);
-  assert.match(source, /scheduleRegionalBunkerSync\(\{ immediate: true \}\)/);
+  assert.doesNotMatch(source, /scheduleRegionalBunkerSync/);
   assert.match(source, /function syncBunkerIndexMarket\(\)/);
+  assert.match(source, /allowWithoutPol: true/);
   assert.match(source, /BUNKER_INDEX_CACHE_MAX_AGE_MS = 48 \* 60 \* 60 \* 1000/);
 });
 
@@ -35,12 +36,14 @@ test('master calculation waits for valid non-fallback regional bunker prices', (
   assert.match(source, /bunkerFetchPromise/);
 });
 
-test('React TCE calculator refetches when the derived bunker region changes', () => {
-  assert.match(tceSource, /const \[regionalBunkerRegion, setRegionalBunkerRegion\] = useState\(''\)/);
-  assert.match(tceSource, /const fetchRegionalBunkers = async \(regionName = regionalBunkerRegion, forceRefresh = false\)/);
-  assert.match(tceSource, /useEffect\(\(\) => \{[\s\S]*setRegionalBunkerRegion\(region\)/);
-  assert.match(tceSource, /useEffect\(\(\) => \{[\s\S]*void fetchRegionalBunkers\(regionalBunkerRegion, false\)/);
-  assert.match(tceSource, /Sincronizar Mercado Regional/);
+test('React TCE calculator uses the same global Oil Price contract', () => {
+  assert.match(tceSource, /const fetchMarketBunkers = async \(\)/);
+  assert.match(tceSource, /fetch\('\/api\/get-market-data'/);
+  assert.match(tceSource, /vlsfo: Number\(record\?\.vlsfo\)/);
+  assert.match(tceSource, /ifo380: Number\(record\?\.hsfo\)/);
+  assert.match(tceSource, /mgo: Number\(record\?\.mgo\)/);
+  assert.match(tceSource, /Sincronizar Oil Price API/);
+  assert.doesNotMatch(tceSource, /regionalBunkerRegion/);
 });
 
 test('arbitrage payload uses maritime route geometry and automatic fuel grade', () => {

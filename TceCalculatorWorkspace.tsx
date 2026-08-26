@@ -148,11 +148,6 @@ type BunkerIndexCache = {
   date: string;
 };
 
-type RegionalBunkerWindow = Window & {
-  getBunkerRegionForVoyage?: (polName?: string, podName?: string) => { region?: string };
-  fetchRegionalBunkers?: (regionName: string, options?: Record<string, unknown>) => Promise<Partial<BunkerIndexCache> | null>;
-};
-
 const DEFAULT_VALUES: ReverseCalculatorState = {
   tceTarget: '',
   daysSea: 8,
@@ -1229,7 +1224,6 @@ export function ReverseTceCalculator({
   const [indexSourceLabel, setIndexSourceLabel] = useState('');
   const [bunkerDateLabel, setBunkerDateLabel] = useState('');
   const [bunkerFetchError, setBunkerFetchError] = useState('');
-  const [regionalBunkerRegion, setRegionalBunkerRegion] = useState('');
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [navigationStrategy, setNavigationStrategy] = useState<NavigationStrategy>('eco');
@@ -1463,7 +1457,7 @@ export function ReverseTceCalculator({
       date: cache.date || getTodayBunkerLabel(),
     };
     if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
-      throw new Error('La respuesta regional no contiene los tres precios de bunker.');
+      throw new Error('get-market-data no contiene VLSFO, HSFO y MGO válidos.');
     }
     setVlsfoPrice(nextCache.vlsfo);
     setIfoPrice(nextCache.ifo380);
@@ -1479,65 +1473,39 @@ export function ReverseTceCalculator({
     window.localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
   };
 
-  const fetchRegionalBunkers = async (regionName = regionalBunkerRegion, forceRefresh = false) => {
+  const fetchMarketBunkers = async () => {
     if (isFetchingBunker) {
       return;
     }
-    const normalizedRegion = String(regionName || '').trim();
-    if (!normalizedRegion) return;
 
     setIsFetchingBunker(true);
     setBunkerFetchError('');
 
     try {
-      const regionalWindow = window as RegionalBunkerWindow;
-      if (typeof regionalWindow.fetchRegionalBunkers === 'function') {
-        const cache = await regionalWindow.fetchRegionalBunkers(normalizedRegion, {
-          forceRefresh,
-          managedByMaster: true,
-        });
-        if (!cache) throw new Error(`No hay cotización regional para ${normalizedRegion}.`);
-        applyRegionalBunkerPrices(cache);
-        return;
-      }
-      throw new Error('El sincronizador regional de bunker no está disponible.');
+      const response = await fetch('/api/get-market-data', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || 'No se pudo consultar get-market-data.');
+      const record = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+      applyRegionalBunkerPrices({
+        vlsfo: Number(record?.vlsfo),
+        ifo380: Number(record?.hsfo),
+        mgo: Number(record?.mgo),
+        date: record?.date || record?.created_at || getTodayBunkerLabel(),
+      });
     } catch (error) {
-      setBunkerFetchError(error instanceof Error ? error.message : 'No se pudieron obtener los precios regionales.');
+      setBunkerFetchError(error instanceof Error ? error.message : 'No se pudieron obtener los precios de Oil Price API.');
     } finally {
       setIsFetchingBunker(false);
     }
   };
 
   useEffect(() => {
-    const polInput = document.getElementById('port-pol') as HTMLInputElement | null;
-    const podInput = document.getElementById('port-pod') as HTMLInputElement | null;
-    const updateRegion = () => {
-      const polName = String(polInput?.value || '').trim();
-      if (!polName) {
-        setRegionalBunkerRegion('');
-        return;
-      }
-      const regionalWindow = window as RegionalBunkerWindow;
-      const region = regionalWindow.getBunkerRegionForVoyage?.(polName, podInput?.value || '')?.region || 'World';
-      setRegionalBunkerRegion(region);
-    };
-    updateRegion();
-    polInput?.addEventListener('input', updateRegion);
-    polInput?.addEventListener('change', updateRegion);
-    polInput?.addEventListener('blur', updateRegion);
-    window.addEventListener('seacharter:bunker-route-change', updateRegion);
-    return () => {
-      polInput?.removeEventListener('input', updateRegion);
-      polInput?.removeEventListener('change', updateRegion);
-      polInput?.removeEventListener('blur', updateRegion);
-      window.removeEventListener('seacharter:bunker-route-change', updateRegion);
-    };
+    void fetchMarketBunkers();
   }, []);
-
-  useEffect(() => {
-    if (!regionalBunkerRegion || regionalBunkerRegion === 'World') return;
-    void fetchRegionalBunkers(regionalBunkerRegion, false);
-  }, [regionalBunkerRegion]);
 
   const handleRestoreMarketIndex = () => {
     setIsManualOverride(false);
@@ -1695,11 +1663,11 @@ export function ReverseTceCalculator({
                   </div>
                   <button
                     type="button"
-                    onClick={() => void fetchRegionalBunkers(regionalBunkerRegion, true)}
-                    disabled={isFetchingBunker || !regionalBunkerRegion}
+                    onClick={() => void fetchMarketBunkers()}
+                    disabled={isFetchingBunker}
                     className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {isFetchingBunker ? `Obteniendo ${regionalBunkerRegion || 'mercado'}...` : 'Sincronizar Mercado Regional'}
+                    {isFetchingBunker ? 'Consultando Oil Price API...' : 'Sincronizar Oil Price API'}
                   </button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">

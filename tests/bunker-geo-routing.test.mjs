@@ -148,17 +148,18 @@ test('map synchronization and session restore route programmatic POL changes thr
   const importEnd = indexSource.indexOf('function restoreSessionFields', importStart);
   const importSource = indexSource.slice(importStart, importEnd);
   const bootstrapStart = indexSource.indexOf("['port-pol', 'port-pod'].forEach");
-  const bootstrapEnd = indexSource.indexOf('const initialBunkerRegion', bootstrapStart);
+  const bootstrapEnd = indexSource.indexOf('void hydrateLatestEuCarbonPrice', bootstrapStart);
   const bootstrapSource = indexSource.slice(bootstrapStart, bootstrapEnd);
 
   assert.match(syncSource, /updateInputIfNotFocused\('port-pol', State\.pol\)/);
   assert.match(syncSource, /setInputValue\(id, val\)/);
   assert.match(importSource, /notifyBunkerRouteChanged\('session-restore'\)/);
   assert.match(bootstrapSource, /addEventListener\('seacharter:bunker-route-change'/);
-  assert.match(bootstrapSource, /scheduleRegionalBunkerSync\(\{ immediate: true \}\)/);
+  assert.match(bootstrapSource, /autoFillBunkers\(\{ allowWithoutPol: true, managedByMaster: true, detectedRegion: 'World' \}\)/);
+  assert.doesNotMatch(bootstrapSource, /scheduleRegionalBunkerSync/);
 });
 
-test('React calculator listens for programmatic bunker route changes', () => {
-  assert.match(workspaceSource, /window\.addEventListener\('seacharter:bunker-route-change', updateRegion\)/);
-  assert.match(workspaceSource, /window\.removeEventListener\('seacharter:bunker-route-change', updateRegion\)/);
+test('React calculator no longer refetches bunkers when the route region changes', () => {
+  assert.doesNotMatch(workspaceSource, /seacharter:bunker-route-change/);
+  assert.match(workspaceSource, /fetch\('\/api\/get-market-data'/);
 });
