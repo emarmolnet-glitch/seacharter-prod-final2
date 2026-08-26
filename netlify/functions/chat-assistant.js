@@ -1,8 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import pdfParse from "pdf-parse";
 import * as xlsx from "xlsx"; 
-import mammoth from "mammoth"; // <-- AÑADIDO: Lector oficial de Word (.docx)
+import mammoth from "mammoth"; 
 import { Buffer } from "node:buffer";
+
+// Importación específica de pdfjs-dist para entornos Node (Serverless)
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
@@ -120,6 +122,25 @@ function jsonResponse(status, body) {
   });
 }
 
+// Función auxiliar para leer PDFs de forma segura en Netlify
+async function extractTextFromPDF(buffer) {
+  try {
+    const data = new Uint8Array(buffer);
+    const pdfDocument = await pdfjsLib.getDocument({ data }).promise;
+    let text = "";
+    for (let i = 1; i <= pdfDocument.numPages; i++) {
+      const page = await pdfDocument.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(" ");
+      text += pageText + "\n";
+    }
+    return text;
+  } catch (err) {
+    console.error("Error extrayendo texto del PDF:", err);
+    return "";
+  }
+}
+
 export default async (req) => {
   if (req.method === "OPTIONS") return jsonResponse(200, { ok: true });
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
@@ -145,20 +166,17 @@ export default async (req) => {
         try { rawContexto = JSON.parse(ctxStr); } catch (e) {}
       }
 
-      // --- MOTOR MULTIFORMATO: PDFs, Excels, Word, TXT y Fotos ---
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
           const arrayBuffer = await value.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
           const fileNameLower = value.name.toLowerCase();
 
-          // 1. PDF
+          // 1. PDF (Usando la nueva librería segura)
           if (value.type === "application/pdf" || fileNameLower.endsWith(".pdf")) {
-            try {
-              const pdfData = await pdfParse(buffer);
-              documentosExtraidos.push(`--- Documento PDF: ${value.name} ---\n${pdfData.text}`);
-            } catch (err) {
-              console.error(`Error PDF ${value.name}:`, err);
+            const pdfText = await extractTextFromPDF(buffer);
+            if (pdfText) {
+              documentosExtraidos.push(`--- Documento PDF: ${value.name} ---\n${pdfText}`);
             }
           } 
           // 2. EXCEL / CSV
@@ -221,7 +239,6 @@ export default async (req) => {
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
     
-    // Inyectamos todo lo extraído (PDF, Excel, Word, TXT) en la consulta a la IA
     let mensajeEnriquecido = (mensaje || "").trim();
     if (documentosExtraidos.length > 0) {
       mensajeEnriquecido += `\n\n[TEXTOS DE LOS DOCUMENTOS DEL PROYECTO]:\n${documentosExtraidos.join("\n\n")}`;
