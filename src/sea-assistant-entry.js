@@ -606,7 +606,7 @@ async function executeActionableAiUpdateFields(actionObj) {
     }
     
     return true;
-
+}
 async function executeActionableAiSearchVessel(action) {
   if (action?.action !== "search_vessel") return false;
   document.getElementById("btn-sync-neon-matching")?.click();
