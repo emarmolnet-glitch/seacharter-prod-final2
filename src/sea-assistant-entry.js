@@ -236,7 +236,7 @@ function getDataBridgeAssistantEndpoint(isSimulation = true) {
 }
 
 // --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
-async function requestAssistantResponse(userText, historyElement, signal) {
+async function requestAssistantResponse(userText, historyElement, signal, attachedFiles = []) {
   const historial = collectConversationHistory(historyElement);
   
   const requestPayload = {
@@ -245,25 +245,37 @@ async function requestAssistantResponse(userText, historyElement, signal) {
     UserContext: userText,
     ConversationHistory: historial,
   };
-  
-  const sanitizedPayload = sanitizePayloadForAI(requestPayload);
-  
-  // Añadimos el contexto de la pantalla y el mensaje original para chat-assistant
-  sanitizedPayload.contexto = collectChatContext();
-  sanitizedPayload.mensaje = userText;
 
-  // Enrutador Inteligente
-  const isSimulation = isSimulationQuery(userText);
+  const isSimulation = isSimulationQuery(userText) || attachedFiles.length > 0;
   const endpointUrl = getDataBridgeAssistantEndpoint(isSimulation);
   
-  console.log(`🤖 [Enrutador AI] Enviando a: ${isSimulation ? 'CEREBRO-IA (Cálculos)' : 'CHAT-ASSISTANT (Consultas)'}`);
+  let response;
 
-  const response = await fetch(endpointUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(sanitizedPayload),
-    signal,
-  });
+  if (attachedFiles.length > 0) {
+    const formData = new FormData();
+    formData.append("body", JSON.stringify(sanitizePayloadForAI(requestPayload)));
+    
+    attachedFiles.forEach((file, index) => {
+      formData.append(`documento_${index}`, file);
+    });
+
+    response = await fetch(endpointUrl, {
+      method: "POST",
+      body: formData,
+      signal,
+    });
+  } else {
+    const sanitizedPayload = sanitizePayloadForAI(requestPayload);
+    sanitizedPayload.contexto = collectChatContext();
+    sanitizedPayload.mensaje = userText;
+
+    response = await fetch(endpointUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sanitizedPayload),
+      signal,
+    });
+  }
   
   const responseText = await response.text();
   let payload = null;
