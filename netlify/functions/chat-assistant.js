@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import pdfParse from "pdf-parse";
+import { Buffer } from "node:buffer";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
@@ -121,17 +123,61 @@ export default async (req) => {
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
 
   try {
-    const body = await req.json();
-    const mensaje = body?.mensaje;
-    const rawContexto = body?.contexto || {};
-    const imagenData = body?.image; // <-- Soporte multimodal opcional para imágenes en base64
     const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
 
-    if (typeof mensaje !== "string" && !imagenData?.data) {
-      return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
+    let mensaje = "";
+    let rawContexto = {};
+    let imagenData = null; 
+    const imageParts = [];
+    const pdfTexts = [];
+
+    // 1. Detectar si la petición viene con Archivos (FormData) o es texto simple (JSON)
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      mensaje = formData.get("mensaje") || "";
+      
+      const ctxStr = formData.get("contexto");
+      if (ctxStr) {
+        try { rawContexto = JSON.parse(ctxStr); } 
+        catch (e) { console.error("Error parseando contexto desde FormData:", e); }
+      }
+
+      // 2. Procesar los archivos subidos al vuelo
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          const arrayBuffer = await value.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+
+          if (value.type === "application/pdf") {
+            try {
+              const pdfData = await pdfParse(buffer);
+              pdfTexts.push(`--- Documento: ${value.name} ---\n${pdfData.text}`);
+            } catch (err) {
+              console.error(`Error leyendo PDF ${value.name}:`, err);
+            }
+          } else if (value.type.startsWith("image/")) {
+            imageParts.push({
+              inlineData: {
+                data: buffer.toString("base64"),
+                mimeType: value.type,
+              },
+            });
+          }
+        }
+      }
+    } else {
+      // 3. Fallback: Mantener compatibilidad si el frontend envía JSON clásico sin archivos
+      const body = await req.json();
+      mensaje = body?.mensaje;
+      rawContexto = body?.contexto || {};
+      imagenData = body?.image; 
     }
-    if (!apiKey) {
-      return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
+
+    if (typeof mensaje !== "string" && imageParts.length === 0 && !imagenData?.data) {
+      return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
     }
 
     // --- BLINDAJE DE SEGURIDAD CONTRA REFERENCIAS CIRCULARES ---
@@ -144,14 +190,22 @@ export default async (req) => {
     // ------------------------------------------------------------
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
-    const intent = classifyChatIntent(mensaje || "Analiza esta imagen", { context: normalizedContext });
+    
+    // 4. Inyectar el texto de los PDFs en el mensaje antes de clasificar la intención
+    let mensajeEnriquecido = (mensaje || "").trim();
+    if (pdfTexts.length > 0) {
+      mensajeEnriquecido += `\n\n[TEXTOS EXTRAÍDOS DE DOCUMENTOS ADJUNTOS]:\n${pdfTexts.join("\n\n")}`;
+    }
+
+    // El enrutador de intenciones leerá el mensaje + el texto del PDF
+    const intent = classifyChatIntent(mensajeEnriquecido || "Analiza estos documentos", { context: normalizedContext });
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
+    
     const action = intent === CHAT_INTENTS.SIMULATION
-      ? buildCalculatorAutofillAction(mensaje || "", normalizedContext)
+      ? buildCalculatorAutofillAction(mensajeEnriquecido || "", normalizedContext)
       : null;
 
     const genAI = new GoogleGenerativeAI(apiKey);
-
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: finalInstruction,
@@ -160,17 +214,17 @@ export default async (req) => {
 
     const chat = model.startChat();
 
-    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN OPCIONAL) ---
-    let messagePayload = (mensaje || "").trim();
-    if (imagenData?.data && imagenData?.mimeType) {
+    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE FINAL HACIA GEMINI ---
+    let messagePayload = mensajeEnriquecido || "Analiza estos adjuntos y valida los datos mostrados en pantalla:";
+
+    if (imageParts.length > 0) {
+      // Si subieron fotos nuevas
+      messagePayload = [messagePayload, ...imageParts];
+    } else if (imagenData?.data && imagenData?.mimeType) {
+      // Si usaron el sistema de fotos legacy en base64
       messagePayload = [
-        messagePayload || "Analiza esta imagen y valida los cálculos o datos mostrados en pantalla:",
-        {
-          inlineData: {
-            data: imagenData.data,
-            mimeType: imagenData.mimeType,
-          },
-        },
+        messagePayload,
+        { inlineData: { data: imagenData.data, mimeType: imagenData.mimeType } },
       ];
     }
     // -------------------------------------------------------------------
