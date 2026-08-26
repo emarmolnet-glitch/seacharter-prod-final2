@@ -1095,6 +1095,22 @@ function collectModuleScreenContext(moduleId = getActiveModuleDescriptor().id) {
   };
 }
 
+function scrapeVisiblePdaBreakdown() {
+  try {
+    const containers = Array.from(document.querySelectorAll('div, section, details, .accordion-item, .card'));
+    const pdaContainer = containers.find(el => {
+      const text = el.textContent || '';
+      return text.includes('Desglose PDA Estimado') && text.includes('Agencia y Despacho');
+    });
+    if (pdaContainer) {
+      return pdaContainer.innerText.replace(/\n{3,}/g, '\n').trim();
+    }
+    const calcState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+    if (calcState.portCosts || calcState.pda) return JSON.stringify(calcState.portCosts || calcState.pda);
+  } catch (e) {}
+  return "Desglose de PDA no disponible o no visible en pantalla.";
+}
+
 function collectChatContext() {
   const state = window.SeaCharterStore?.getState?.() || window.State || {};
   const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
@@ -1182,6 +1198,7 @@ function collectChatContext() {
         beneficioArmadorUsd: firstNumber(state.netProfitOwner, calculatedState.netProfitOwner),
         beneficioFletadorUsd: firstNumber(state.netProfitCharterer, calculatedState.netProfitCharterer),
       },
+      desglosePDAs: scrapeVisiblePdaBreakdown(), // <--- ¡AQUÍ ESTÁ LA LÍNEA NUEVA!
       ...(dualModeContext ? { modoDual: dualModeContext } : {}),
     },
     contrato: {
