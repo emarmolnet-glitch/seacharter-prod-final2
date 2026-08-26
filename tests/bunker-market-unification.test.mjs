@@ -17,9 +17,11 @@ const [indexSource, workspaceSource, marketDataSource, schemaSource, migrationSo
 test('frontend uses only get-market-data for bunker synchronization', () => {
   assert.match(indexSource, /BUNKER_MARKET_DATA_ENDPOINT = '\/api\/get-market-data'/);
   assert.match(indexSource, /onclick="syncBunkerIndexMarket\(\)"/);
-  assert.match(indexSource, /const vlsfo = Number\(record\?\.vlsfo\)/);
-  assert.match(indexSource, /const ifo380 = Number\(record\?\.hsfo\)/);
-  assert.match(indexSource, /const mgo = Number\(record\?\.mgo\)/);
+  assert.match(indexSource, /const snapshot = await hydration\.refresh\(\{ force: true \}\)/);
+  assert.match(indexSource, /const record = snapshot\?\.bunkers \|\| \{\}/);
+  assert.match(indexSource, /const vlsfo = Number\(record\.vlsfo\)/);
+  assert.match(indexSource, /const ifo380 = Number\(record\.hsfo\)/);
+  assert.match(indexSource, /const mgo = Number\(record\.mgo\)/);
   assert.match(indexSource, /forceMarket: true/);
   assert.match(indexSource, /input\.dataset\.userOverride = 'false'/);
   assert.match(workspaceSource, /fetch\('\/api\/get-market-data'/);

@@ -214,58 +214,18 @@ async function mountPanel() {
 
     window.SeaCharterMarketIntelligencePanel = controller;
 
-    // Función segura y robusta para sincronizar con la BD de Neon via API
-    const syncMarketDataFromNeon = async () => {
-        try {
-            const response = await fetch('/api/market/latest', { cache: 'no-store' });
-            if (!response.ok) {
-                console.warn('[Market Intelligence] Respuesta no válida de Neon:', response.status);
-                return;
-            }
-            const payload = await response.json().catch(() => null);
-            const record = payload?.data || payload;
-
-            if (record) {
-                const vesselType = (document.getElementById('vessel-badge')?.textContent || '').toLowerCase();
-                let activeTceSpot = Number(record.handysize_tc) || 18712;
-
-                if (vesselType.includes('cape')) activeTceSpot = Number(record.capesize_tc) || 39437;
-                else if (vesselType.includes('panamax') || vesselType.includes('kamsar')) activeTceSpot = Number(record.panamax_tc) || 19146;
-                else if (vesselType.includes('supra') || vesselType.includes('ultra')) activeTceSpot = Number(record.supramax_tc) || 17178;
-
-                // --- INICIO CONVERSIÓN DE USD/DÍA A USD/TONELADA ---
-                
-                // 1. Intentamos leer las toneladas de la interfaz (o usamos 10000 TM por defecto)
-                const inputCargo = document.querySelector('input[name*="cargo"], input[id*="cargo"]');
-                const cargoTons = inputCargo && inputCargo.value ? Number(inputCargo.value) : 10000;
-                
-                // 2. Definimos costes medios del viaje (Búnker + Puertos) y días totales
-                const totalDays = 20; 
-                const voyageCosts = 95000; 
-                
-                // 3. FÓRMULA INVERSA TCE: ( (USD/Día * Días) + Gastos Viaje ) / Toneladas
-                const spotUsdPorTonelada = ((activeTceSpot * totalDays) + voyageCosts) / cargoTons;
-
-                // 4. Enviamos el resultado convertido al Panel visual
-                controller.update({
-                    spot: Number(spotUsdPorTonelada.toFixed(2)),
-                    coa: Number((spotUsdPorTonelada * 0.75).toFixed(2)),
-                    backhaul: Number((spotUsdPorTonelada * 0.55).toFixed(2))
-                });
-                
-                // --- FIN CONVERSIÓN ---
-            }
-        } catch (err) {
-            console.warn('[Market Intelligence] Error de red al conectar con Neon:', err);
-        }
-    };
-
-    // 1. Sincronización inicial al cargar la página
-    syncMarketDataFromNeon();
-
-    // 2. Sincronización automática cada 5 minutos en segundo plano
-    const FIVE_MINUTES = 5 * 60 * 1000;
-    setInterval(syncMarketDataFromNeon, FIVE_MINUTES);
+    const hydration = window.MarketIntelligenceHydration;
+    if (hydration) {
+        hydration.subscribe(state => {
+            root.dataset.marketSnapshotId = state.snapshot?.snapshotId || '';
+            root.dataset.marketHydrationStatus = state.status;
+        });
+    } else {
+        window.addEventListener('seacharter:market-intelligence-hydrated', event => {
+            root.dataset.marketSnapshotId = event.detail?.snapshot?.snapshotId || '';
+            root.dataset.marketHydrationStatus = event.detail?.status || '';
+        });
+    }
 
     const offerInput = root.querySelector('[data-mi-offer-input]');
     offerInput?.addEventListener('input', () => {
