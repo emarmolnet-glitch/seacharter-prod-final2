@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const balticSpotSource = await readFile(new URL('../src/step7-baltic-spot-reference.js', import.meta.url), 'utf8');
+const marketHydrationSource = await readFile(new URL('../src/market-intelligence-hydration.js', import.meta.url), 'utf8');
 const tceWorkspaceSource = await readFile(new URL('../TceCalculatorWorkspace.tsx', import.meta.url), 'utf8');
 const marketMapperSource = await readFile(new URL('../src/utils/marketMapper.js', import.meta.url), 'utf8');
 const { getIndexForVessel } = await import(`data:text/javascript,${encodeURIComponent(marketMapperSource)}`);
@@ -36,7 +37,7 @@ test('uses compact matching header controls', () => {
   assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
 });
 
-test('renders Market Intel data and feeds the inverse TCE calculator', () => {
+test('renders the unified Data Bridge snapshot and feeds the inverse TCE calculator', () => {
   assert.match(indexSource, /Market Intel · Dry Bulk/);
   assert.match(indexSource, /🔄 Forzar Sincronización/);
   assert.match(indexSource, /✏️ Editar Manualmente/);
@@ -45,20 +46,30 @@ test('renders Market Intel data and feeds the inverse TCE calculator', () => {
   assert.match(indexSource, /data-market-field="supramax_tc"/);
   assert.match(indexSource, /data-market-field="handysize_tc"/);
   assert.match(indexSource, /data-market-field="bdi_index"/);
-  assert.match(indexSource, /fetch\('\/api\/market\/latest'/);
+  assert.match(indexSource, /src="\.\/src\/market-intelligence-hydration\.js\?v=20260826-visual-mirror"/);
+  assert.match(marketHydrationSource, /MARKET_DATA_ENDPOINT = '\/api\/get-market-data'/);
+  assert.match(marketHydrationSource, /tceSpotByClass/);
+  assert.match(marketHydrationSource, /theoreticalSpotTce/);
+  assert.match(marketHydrationSource, /spreadUsd/);
+  assert.match(marketHydrationSource, /spreadPct/);
+  assert.doesNotMatch(indexSource, /fetch\('\/api\/market\/latest'/);
   assert.match(indexSource, /fetch\('\/api\/market\/sync-fearnleys', \{ method: 'POST' \}\)/);
   assert.match(indexSource, /fetch\('\/api\/market\/manual-update'/);
   assert.match(indexSource, /body: JSON\.stringify\(manualValues\)/);
   assert.match(indexSource, /MARKET_TCE_FIELD_BY_CLASS/);
   assert.match(indexSource, /applyMarketLatestToInverseTce\(record, vesselCategory\)/);
-  assert.match(indexSource, /record\?\.bdi_index/);
-  assert.match(indexSource, /1Y T\/C - \$\{sourceMeta\.dataLabel\} - \$\{recordDate\}/);
+  assert.match(indexSource, /classSnapshot\?\.theoreticalSpotTce/);
+  assert.match(indexSource, /TCE Spot Teórico - \$\{sourceLabel\} - \$\{recordDate\}/);
   assert.doesNotMatch(indexSource, /fetch\(`\/api\/spot-rates\?\$\{query\.toString\(\)\}`/);
 
-  assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260817-market-latest"/);
-  assert.match(balticSpotSource, /fetch\('\/api\/market\/latest'/);
-  assert.match(balticSpotSource, /BDIINDEX/);
-  assert.match(balticSpotSource, /findMarketEntryByIndex\(payload, 'BDI'\)/);
+  assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260826-visual-mirror"/);
+  assert.match(indexSource, /id="tce-spot-theoretical-value"/);
+  assert.match(indexSource, /id="baltic-spot-updated"/);
+  assert.match(balticSpotSource, /hydration\.subscribe/);
+  assert.match(balticSpotSource, /tceSpot\?\.theoreticalSpotTce/);
+  assert.match(balticSpotSource, /tceSpot\?\.spreadUsd/);
+  assert.doesNotMatch(balticSpotSource, /fetch\(/);
+  assert.doesNotMatch(balticSpotSource, /marketRatio|bunkerDrag|dailyScrubberAdvantage|consumption/);
   assert.doesNotMatch(balticSpotSource, /\/api\/spot-rates/);
 
   assert.match(tceWorkspaceSource, /fetch\('\/api\/market\/latest'/);
@@ -87,7 +98,7 @@ test('maps vessel classes to their Baltic indices', () => {
   assert.equal(getIndexForVessel('Ultramax'), 'BSI');
 });
 
-test('loads BDI immediately from the market latest response', async () => {
+test('renders BDI and final TCE Spot from the shared hydration snapshot', async () => {
   const elements = new Map([
     ['vessel-badge', { textContent: 'Handysize / Small Tanker' }],
     ['port-pol', { value: 'Buenos Aires', addEventListener() {} }],
@@ -96,19 +107,43 @@ test('loads BDI immediately from the market latest response', async () => {
     ['baltic-spot-value', { textContent: '', className: '' }],
     ['baltic-spot-variation', { textContent: '', className: '', hidden: false }],
     ['baltic-spot-status', { textContent: '', className: '' }],
+    ['baltic-spot-updated', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-class', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-value', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-updated', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-fuel', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-spread', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-status', { textContent: '', className: '' }],
   ]);
   const originalWindow = globalThis.window;
   const originalDocument = globalThis.document;
-  const originalFetch = globalThis.fetch;
   const originalMutationObserver = globalThis.MutationObserver;
-  const originalConsoleLog = console.log;
-  let fetchCalls = 0;
 
   try {
     globalThis.window = {
       addEventListener() {},
-      clearTimeout,
-      setTimeout,
+      MarketIntelligenceHydration: {
+        subscribe(callback) {
+          callback({
+            status: 'ready',
+            snapshot: {
+              status: 'ready',
+              bdi: { value: 2302, changeValue: -18, changePct: -0.78, updatedAt: '2026-08-26T09:45:00Z', status: 'LIVE' },
+              tceSpotByClass: {
+                Handysize: {
+                  theoreticalSpotTce: 18712,
+                  spreadUsd: 412,
+                  spreadPct: 2.25,
+                  fuelLabel: 'VLSFO Standard',
+                  algorithmLabel: 'ALGORITMO LIVE VLSFO',
+                  updatedAt: '2026-08-26T09:42:00Z',
+                },
+              },
+            },
+          });
+        },
+        refresh() {},
+      },
     };
     globalThis.document = {
       readyState: 'complete',
@@ -117,32 +152,17 @@ test('loads BDI immediately from the market latest response', async () => {
     globalThis.MutationObserver = class {
       observe() {}
     };
-    globalThis.fetch = async (url) => {
-      fetchCalls += 1;
-      assert.equal(url, '/api/market/latest');
-      return {
-        ok: true,
-        json: async () => ({ bdi_index: 2302 }),
-      };
-    };
-    console.log = () => {};
+    await import(`data:text/javascript,${encodeURIComponent(balticSpotSource)}#${Date.now()}`);
 
-    const executableSource = balticSpotSource.replace(
-      /^import[^\n]+\n/,
-      marketMapperSource.replace('export function', 'function'),
-    );
-    await import(`data:text/javascript,${encodeURIComponent(executableSource)}#${Date.now()}`);
-    await new Promise((resolve) => setImmediate(resolve));
-
-    assert.equal(fetchCalls, 1);
     assert.equal(elements.get('baltic-spot-index').textContent, 'BDI');
     assert.equal(elements.get('baltic-spot-value').textContent, '2,302');
-    assert.equal(elements.get('baltic-spot-variation').textContent, 'Variación N/D');
+    assert.equal(elements.get('baltic-spot-variation').textContent, '-18 pts · -0.78%');
+    assert.equal(elements.get('tce-spot-theoretical-value').textContent, '$18,712');
+    assert.equal(elements.get('tce-spot-theoretical-spread').textContent, 'Brecha: +$412 · +2.25%');
+    assert.equal(elements.get('tce-spot-theoretical-status').textContent, 'ALGORITMO LIVE VLSFO');
   } finally {
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;
-    globalThis.fetch = originalFetch;
     globalThis.MutationObserver = originalMutationObserver;
-    console.log = originalConsoleLog;
   }
 });
