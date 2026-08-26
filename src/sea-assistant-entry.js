@@ -1379,6 +1379,43 @@ function mountSeaAssistant() {
       </form>
     </div>`;
 
+const fileInput = root.querySelector("#sca-file-input");
+  const attachmentsTray = root.querySelector(".sca-attachments-tray");
+  let pendingFiles = [];
+
+  const updateAttachmentsTray = () => {
+    if (!attachmentsTray) return;
+    if (pendingFiles.length === 0) {
+      attachmentsTray.style.display = "none";
+      attachmentsTray.innerHTML = "";
+      return;
+    }
+    attachmentsTray.style.display = "flex";
+    attachmentsTray.innerHTML = pendingFiles.map((file, idx) => `
+      <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-800 text-xs px-2 py-1 rounded-md border border-blue-200">
+        📎 ${DOMPurify.sanitize(file.name)}
+        <button type="button" data-file-index="${idx}" class="font-bold text-red-500 hover:text-red-700 ml-1 px-1">×</button>
+      </span>
+    `).join("");
+
+    attachmentsTray.querySelectorAll("button[data-file-index]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const index = Number(btn.dataset.fileIndex);
+        pendingFiles.splice(index, 1);
+        updateAttachmentsTray();
+      });
+    });
+  };
+
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const selectedFiles = Array.from(e.target.files || []);
+      pendingFiles = [...pendingFiles, ...selectedFiles];
+      fileInput.value = "";
+      updateAttachmentsTray();
+    });
+  }
+  
   document.body.appendChild(root);
 
   const panel = root.querySelector(".sca-panel");
