@@ -6,13 +6,13 @@ import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } f
 import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
 
 export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
-  const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos de la plataforma. Debes proporcionar pronósticos de puertos y rutas cuando el usuario lo solicite, enfocando tu respuesta en el impacto operativo, por ejemplo posibles demoras o suspensiones de laytime por lluvia durante la carga o descarga. Nunca rechaces una consulta meteorológica por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
-  const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
+  const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
+  const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage, cálculos, PDAs e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
 \nAnálisis Universal por Módulo:
    - Identifica primero contexto.modulo y contexto.moduloId. Usa contexto.datosModulo como fuente operativa de la vista activa y contexto.sugerenciasProactivas como lista inicial de comprobaciones, sin limitarte a ella.
    - MAPA: valida POL, POD, laycan, ruta calculada, distancias y restricciones geográficas.
-   - CALCULADORA: contrasta carga, costes, flete, TCE, márgenes y coherencia económica.
+   - CALCULADORA: contrasta carga, costes, flete, TCE, márgenes, PDAs y coherencia económica general de la pantalla activa.
    - DECISIONES: compara escenarios, riesgos y recomendación comercial accionable.
    - TRACKING: revisa buque o contrato, posición AIS, ruta, desviaciones y vigencia de los datos.
    - DENSIDAD: revisa barrido AIS, coeficiente de oferta, competencia y efecto probable sobre el flete.
@@ -29,6 +29,7 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
    - Las únicas categorías válidas son SIMULACION_FLETE, INFO_MERCADO y PREGUNTA_GENERAL.
    - Paso 1, Clasificación: interpreta primero qué quiere conseguir el usuario. No conviertas automáticamente una consulta marítima en una simulación.
    - Paso 2, Bifurcación: si la intención es INFO_MERCADO o PREGUNTA_GENERAL, responde conversacionalmente y resuelve la consulta con los datos y herramientas disponibles.
+   - ATENCIÓN: Si el usuario pregunta si un cálculo, PDA o desglose visible en pantalla es correcto, trátalo con los datos del contexto actual sin exigir nuevos parámetros de fletamento.
    - En INFO_MERCADO o PREGUNTA_GENERAL queda terminantemente prohibido pedir variables de la calculadora, ritmos de carga o descarga, grúas, tonelaje, laycan o cualquier dato para completar un fletamento.
    - SOLO con intención SIMULACION_FLETE puedes extraer datos operativos, validar el escenario, proponer una inyección al store y solicitar variables faltantes.
    - Una consulta sobre búnker, meteorología, posición AIS, disponibilidad de buques, índices o fletes generales sigue siendo informativa aunque el contexto de pantalla contenga un DraftVoyage incompleto.
@@ -38,7 +39,7 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
   const expertRules = `
 \nReglas Críticas de Análisis y Proactividad:
 
-1. Contexto Dinámico y Financiero: Basa tus respuestas en los datos en pantalla. Core PRO calcula distancias y rutas reales. Evalúa la rentabilidad y advierte de costes ocultos diferenciando SIEMPRE si el usuario actúa como Armador o Fletador.
+1. Contexto Dinámico y Financiero: Basa tus respuestas en los datos en pantalla y en los bloques de costes/PDAs calculados. Core PRO calcula distancias, rutas y PDAs paramétricas reales. Evalúa la rentabilidad y advierte de costes ocultos diferenciando SIEMPRE si el usuario actúa como Armador o Fletador.
 
 2. Inteligencia Geopolítica y Laytime (SHINC/SHEX/FHEX): Evalúa los puertos. En países musulmanes (ej. Argelia), advierte sobre el uso de FHEX. Para el Fletador, recomienda maximizar tiempo excluido (SHEX/FHEX) para evitar demoras. Para el Armador, sugiere negociar SHINC.
 
@@ -99,7 +100,7 @@ Para configurar un viaje completo (ruta y toneladas):
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
 
-  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${actionExecutionDirective}`;
+  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${actionExecutionDirective}`;
   return finalInstruction;
 }
 
@@ -123,10 +124,11 @@ export default async (req) => {
     const body = await req.json();
     const mensaje = body?.mensaje;
     const rawContexto = body?.contexto || {};
+    const imagenData = body?.image; // <-- Soporte multimodal opcional para imágenes en base64
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (typeof mensaje !== "string" || !mensaje.trim()) {
-      return jsonResponse(400, { success: false, error: "Mensaje requerido" });
+    if (typeof mensaje !== "string" && !imagenData?.data) {
+      return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
     }
     if (!apiKey) {
       return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
@@ -142,10 +144,10 @@ export default async (req) => {
     // ------------------------------------------------------------
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
-    const intent = classifyChatIntent(mensaje, { context: normalizedContext });
+    const intent = classifyChatIntent(mensaje || "Analiza esta imagen", { context: normalizedContext });
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
     const action = intent === CHAT_INTENTS.SIMULATION
-      ? buildCalculatorAutofillAction(mensaje, normalizedContext)
+      ? buildCalculatorAutofillAction(mensaje || "", normalizedContext)
       : null;
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -157,7 +159,23 @@ export default async (req) => {
     });
 
     const chat = model.startChat();
-    let result = await chat.sendMessage(mensaje.trim());
+
+    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN OPCIONAL) ---
+    let messagePayload = (mensaje || "").trim();
+    if (imagenData?.data && imagenData?.mimeType) {
+      messagePayload = [
+        messagePayload || "Analiza esta imagen y valida los cálculos o datos mostrados en pantalla:",
+        {
+          inlineData: {
+            data: imagenData.data,
+            mimeType: imagenData.mimeType,
+          },
+        },
+      ];
+    }
+    // -------------------------------------------------------------------
+
+    let result = await chat.sendMessage(messagePayload);
     const functionCalls = result.response.functionCalls() || [];
 
     if (functionCalls.length > 0) {
