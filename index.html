@@ -65951,26 +65951,25 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
     }
 
     try {
-        // Llamada directa al endpoint exacto que usa la aplicación: /api/get-market-data
         const response = await fetch('/api/get-market-data', { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
         const payload = await response.json();
         const record = payload?.data || payload;
         
         if (!record) {
-            throw new Error('No se pudo obtener la respuesta de get-market-data');
         }
 
-        // Extraemos los precios limpios del JSON que vimos en la Pestaña de Red
         const vlsfoPrice = Number(record.vlsfo);
         const ifoPrice = Number(record.hsfo);
         const mgoPrice = Number(record.mgo);
 
-        // Localizamos los inputs de la Sección 3 de Costes
         const vlsfoInput = document.querySelector('#price-sea, input[name*="vlsfo"], input[id*="vlsfo"]');
         const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
         const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
 
-        // Inyectamos y disparamos eventos para forzar el recálculo instantáneo
         if (!isNaN(vlsfoPrice) && vlsfoInput) {
             vlsfoInput.value = vlsfoPrice;
             vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -65996,7 +65995,8 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
         console.log('[Bunkers Auto-Sync] Sincronizado correctamente con /api/get-market-data.');
 
     } catch (error) {
-        console.error("Fallo al sincronizar búnkers desde get-market-data:", error);
+        console.warn("[Bunkers Auto-Sync] Aviso de red:", error);
+        // Si el usuario pulsó el botón manualmente, sí le avisamos. Si fue automático, se hace en silencio.
         if (syncBtn && !isAutomatic) {
             alert("No se pudo conectar con get-market-data.");
             syncBtn.innerHTML = originalText;
@@ -66006,9 +66006,9 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
     }
 }
 
-// Ejecución 100% automática en segundo plano nada más cargar la página
+// Ejecución automática y silenciosa al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => syncBunkerPricesFromNeon(true), 800);
+    setTimeout(() => syncBunkerPricesFromNeon(true), 1000);
 });
 </script>
 
