@@ -233,11 +233,27 @@ async function mountPanel() {
                 else if (vesselType.includes('panamax') || vesselType.includes('kamsar')) activeTceSpot = Number(record.panamax_tc) || 19146;
                 else if (vesselType.includes('supra') || vesselType.includes('ultra')) activeTceSpot = Number(record.supramax_tc) || 17178;
 
+                // --- INICIO CONVERSIÓN DE USD/DÍA A USD/TONELADA ---
+                
+                // 1. Intentamos leer las toneladas de la interfaz (o usamos 10000 TM por defecto)
+                const inputCargo = document.querySelector('input[name*="cargo"], input[id*="cargo"]');
+                const cargoTons = inputCargo && inputCargo.value ? Number(inputCargo.value) : 10000;
+                
+                // 2. Definimos costes medios del viaje (Búnker + Puertos) y días totales
+                const totalDays = 20; 
+                const voyageCosts = 95000; 
+                
+                // 3. FÓRMULA INVERSA TCE: ( (USD/Día * Días) + Gastos Viaje ) / Toneladas
+                const spotUsdPorTonelada = ((activeTceSpot * totalDays) + voyageCosts) / cargoTons;
+
+                // 4. Enviamos el resultado convertido al Panel visual
                 controller.update({
-                    spot: activeTceSpot,
-                    coa: Math.round(activeTceSpot * 0.75),
-                    backhaul: Math.round(activeTceSpot * 0.55)
+                    spot: Number(spotUsdPorTonelada.toFixed(2)),
+                    coa: Number((spotUsdPorTonelada * 0.75).toFixed(2)),
+                    backhaul: Number((spotUsdPorTonelada * 0.55).toFixed(2))
                 });
+                
+                // --- FIN CONVERSIÓN ---
             }
         } catch (err) {
             console.warn('[Market Intelligence] Error de red al conectar con Neon:', err);
