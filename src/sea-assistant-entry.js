@@ -1,4 +1,5 @@
-close: `
+const icons = {
+  close: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m7 7 10 10" />
       <path d="m17 7-10 10" />
