@@ -1362,11 +1362,18 @@ function mountSeaAssistant() {
       <div class="sca-history flex-1 overflow-y-auto p-4" aria-live="polite" aria-relevant="additions text">
         <div class="sca-messages-end" aria-hidden="true"></div>
       </div>
-      <form class="sca-form w-full min-h-[70px] p-4 bg-gray-50 border-t flex flex-row items-center gap-3 shrink-0">
-        <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
-        <button class="sca-mic w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
-        <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
-        <button class="sca-send w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
+      <form class="sca-form w-full min-h-[70px] p-4 bg-gray-50 border-t flex flex-col gap-2 shrink-0">
+        <div class="sca-attachments-tray flex flex-wrap gap-1.5" style="display: none;"></div>
+        <div class="flex flex-row items-center gap-2 w-full">
+          <label class="sca-clip-btn w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:text-teal-600 hover:bg-gray-100 cursor-pointer transition-colors" title="Adjuntar documentos (PDF, Excel, Word, Imágenes)">
+            ${icons.clip}
+            <input type="file" id="sca-file-input" multiple accept=".pdf, .xlsx, .xls, .docx, .txt, image/*" class="hidden" />
+          </label>
+          <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Escribe tu consulta o adjunta documentos..." aria-label="Mensaje para el asistente" required></textarea>
+          <button class="sca-mic w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
+          <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
+          <button class="sca-send w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
+        </div>
         <span class="sca-status">Disponible para consultas</span>
         <span class="sca-voice-feedback" role="status" aria-live="polite"></span>
       </form>
