@@ -57,7 +57,7 @@ const icons = {
       <path d="m15.5 9.5 5 5" />
       <path d="m20.5 9.5-5 5" />
     </svg>`,
-  stop: `
+    stop: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="7" y="7" width="10" height="10" rx="2" />
     </svg>`,
@@ -69,6 +69,10 @@ const icons = {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m7 7 10 10" />
       <path d="m17 7-10 10" />
+    </svg>`,
+  clip: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
     </svg>`,
 };
 
