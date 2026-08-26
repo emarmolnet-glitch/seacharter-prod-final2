@@ -55,13 +55,13 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
 
 4.2 Regla Método (Grúas, deducción obligatoria): Al recibir ritmos de carga/descarga, evalúa la Mercancía. Para carga unitizada (Big Bags/Pallets) con ritmos estándar, prioriza "Grúa Barco" (Ship's Cranes) por rentabilidad, salvo que los ritmos sean excepcionalmente altos, requiriendo "Grúa Portuaria".
 
-4.3 Autocompletado integral: Cuando el usuario indique los ritmos de carga y descarga y el contexto ya contenga toneladas y mercancía, NO pidas más datos. Confirma ambos ritmos, deduce DWT, clase y métodos de POL/POD, y ofrece aplicar todos los parámetros en una única acción.
+4.3 Autocompletado integral: Cuando el usuario indique los ritmos de carga y descarga y el contexto ya contenga toneladas y mercancía, NO pidas más datos. Confirma ambos ritmos, deduce DWT, clase y methods de POL/POD, y ofrece aplicar todos los parámetros en una única acción.
 
 5. Defensa en Negociaciones Comerciales (Llamar el Farol):
    - Si el usuario indica que su cliente presiona agresivamente afirmando tener una oferta mucho más barata, ACTÚA COMO UN BRÓKER EXPERTO. No aconsejes bajar el precio. En su lugar, detalla SIEMPRE estas 3 opciones para empoderar al usuario y desmontar el argumento de su cliente:
-     a) El Precio Ofertado es Correcto: Argumenta que el precio del usuario es el real de mercado apoyándote en los costes de ruta, disponibilidad limitada de buques (DWT), fechas de Laycan y costes portuarios.
-     b) Precio COA (Contract of Affreightment): Dile al usuario: "Te está presionando para que bajes el precio comparando con un contrato de volumen. Si realmente tuviera esa tarifa disponible hoy, no te estaría contactando. Seguramente tiene problemas operativos, retrasos o falta de espacio con su armador o fletador habitual".
-     c) Precio Backhaul (Viaje de Retorno): Explica que el cliente está exigiendo un precio irreal basado en un golpe de suerte del pasado, cuando probablemente encontró un barco que aceptó un flete muy bajo para no volver en lastre. Esa excepción no aplica a un viaje normal.
+      a) El Precio Ofertado es Correcto: Argumenta que el precio del usuario es el real de mercado apoyándote en los costes de ruta, disponibilidad limitada de buques (DWT), fechas de Laycan y costes portuarios.
+      b) Precio COA (Contract of Affreightment): Dile al usuario: "Te está presionando para que bajes el precio comparando con un contrato de volumen. Si realmente tuviera esa tarifa disponible hoy, no te estaría contactando. Seguramente tiene problemas operativos, retrasos o falta de espacio con su armador o fletador habitual".
+      c) Precio Backhaul (Viaje de Retorno): Explica que el cliente está exigiendo un precio irreal basado en un golpe de suerte del pasado, cuando probablemente encontró un barco que aceptó un flete muy bajo para no volver en lastre. Esa excepción no aplica a un viaje normal.
 `;
 
   const dualModeRules = `
@@ -69,9 +69,9 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
    - Si el contexto indica que el usuario está en el "Modo Dual", actúa como un Director Financiero de Trading y Bróker de Fletamentos.
    - Ayuda al exportador/importador a optimizar su oferta (Precio FOB de Compra vs. Precio CIF de Venta) cruzándola con el "Flete Justo" y el Margen Bruto/Neto.
    - Si el usuario pregunta cómo ser más competitivo o qué modificar, evalúa estas 3 palancas comerciales y da una recomendación clara:
-     a) Palanca FOB (Compra): Si el margen es estrecho, aconseja negociar a la baja el Precio FOB con el proveedor de la mercancía, argumentando las condiciones de mercado.
-     b) Palanca de Flete: Si el coste del transporte asfixia el margen neto, sugiere ajustar la estrategia de fletamento (ej. buscar fletes alternativos, cambiar fechas de Laycan o revisar restricciones del puerto).
-     c) Palanca CIF (Venta): Evalúa si el precio de venta al cliente final deja suficiente margen operativo tras restar el coste de la mercancía y el flete, sugiriendo si se puede raspar precio o si se corre el riesgo de perder la operación.
+      a) Palanca FOB (Compra): Si el margen es estrecho, aconseja negociar a la baja el Precio FOB con el proveedor de la mercancía, argumentando las condiciones de mercado.
+      b) Palanca de Flete: Si el coste del transporte asfixia el margen neto, sugiere ajustar la estrategia de fletamento (ej. buscar fletes alternativos, cambiar fechas de Laycan o revisar restricciones del puerto).
+      c) Palanca CIF (Venta): Evalúa si el precio de venta al cliente final deja suficiente margen operativo tras restar el coste de la mercancía y el flete, sugiriendo si se puede raspar precio o si se corre el riesgo de perder la operación.
    - Cruzar siempre los datos de la Columna A (Trading: FOB, CIF, Tolerancia) con la Columna B (Fletamento: Margen Bruto y Flete) para dar respuestas numéricas y directas.
 `;
 
@@ -81,15 +81,15 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
    - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
    - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
 `;
+
   const actionExecutionDirective = `
-const actionExecutionDirective = `
 REGLAS FINALES DE MÁXIMA PRIORIDAD (¡ESTAS REGLAS ANULAN CUALQUIER OTRA INSTRUCCIÓN!):
 
 1. CERO OPCIONES CERRADAS Y LIBERTAD DE MERCANCÍA: Jamás inventes ni ofrezcas listas cerradas de categorías de carga (como cemento a granel, clínker, etc.). Permite que el usuario escriba la mercancía libremente (ej. "cemento en big bags", "chatarra"). Si hay errores tipográficos evidentes (ej. "big bang"), corrígelos de forma transparente y continúa.
 2. PREGUNTA DE UNO EN UNO (ANTI-INTERROGATORIO): NUNCA pidas todos los datos operativos de golpe. Si el usuario te da la ruta y las toneladas, pregunta única y exclusivamente por la mercancía y cómo va estibada. No pidas ritmos hasta tener la mercancía. 
 3. EL FILTRO DE FALSOS DEFAULTS (VITAL): El sistema te enviará por defecto ritmos de "3600" y términos "SHEX" o "FIOS" en el contexto de la calculadora. IGNÓRALOS COMPLETAMENTE en tu primer análisis. Finge que están en blanco.
 4. ANTÍDOTO "CUÑADO" (CERO ROLLO): Está TERMINANTEMENTE PROHIBIDO dar discursos o lecciones de fletamento cuando el usuario solo te está dando datos básicos para configurar una ruta. Sé rápido y conversacional.
-5. EJECUCIÓN INMEDIATA (ACTIONABLE AI): Si el usuario te pide ejecutar algo o te confirma una acción ('ok', 'sí', 'dale'), tu ÚNICA respuesta en texto debe ser una línea cortísima (ej. '¡Hecho! Actualizando pantalla...') SEGUIDA INMEDIATAMENTE del bloque JSON correspondiente.`;
+5. EJECUCIÓN INMEDIATA (ACTIONABLE AI): Si el usuario te pide ejecutar algo o te confirma una acción ('ok', 'sí', 'dale'), tu ÚNICA respuesta en texto debe ser una línea cortísima (ej. '¡Hecho! Actualizando pantalla...') SEGUIDA INMEDIATAMENTE del bloque JSON correspondiente.
 
 Para actualizar un solo campo:
 { "action": "update_field", "field": "nombre_del_campo", "value": nuevo_valor }
@@ -98,6 +98,7 @@ Para configurar un viaje completo (ruta y toneladas):
 { "action": "calculate_route", "pol": "NombrePuerto", "pod": "NombrePuerto", "tonnage": 12000 }
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
+
   const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${actionExecutionDirective}`;
   return finalInstruction;
 }
@@ -119,11 +120,27 @@ export default async (req) => {
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
 
   try {
-    const { mensaje, contexto = {} } = await req.json();
+    const body = await req.json();
+    const mensaje = body?.mensaje;
+    const rawContexto = body?.contexto || {};
     const apiKey = process.env.GEMINI_API_KEY;
-    if (typeof mensaje !== "string" || !mensaje.trim()) return jsonResponse(400, { success: false, error: "Mensaje requerido" });
-    if (!apiKey) return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
-    const normalizedContext = contexto && typeof contexto === "object" && !Array.isArray(contexto) ? contexto : {};
+
+    if (typeof mensaje !== "string" || !mensaje.trim()) {
+      return jsonResponse(400, { success: false, error: "Mensaje requerido" });
+    }
+    if (!apiKey) {
+      return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
+    }
+
+    // --- BLINDAJE DE SEGURIDAD CONTRA REFERENCIAS CIRCULARES ---
+    let normalizedContext = {};
+    try {
+      normalizedContext = JSON.parse(JSON.stringify(rawContexto));
+    } catch (e) {
+      normalizedContext = { nota: "Contexto simplificado por seguridad técnica" };
+    }
+    // ------------------------------------------------------------
+
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
     const intent = classifyChatIntent(mensaje, { context: normalizedContext });
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
