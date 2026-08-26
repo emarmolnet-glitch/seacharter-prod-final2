@@ -65951,35 +65951,40 @@ async function syncBunkerPricesFromNeon() {
     }
 
     try {
-        const response = await fetch('/api/market/bunkers-latest'); 
-        const result = await response.json();
+        // Llamamos al endpoint unificado /api/market/latest que ya vimos en la Red
+        const response = await fetch('/api/market/latest', { cache: 'no-store' });
+        const payload = await response.json();
+        const record = payload?.data || payload;
         
-        if (!result.success || !result.bunkers) {
-            throw new Error('La API no devolvió los datos correctamente');
+        if (!record) {
+            throw new Error('No se pudieron recuperar los datos del mercado');
         }
 
-        const bunkers = result.bunkers;
-        const vlsfoData = bunkers.find(b => b.fuel_grade === 'VLSFO');
-        const ifo380Data = bunkers.find(b => b.fuel_grade === 'IFO380' || b.fuel_grade === 'IFO');
-        const mgoData = bunkers.find(b => b.fuel_grade === 'MGO');
+        // Extraemos los valores planos directamente del JSON (844.29, 629.6, 1384.23)
+        const vlsfoPrice = Number(record.vlsfo);
+        const ifoPrice = Number(record.hsfo || record.ifo380);
+        const mgoPrice = Number(record.mgo);
 
-        // Apuntamos directamente a los IDs que he visto en tu código
+        // Apuntamos directamente a los inputs de la sección de costes
         const vlsfoInput = document.querySelector('#price-sea, input[name*="vlsfo"], input[id*="vlsfo"]');
         const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
         const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
 
-        // Inyectamos los valores y forzamos el recálculo (runEngine)
-        if (vlsfoData && vlsfoInput) {
-            vlsfoInput.value = vlsfoData.price;
+        // Inyectamos los valores exactos de la base de datos en los inputs
+        if (!isNaN(vlsfoPrice) && vlsfoInput) {
+            vlsfoInput.value = vlsfoPrice;
             vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
+            vlsfoInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        if (ifo380Data && ifo380Input) {
-            ifo380Input.value = ifo380Data.price;
+        if (!isNaN(ifoPrice) && ifo380Input) {
+            ifo380Input.value = ifoPrice;
             ifo380Input.dispatchEvent(new Event('input', { bubbles: true }));
+            ifo380Input.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        if (mgoData && mgoInput) {
-            mgoInput.value = mgoData.price;
+        if (!isNaN(mgoPrice) && mgoInput) {
+            mgoInput.value = mgoPrice;
             mgoInput.dispatchEvent(new Event('input', { bubbles: true }));
+            mgoInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         if (syncBtn) {
@@ -65990,7 +65995,7 @@ async function syncBunkerPricesFromNeon() {
 
     } catch (error) {
         console.error("Fallo al sincronizar búnkers:", error);
-        alert("No se pudo conectar con Data Bridge. Revisa la consola.");
+        alert("No se pudo conectar con el endpoint de mercado.");
         if (syncBtn) syncBtn.innerHTML = originalText;
     } finally {
         if (syncBtn) syncBtn.disabled = false;
