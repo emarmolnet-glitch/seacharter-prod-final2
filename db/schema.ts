@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -23,6 +24,24 @@ export const appConfig = pgTable("AppConfig", {
   value: text("value").notNull(),
   updatedAt: updatedAt(),
 });
+
+export const bunkerPricesLog = pgTable(
+  "bunker_prices_log",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    hubName: varchar("hub_name", { length: 120 }).notNull(),
+    fuelGrade: varchar("fuel_grade", { length: 16 }).notNull(),
+    price: numeric("price", { mode: "number" }).notNull(),
+    source: varchar("source", { length: 64 }).default("AUTO_BUNKERINDEX").notNull(),
+  },
+  (table) => [
+    index("bunker_prices_log_market_latest_idx").on(table.hubName, table.fuelGrade, table.createdAt),
+    check("bunker_prices_log_fuel_grade_check", sql`${table.fuelGrade} IN ('VLSFO', 'IFO380', 'MGO')`),
+    check("bunker_prices_log_price_positive_check", sql`${table.price} > 0`),
+    check("bunker_prices_log_source_not_blank_check", sql`BTRIM(${table.source}) <> ''`),
+  ],
+);
 
 export const pdaVesselConfirmations = pgTable("pda_vessel_confirmations", {
   id: uuid("id").defaultRandom().primaryKey(),

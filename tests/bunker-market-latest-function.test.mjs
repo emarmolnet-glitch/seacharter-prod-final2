@@ -9,6 +9,9 @@ test('bunker market endpoint returns the latest normalized row per hub and fuel 
   assert.match(source, /FROM bunker_prices_log/);
   assert.match(source, /SELECT DISTINCT ON/);
   assert.match(source, /UPPER\(REPLACE\(BTRIM\(fuel_grade\), ' ', ''\)\)/);
-  assert.match(source, /data: \{ bunkers \}/);
+  assert.match(source, /vlsfo: findMarketPrice\(bunkers, "VLSFO"\)/);
+  assert.match(source, /ifo380: findMarketPrice\(bunkers, "IFO380"\)/);
+  assert.match(source, /mgo: findMarketPrice\(bunkers, "MGO"\)/);
+  assert.match(source, /data: \{ \.\.\.market, bunkers \}/);
   assert.match(source, /price: Number\(row\.price\)/);
 });

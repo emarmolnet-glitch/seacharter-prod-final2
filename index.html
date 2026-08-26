@@ -9140,9 +9140,9 @@
                                     </p>
                                 </div>
                                 <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerPricesFromNeon()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-400 transition-colors hover:bg-sky-900/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50">
+                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerIndexMarket()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-400 transition-colors hover:bg-sky-900/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50">
                                         <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                                        <span>Sincronizar Mercado Regional</span>
+                                        <span>Sincronizar Oil Price API</span>
                                     </button>
                                     <button id="btn-search-bunker-arbitrage" type="button" onclick="searchProfitableBunkerDiversions()" class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:cursor-wait disabled:opacity-60">
                                         <i class="fa-solid fa-route" aria-hidden="true"></i>
@@ -32630,7 +32630,7 @@
 
         const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
         const BUNKER_INDEX_CACHE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
-        const BUNKER_MARKET_LATEST_ENDPOINT = '/api/market/bunkers-latest';
+        const BUNKER_MARKET_DATA_ENDPOINT = '/api/get-market-data';
         const BUNKER_ARBITRAGE_ENDPOINT = '/api/routing/bunker-arbitrage';
         const HISTORICAL_BUNKER_FALLBACK_USD = Object.freeze({
             vlsfo: 600,
@@ -32672,8 +32672,6 @@
         let isFetchingBunker = false;
         let bunkerFetchPromise = null;
         let bunkerFetchRegion = '';
-        let bunkerRegionSyncTimer = null;
-        let lastAutomaticallyFetchedBunkerRegion = '';
         let isSearchingBunkerArbitrage = false;
         let bunkerDateLabel = '';
 
@@ -32738,7 +32736,7 @@
             const market = source?.prices && !Array.isArray(source.prices) ? source.prices : source;
             return {
                 vlsfo: parseBunkerMarketPrice(market?.vlsfo ?? market?.VLSFO ?? market?.vlsfo_price),
-                ifo380: parseBunkerMarketPrice(market?.ifo380 ?? market?.IFO380 ?? market?.ifo_380 ?? market?.ifo380_price),
+                ifo380: parseBunkerMarketPrice(market?.hsfo ?? market?.HSFO ?? market?.ifo380 ?? market?.IFO380 ?? market?.ifo_380 ?? market?.ifo380_price),
                 mgo: parseBunkerMarketPrice(market?.mgo ?? market?.MGO ?? market?.mgo_price)
             };
         }
@@ -32846,10 +32844,10 @@
         function resolveRegionalBunkerSelection(source = {}, requestedRegion = 'World') {
             const regionalPrices = source?.regionalPrices || collectRegionalBunkerPrices(source);
             const detectedRegion = normalizeBunkerRegionName(requestedRegion);
+            const directPrices = readBunkerPriceTriplet(source);
             const selectedRegion = hasPositiveBunkerPrice(regionalPrices?.[detectedRegion])
                 ? detectedRegion
-                : (hasPositiveBunkerPrice(regionalPrices?.World) ? 'World' : detectedRegion);
-            const directPrices = readBunkerPriceTriplet(source);
+                : (hasPositiveBunkerPrice(regionalPrices?.World) || hasPositiveBunkerPrice(directPrices) ? 'World' : detectedRegion);
             const prices = hasPositiveBunkerPrice(regionalPrices?.[selectedRegion])
                 ? regionalPrices[selectedRegion]
                 : directPrices;
@@ -32991,16 +32989,24 @@
             const routeRegion = getCurrentBunkerRegionContext();
             const selection = resolveRegionalBunkerSelection(cache, routeRegion.region);
             const marketPrices = selection.prices;
+            const resolvePrice = (key, inputId, fallbackValue) => {
+                const marketPrice = Number(marketPrices?.[key]);
+                if (options.forceMarket === true && Number.isFinite(marketPrice) && marketPrice > 0) return marketPrice;
+                return resolveSafeBunkerPrice(inputId, marketPrice, fallbackValue);
+            };
             const resolved = {
-                vlsfo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.vlsfo, marketPrices?.vlsfo, HISTORICAL_BUNKER_FALLBACK_USD.vlsfo),
-                ifo380: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.ifo380, marketPrices?.ifo380, HISTORICAL_BUNKER_FALLBACK_USD.ifo380),
-                mgo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.mgo, marketPrices?.mgo, HISTORICAL_BUNKER_FALLBACK_USD.mgo)
+                vlsfo: resolvePrice('vlsfo', BUNKER_INPUT_BINDINGS.vlsfo, HISTORICAL_BUNKER_FALLBACK_USD.vlsfo),
+                ifo380: resolvePrice('ifo380', BUNKER_INPUT_BINDINGS.ifo380, HISTORICAL_BUNKER_FALLBACK_USD.ifo380),
+                mgo: resolvePrice('mgo', BUNKER_INPUT_BINDINGS.mgo, HISTORICAL_BUNKER_FALLBACK_USD.mgo)
             };
             const fallbackUsed = Boolean(cache?.fallbackUsed) || Object.keys(BUNKER_INPUT_BINDINGS)
                 .some((key) => !Number.isFinite(Number(marketPrices?.[key])) || Number(marketPrices?.[key]) <= 0);
             Object.entries(BUNKER_INPUT_BINDINGS).forEach(([key, inputId]) => {
                 const input = document.getElementById(inputId);
-                if (input) input.value = resolved[key].toFixed(2);
+                if (input) {
+                    input.value = resolved[key].toFixed(2);
+                    if (options.forceMarket === true) input.dataset.userOverride = 'false';
+                }
             });
             updateBunkerRegionLabels(selection.selectedRegion);
             if (typeof State !== 'undefined') {
@@ -33085,7 +33091,7 @@
             const market = selection.prices;
             const rawPrices = {
                 vlsfo: Number(market.vlsfo ?? market.VLSFO ?? market.vlsfo_price),
-                ifo380: Number(market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price),
+                ifo380: Number(market.hsfo ?? market.HSFO ?? market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price),
                 mgo: Number(market.mgo ?? market.MGO ?? market.mgo_price)
             };
             const marketDataFound = Object.values(regionRecords).some(Boolean) || hasPositiveBunkerPrice(rawPrices);
@@ -33140,7 +33146,7 @@
             if (!managedByMaster) showToast("Actualizando VLSFO, IFO 380 y MGO del día...", true);
 
             try {
-                const bunkerEndpoint = BUNKER_MARKET_LATEST_ENDPOINT;
+                const bunkerEndpoint = BUNKER_MARKET_DATA_ENDPOINT;
                 const bunkerRequest = {
                     method: 'GET',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -33157,25 +33163,35 @@
                     throw new Error(`${extractionError}${extractionDetails}`);
                 }
 
-                const bunkersArray = extractBunkersArray(data);
-                console.info('[Bunker Market] Raw Bunkers Array extraído:', bunkersArray);
-                const nextCache = normalizeBunkerMarketPayload(data, { bunkersArray, detectedRegion, routeRegion });
-                if (!nextCache.marketDataFound) {
-                    throw new Error(`Market Latest no devolvió registros de bunker para ${detectedRegion}.`);
+                const record = data?.data && typeof data.data === 'object' ? data.data : data;
+                const vlsfo = Number(record?.vlsfo);
+                const ifo380 = Number(record?.hsfo);
+                const mgo = Number(record?.mgo);
+                if (![vlsfo, ifo380, mgo].every(price => Number.isFinite(price) && price > 0)) {
+                    throw new Error('get-market-data no devolvió VLSFO, HSFO y MGO válidos.');
                 }
+                const nextCache = {
+                    vlsfo,
+                    ifo380,
+                    mgo,
+                    date: record?.date || record?.created_at || getTodayBunkerLabel(),
+                    cachedAt: Date.now(),
+                    regionalPrices: { World: { vlsfo, ifo380, mgo } },
+                    detectedRegion: 'World',
+                    selectedRegion: 'World',
+                    marketDataFound: true,
+                    fallbackUsed: false
+                };
 
                 if (typeof localStorage !== 'undefined') {
                     localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
                 }
 
-                const appliedPrices = applyBunkerIndexData(nextCache, { deferEngine: options.deferEngine });
-                if (nextCache.fallbackUsed) {
-                    updateBunkerIndexErrorLabel(`Market Latest parcial para ${detectedRegion} · completando grados ausentes con valores seguros`);
-                    updateBunkerMarketSyncStatus(appliedPrices, { warning: `Cotización regional parcial para ${detectedRegion}` });
-                    if (typeof showToast === 'function') showToast(`Aviso: cotización regional parcial para ${detectedRegion}; se completaron grados ausentes.`, 'warning');
-                } else if (!managedByMaster) {
-                    showToast(`Precios sincronizados para ${appliedPrices.selectedRegion || 'World'} según el POL`);
-                }
+                const appliedPrices = applyBunkerIndexData(nextCache, {
+                    deferEngine: options.deferEngine,
+                    forceMarket: true
+                });
+                if (!managedByMaster) showToast('Precios VLSFO, HSFO y MGO sincronizados desde Data Bridge');
                 return appliedPrices;
             } catch (error) {
                 console.error('Error fatal extrayendo datos del array de Bunkers:', error);
@@ -33272,26 +33288,11 @@
             });
         }
 
-        function scheduleRegionalBunkerSync(options = {}) {
-            clearTimeout(bunkerRegionSyncTimer);
-            bunkerRegionSyncTimer = setTimeout(() => {
-                const routeRegion = getCurrentBunkerRegionContext();
-                if (!routeRegion.hasPol || routeRegion.region === 'World') return;
-                if (options.force !== true && routeRegion.region === lastAutomaticallyFetchedBunkerRegion && hasValidRegionalBunkerPrices()) return;
-                lastAutomaticallyFetchedBunkerRegion = routeRegion.region;
-                void autoFillBunkers({
-                    forceRefresh: true,
-                    managedByMaster: true,
-                    detectedRegion: routeRegion.region
-                });
-            }, options.immediate === true ? 0 : 280);
-        }
-
         function syncBunkerIndexMarket() {
-            const routeRegion = getCurrentBunkerRegionContext();
             return autoFillBunkers({
                 forceRefresh: true,
-                detectedRegion: routeRegion.region
+                allowWithoutPol: true,
+                detectedRegion: 'World'
             });
         }
 
@@ -64083,28 +64084,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!portInput) return;
                 portInput.addEventListener('change', () => {
                     refreshBunkerRegionSelection();
-                    if (id === 'port-pol' && String(portInput.value || '').trim()) {
-                        scheduleRegionalBunkerSync({ immediate: true });
-                    }
-                });
-                portInput.addEventListener('input', () => {
-                    if (id === 'port-pol') scheduleRegionalBunkerSync();
                 });
                 portInput.addEventListener('blur', () => {
                     refreshBunkerRegionSelection();
-                    if (id === 'port-pol') scheduleRegionalBunkerSync({ immediate: true });
                 });
             });
             window.addEventListener('seacharter:bunker-route-change', () => {
                 refreshBunkerRegionSelection();
-                if (String(document.getElementById('port-pol')?.value || '').trim()) {
-                    scheduleRegionalBunkerSync({ immediate: true });
-                }
             });
-            const initialBunkerRegion = getCurrentBunkerRegionContext();
-            if (initialBunkerRegion.hasPol) {
-                scheduleRegionalBunkerSync({ immediate: true });
-            }
+            void autoFillBunkers({ allowWithoutPol: true, managedByMaster: true, detectedRegion: 'World' });
             void hydrateLatestEuCarbonPrice();
             void loadCoaClientProfiles();
 	            updateManualBalticSpotOverrideUi();
@@ -65940,78 +65928,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
       });
     </script>
-<script>
-async function syncBunkerPricesFromNeon(isAutomatic = false) {
-    const syncBtn = document.getElementById('btn-consult-bunker');
-    const originalText = syncBtn ? syncBtn.innerHTML : '';
-    
-    if (syncBtn && !isAutomatic) {
-        syncBtn.innerHTML = '🔄 SINCRONIZANDO...';
-        syncBtn.disabled = true;
-    }
-
-    try {
-        const response = await fetch('/api/get-market-data', { cache: 'no-store' });
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
-        }
-        
-        const payload = await response.json();
-        const record = payload?.data || payload;
-        
-        if (!record) {
-        }
-
-        const vlsfoPrice = Number(record.vlsfo);
-        const ifoPrice = Number(record.hsfo);
-        const mgoPrice = Number(record.mgo);
-
-        const vlsfoInput = document.querySelector('#price-sea, input[name*="vlsfo"], input[id*="vlsfo"]');
-        const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
-        const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
-
-        if (!isNaN(vlsfoPrice) && vlsfoInput) {
-            vlsfoInput.value = vlsfoPrice;
-            vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
-            vlsfoInput.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        if (!isNaN(ifoPrice) && ifo380Input) {
-            ifo380Input.value = ifoPrice;
-            ifo380Input.dispatchEvent(new Event('input', { bubbles: true }));
-            ifo380Input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        if (!isNaN(mgoPrice) && mgoInput) {
-            mgoInput.value = mgoPrice;
-            mgoInput.dispatchEvent(new Event('input', { bubbles: true }));
-            mgoInput.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-
-        if (syncBtn && !isAutomatic) {
-            syncBtn.innerHTML = `<i class="fa-solid fa-check"></i> <span>MERCADO SINCRONIZADO</span>`;
-            syncBtn.classList.remove('border-sky-700', 'text-sky-400');
-            syncBtn.classList.add('border-emerald-500', 'text-emerald-400');
-        }
-
-        console.log('[Bunkers Auto-Sync] Sincronizado correctamente con /api/get-market-data.');
-
-    } catch (error) {
-        console.warn("[Bunkers Auto-Sync] Aviso de red:", error);
-        // Si el usuario pulsó el botón manualmente, sí le avisamos. Si fue automático, se hace en silencio.
-        if (syncBtn && !isAutomatic) {
-            alert("No se pudo conectar con get-market-data.");
-            syncBtn.innerHTML = originalText;
-        }
-    } finally {
-        if (syncBtn && !isAutomatic) syncBtn.disabled = false;
-    }
-}
-
-// Ejecución automática y silenciosa al cargar la página
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => syncBunkerPricesFromNeon(true), 1000);
-});
-</script>
-
 </body>
 </html>
 <!-- Phase 1 structural stabilization synchronization marker; no runtime effect. -->

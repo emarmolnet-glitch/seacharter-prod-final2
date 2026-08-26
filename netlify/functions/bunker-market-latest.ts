@@ -1,5 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { getDatabase } from "netlify-database-client";
+import { getDatabaseConnectionString } from "../../db/connection-string.js";
 
 type BunkerPriceRow = {
   hub_name: string;
@@ -14,10 +15,15 @@ const headers = {
   "content-type": "application/json; charset=utf-8",
 };
 
-function getConnectionString() {
-  return process.env.DATABASE_URL
-    || process.env.NETLIFY_DATABASE_URL
-    || process.env.NETLIFY_DB_URL;
+function findMarketPrice(bunkers: BunkerPriceRow[], fuelGrade: string) {
+  const normalizedGrade = fuelGrade.toUpperCase().replaceAll(" ", "");
+  const exactWorld = bunkers.find((row) => (
+    row.hub_name.trim().toUpperCase() === "WORLD"
+    && row.fuel_grade.toUpperCase().replaceAll(" ", "") === normalizedGrade
+  ));
+  const fallback = bunkers.find((row) => row.fuel_grade.toUpperCase().replaceAll(" ", "") === normalizedGrade);
+  const price = Number((exactWorld || fallback)?.price);
+  return Number.isFinite(price) && price > 0 ? price : null;
 }
 
 export default async function handler(request: Request) {
@@ -25,7 +31,7 @@ export default async function handler(request: Request) {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers });
   }
 
-  const connectionString = getConnectionString();
+  const connectionString = getDatabaseConnectionString();
   if (!connectionString) {
     return Response.json({ success: false, error: "Database unavailable" }, { status: 503, headers });
   }
@@ -60,10 +66,16 @@ export default async function handler(request: Request) {
       ...row,
       price: Number(row.price),
     }));
+    const market = {
+      vlsfo: findMarketPrice(bunkers, "VLSFO"),
+      ifo380: findMarketPrice(bunkers, "IFO380"),
+      mgo: findMarketPrice(bunkers, "MGO"),
+    };
 
     return Response.json({
       success: true,
-      data: { bunkers },
+      ...market,
+      data: { ...market, bunkers },
       bunkers,
       updated_at: bunkers.reduce<string | null>((latest, row) => {
         if (!latest || new Date(row.created_at).getTime() > new Date(latest).getTime()) return row.created_at;

@@ -1,23 +1,15 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type Pool as PgPool } from "pg";
+import { requireDatabaseConnectionString } from "./connection-string.js";
 import * as schema from "./schema.js";
 
 let pool: PgPool | null = null;
 let applicationSchemaReady: Promise<void> | null = null;
 
-function getConnectionString() {
-  const connectionString = process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
-  if (!connectionString || connectionString === "tu_valor_real_de_la_variable") {
-    throw new Error("La conexión de Netlify Database no está configurada.");
-  }
-
-  return connectionString;
-}
-
 export function getPool() {
   if (pool) return pool;
 
-  const connectionString = getConnectionString();
+  const connectionString = requireDatabaseConnectionString();
 
   pool = new Pool({
     connectionString,
