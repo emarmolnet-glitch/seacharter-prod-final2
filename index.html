@@ -9140,7 +9140,7 @@
                                     </p>
                                 </div>
                                 <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerIndexMarket()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-300 shadow-sm transition hover:border-sky-500 hover:bg-sky-950/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:cursor-wait disabled:opacity-60" title="Sincronizar los precios regionales guardados en Market Latest">
+                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerPricesFromNeon()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-400 transition-colors hover:bg-sky-900/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50">
                                         <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
                                         <span>Sincronizar Mercado Regional</span>
                                     </button>
@@ -65940,6 +65940,64 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
       });
     </script>
+<script>
+async function syncBunkerPricesFromNeon() {
+    const syncBtn = document.getElementById('btn-consult-bunker');
+    const originalText = syncBtn ? syncBtn.innerHTML : '';
+    
+    if (syncBtn) {
+        syncBtn.innerHTML = '🔄 EXTRAYENDO...';
+        syncBtn.disabled = true;
+    }
+
+    try {
+        const response = await fetch('/api/market/bunkers-latest'); 
+        const result = await response.json();
+        
+        if (!result.success || !result.bunkers) {
+            throw new Error('La API no devolvió los datos correctamente');
+        }
+
+        const bunkers = result.bunkers;
+        const vlsfoData = bunkers.find(b => b.fuel_grade === 'VLSFO');
+        const ifo380Data = bunkers.find(b => b.fuel_grade === 'IFO380' || b.fuel_grade === 'IFO');
+        const mgoData = bunkers.find(b => b.fuel_grade === 'MGO');
+
+        // Apuntamos directamente a los IDs que he visto en tu código
+        const vlsfoInput = document.querySelector('#price-sea, input[name*="vlsfo"], input[id*="vlsfo"]');
+        const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
+        const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
+
+        // Inyectamos los valores y forzamos el recálculo (runEngine)
+        if (vlsfoData && vlsfoInput) {
+            vlsfoInput.value = vlsfoData.price;
+            vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (ifo380Data && ifo380Input) {
+            ifo380Input.value = ifo380Data.price;
+            ifo380Input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (mgoData && mgoInput) {
+            mgoInput.value = mgoData.price;
+            mgoInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        if (syncBtn) {
+            syncBtn.innerHTML = `<i class="fa-solid fa-check"></i> <span>MERCADO SINCRONIZADO</span>`;
+            syncBtn.classList.remove('border-sky-700', 'text-sky-400');
+            syncBtn.classList.add('border-emerald-500', 'text-emerald-400');
+        }
+
+    } catch (error) {
+        console.error("Fallo al sincronizar búnkers:", error);
+        alert("No se pudo conectar con Data Bridge. Revisa la consola.");
+        if (syncBtn) syncBtn.innerHTML = originalText;
+    } finally {
+        if (syncBtn) syncBtn.disabled = false;
+    }
+}
+</script>
+
 </body>
 </html>
 <!-- Phase 1 structural stabilization synchronization marker; no runtime effect. -->
