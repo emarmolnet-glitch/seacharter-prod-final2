@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import pdfParse from "pdf-parse";
+import * as xlsx from "xlsx"; 
+import mammoth from "mammoth"; // <-- AÑADIDO: Lector oficial de Word (.docx)
 import { Buffer } from "node:buffer";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
@@ -130,9 +132,8 @@ export default async (req) => {
     let rawContexto = {};
     let imagenData = null; 
     const imageParts = [];
-    const pdfTexts = [];
+    const documentosExtraidos = []; 
 
-    // 1. Detectar si la petición viene con Archivos (FormData) o es texto simple (JSON)
     const contentType = req.headers.get("content-type") || "";
 
     if (contentType.includes("multipart/form-data")) {
@@ -141,24 +142,63 @@ export default async (req) => {
       
       const ctxStr = formData.get("contexto");
       if (ctxStr) {
-        try { rawContexto = JSON.parse(ctxStr); } 
-        catch (e) { console.error("Error parseando contexto desde FormData:", e); }
+        try { rawContexto = JSON.parse(ctxStr); } catch (e) {}
       }
 
-      // 2. Procesar los archivos subidos al vuelo
+      // --- MOTOR MULTIFORMATO: PDFs, Excels, Word, TXT y Fotos ---
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
           const arrayBuffer = await value.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
+          const fileNameLower = value.name.toLowerCase();
 
-          if (value.type === "application/pdf") {
+          // 1. PDF
+          if (value.type === "application/pdf" || fileNameLower.endsWith(".pdf")) {
             try {
               const pdfData = await pdfParse(buffer);
-              pdfTexts.push(`--- Documento: ${value.name} ---\n${pdfData.text}`);
+              documentosExtraidos.push(`--- Documento PDF: ${value.name} ---\n${pdfData.text}`);
             } catch (err) {
-              console.error(`Error leyendo PDF ${value.name}:`, err);
+              console.error(`Error PDF ${value.name}:`, err);
             }
-          } else if (value.type.startsWith("image/")) {
+          } 
+          // 2. EXCEL / CSV
+          else if (
+            value.type.includes("spreadsheetml") || 
+            value.type.includes("excel") ||
+            fileNameLower.match(/\.(xlsx|xls|csv)$/)
+          ) {
+            try {
+              const workbook = xlsx.read(buffer, { type: "buffer" });
+              let excelText = `--- Excel/Packing List: ${value.name} ---\n`;
+              workbook.SheetNames.forEach(sheetName => {
+                const sheet = workbook.Sheets[sheetName];
+                const csvData = xlsx.utils.sheet_to_csv(sheet);
+                excelText += `\n[Hoja: ${sheetName}]\n${csvData.substring(0, 8000)}`; 
+              });
+              documentosExtraidos.push(excelText);
+            } catch (err) {
+              console.error(`Error Excel ${value.name}:`, err);
+            }
+          } 
+          // 3. WORD (.docx)
+          else if (
+            value.type.includes("wordprocessingml") || 
+            value.type.includes("msword") || 
+            fileNameLower.endsWith(".docx")
+          ) {
+            try {
+              const result = await mammoth.extractRawText({ buffer: buffer });
+              documentosExtraidos.push(`--- Documento Word: ${value.name} ---\n${result.value}`);
+            } catch (err) {
+              console.error(`Error Word ${value.name}:`, err);
+            }
+          }
+          // 4. TEXTO PLANO (.txt)
+          else if (value.type === "text/plain" || fileNameLower.endsWith(".txt")) {
+            documentosExtraidos.push(`--- Archivo de Texto: ${value.name} ---\n${buffer.toString("utf-8")}`);
+          }
+          // 5. FOTOS
+          else if (value.type.startsWith("image/")) {
             imageParts.push({
               inlineData: {
                 data: buffer.toString("base64"),
@@ -169,40 +209,30 @@ export default async (req) => {
         }
       }
     } else {
-      // 3. Fallback: Mantener compatibilidad si el frontend envía JSON clásico sin archivos
       const body = await req.json();
       mensaje = body?.mensaje;
       rawContexto = body?.contexto || {};
       imagenData = body?.image; 
     }
 
-    if (typeof mensaje !== "string" && imageParts.length === 0 && !imagenData?.data) {
-      return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
-    }
-
-    // --- BLINDAJE DE SEGURIDAD CONTRA REFERENCIAS CIRCULARES ---
     let normalizedContext = {};
-    try {
-      normalizedContext = JSON.parse(JSON.stringify(rawContexto));
-    } catch (e) {
-      normalizedContext = { nota: "Contexto simplificado por seguridad técnica" };
-    }
-    // ------------------------------------------------------------
+    try { normalizedContext = JSON.parse(JSON.stringify(rawContexto)); } 
+    catch (e) { normalizedContext = { nota: "Contexto simplificado" }; }
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
     
-    // 4. Inyectar el texto de los PDFs en el mensaje antes de clasificar la intención
+    // Inyectamos todo lo extraído (PDF, Excel, Word, TXT) en la consulta a la IA
     let mensajeEnriquecido = (mensaje || "").trim();
-    if (pdfTexts.length > 0) {
-      mensajeEnriquecido += `\n\n[TEXTOS EXTRAÍDOS DE DOCUMENTOS ADJUNTOS]:\n${pdfTexts.join("\n\n")}`;
+    if (documentosExtraidos.length > 0) {
+      mensajeEnriquecido += `\n\n[TEXTOS DE LOS DOCUMENTOS DEL PROYECTO]:\n${documentosExtraidos.join("\n\n")}`;
     }
 
-    // El enrutador de intenciones leerá el mensaje + el texto del PDF
     const intent = classifyChatIntent(mensajeEnriquecido || "Analiza estos documentos", { context: normalizedContext });
+    
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
     
     const action = intent === CHAT_INTENTS.SIMULATION
-      ? buildCalculatorAutofillAction(mensajeEnriquecido || "", normalizedContext)
+      ? buildCalculatorAutofillAction(mensajeEnriquecido, normalizedContext)
       : null;
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -214,20 +244,12 @@ export default async (req) => {
 
     const chat = model.startChat();
 
-    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE FINAL HACIA GEMINI ---
-    let messagePayload = mensajeEnriquecido || "Analiza estos adjuntos y valida los datos mostrados en pantalla:";
-
+    let messagePayload = mensajeEnriquecido || "Analiza este proyecto y propón la ruta/cálculo óptimo:";
     if (imageParts.length > 0) {
-      // Si subieron fotos nuevas
       messagePayload = [messagePayload, ...imageParts];
-    } else if (imagenData?.data && imagenData?.mimeType) {
-      // Si usaron el sistema de fotos legacy en base64
-      messagePayload = [
-        messagePayload,
-        { inlineData: { data: imagenData.data, mimeType: imagenData.mimeType } },
-      ];
+    } else if (imagenData?.data) {
+      messagePayload = [messagePayload, { inlineData: { data: imagenData.data, mimeType: imagenData.mimeType } }];
     }
-    // -------------------------------------------------------------------
 
     let result = await chat.sendMessage(messagePayload);
     const functionCalls = result.response.functionCalls() || [];
@@ -244,13 +266,15 @@ export default async (req) => {
       result = await chat.sendMessage(functionResponses);
     }
 
-    return jsonResponse(200, { success: true, intent, respuesta: result.response.text(), action });
+    return jsonResponse(200, { 
+      success: true, 
+      intent, 
+      respuesta: result.response.text(), 
+      action 
+    });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);
-    return jsonResponse(500, {
-      success: false,
-      error: error instanceof Error ? error.message : "Error interno del servidor.",
-    });
+    return jsonResponse(500, { success: false, error: error.message });
   }
 };
