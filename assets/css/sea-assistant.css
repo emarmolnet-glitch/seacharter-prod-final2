@@ -823,3 +823,65 @@
     transition: none;
   }
 }
+
+/* --- ESTILOS PARA ADJUNTAR ARCHIVOS EN EL CHAT --- */
+.sca-attachments-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--sca-surface-soft);
+  border-top: 1px solid var(--sca-line);
+}
+
+.sca-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: var(--sca-navy);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sca-file-chip button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.sca-clip-btn {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: var(--sca-navy-soft);
+  background: #f9fafb;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.sca-clip-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sca-clip-btn:hover {
+  border-color: var(--sca-teal);
+  color: var(--sca-teal-dark);
+  background: #ffffff;
+}
