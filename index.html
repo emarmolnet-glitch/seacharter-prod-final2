@@ -65946,65 +65946,59 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
     const originalText = syncBtn ? syncBtn.innerHTML : '';
     
     if (syncBtn && !isAutomatic) {
-        syncBtn.innerHTML = '🔄 ACTUALIZANDO EMEA...';
+        syncBtn.innerHTML = '🔄 SINCRONIZANDO MARKET DATA...';
         syncBtn.disabled = true;
     }
 
     try {
-        const response = await fetch('/api/market/bunkers-latest', { cache: 'no-store' });
-        const result = await response.json();
+        // Apuntamos directamente a get-market-data (/api/market/latest)
+        const response = await fetch('/api/market/latest', { cache: 'no-store' });
+        const payload = await response.json();
+        const record = payload?.data || payload;
         
-        const bunkers = result?.bunkers || result?.data?.bunkers;
-        if (!bunkers || !Array.isArray(bunkers)) {
-            throw new Error('No se pudieron recuperar los datos de búnker');
+        if (!record) {
+            throw new Error('No se pudo obtener el registro de get-market-data');
         }
 
-        // Buscamos prioritariamente los precios del hub "EMEA", o "World" como respaldo
-        const getHubPrice = (grade) => {
-            const emeaItem = bunkers.find(b => b.hub_name === 'EMEA' && b.fuel_grade === grade);
-            if (emeaItem) return Number(emeaItem.price);
-            
-            const worldItem = bunkers.find(b => b.hub_name === 'World' && b.fuel_grade === grade);
-            return worldItem ? Number(worldItem.price) : null;
-        };
+        // Extraemos los precios limpios del JSON unificado
+        const vlsfoPrice = Number(record.vlsfo);
+        const ifoPrice = Number(record.hsfo);
+        const mgoPrice = Number(record.mgo);
 
-        const vlsfoPrice = getHubPrice('VLSFO');
-        const ifoPrice = getHubPrice('IFO380') || getHubPrice('IFO');
-        const mgoPrice = getHubPrice('MGO');
-
+        // Localizamos los inputs de la Sección 3 de Costes
         const vlsfoInput = document.querySelector('#price-sea, input[name*="vlsfo"], input[id*="vlsfo"]');
         const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
         const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
 
-        // Inyectamos los valores solo si los inputs están vacíos o si viene de sincronización manual/automática
-        if (vlsfoPrice !== null && vlsfoInput) {
+        // Inyectamos y disparamos eventos para forzar el recálculo instantáneo del motor
+        if (!isNaN(vlsfoPrice) && vlsfoInput) {
             vlsfoInput.value = vlsfoPrice;
             vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
             vlsfoInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        if (ifoPrice !== null && ifo380Input) {
+        if (!isNaN(ifoPrice) && ifo380Input) {
             ifo380Input.value = ifoPrice;
             ifo380Input.dispatchEvent(new Event('input', { bubbles: true }));
             ifo380Input.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        if (mgoPrice !== null && mgoInput) {
+        if (!isNaN(mgoPrice) && mgoInput) {
             mgoInput.value = mgoPrice;
             mgoInput.dispatchEvent(new Event('input', { bubbles: true }));
             mgoInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         if (syncBtn && !isAutomatic) {
-            syncBtn.innerHTML = `<i class="fa-solid fa-check"></i> <span>EMEA SINCRONIZADO</span>`;
+            syncBtn.innerHTML = `<i class="fa-solid fa-check"></i> <span>MERCADO SINCRONIZADO</span>`;
             syncBtn.classList.remove('border-sky-700', 'text-sky-400');
             syncBtn.classList.add('border-emerald-500', 'text-emerald-400');
         }
 
-        console.log('[Bunkers Auto-Sync] Precios de Neon cargados correctamente.');
+        console.log('[Bunkers Auto-Sync] Sincronización automática con get-market-data completada.');
 
     } catch (error) {
-        console.error("Fallo al sincronizar búnkers automáticamente:", error);
+        console.error("Fallo al sincronizar búnkers desde get-market-data:", error);
         if (syncBtn && !isAutomatic) {
-            alert("No se pudo conectar con el endpoint de búnkers.");
+            alert("No se pudo conectar con get-market-data.");
             syncBtn.innerHTML = originalText;
         }
     } finally {
@@ -66012,9 +66006,8 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
     }
 }
 
-// 1. EJECUCIÓN AUTOMÁTICA AL CARGAR LA PÁGINA
+// Ejecución 100% automática en segundo plano nada más cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    // Pequeño retardo de seguridad para asegurar que los inputs ya se han pintado en el DOM
     setTimeout(() => syncBunkerPricesFromNeon(true), 800);
 });
 </script>
