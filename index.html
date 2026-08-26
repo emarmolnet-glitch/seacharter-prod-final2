@@ -65946,21 +65946,21 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
     const originalText = syncBtn ? syncBtn.innerHTML : '';
     
     if (syncBtn && !isAutomatic) {
-        syncBtn.innerHTML = '🔄 SINCRONIZANDO MARKET DATA...';
+        syncBtn.innerHTML = '🔄 SINCRONIZANDO...';
         syncBtn.disabled = true;
     }
 
     try {
-        // Apuntamos directamente a get-market-data (/api/market/latest)
-        const response = await fetch('/api/market/latest', { cache: 'no-store' });
+        // Llamada directa al endpoint exacto que usa la aplicación: /api/get-market-data
+        const response = await fetch('/api/get-market-data', { cache: 'no-store' });
         const payload = await response.json();
         const record = payload?.data || payload;
         
         if (!record) {
-            throw new Error('No se pudo obtener el registro de get-market-data');
+            throw new Error('No se pudo obtener la respuesta de get-market-data');
         }
 
-        // Extraemos los precios limpios del JSON unificado
+        // Extraemos los precios limpios del JSON que vimos en la Pestaña de Red
         const vlsfoPrice = Number(record.vlsfo);
         const ifoPrice = Number(record.hsfo);
         const mgoPrice = Number(record.mgo);
@@ -65970,7 +65970,7 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
         const ifo380Input = document.querySelector('#price-port, input[name*="ifo"], input[id*="ifo"]');
         const mgoInput = document.querySelector('#price-eca, input[name*="mgo"], input[id*="mgo"]');
 
-        // Inyectamos y disparamos eventos para forzar el recálculo instantáneo del motor
+        // Inyectamos y disparamos eventos para forzar el recálculo instantáneo
         if (!isNaN(vlsfoPrice) && vlsfoInput) {
             vlsfoInput.value = vlsfoPrice;
             vlsfoInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -65993,7 +65993,7 @@ async function syncBunkerPricesFromNeon(isAutomatic = false) {
             syncBtn.classList.add('border-emerald-500', 'text-emerald-400');
         }
 
-        console.log('[Bunkers Auto-Sync] Sincronización automática con get-market-data completada.');
+        console.log('[Bunkers Auto-Sync] Sincronizado correctamente con /api/get-market-data.');
 
     } catch (error) {
         console.error("Fallo al sincronizar búnkers desde get-market-data:", error);
