@@ -218,13 +218,17 @@ function isSimulationQuery(mensaje) {
 }
 
 // --- 2. SELECTOR DE ENDPOINT ---
+// --- 2. SELECTOR DE ENDPOINT (En el archivo sea-assistant-entry.js) ---
 function getDataBridgeAssistantEndpoint(isSimulation = true) {
   if (isSimulation) {
+    // Para cálculos: Va al servidor externo de Data Bridge
     const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
     const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
     return runtimeEndpoint || buildEndpoint || "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
   }
-  return "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/chat-assistant";
+  
+  // Para chat y dudas: Va al backend local de Core PRO (ruta relativa, cero errores CORS)
+  return "/.netlify/functions/chat-assistant";
 }
 
 // --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
