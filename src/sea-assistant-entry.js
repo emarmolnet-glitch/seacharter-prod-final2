@@ -1837,13 +1837,22 @@ const fileInput = root.querySelector("#sca-file-input");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const userText = input.value;
-    if (!userText.trim() || pending) return;
+    if (!userText.trim() && pendingFiles.length === 0) return;
+    if (pending) return;
 
     cancelSpeech();
-    appendMessage(createMessage("user", userText, { meta: formatTime() }));
+    
+    const filesLabel = pendingFiles.length > 0 ? ` [${pendingFiles.length} archivo(s) adjunto(s)]` : "";
+    appendMessage(createMessage("user", `${userText}${filesLabel}`, { meta: formatTime() }));
+    
+    // 📎 Capturamos los ficheros y vaciamos la bandeja visual:
+    const filesToSend = [...pendingFiles];
     input.value = "";
+    pendingFiles = [];
+    updateAttachmentsTray();
     resizeInput();
     setPending(true);
+
     const thinkingMessage = createThinkingMessage();
     appendMessage(thinkingMessage);
     const controller = new AbortController();
@@ -1851,7 +1860,8 @@ const fileInput = root.querySelector("#sca-file-input");
     activeRequestController = controller;
 
     try {
-      const response = await requestAssistantResponse(userText, history, controller.signal);
+      // 📎 Pasamos filesToSend a la función de red:
+      const response = await requestAssistantResponse(userText, history, controller.signal, filesToSend);
       const actionableResponse = extractActionableAiResponse(response.respuesta);
       const action = response.action && typeof response.action === "object"
         ? response.action
