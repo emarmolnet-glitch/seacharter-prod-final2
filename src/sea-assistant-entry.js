@@ -534,16 +534,20 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
     });
 
+    // --- NUEVA LÓGICA ANTI-LAG: Detectar si estamos en el mapa ---
+    const isMapView = getActiveModuleDescriptor().id === 'map';
+
     // 4. Calcular DWT estimado si viene a 0
     const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
-    updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt);
+    
+    // Si estamos en el mapa, pasamos 'false' para que inyecte silenciosamente sin disparar el fetch de velocidad del barco
+    updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
     // 5. Mapear Producto Específico (Priorizando "Big Bags" antes que términos genéricos)
     document.querySelectorAll('select').forEach(sel => {
         const prodText = (p.product || 'big bags').toLowerCase();
         let matched = false;
         
-        // Primero buscamos coincidencia exacta con el producto (Big Bags)
         for (let opt of sel.options) {
             if (opt.text.toLowerCase().includes(prodText) || opt.value.toLowerCase().includes(prodText)) {
                 sel.value = opt.value;
@@ -553,7 +557,6 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         }
         
-        // Si no, buscamos cemento (excluyendo granel si buscábamos big bags)
         if (!matched) {
             for (let opt of sel.options) {
                 if (opt.text.toLowerCase().includes('cemento') && !opt.text.toLowerCase().includes('granel')) {
@@ -576,7 +579,7 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
     });
 
-    // 5. Autocompletado del estado global y disparo del cálculo (tu código original)
+    // 7. Autocompletado del estado global y disparo exclusivo del MAPA
     if (p.pol && p.pod && p.tonnage) {
         if (!window.State) window.State = {};
         Object.assign(window.State, {
@@ -592,13 +595,17 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
     }
 
-    if (p.loadingRate || p.dischargeRate) {
-        window.recalcularDiasPuerto?.();
+    // 8. BLOQUEO DEL MOTOR PESADO: Solo calculamos finanzas y ritmos si NO estamos en el mapa
+    if (!isMapView) {
+        if (p.loadingRate || p.dischargeRate) {
+            window.recalcularDiasPuerto?.();
+        }
+        window.runEngine?.();
+    } else {
+        console.log("📍 Modo Mapa detectado: Fetch de velocidad y motor financiero diferidos.");
     }
     
-    window.runEngine?.();
     return true;
-}
 
 async function executeActionableAiSearchVessel(action) {
   if (action?.action !== "search_vessel") return false;
