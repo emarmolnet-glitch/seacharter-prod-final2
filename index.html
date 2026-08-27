@@ -31444,7 +31444,7 @@
 	                const currentSum = existingBreakdown.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
 	                if (currentSum > 0 && Math.abs(currentSum - normalizedTotal) > 1) {
 	                    const scaled = existingBreakdown.map(b => ({
-	                        item: b.item,
+	                        ...b,
 	                        amount: Math.round((Number(b.amount) || 0) * (normalizedTotal / currentSum))
 	                    }));
 	                    const scaledSum = scaled.reduce((acc, b) => acc + b.amount, 0);
@@ -31476,6 +31476,63 @@
 	            else State.pdaPodBreakdown = items;
 	            return items;
 	        }
+
+        function readOperationalPdaBase(type) {
+            const input = document.getElementById(`pda-${type}`);
+            if (!input) return 0;
+            const currentValue = Math.max(0, Number(input.value) || 0);
+            const lastPublishedTotal = Number(input.dataset.operationalPdaTotal);
+            const lastPublishedBase = Number(input.dataset.operationalPdaBase);
+            const stillPublishedTotal = Number.isFinite(lastPublishedTotal)
+                && Math.abs(currentValue - lastPublishedTotal) <= 0.01;
+
+            if (stillPublishedTotal && Number.isFinite(lastPublishedBase) && lastPublishedBase >= 0) {
+                return lastPublishedBase;
+            }
+
+            delete input.dataset.operationalPdaTotal;
+            delete input.dataset.operationalPdaIncrement;
+            input.dataset.operationalPdaBase = String(currentValue);
+            return currentValue;
+        }
+
+        function publishOperationalPdaTotal(type, basePda, incrementalCost) {
+            const input = document.getElementById(`pda-${type}`);
+            const normalizedBase = Math.max(0, Number(basePda) || 0);
+            const normalizedIncrement = Math.max(0, Number(incrementalCost) || 0);
+            const totalPda = normalizedBase + normalizedIncrement;
+            if (input) {
+                input.value = totalPda.toFixed(2).replace(/\.00$/, '');
+                input.dataset.operationalPdaBase = String(normalizedBase);
+                input.dataset.operationalPdaIncrement = String(normalizedIncrement);
+                input.dataset.operationalPdaTotal = String(totalPda);
+                input.title = normalizedIncrement > 0
+                    ? `PDA base $${Math.round(normalizedBase).toLocaleString('en-US')} + coste incremental $${Math.round(normalizedIncrement).toLocaleString('en-US')}`
+                    : `PDA base $${Math.round(normalizedBase).toLocaleString('en-US')}`;
+            }
+            if (type === 'pol') State.pdaPol = totalPda;
+            else State.pdaPod = totalPda;
+            return totalPda;
+        }
+
+        function buildOperationalPdaBreakdown(type, basePda, incrementalCost) {
+            const stateKey = type === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
+            const existingBaseBreakdown = Array.isArray(State[stateKey])
+                ? State[stateKey].filter(item => item?.kind !== 'operational-overtime')
+                : [];
+            if (existingBaseBreakdown.length > 0) State[stateKey] = existingBaseBreakdown;
+            const breakdown = getPortPdaBreakdown(type, basePda).map(item => ({ ...item }));
+            const normalizedIncrement = Math.max(0, Number(incrementalCost) || 0);
+            if (normalizedIncrement > 0) {
+                breakdown.push({
+                    item: 'Coste Incremental Overtime',
+                    amount: normalizedIncrement,
+                    kind: 'operational-overtime'
+                });
+            }
+            State[stateKey] = breakdown;
+            return breakdown;
+        }
 
 	        function openPdaManualEditModal() {
 	            const currentPol = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
@@ -31717,8 +31774,12 @@
                     loa: numberValue('vessel-loa') || Number(vessel.loa) || 0,
                     loadRate: numberValue('rate-load'),
                     dischargeRate: numberValue('rate-disch'),
-                    pdaPolBase: Number(document.getElementById('pda-pol')?.dataset?.basePda || State.basePdaPol) || pdaPol,
-                    pdaPodBase: Number(document.getElementById('pda-pod')?.dataset?.basePda || State.basePdaPod) || pdaPod
+                    pdaPolBase: Number(document.getElementById('pda-pol')?.dataset?.operationalPdaBase || document.getElementById('pda-pol')?.dataset?.basePda || State.basePdaPol) || pdaPol,
+                    pdaPodBase: Number(document.getElementById('pda-pod')?.dataset?.operationalPdaBase || document.getElementById('pda-pod')?.dataset?.basePda || State.basePdaPod) || pdaPod,
+                    pdaPolIncrementalCost: Number(document.getElementById('pda-pol')?.dataset?.operationalPdaIncrement) || 0,
+                    pdaPodIncrementalCost: Number(document.getElementById('pda-pod')?.dataset?.operationalPdaIncrement) || 0,
+                    pdaIncrementalCost: (Number(document.getElementById('pda-pol')?.dataset?.operationalPdaIncrement) || 0)
+                        + (Number(document.getElementById('pda-pod')?.dataset?.operationalPdaIncrement) || 0)
                 }
             };
         }
@@ -35498,8 +35559,8 @@ function scheduleReactiveEngine() {
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
             const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
             const stevedoringAllocation = resolveStevedoringAllocation(freightConditions, cargo);
-            const basePdaPol = parseFloat(document.getElementById('pda-pol').value) || 0;
-            const basePdaPod = parseFloat(document.getElementById('pda-pod').value) || 0;
+	            const basePdaPol = readOperationalPdaBase('pol');
+	            const basePdaPod = readOperationalPdaBase('pod');
             let pdaRecurrente = basePdaPol + basePdaPod + stevedoringAllocation.ownerCost + canalCost;
             let basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
             const operacionModo = getOperacionModo();
@@ -35741,9 +35802,13 @@ function scheduleReactiveEngine() {
             const podOperationalRisk = calculateRisk
                 ? calculateRisk(basePdaPod, podEta, dPortDisch, podOperationalContext.countryCode || podOperationalContext.countryName, vesselDraft, podOperationalContext.maxDraft, buildOperationalContext(podOperationalContext, rateDisch))
                 : { ...emptyOperationalRisk, adjustedPDA: basePdaPod, basePDA: basePdaPod };
+            const pdaPolIncrementalCost = Math.max(0, Number(polOperationalRisk.penaltyAmount) || 0);
+            const pdaPodIncrementalCost = Math.max(0, Number(podOperationalRisk.penaltyAmount) || 0);
+            const totalPdaPol = publishOperationalPdaTotal('pol', basePdaPol, pdaPolIncrementalCost);
+            const totalPdaPod = publishOperationalPdaTotal('pod', basePdaPod, pdaPodIncrementalCost);
             const operationalPenaltyAmount = polOperationalRisk.penaltyAmount + podOperationalRisk.penaltyAmount;
-            pdaRecurrente = polOperationalRisk.adjustedPDA
-                + podOperationalRisk.adjustedPDA
+            pdaRecurrente = totalPdaPol
+                + totalPdaPod
                 + stevedoringAllocation.ownerCost
                 + canalCost;
             basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
@@ -35979,18 +36044,15 @@ function scheduleReactiveEngine() {
                 pdaPolVal = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
                 pdaPodVal = parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0;
             }
-            const polBreakdown = getPortPdaBreakdown('pol', pdaPolVal);
-            const podBreakdown = getPortPdaBreakdown('pod', pdaPodVal);
+            const polBreakdown = buildOperationalPdaBreakdown('pol', basePdaPol, pdaPolIncrementalCost);
+            const podBreakdown = buildOperationalPdaBreakdown('pod', basePdaPod, pdaPodIncrementalCost);
             const combinedBreakdown = [
                 ...polBreakdown.map(b => ({ item: `POL (${document.getElementById('port-pol')?.value || State.pol || 'Carga'}): ${b.item}`, amount: b.amount })),
-                ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount })),
-                ...(operationalPenaltyAmount > 0 ? [{
-                    item: `Overtime simulado (${operationalRisk.overtimeHours.toFixed(1)} h extra / ${operationalRisk.standardHours.toFixed(1)} h normales)`,
-                    amount: operationalPenaltyAmount
-                }] : [])
+                ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount }))
             ];
             State.pdaPolBreakdown = polBreakdown;
             State.pdaPodBreakdown = podBreakdown;
+            schedulePdaEstimationPersistence('operational-pda-total', 0);
             State.gastos_puerto = {
                 totalPortCost: smartPortExpenses,
                 breakdown: combinedBreakdown,
@@ -36786,9 +36848,8 @@ function scheduleReactiveEngine() {
                 totalTons: totalConsumption,
                 totalCost: totalBunkers
             };
-            State.pdaPol = parseFloat(document.getElementById('pda-pol').value) || 0;
-            State.pdaPod = parseFloat(document.getElementById('pda-pod').value) || 0;
-            schedulePdaEstimationPersistence('run-engine');
+	            State.pdaPol = totalPdaPol;
+	            State.pdaPod = totalPdaPod;
             State.stevedoringCosts = parseFloat(document.getElementById('stevedoring-costs').value) || 0;
             State.pdaMisc = parseFloat(document.getElementById('pda-misc').value) || 0;
             State.cargoSurcharge = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
@@ -36937,7 +36998,8 @@ function scheduleReactiveEngine() {
                     buyFreight: freightBuy,
                     tce: tceOwner,
                     sellFreight: freightSell,
-                    chartererProfit: netProfitCharterer
+                    chartererProfit: netProfitCharterer,
+                    pdaIncrementalCost: operationalPenaltyAmount
                 }, operationalRisk);
             }
 
