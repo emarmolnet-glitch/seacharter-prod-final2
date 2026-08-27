@@ -77,7 +77,7 @@ const icons = {
 };
 
 // --- NUEVO ESTADO GLOBAL PARA EL SELECTOR DE IA ---
-let iaActiva = 'local'; // Puede ser 'local' o 'cerebro'
+let iaActiva = 'cerebro'; // Puede ser 'local' o 'cerebro'
 
 // Función para actualizar visualmente la cabecera y el input
 function updateAiUI(type) {
@@ -1405,10 +1405,10 @@ function mountSeaAssistant() {
   root.innerHTML = `
     <div class="sca-panel w-[400px] h-[550px] flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden" id="sea-assistant-panel" role="dialog" aria-labelledby="sea-assistant-title" hidden>
       <header class="sca-header flex justify-between items-center p-3 border-b bg-white rounded-t-xl">
-        <!-- CABECERA DINÁMICA INTERACTIVA -->
         <div class="sca-header-main flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 p-1.5 rounded-md transition-colors" id="sea-assistant-ai-switcher" title="Clic para cambiar de asistente">
-          <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" id="sea-assistant-dot" aria-hidden="true"></span>
-          <h2 class="sca-title font-bold text-[14px]" id="sea-assistant-title">🤖 Asistente Core</h2>
+          <!-- OJO AQUÍ: Color morado y texto Cerebro por defecto -->
+          <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-[#6366f1] shrink-0" id="sea-assistant-dot" aria-hidden="true"></span>
+          <h2 class="sca-title font-bold text-[14px]" id="sea-assistant-title">🧠 Cerebro.ia</h2>
           <span style="font-size: 10px; color: #94a3b8; margin-left: 2px;">▼</span>
         </div>
         <div class="sca-header-actions flex gap-2 items-center">
@@ -1427,7 +1427,7 @@ function mountSeaAssistant() {
             ${icons.clip}
             <input type="file" id="sca-file-input" multiple accept=".pdf, .xlsx, .xls, .docx, .txt, image/*" class="hidden" />
           </label>
-          <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Haz una consulta rápida de fletamento..." aria-label="Mensaje para el asistente" required></textarea>
+          <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Analizando con Data Bridge. Describe la carga..." aria-label="Mensaje para el asistente" required></textarea>
           <button class="sca-mic w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
           <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
           <button class="sca-send w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
@@ -1831,6 +1831,16 @@ const fileInput = root.querySelector("#sca-file-input");
   });
   window.addEventListener("sea-assistant:open", openFromContext);
 
+// --- AÑADE ESTO JUSTO AQUÍ ---
+  const aiSwitcher = root.querySelector("#sea-assistant-ai-switcher");
+  if (aiSwitcher) {
+    aiSwitcher.addEventListener("mousedown", (e) => {
+      e.stopPropagation(); 
+      updateAiUI(iaActiva === 'local' ? 'cerebro' : 'local');
+    });
+  }
+  // -----------------------------
+  // ESTO ES LO QUE YA TIENES:
   header.addEventListener("mousedown", (event) => {
     // ESTA LÍNEA ES LA QUE PERMITE QUE EL CLIC FUNCIONE
     if (event.button !== 0 || event.target.closest("button") || event.target.closest("#sea-assistant-ai-switcher")) return;
