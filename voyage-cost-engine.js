@@ -289,11 +289,41 @@
         const formatRate = (value) => `$${Math.max(0, toNumber(value)).toFixed(2)} / MT`;
         const formatDays = (value) => `${Math.max(0, toNumber(value)).toFixed(1)} días`;
         const formatTons = (value) => `${Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })} MT`;
-        const formatDailyRate = (value) => `${Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })} MT/día`;
+        const formatDailyRate = (value) => Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 });
+        const hasVoyageDefinition = calcResults.forceEmpty !== true && Boolean(
+            toText(calcResults.pol) &&
+            toText(calcResults.pod) &&
+            toNumber(calcResults.cargoQty) > 0
+        );
 
-        setText('exec-pol', calcResults.pol || 'POL');
-        setText('exec-pod', calcResults.pod || 'POD');
-        setText('exec-total-profit', formatMoney(calcResults.totalProfit));
+        if (!hasVoyageDefinition) {
+            setText('exec-operation-icon', '⚪');
+            setText('exec-operation-status', 'OPERACIÓN PENDIENTE');
+            setText('exec-pol', 'N/D');
+            setText('exec-pod', 'N/D');
+            setText('exec-cargo-qty', formatTons(0));
+            setText('exec-cargo-type', 'N/D');
+            setText('exec-load-rate', formatDailyRate(0));
+            setText('exec-disch-rate', formatDailyRate(0));
+            setText('exec-vessel-type', 'N/D');
+            setText('exec-sea-days', formatDays(0));
+            setText('exec-port-days', formatDays(0));
+            setText('exec-total-days', formatDays(0));
+            setText('exec-buy-freight', formatRate(0));
+            setText('exec-tce', `${formatMoney(0)} / día`);
+            setText('exec-sell-freight', formatRate(0));
+            setText('exec-charterer-profit', formatMoney(0));
+            setText('exec-spread-mt', `${formatMoney(0, 2)} / MT`);
+            setText('exec-risk-level', 'N/D');
+            setText('exec-insight-text', 'Introduce POL, POD y volumen de carga para generar el análisis ejecutivo.');
+            return true;
+        }
+
+        const isProfitable = toNumber(calcResults.totalProfit) >= 0;
+        setText('exec-operation-icon', isProfitable ? '🟢' : '🟠');
+        setText('exec-operation-status', isProfitable ? 'OPERACIÓN RENTABLE' : 'OPERACIÓN A REVISAR');
+        setText('exec-pol', calcResults.pol);
+        setText('exec-pod', calcResults.pod);
         setText('exec-total-margin', formatMoney(calcResults.totalProfit));
         setText('exec-cargo-qty', formatTons(calcResults.cargoQty));
         setText('exec-cargo-type', calcResults.cargoType || 'Carga no definida');

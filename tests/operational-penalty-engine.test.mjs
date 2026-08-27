@@ -90,7 +90,7 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   const elements = new Map([
     ['exec-pol', { style: {} }],
     ['exec-pod', { style: {} }],
-    ['exec-total-profit', { style: {} }],
+    ['exec-operation-status', { style: {} }],
     ['exec-cargo-qty', { style: {} }],
     ['exec-risk-level', { style: {} }],
     ['exec-insight-text', { style: {} }],
@@ -116,11 +116,48 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   assert.equal(updated, true);
   assert.equal(elements.get('exec-pol').textContent, 'Bejaia');
   assert.equal(elements.get('exec-pod').textContent, 'Valencia');
-  assert.equal(elements.get('exec-total-profit').textContent, '+$45,000');
+  assert.equal(elements.get('exec-operation-status').textContent, 'OPERACIÓN RENTABLE');
   assert.equal(elements.get('exec-risk-level').textContent, 'ALTO');
   assert.equal(elements.get('exec-risk-level').style.color, '#b91c1c');
   assert.match(elements.get('exec-insight-text').textContent, /12\.0 h a turnos ordinarios y 36\.0 h a Overtime/i);
   assert.match(elements.get('exec-insight-text').textContent, /1 de 7 muelles/i);
+});
+
+test('executive dashboard stays neutral until POL, POD and cargo are defined', () => {
+  const elements = new Map([
+    ['exec-pol', { style: {} }],
+    ['exec-pod', { style: {} }],
+    ['exec-operation-status', { style: {} }],
+    ['exec-cargo-qty', { style: {} }],
+    ['exec-cargo-type', { style: {} }],
+    ['exec-load-rate', { style: {} }],
+    ['exec-disch-rate', { style: {} }],
+    ['exec-total-days', { style: {} }],
+    ['exec-buy-freight', { style: {} }],
+    ['exec-tce', { style: {} }],
+    ['exec-sell-freight', { style: {} }],
+    ['exec-charterer-profit', { style: {} }],
+    ['exec-spread-mt', { style: {} }],
+    ['exec-risk-level', { style: {} }],
+    ['exec-insight-text', { style: {} }],
+  ]);
+  const documentRef = { getElementById: (id) => elements.get(id) || null };
+
+  assert.equal(engine.updateExecutiveDashboard({
+    pol: 'Bejaia',
+    pod: '',
+    cargoQty: 10000,
+    totalProfit: 45000,
+  }, { riskLevel: 'ALTO' }, documentRef), true);
+
+  assert.equal(elements.get('exec-pol').textContent, 'N/D');
+  assert.equal(elements.get('exec-pod').textContent, 'N/D');
+  assert.equal(elements.get('exec-operation-status').textContent, 'OPERACIÓN PENDIENTE');
+  assert.equal(elements.get('exec-cargo-qty').textContent, '0 MT');
+  assert.equal(elements.get('exec-total-days').textContent, '0.0 días');
+  assert.equal(elements.get('exec-charterer-profit').textContent, '$0');
+  assert.equal(elements.get('exec-risk-level').textContent, 'N/D');
+  assert.match(elements.get('exec-insight-text').textContent, /Introduce POL, POD y volumen de carga/i);
 });
 
 test('Core PRO main engine persists penalty and syncs the executive dashboard', () => {
@@ -136,6 +173,7 @@ test('Core PRO main engine persists penalty and syncs the executive dashboard', 
   assert.match(indexSource, /State\.operationalRisk = operationalRisk/);
   assert.match(indexSource, /operationalRisk: State\.operationalRisk/);
   assert.match(indexSource, /syncExecutiveDashboard\(\{/);
-  assert.match(indexSource, /id="exec-total-profit"/);
+  assert.doesNotMatch(indexSource, /id="exec-total-profit"/);
+  assert.doesNotMatch(indexSource, /Margen Total \(Spread\)/i);
   assert.match(indexSource, /id="exec-charterer-profit"/);
 });
