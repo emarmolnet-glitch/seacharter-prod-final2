@@ -263,13 +263,17 @@ function isSimulationQuery(mensaje) {
 }
 
 // --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
+// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
 function getActiveAssistantEndpoint() {
   if (iaActiva === 'cerebro') {
     const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
     const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
-    return runtimeEndpoint || buildEndpoint || DEFAULT_CEREBRO_IA_ENDPOINT;
+    // Para Cerebro sí usamos la ruta absoluta
+    return runtimeEndpoint || buildEndpoint || "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
   }
-  return DEFAULT_CHAT_ASSISTANT_ENDPOINT;
+  
+  // SOLUCIÓN CORS: Para el Asistente Core volvemos a usar LA RUTA RELATIVA
+  return "/.netlify/functions/chat-assistant";
 }
 
 // --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
@@ -1828,10 +1832,12 @@ const fileInput = root.querySelector("#sca-file-input");
   window.addEventListener("sea-assistant:open", openFromContext);
 
   header.addEventListener("mousedown", (event) => {
+    // ESTA LÍNEA ES LA QUE PERMITE QUE EL CLIC FUNCIONE
     if (event.button !== 0 || event.target.closest("button") || event.target.closest("#sea-assistant-ai-switcher")) return;
 
     if (!hasCustomPosition) initializePosition();
     isDragging = true;
+    // ...
     dragStart = {
       x: event.clientX - position.x,
       y: event.clientY - position.y,
