@@ -1938,7 +1938,7 @@
 
         @media print { 
             @page { size: A4 portrait; margin: 0.8cm; }
-            
+
             html, body, .h-screen, .flex-1, .overflow-hidden, .absolute, .inset-0, .overflow-y-auto { 
                 height: auto !important; 
                 overflow: visible !important; 
@@ -1948,7 +1948,7 @@
             }
 
             body { color: #000 !important; font-size: 8pt; line-height: 1.3; }
-            
+
             header, .no-print, #view-estimator, #view-auditor, #view-ais, #gc-form-view, #asb-form-view, #toast, #ai-modal, #comparison-modal, #vessels-list-modal { 
                 display: none !important; 
             }
@@ -8512,6 +8512,104 @@
         <!-- MÓDULO 1: VOYAGE ESTIMATOR COMPLETO        -->
         <!-- ========================================== -->
         <div id="view-estimator" class="view-section absolute inset-0 overflow-y-auto p-6 scroll-smooth">
+            <!-- CONTROLES DE VISTA -->
+            <div class="w-full max-w-6xl mx-auto mb-6 font-sans">
+                <div class="flex justify-end mb-4">
+                    <div class="bg-slate-200 p-1 rounded-lg inline-flex items-center">
+                        <button id="btn-mode-exec" onclick="setCalculatorMode('exec')" class="px-5 py-2 rounded-md text-sm font-bold bg-white text-blue-700 shadow-sm transition-all">
+                            💼 Vista Ejecutiva
+                        </button>
+                        <button id="btn-mode-tech" onclick="setCalculatorMode('tech')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-500 hover:text-slate-800 transition-all">
+                            ⚙️ Modo Técnico
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DASHBOARD EJECUTIVO -->
+                <div id="executive-dashboard" class="flex flex-col gap-4">
+
+                    <!-- CABECERA: OPERACIÓN Y MARGEN -->
+                    <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between shadow-sm">
+                        <div class="mb-4 md:mb-0">
+                            <h3 class="text-emerald-800 font-extrabold text-xl mb-1 flex items-center gap-2">
+                                <span class="text-emerald-500">🟢</span> OPERACIÓN RENTABLE
+                            </h3>
+                            <p class="text-emerald-700 text-sm font-medium ml-6">Ruta: <span id="exec-pol" class="font-bold text-emerald-900">POL</span> ➔ <span id="exec-pod" class="font-bold text-emerald-900">POD</span></p>
+                        </div>
+                        <div class="text-left md:text-right">
+                            <span class="block text-xs text-emerald-600 font-bold uppercase tracking-wide">Margen Total (Spread)</span>
+                            <span class="text-3xl font-black text-emerald-700" id="exec-total-margin">+$45,000</span>
+                        </div>
+                    </div>
+
+                    <!-- TARJETA: MERCANCÍA Y RITMOS -->
+                    <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                        <h4 class="text-xs text-slate-400 font-bold uppercase mb-3 tracking-wider">📦 Resumen de Mercancía y Ritmos</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
+                            <div>Volumen: <strong class="text-slate-800 text-base" id="exec-cargo-qty">10,000 MT</strong> (<span id="exec-cargo-type">Cemento</span>)</div>
+                            <div>Ritmo Carga: <strong class="text-slate-800 text-base" id="exec-load-rate">3,000</strong> MT/día</div>
+                            <div>Ritmo Desc.: <strong class="text-slate-800 text-base" id="exec-disch-rate">2,500</strong> MT/día</div>
+                        </div>
+                    </div>
+
+                    <!-- TARJETAS DUALES: ARMADOR VS FLETADOR -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Lado Armador -->
+                        <div class="bg-slate-50 border border-slate-200 p-5 rounded-xl shadow-sm">
+                            <h4 class="text-xs text-slate-500 font-bold uppercase mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+                                <span>🚢</span> LADO DEL ARMADOR
+                            </h4>
+                            <div class="mb-4">
+                                <span class="block text-xs text-slate-500 font-medium mb-1 uppercase tracking-wide">Flete de Compra (Sub-let)</span>
+                                <span class="text-2xl font-black text-slate-800" id="exec-buy-freight">$24.00 <span class="text-sm font-normal text-slate-500">/ MT</span></span>
+                            </div>
+                            <div>
+                                <span class="block text-xs text-slate-500 font-medium mb-1 uppercase tracking-wide">Beneficio Diario (TCE)</span>
+                                <span class="text-xl font-bold text-emerald-600" id="exec-tce">+$4,200 <span class="text-sm font-normal text-emerald-600">/ día</span></span>
+                            </div>
+                        </div>
+
+                        <!-- Lado Fletador (Nuestra Casa) -->
+                        <div class="bg-blue-50 border border-blue-200 p-5 rounded-xl shadow-sm">
+                            <h4 class="text-xs text-blue-700 font-bold uppercase mb-4 border-b border-blue-200 pb-2 flex items-center gap-2">
+                                <span>🏢</span> LADO DEL FLETADOR (NUESTRA CASA)
+                            </h4>
+                            <div class="mb-4">
+                                <span class="block text-xs text-blue-600 font-medium mb-1 uppercase tracking-wide">Flete de Venta (Cliente)</span>
+                                <span class="text-2xl font-black text-blue-900" id="exec-sell-freight">$28.50 <span class="text-sm font-normal text-blue-600">/ MT</span></span>
+                            </div>
+                            <div>
+                                <span class="block text-xs text-blue-600 font-medium mb-1 uppercase tracking-wide">Margen Unitario (Spread)</span>
+                                <span class="text-xl font-bold text-blue-700" id="exec-spread-mt">+$4.50 <span class="text-sm font-normal text-blue-700">/ MT</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INSIGHTS Y RIESGOS OPERATIVOS -->
+                    <div class="bg-indigo-50 border border-indigo-100 p-5 rounded-xl shadow-sm mt-1">
+                        <h4 class="text-xs text-indigo-700 font-bold uppercase mb-3 flex items-center gap-2 tracking-wider">
+                            <span>💡</span> INSIGHT COMERCIAL Y AUDITORÍA DE RIESGOS
+                        </h4>
+                        <div class="flex flex-col md:flex-row gap-4 md:items-start text-sm">
+                            <!-- Alerta de Riesgo -->
+                            <div class="shrink-0 bg-white border border-amber-200 p-3 rounded-lg flex flex-col items-center justify-center min-w-[140px]">
+                                <span class="text-[10px] text-amber-600 font-bold uppercase mb-1">Riesgo Demoras</span>
+                                <span class="text-amber-500 text-2xl mb-1">⚠️</span>
+                                <span class="font-bold text-amber-700" id="exec-risk-level">MODERADO</span>
+                            </div>
+                            <!-- Explicación Puntos Clave -->
+                            <div class="text-indigo-900 leading-relaxed">
+                                <p id="exec-insight-text">
+                                    <strong>Puntos Clave de la Operación:</strong> La rentabilidad es sólida, asegurando un margen total de $45,000. Sin embargo, el ritmo de descarga en el POD (2,500 MT/día) es ajustado para este tipo de buque.
+                                    <br><span class="inline-block mt-1 text-indigo-700 font-medium">Recomendación: Blindar las cláusulas de despacho (Despatch) o negociar 1 día extra de franquicia (Laytime) en el puerto de destino para proteger el margen neto del fletador.</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="technical-workspace" class="w-full hidden">
             <div class="estimator-dashboard-grid">
                 
                 <!-- COLUMNA IZQUIERDA (Inputs Operativos) -->
@@ -10690,6 +10788,7 @@
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
 
@@ -14578,7 +14677,7 @@
 
         function translatePage(lang) {
             if (!lang) lang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || 'es';
-            
+
             // 1. Explicit [data-i18n] text translation
             document.querySelectorAll('[data-i18n]').forEach(el => {
                 const key = el.getAttribute('data-i18n');
@@ -17198,7 +17297,7 @@
             // DK (Dinamarca), SE (Suecia), NO (Noruega), FI (Finlandia), EE, LV, LT, PL, FR (Norte), PR (Puerto Rico)
             const secaCountries = ['US', 'CA', 'GB', 'NL', 'BE', 'DE', 'DK', 'SE', 'NO', 'FI', 'EE', 'LV', 'LT', 'PL', 'PR'];
             const country = port.country.toUpperCase().trim();
-            
+
             if (secaCountries.includes(country)) return true;
             
             // Excepción especial para Francia (FR) (El norte es SECA, el sur/mediterráneo no)
@@ -65800,6 +65899,35 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         stopDatalasticRadarPolling();
     </script>
 
+    <script>
+        window.setCalculatorMode = function(mode) {
+            const execDash = document.getElementById('executive-dashboard');
+            const techWork = document.getElementById('technical-workspace');
+            const btnExec = document.getElementById('btn-mode-exec');
+            const btnTech = document.getElementById('btn-mode-tech');
+
+            if (!execDash || !techWork) return;
+
+            if (mode === 'exec') {
+                execDash.classList.remove('hidden');
+                execDash.classList.add('flex');
+                techWork.classList.add('hidden');
+                btnExec.classList.add('bg-white', 'text-blue-700', 'shadow-sm');
+                btnExec.classList.remove('text-slate-500');
+                btnTech.classList.remove('bg-white', 'text-blue-700', 'shadow-sm');
+                btnTech.classList.add('text-slate-500');
+            } else {
+                execDash.classList.add('hidden');
+                execDash.classList.remove('flex');
+                techWork.classList.remove('hidden');
+                btnTech.classList.add('bg-white', 'text-blue-700', 'shadow-sm');
+                btnTech.classList.remove('text-slate-500');
+                btnExec.classList.remove('bg-white', 'text-blue-700', 'shadow-sm');
+                btnExec.classList.add('text-slate-500');
+            }
+        };
+    </script>
+
     <!-- ==========================================================================
          CONTROLADOR DE CAPA DE PRESENTACIÓN: VISTA ARMADOR / VISTA FLETADOR
          No toca el DOM ni el motor de cálculo. Solo intercambia clases CSS y
@@ -65944,7 +66072,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 applyGlobalViewModePresentation();
             }
         })();
-        
+    </script>
+
         <script>
       // Escuchamos el evento del Algoritmo Live del panel derecho
       window.addEventListener('MARKET_REFERENCE_UPDATED', (e) => {
