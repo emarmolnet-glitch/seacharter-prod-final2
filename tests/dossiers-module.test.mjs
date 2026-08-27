@@ -6,6 +6,9 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../dossiers.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../dossiers.css', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../db/schema.ts', import.meta.url), 'utf8');
+const functionSource = readFileSync(new URL('../netlify/functions/dossiers.ts', import.meta.url), 'utf8');
+const netlifyConfig = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
+const databaseSource = readFileSync(new URL('../db/index.ts', import.meta.url), 'utf8');
 
 test('dossiers uses a light corporate hero and teal active navigation', () => {
   const viewStart = html.indexOf('<div id="view-dossiers"');
@@ -47,4 +50,23 @@ test('client and notes are injected into the persisted dossier payload', () => {
   assert.match(script, /charterer: clientName/);
   assert.match(script, /dossier\.charterer \|\| 'Sin especificar'/);
   assert.match(schema, /internalNotes: text\("internal_notes"\)/);
+});
+
+test('dossiers uses the canonical Netlify function endpoint', () => {
+  assert.match(script, /DOSSIERS_API_URL\s*=\s*['"]\/\.netlify\/functions\/dossiers['"]/);
+  assert.doesNotMatch(script, /fetch\(\s*[`'"]\/dossiers/);
+  assert.doesNotMatch(functionSource, /path:\s*["']\/api\/dossiers\/\*["']/);
+});
+
+test('dossiers keeps explicit api aliases for list and detail routes', () => {
+  assert.match(netlifyConfig, /from\s*=\s*"\/api\/dossiers"[\s\S]*?to\s*=\s*"\/\.netlify\/functions\/dossiers"/);
+  assert.match(netlifyConfig, /from\s*=\s*"\/api\/dossiers\/\*"[\s\S]*?to\s*=\s*"\/\.netlify\/functions\/dossiers\/:splat"/);
+  assert.match(functionSource, /parts\.lastIndexOf\("dossiers"\)/);
+});
+
+test('dossiers initializes its database table before querying', () => {
+  assert.match(functionSource, /db, ensureApplicationSchema/);
+  assert.match(functionSource, /await ensureApplicationSchema\(\)/);
+  assert.match(databaseSource, /CREATE TABLE IF NOT EXISTS charter_dossiers/);
+  assert.match(databaseSource, /CREATE UNIQUE INDEX IF NOT EXISTS charter_dossiers_account_reference_uidx/);
 });
