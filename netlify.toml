@@ -57,6 +57,18 @@
   status = 200
 
 [[redirects]]
+  from = "/api/dossiers"
+  to = "/.netlify/functions/dossiers"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/dossiers/*"
+  to = "/.netlify/functions/dossiers/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200

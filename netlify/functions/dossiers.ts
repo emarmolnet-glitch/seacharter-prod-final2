@@ -1,6 +1,5 @@
-import type { Config } from "@netlify/functions";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
-import { db } from "../../db/index.js";
+import { db, ensureApplicationSchema } from "../../db/index.js";
 import { charterDossiers } from "../../db/schema.js";
 
 const MAX_PAYLOAD_BYTES = 4_000_000;
@@ -21,7 +20,8 @@ function normalizeStatus(value: unknown) {
 
 function dossierIdFromUrl(url: URL) {
   const parts = url.pathname.split("/").filter(Boolean);
-  return parts.length > 2 ? parts.at(-1) || "" : "";
+  const routeIndex = parts.lastIndexOf("dossiers");
+  return routeIndex >= 0 ? parts[routeIndex + 1] || "" : "";
 }
 
 function serialize(row: typeof charterDossiers.$inferSelect, includePayload = false) {
@@ -52,6 +52,8 @@ export default async (req: Request) => {
   const id = dossierIdFromUrl(url);
 
   try {
+    await ensureApplicationSchema();
+
     if (req.method === "GET" && id) {
       const key = accountKey(req);
       const [row] = await db.select().from(charterDossiers)
@@ -135,5 +137,3 @@ export default async (req: Request) => {
     return Response.json({ success: false, error: "Dossier operation failed" }, { status: 500 });
   }
 };
-
-export const config: Config = { path: "/api/dossiers/*" };

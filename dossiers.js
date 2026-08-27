@@ -1,4 +1,6 @@
 (function () {
+    const DOSSIERS_API_URL = '/.netlify/functions/dossiers';
+
     const state = {
         activeId: null,
         activeStatus: 'BORRADOR',
@@ -28,7 +30,7 @@
     }
 
     async function request(path = '', options = {}) {
-        const response = await fetch(`/api/dossiers${path}`, {
+        const response = await fetch(`${DOSSIERS_API_URL}${path}`, {
             ...options,
             headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
         });

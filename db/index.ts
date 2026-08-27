@@ -238,6 +238,33 @@ export async function ensureApplicationSchema() {
     CREATE INDEX IF NOT EXISTS pda_vessel_confirmations_imo_created_idx
       ON pda_vessel_confirmations (imo_number, created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS charter_dossiers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      account_key TEXT NOT NULL DEFAULT 'default-account',
+      reference TEXT NOT NULL,
+      pol TEXT,
+      pod TEXT,
+      cargo_name TEXT,
+      cargo_volume DOUBLE PRECISION,
+      charterer TEXT,
+      internal_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'BORRADOR',
+      session_payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT charter_dossiers_status_check
+        CHECK (status IN ('BORRADOR', 'COTIZADO', 'FIJADO')),
+      CONSTRAINT charter_dossiers_payload_object_check
+        CHECK (jsonb_typeof(session_payload) = 'object')
+    );
+
+    ALTER TABLE charter_dossiers ADD COLUMN IF NOT EXISTS internal_notes TEXT;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS charter_dossiers_account_reference_uidx
+      ON charter_dossiers (account_key, reference);
+    CREATE INDEX IF NOT EXISTS charter_dossiers_account_updated_idx
+      ON charter_dossiers (account_key, updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS pda_estimations (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       calculation_key TEXT NOT NULL,
