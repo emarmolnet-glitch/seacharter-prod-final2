@@ -562,9 +562,25 @@ async function executeActionableAiUpdateFields(actionObj) {
         });
     };
 
+    const polQuery = String(p.pol || "").trim();
+    const podQuery = String(p.pod || "").trim();
+    let selectedRoutePorts = null;
+
+    if (polQuery && podQuery) {
+        selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
+        p = {
+            ...p,
+            pol: selectedRoutePorts.pol.officialLabel,
+            pod: selectedRoutePorts.pod.officialLabel,
+            pol_port: selectedRoutePorts.pol,
+            pod_port: selectedRoutePorts.pod,
+        };
+    } else {
+        updateInputs(["map-port-pol", "port-pol"], p.pol, false);
+        updateInputs(["map-port-pod", "port-pod"], p.pod, false);
+    }
+
     // 4. Inyección de datos
-    updateInputs(["map-port-pol", "port-pol"], p.pol, false);
-    updateInputs(["map-port-pod", "port-pod"], p.pod, false);
     updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
     updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
     updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
@@ -640,13 +656,17 @@ async function executeActionableAiUpdateFields(actionObj) {
     });
 
     // 7. Autocompletado del estado global y disparo exclusivo del MAPA
-    if (p.pol && p.pod && p.tonnage) {
+    if (selectedRoutePorts) {
         if (!window.State) window.State = {};
-        Object.assign(window.State, {
+        const routeState = {
             pol: p.pol,
             pod: p.pod,
-            tonnage: p.tonnage,
-        });
+        };
+        const tonnage = Number(p.tonnage);
+        if (Number.isFinite(tonnage) && tonnage > 0) routeState.tonnage = tonnage;
+        Object.assign(window.State, routeState);
+        window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
+        window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
         const routeButton = document.getElementById("btn-map-locate-route");
         if (typeof window.runOnDemandMapRouteWorkflow === "function") {
             await window.runOnDemandMapRouteWorkflow(routeButton);
@@ -728,13 +748,14 @@ async function executeActionableAiRoute(action) {
   const pol = String(action.pol || "").trim().slice(0, 200);
   const pod = String(action.pod || "").trim().slice(0, 200);
   const tonnage = Number(action.tonnage);
-  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
+  const hasTonnage = Number.isFinite(tonnage) && tonnage > 0;
+  if (!pol || !pod) return false;
 
   const mapPolInput = document.getElementById("map-port-pol");
   const mapPodInput = document.getElementById("map-port-pod");
   const cargoInput = document.getElementById("cargo-qty");
   const routeButton = document.getElementById("btn-map-locate-route");
-  if (!mapPolInput || !mapPodInput || !cargoInput || !routeButton) return false;
+  if (!mapPolInput || !mapPodInput || !routeButton) return false;
 
   const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
   const selectedPol = selectedPorts.pol.officialLabel;
@@ -743,20 +764,28 @@ async function executeActionableAiRoute(action) {
   const routeState = {
     pol: selectedPol,
     pod: selectedPod,
-    cargoQty: tonnage,
-    cargoQuantity: tonnage,
-    quantity: tonnage,
   };
+  if (hasTonnage) {
+    Object.assign(routeState, {
+      cargoQty: tonnage,
+      cargoQuantity: tonnage,
+      quantity: tonnage,
+    });
+  }
   if (!window.State) window.State = {};
   Object.assign(window.State, routeState);
   window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
   window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
 
-  setActionableAiInputValue(cargoInput, tonnage);
+  if (hasTonnage && cargoInput) setActionableAiInputValue(cargoInput, tonnage);
 
-  routeButton.click();
+  if (typeof window.runOnDemandMapRouteWorkflow === "function") {
+    await window.runOnDemandMapRouteWorkflow(routeButton);
+  } else {
+    routeButton.click();
+  }
   window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
-    detail: { pol: selectedPol, pod: selectedPod, tonnage },
+    detail: { pol: selectedPol, pod: selectedPod, tonnage: hasTonnage ? tonnage : null },
   }));
   return true;
 }
