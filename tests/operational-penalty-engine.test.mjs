@@ -7,30 +7,70 @@ const require = createRequire(import.meta.url);
 const engine = require('../voyage-cost-engine.js');
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('Friday operations trigger overtime in Islamic-weekend countries', () => {
-  const result = engine.calculateOperationalRisk(10000, '2026-08-27', 1, 'Algeria', 7.5, 9);
+test('Friday operations use 24 overtime hours in Friday-weekend countries', () => {
+  const result = engine.calculateOperationalRisk(10000, '2026-08-28T00:00:00Z', 1, 'Algeria', 7.5, 9, {
+    cargoQuantity: 1000,
+    portDailyRate: 1000,
+    standardHourlyRate: 100,
+    overtimeMultiplier: 1.5,
+  });
 
   assert.equal(result.hasWeekendPenalty, true);
-  assert.equal(result.adjustedPDA, 11500);
-  assert.equal(result.penaltyAmount, 1500);
+  assert.equal(result.shiftSimulation.totalPortHours, 24);
+  assert.equal(result.shiftSimulation.standardHours, 0);
+  assert.equal(result.shiftSimulation.overtimeHours, 24);
+  assert.equal(result.adjustedPDA, 11200);
+  assert.equal(result.penaltyAmount, 1200);
   assert.equal(result.riskLevel, 'MODERADO');
   assert.deepEqual(result.weekendDates, ['2026-08-28']);
 });
 
-test('Saturday and Sunday trigger overtime for standard calendars', () => {
-  const result = engine.calculateOperationalRisk(20000, '2026-08-28', 1, 'ES', 7.5, 9);
+test('standard calendars distribute operations across daytime, night and weekend hours', () => {
+  const result = engine.calculateOperationalRisk(20000, '2026-08-28T00:00:00Z', 2, 'ES', 7.5, 9, {
+    cargoQuantity: 2000,
+    portDailyRate: 1000,
+    standardHourlyRate: 50,
+    overtimeMultiplier: 1.5,
+  });
 
   assert.equal(result.hasWeekendPenalty, true);
-  assert.equal(result.adjustedPDA, 23000);
+  assert.equal(result.shiftSimulation.totalPortHours, 48);
+  assert.equal(result.shiftSimulation.standardHours, 12);
+  assert.equal(result.shiftSimulation.overtimeHours, 36);
+  assert.equal(result.penaltyAmount, 900);
+  assert.equal(result.adjustedPDA, 20900);
   assert.equal(result.riskLevel, 'MODERADO');
 });
 
-test('draft excess escalates operational risk to high', () => {
-  const result = engine.calculateOperationalRisk(10000, '2026-08-31', 1, 'Spain', 10.2, 9.5);
+test('minority berth availability escalates congestion risk to high', () => {
+  const result = engine.calculateOperationalRisk(10000, '2026-08-31T06:00:00Z', 0.5, 'Spain', 8, 9.5, {
+    berths: [
+      { name: 'Pier 7', max_draft: 8.2 },
+      { name: 'Berth 01', max_draft: 7.6 },
+      { name: 'Berth 02', max_draft: 7.6 },
+      { name: 'Berth 03', max_draft: 7.7 },
+      { name: 'Berth 04', max_draft: 7.5 },
+      { name: 'Berth 05', max_draft: 7.4 },
+      { name: 'Berth 06', max_draft: 7.8 },
+    ],
+  });
 
   assert.equal(result.hasWeekendPenalty, false);
-  assert.equal(result.isDraftExceeded, true);
+  assert.equal(result.isDraftExceeded, false);
+  assert.equal(result.hasMinorityBerthAvailability, true);
+  assert.equal(result.berthAvailability.compatibleCount, 1);
+  assert.equal(result.berthAvailability.totalBerths, 7);
   assert.equal(result.adjustedPDA, 10000);
+  assert.equal(result.riskLevel, 'ALTO');
+});
+
+test('draft excess across every berth escalates operational risk to high', () => {
+  const result = engine.calculateOperationalRisk(10000, '2026-08-31T06:00:00Z', 0.5, 'Spain', 10.2, 9.5, {
+    berths: [{ name: 'Pier 7', max_draft: 9.5 }, { name: 'Pier 8', max_draft: 9.2 }],
+  });
+
+  assert.equal(result.isDraftExceeded, true);
+  assert.equal(result.berthAvailability.compatibleCount, 0);
   assert.equal(result.riskLevel, 'ALTO');
 });
 
@@ -64,7 +104,12 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   }, {
     riskLevel: 'ALTO',
     hasWeekendPenalty: true,
-    isDraftExceeded: true,
+    hasMinorityBerthAvailability: true,
+    compatibleBerths: 1,
+    totalBerths: 7,
+    standardHours: 12,
+    overtimeHours: 36,
+    penaltyAmount: 900,
     penaltyCountries: ['Argelia'],
   }, documentRef);
 
@@ -74,14 +119,20 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   assert.equal(elements.get('exec-total-profit').textContent, '+$45,000');
   assert.equal(elements.get('exec-risk-level').textContent, 'ALTO');
   assert.equal(elements.get('exec-risk-level').style.color, '#b91c1c');
-  assert.match(elements.get('exec-insight-text').textContent, /recargo automático de 15%/i);
-  assert.match(elements.get('exec-insight-text').textContent, /supera el límite operativo/i);
+  assert.match(elements.get('exec-insight-text').textContent, /12\.0 h a turnos ordinarios y 36\.0 h a Overtime/i);
+  assert.match(elements.get('exec-insight-text').textContent, /1 de 7 muelles/i);
 });
 
 test('Core PRO main engine persists penalty and syncs the executive dashboard', () => {
   assert.match(indexSource, /resolveOperationalPortContext\('pol'\)/);
   assert.match(indexSource, /calculateRisk\(basePdaPol/);
   assert.match(indexSource, /operationalPenaltyAmount/);
+  assert.doesNotMatch(indexSource, /Recargo Overtime por fin de semana \(15%\)/);
+  assert.match(indexSource, /standardHourlyRate: stevedoringHourlyRate/);
+  assert.match(indexSource, /berths: portContext\.berths/);
+  assert.match(indexSource, /etaBaseDate.*etaBaseTime/s);
+  assert.match(indexSource, /operationalOvertimeHours: operationalRisk\.overtimeHours/);
+  assert.match(indexSource, /renderStevedoringCostBreakdown\(stevedoringAllocation, operationalRisk\)/);
   assert.match(indexSource, /State\.operationalRisk = operationalRisk/);
   assert.match(indexSource, /operationalRisk: State\.operationalRisk/);
   assert.match(indexSource, /syncExecutiveDashboard\(\{/);
