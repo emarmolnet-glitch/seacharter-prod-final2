@@ -106,6 +106,31 @@ export const sessionSync = pgTable(
   ],
 );
 
+export const charterDossiers = pgTable(
+  "charter_dossiers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountKey: text("account_key").default("default-account").notNull(),
+    reference: text("reference").notNull(),
+    pol: text("pol"),
+    pod: text("pod"),
+    cargoName: text("cargo_name"),
+    cargoVolume: doublePrecision("cargo_volume"),
+    charterer: text("charterer"),
+    internalNotes: text("internal_notes"),
+    status: text("status").default("BORRADOR").notNull(),
+    sessionPayload: jsonb("session_payload").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("charter_dossiers_account_reference_uidx").on(table.accountKey, table.reference),
+    index("charter_dossiers_account_updated_idx").on(table.accountKey, table.updatedAt),
+    check("charter_dossiers_status_check", sql`${table.status} IN ('BORRADOR', 'COTIZADO', 'FIJADO')`),
+    check("charter_dossiers_payload_object_check", sql`jsonb_typeof(${table.sessionPayload}) = 'object'`),
+  ],
+);
+
 export const iaReports = pgTable("ia_reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   status: text("status").default("PENDING").notNull(),

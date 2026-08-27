@@ -20,8 +20,9 @@ test('header modules use the required visual order and stable text identifiers',
   assert.equal(primaryModulesSource, `const PRIMARY_MODULES = [
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
+            { id: 'dossiers', label: 'Dossiers' },
             { id: 'decisiones', label: 'Decisiones' },
-            { id: 'tracking', label: 'Tracking', presentation: 'dialog' },
+            { id: 'tracking', label: 'Tracking', presentation: 'module-overlay' },
             { id: 'ais', label: 'Densidad' },
             { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
@@ -30,12 +31,11 @@ test('header modules use the required visual order and stable text identifiers',
   assert.doesNotMatch(primaryModulesSource, /\[[0-9]+\]|id:\s*[0-9]+/);
 });
 
-test('tracking uses the shared top-level navigation factory and dialog action', () => {
+test('tracking uses the shared top-level navigation factory and module overlay action', () => {
   const createButtonSource = readFunctionSource('createModuleButton', 'getPrimaryNavigationModules');
 
-  assert.match(createButtonSource, /moduleConfig\.presentation === 'dialog'/);
+  assert.match(createButtonSource, /moduleConfig\.presentation === 'module-overlay'/);
   assert.match(createButtonSource, /window\.openTrackingLive\?\.\(\)/);
-  assert.match(createButtonSource, /aria-haspopup', 'dialog'/);
   assert.match(createButtonSource, /aria-controls', 'tracking-live-overlay'/);
 });
 
