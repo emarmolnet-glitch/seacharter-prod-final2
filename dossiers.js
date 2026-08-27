@@ -69,6 +69,16 @@
         };
     }
 
+    function newEstimationModalElements() {
+        return {
+            modal: document.getElementById('new-estimation-modal'),
+            reference: document.getElementById('new-estimation-current-reference'),
+            save: document.getElementById('new-estimation-save'),
+            discard: document.getElementById('new-estimation-discard'),
+            error: document.getElementById('new-estimation-modal-error'),
+        };
+    }
+
     function inferredClientName() {
         return text('coa-client-name') || text('gc-charterer') || text('asb-charterer') || '';
     }
@@ -102,7 +112,56 @@
     }
 
     function requestNewEstimation() {
-        openSaveModal('new');
+        const elements = newEstimationModalElements();
+        if (!elements.modal) return;
+        elements.reference.textContent = `REF: ${text('quick-ref') || 'Pendiente de asignación'}`;
+        elements.error.textContent = '';
+        elements.error.classList.add('hidden');
+        elements.save.disabled = false;
+        elements.discard.disabled = false;
+        elements.save.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar y Continuar';
+        elements.modal.classList.add('is-open');
+        elements.modal.setAttribute('aria-hidden', 'false');
+        window.setTimeout(() => elements.save.focus(), 0);
+    }
+
+    function closeNewEstimationModal() {
+        const { modal } = newEstimationModalElements();
+        if (!modal) return;
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.getElementById('new-estimation-btn')?.focus();
+    }
+
+    function resetGlobalState() {
+        const storeReset = window.SeaCharterStore?.resetGlobalState;
+        if (typeof storeReset === 'function') return storeReset.call(window.SeaCharterStore);
+        if (typeof window.resetGlobalState === 'function') return window.resetGlobalState();
+        return window.resetTotalEstimation?.();
+    }
+
+    async function saveAndStartNewEstimation() {
+        const elements = newEstimationModalElements();
+        elements.save.disabled = true;
+        elements.discard.disabled = true;
+        elements.error.classList.add('hidden');
+        elements.save.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Guardando...';
+        try {
+            await persistCurrent(state.activeClientName || inferredClientName(), state.activeInternalNotes);
+            closeNewEstimationModal();
+            resetGlobalState();
+        } catch (error) {
+            elements.error.textContent = error.message || 'No se pudo guardar la estimación. El trabajo actual se mantiene intacto.';
+            elements.error.classList.remove('hidden');
+            elements.save.disabled = false;
+            elements.discard.disabled = false;
+            elements.save.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar y Continuar';
+        }
+    }
+
+    function discardAndStartNewEstimation() {
+        closeNewEstimationModal();
+        resetGlobalState();
     }
 
     async function confirmSave() {
@@ -195,7 +254,10 @@
         const openButton = event.target.closest('[data-open-dossier]');
         if (openButton) openDossier(openButton.dataset.openDossier).catch((error) => window.showToast?.(error.message));
         if (event.target.closest('[data-close-dossier-modal]')) closeSaveModal();
+        if (event.target.closest('[data-close-new-estimation-modal]')) closeNewEstimationModal();
         if (event.target.closest('#dossier-confirm-save')) confirmSave();
+        if (event.target.closest('#new-estimation-save')) saveAndStartNewEstimation();
+        if (event.target.closest('#new-estimation-discard')) discardAndStartNewEstimation();
     });
     document.addEventListener('change', (event) => {
         const select = event.target.closest('[data-dossier-status]');
@@ -208,7 +270,9 @@
         state.searchTimer = setTimeout(loadList, 250);
     });
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && document.getElementById('dossier-save-modal')?.classList.contains('is-open')) closeSaveModal();
+        if (event.key !== 'Escape') return;
+        if (document.getElementById('new-estimation-modal')?.classList.contains('is-open')) closeNewEstimationModal();
+        else if (document.getElementById('dossier-save-modal')?.classList.contains('is-open')) closeSaveModal();
     });
 
     window.DossierManager = { requestSave, requestNewEstimation, openDossier, loadList, clearActive };

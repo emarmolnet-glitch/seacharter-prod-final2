@@ -90,8 +90,14 @@ test('new estimation creates and persists a different temporary reference', () =
   assert.equal(location.searchParams.get('ref'), nextReference);
 });
 
+test('new estimation advances the active reference sequence', () => {
+  const { api } = loadUtility({ sessionReference: 'RDM/2026-0042' });
+
+  assert.equal(api.createNewReference(), 'RDM/2026-0043');
+});
+
 test('all contractual modules consume the centralized reference', () => {
-  assert.match(indexSource, /<script src="\/contract-reference\.js"><\/script>/);
+  assert.match(indexSource, /<script defer src="\/contract-reference\.js"><\/script>/);
   assert.match(indexSource, /function getSafeActiveContractRef/);
   assert.match(indexSource, /window\.ContractReference \|\| window\.ContractRefManager/);
   assert.match(indexSource, /\['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'\]/);

@@ -19,7 +19,7 @@ test('Master Report payload uses the Data Bridge AI contract', () => {
 
 test('Master Report posts to the configurable cerebro-ia endpoint', () => {
   assert.match(source, /VITE_DATA_BRIDGE_AI_URL/);
-  assert.match(source, /\.netlify\/functions\/cerebro-ia/);
+  assert.match(source, /\/api\/cerebro-ia/);
 
   const start = source.indexOf('async function generarInformeMasterOnClick');
   const end = source.indexOf('async function generateMasterExecutiveReport', start);

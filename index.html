@@ -143,6 +143,12 @@
                 else randomValues[0] = Math.floor(Math.random() * 0xFFFFFFFF);
                 return `RDM/${new Date().getFullYear()}-${String(randomValues[0] % 10000).padStart(4, '0')}`;
             };
+            const generateNextVoyageRef = function(currentReference) {
+                const year = new Date().getFullYear();
+                const match = normalizeReference(currentReference).match(/^RDM\/(\d{4})-(\d{4})$/);
+                if (!match || Number(match[1]) !== year) return generateVoyageRef();
+                return `RDM/${year}-${String((Number(match[2]) + 1) % 10000).padStart(4, '0')}`;
+            };
             const getActiveContractRef = function() {
                 try {
                     const params = new URLSearchParams(globalObject.location?.search || '');
@@ -177,9 +183,10 @@
                 },
                 getActiveContractRef,
                 generateReference: generateVoyageRef,
+                generateNextVoyageRef,
                 generateVoyageRef,
                 createNewReference: function() {
-                    return setActiveContractRef(generateVoyageRef());
+                    return setActiveContractRef(generateNextVoyageRef(getActiveContractRef()));
                 },
                 setActiveContractRef,
             };
@@ -8238,7 +8245,7 @@
                 <button
                     id="new-estimation-btn"
                     type="button"
-                    onclick="if (window.DossierManager) window.DossierManager.requestNewEstimation(); else resetTotalEstimation(); closeMobileSessionMenu();"
+                    onclick="window.DossierManager?.requestNewEstimation(); closeMobileSessionMenu();"
                     class="tools-dropdown-trigger flex items-center justify-center"
                     title="Nueva Estimación"
                     aria-label="Nueva Estimación"
@@ -12968,6 +12975,35 @@
         </section>
     </div>
 
+    <div id="new-estimation-modal" class="dossier-modal new-estimation-modal" aria-hidden="true">
+        <div class="dossier-modal__backdrop" data-close-new-estimation-modal></div>
+        <section class="dossier-modal__dialog new-estimation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="new-estimation-title" aria-describedby="new-estimation-description">
+            <div class="dossier-modal__header new-estimation-modal__header">
+                <div class="new-estimation-modal__heading">
+                    <span class="new-estimation-modal__icon" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[.14em] text-amber-700">Nueva Estimación</p>
+                        <h2 id="new-estimation-title" class="mt-1 text-xl font-black text-slate-800">¿Guardar antes de empezar?</h2>
+                    </div>
+                </div>
+                <button type="button" class="dossier-modal__close" data-close-new-estimation-modal aria-label="Cancelar nueva estimación"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="dossier-modal__body new-estimation-modal__body">
+                <p id="new-estimation-description">¿Deseas guardar la estimación actual antes de empezar una nueva? Los cambios no guardados se perderán.</p>
+                <div class="dossier-reference-box new-estimation-modal__reference">
+                    <span>Estimación actual</span>
+                    <strong id="new-estimation-current-reference">REF: —</strong>
+                </div>
+                <p id="new-estimation-modal-error" class="hidden text-xs font-semibold text-red-600" role="alert"></p>
+            </div>
+            <div class="dossier-modal__actions new-estimation-modal__actions">
+                <button type="button" class="dossier-modal__cancel" data-close-new-estimation-modal>Cancelar</button>
+                <button type="button" id="new-estimation-discard" class="new-estimation-modal__discard"><i class="fa-solid fa-trash-can"></i> Descartar (Empezar de cero)</button>
+                <button type="button" id="new-estimation-save" class="dossier-modal__confirm"><i class="fa-solid fa-floppy-disk"></i> Guardar y Continuar</button>
+            </div>
+        </section>
+    </div>
+
     <!-- SECCIÓN DE IMPRESIÓN DEL INFORME EJECUTIVO -->
     <div id="executive-report-print-view" class="hidden font-sans">
         <!-- Header -->
@@ -15926,6 +15962,9 @@
             getState() {
                 return State;
             },
+            resetGlobalState(options = {}) {
+                return resetGlobalState(options);
+            },
             set(partial = {}, options = {}) {
                 if (!options.force && !hasShallowStoreChanges(partial, this.committedState)) return false;
                 const normalizedPartial = normalizeActiveVoyageState(partial, State);
@@ -16123,7 +16162,70 @@
             );
         }
 
-        function resetTotalEstimation({ silent = false } = {}) {
+        function resetFactoryControls(containerIds = []) {
+            containerIds.forEach((containerId) => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.querySelectorAll('input, textarea, select').forEach((control) => {
+                    if (control.type === 'file') {
+                        control.value = '';
+                    } else if (control.type === 'checkbox' || control.type === 'radio') {
+                        control.checked = control.defaultChecked;
+                    } else if (control.tagName === 'SELECT') {
+                        const defaultOption = Array.from(control.options).find((option) => option.defaultSelected);
+                        control.value = defaultOption?.value ?? control.options[0]?.value ?? '';
+                    } else {
+                        control.value = control.defaultValue;
+                    }
+                });
+            });
+        }
+
+        function resetGeneratedModuleState() {
+            resetFactoryControls(['view-gencon', 'view-asbatankvoy', 'view-auditor']);
+            window.VoyageDraftStore?.getState?.().clearDraft?.();
+            window.MapController?.reset?.();
+            routeMarkerLayer?.clearLayers?.();
+            markers.forEach((marker) => marker?.remove?.());
+            routeMapboxMarkers.forEach((marker) => marker?.remove?.());
+            markers = [];
+            routeMapboxMarkers = [];
+
+            const auditOutputs = ['resProforma', 'resRiesgos', 'resClausulas', 'resEstrategia', 'resEmail', 'contenedor-informe-pdf', 'commercial-nlp-summary'];
+            auditOutputs.forEach((id) => {
+                const element = document.getElementById(id);
+                if (!element) return;
+                if ('value' in element) element.value = '';
+                else element.innerHTML = '';
+            });
+            document.getElementById('resultsContent')?.classList.add('hidden');
+            document.getElementById('loadingState')?.classList.add('hidden');
+            document.getElementById('emptyState')?.classList.remove('hidden');
+            document.getElementById('commercial-nlp-panel')?.classList.add('hidden');
+            document.getElementById('doc-badge')?.classList.add('hidden');
+            document.getElementById('errorBox')?.classList.add('hidden');
+            document.getElementById('excel-download-container')?.classList.add('hidden');
+            if (typeof clearDocPreview === 'function') clearDocPreview();
+            if (typeof resetCommercialNlpPanel === 'function') resetCommercialNlpPanel();
+
+            const aiContent = document.getElementById('ai-modal-content');
+            if (aiContent) {
+                aiContent.innerHTML = '';
+                aiContent.classList.add('hidden');
+            }
+            document.getElementById('ai-modal-loader')?.classList.remove('hidden');
+            if (typeof closeAIModal === 'function') closeAIModal();
+
+            const decisionsView = document.getElementById('view-decisiones');
+            if (decisionsView?.dataset.dssMounted === 'true') {
+                decisionsView.innerHTML = '';
+                delete decisionsView.dataset.dssMounted;
+                ensureDecisionSupportModule(decisionsView);
+            }
+            window.dispatchEvent(new CustomEvent('core-pro:global-reset', { detail: { source: 'new-estimation' } }));
+        }
+
+        function resetGlobalState({ silent = false } = {}) {
             if (!silent) window.DossierManager?.clearActive();
             const referenceManager = window.ContractReference || window.ContractRefManager;
             const initialReference = String(State.activeReference || '').trim();
@@ -16216,6 +16318,7 @@
             const source = document.getElementById('historical-risk-source');
             if (source) source.innerText = 'Selecciona POL/POD y pulsa Cargar desde Histórico para aplicar promedios internos.';
             setCalculatorWaitingState();
+            resetGeneratedModuleState();
 
             if (typeof window.forceResetAisDensityResults === 'function') {
                 window.forceResetAisDensityResults();
@@ -16314,7 +16417,12 @@
             syncGlobalStateToForms();
             if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
             if (!silent && typeof showToast === 'function') showToast('Nueva estimación iniciada en estado cero.');
+            return nextActiveReference;
         }
+        function resetTotalEstimation(options = {}) {
+            return resetGlobalState(options);
+        }
+        window.resetGlobalState = resetGlobalState;
         window.resetTotalEstimation = resetTotalEstimation;
 
         function normalizeDateInputValue(value) {
@@ -17211,6 +17319,23 @@
                 return maps.length > 0;
             }
 
+            function reset() {
+                state.route = [];
+                state.pol = null;
+                state.pod = null;
+                clearMap();
+                getMaps().forEach((mapInstance) => {
+                    if (typeof mapInstance.setView === 'function') {
+                        mapInstance.setView([20, 0], 2, { animate: false });
+                    } else if (typeof mapInstance.jumpTo === 'function') {
+                        mapInstance.jumpTo({ center: [0, 20], zoom: 1.5, bearing: 0, pitch: 0 });
+                    } else if (typeof mapInstance.easeTo === 'function') {
+                        mapInstance.easeTo({ center: [0, 20], zoom: 1.5, bearing: 0, pitch: 0, duration: 0 });
+                    }
+                });
+                return true;
+            }
+
             function fitLeaflet(mapInstance, points) {
                 if (!mapInstance || points.length === 0 || typeof L === 'undefined') return;
                 const bounds = L.latLngBounds(points);
@@ -17373,7 +17498,7 @@
                 if (!mapInstance || state.densityMap === mapInstance) state.densityMap = null;
             }
 
-            return { renderRoute, renderPort, clearMap, checkReady, renderMapData, drawRoute, drawPOL, normalizePoints, cleanDynamicLayers, syncRouteResult, attachRouteMap, attachDensityMap, detachDensityMap, refresh };
+            return { renderRoute, renderPort, clearMap, reset, checkReady, renderMapData, drawRoute, drawPOL, normalizePoints, cleanDynamicLayers, syncRouteResult, attachRouteMap, attachDensityMap, detachDensityMap, refresh };
         })();
         window.MapManager = window.MapController;
 
@@ -47341,7 +47466,7 @@ Example:
 
         function getDataBridgeMasterReportEndpoint() {
             const configuredEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || '').trim();
-            return configuredEndpoint || 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia';
+            return configuredEndpoint || '/api/cerebro-ia';
         }
 
         function formatMasterReportMarkdownText(content) {
@@ -61970,7 +62095,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         );
         const DATA_BRIDGE_AI_ENDPOINT = resolveViteEnvValue(
             VITE_ENV.VITE_DATA_BRIDGE_AI_URL,
-            `${DATA_BRIDGE_FRONTEND_URL.replace(/\/$/, '')}/.netlify/functions/cerebro-ia`
+            '/api/cerebro-ia'
         );
         window.SeaCharterDataBridgeAIEndpoint = DATA_BRIDGE_AI_ENDPOINT;
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');

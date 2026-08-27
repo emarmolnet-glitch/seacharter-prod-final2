@@ -5,11 +5,11 @@ import test from 'node:test';
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
 test('resetTotalEstimation clears evaluated vessel cache and global fleet states', () => {
-  const resetStart = indexSource.indexOf('function resetTotalEstimation');
-  const resetEnd = indexSource.indexOf('window.resetTotalEstimation = resetTotalEstimation;', resetStart);
+  const resetStart = indexSource.indexOf('function resetGlobalState');
+  const resetEnd = indexSource.indexOf('function resetTotalEstimation', resetStart);
   const resetSource = indexSource.slice(resetStart, resetEnd);
 
-  assert.ok(resetStart >= 0 && resetEnd > resetStart, 'resetTotalEstimation function must exist');
+  assert.ok(resetStart >= 0 && resetEnd > resetStart, 'resetGlobalState function must exist');
 
   // Verify call to AIS density reset
   assert.match(resetSource, /forceResetAisDensityResults\(\)|resetAisDensityResults/);

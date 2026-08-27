@@ -36,7 +36,7 @@ test('chat assistant sends the unified Data Bridge context with each message', (
   assert.match(frontendSource, /ConversationHistory: historial/);
   assert.match(frontendSource, /const sanitizedPayload = sanitizePayloadForAI\(requestPayload\)/);
   assert.match(frontendSource, /JSON\.stringify\(sanitizedPayload\)/);
-  assert.match(frontendSource, /\.netlify\/functions\/cerebro-ia/);
+  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = "\/api\/cerebro-ia"/);
   assert.doesNotMatch(frontendSource, /const CHAT_ENDPOINT = "\/\.netlify\/functions\/chat-assistant"/);
 });
 
@@ -82,7 +82,8 @@ test('chat assistant builds a dynamic maritime risk audit instruction', () => {
   assert.match(backendSource, /posibles demoras o suspensiones de laytime por lluvia/);
   assert.match(backendSource, /contexto\.meteorologia/);
   assert.match(backendSource, /systemInstruction: finalInstruction/);
-  assert.match(backendSource, /model: "gemini-2\.5-flash"/);
+  assert.match(backendSource, /CHAT_ASSISTANT_MODEL = "gemini-3\.1-pro-preview"/);
+  assert.match(backendSource, /model: CHAT_ASSISTANT_MODEL/);
 });
 
 test('chat assistant injects the Neon ecosystem dictionary and exposes safe tool calling', () => {
