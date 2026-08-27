@@ -57,6 +57,41 @@ export const pdaVesselConfirmations = pgTable("pda_vessel_confirmations", {
   createdAt: createdAt(),
 });
 
+export const pdaEstimations = pgTable(
+  "pda_estimations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    calculationKey: text("calculation_key").notNull(),
+    estimationId: text("estimation_id"),
+    sessionId: text("session_id"),
+    pol: text("pol"),
+    pod: text("pod"),
+    pdaTotal: doublePrecision("pda_total").notNull(),
+    pdaPol: doublePrecision("pda_pol").notNull(),
+    pdaPod: doublePrecision("pda_pod").notNull(),
+    polBreakdown: jsonb("pol_breakdown").notNull(),
+    podBreakdown: jsonb("pod_breakdown").notNull(),
+    calculationMode: text("calculation_mode").default("parametric-estimator").notNull(),
+    currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+    vesselName: text("vessel_name"),
+    imoNumber: text("imo_number"),
+    cargoQuantity: doublePrecision("cargo_quantity"),
+    calculationContext: jsonb("calculation_context").notNull(),
+    calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("pda_estimations_calculation_key_uidx").on(table.calculationKey),
+    index("pda_estimations_estimation_updated_idx").on(table.estimationId, table.updatedAt),
+    index("pda_estimations_session_updated_idx").on(table.sessionId, table.updatedAt),
+    check("pda_estimations_values_nonnegative_check", sql`${table.pdaTotal} >= 0 AND ${table.pdaPol} >= 0 AND ${table.pdaPod} >= 0`),
+    check("pda_estimations_pol_breakdown_array_check", sql`jsonb_typeof(${table.polBreakdown}) = 'array'`),
+    check("pda_estimations_pod_breakdown_array_check", sql`jsonb_typeof(${table.podBreakdown}) = 'array'`),
+    check("pda_estimations_context_object_check", sql`jsonb_typeof(${table.calculationContext}) = 'object'`),
+  ],
+);
+
 export const sessionSync = pgTable(
   "session_sync",
   {

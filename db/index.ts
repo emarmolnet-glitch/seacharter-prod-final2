@@ -237,6 +237,44 @@ export async function ensureApplicationSchema() {
 
     CREATE INDEX IF NOT EXISTS pda_vessel_confirmations_imo_created_idx
       ON pda_vessel_confirmations (imo_number, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS pda_estimations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      calculation_key TEXT NOT NULL,
+      estimation_id TEXT,
+      session_id TEXT,
+      pol TEXT,
+      pod TEXT,
+      pda_total DOUBLE PRECISION NOT NULL,
+      pda_pol DOUBLE PRECISION NOT NULL,
+      pda_pod DOUBLE PRECISION NOT NULL,
+      pol_breakdown JSONB NOT NULL,
+      pod_breakdown JSONB NOT NULL,
+      calculation_mode TEXT NOT NULL DEFAULT 'parametric-estimator',
+      currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+      vessel_name TEXT,
+      imo_number TEXT,
+      cargo_quantity DOUBLE PRECISION,
+      calculation_context JSONB NOT NULL,
+      calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT pda_estimations_values_nonnegative_check
+        CHECK (pda_total >= 0 AND pda_pol >= 0 AND pda_pod >= 0),
+      CONSTRAINT pda_estimations_pol_breakdown_array_check
+        CHECK (jsonb_typeof(pol_breakdown) = 'array'),
+      CONSTRAINT pda_estimations_pod_breakdown_array_check
+        CHECK (jsonb_typeof(pod_breakdown) = 'array'),
+      CONSTRAINT pda_estimations_context_object_check
+        CHECK (jsonb_typeof(calculation_context) = 'object')
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS pda_estimations_calculation_key_uidx
+      ON pda_estimations (calculation_key);
+    CREATE INDEX IF NOT EXISTS pda_estimations_estimation_updated_idx
+      ON pda_estimations (estimation_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS pda_estimations_session_updated_idx
+      ON pda_estimations (session_id, updated_at DESC);
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;

@@ -31636,6 +31636,137 @@
 	            status.innerHTML = `<i class="fa-solid ${official ? 'fa-circle-check' : 'fa-chart-line'}"></i><span>${official ? 'Cálculo Oficial' : 'Estimación Algorítmica Global'}</span>`;
 	        }
 
+        function getPdaPersistenceIdentity() {
+            const calculatedState = window.CalculatedState || window.GlobalStore?.calculatedState || {};
+            let sessionContext = {};
+            try {
+                sessionContext = typeof getPipelineSessionContext === 'function' ? getPipelineSessionContext() : {};
+            } catch (_) {}
+            const estimationId = String(
+                calculatedState.calculationId
+                || calculatedState.estimationId
+                || calculatedState.contractReference
+                || calculatedState.contract_reference
+                || ''
+            ).trim();
+            const sessionId = String(calculatedState.sessionId || sessionContext.sessionId || '').trim();
+            if (estimationId) return { calculationKey: `estimation:${estimationId}`, estimationId, sessionId };
+            if (sessionId) return { calculationKey: `session:${sessionId}`, estimationId: '', sessionId };
+
+            const storageKey = 'core-pro-pda-persistence-id';
+            let browserId = '';
+            try {
+                browserId = window.sessionStorage.getItem(storageKey) || '';
+                if (!browserId) {
+                    browserId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                    window.sessionStorage.setItem(storageKey, browserId);
+                }
+            } catch (_) {
+                browserId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            }
+            return { calculationKey: `browser:${browserId}`, estimationId: '', sessionId: '' };
+        }
+
+        function buildPdaPersistencePayload(reason = 'parametric-estimator') {
+            const pdaPol = Math.max(0, Number(document.getElementById('pda-pol')?.value || State.pdaPol) || 0);
+            const pdaPod = Math.max(0, Number(document.getElementById('pda-pod')?.value || State.pdaPod) || 0);
+            if (pdaPol + pdaPod <= 0) return null;
+
+            const polBreakdown = getPortPdaBreakdown('pol', pdaPol).map(item => ({
+                item: String(item.item || '').trim(),
+                amount: Math.max(0, Number(item.amount) || 0)
+            }));
+            const podBreakdown = getPortPdaBreakdown('pod', pdaPod).map(item => ({
+                item: String(item.item || '').trim(),
+                amount: Math.max(0, Number(item.amount) || 0)
+            }));
+            if (!polBreakdown.length || !podBreakdown.length) return null;
+
+            const identity = getPdaPersistenceIdentity();
+            const polMode = document.getElementById('pda-pol')?.dataset?.calculationMode || 'parametric-estimator';
+            const podMode = document.getElementById('pda-pod')?.dataset?.calculationMode || 'parametric-estimator';
+            const vessel = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
+            const numberValue = id => Math.max(0, Number(document.getElementById(id)?.value) || 0);
+
+            return {
+                ...identity,
+                pol: document.getElementById('port-pol')?.value || State.pol || '',
+                pod: document.getElementById('port-pod')?.value || State.pod || '',
+                pdaTotal: pdaPol + pdaPod,
+                pdaPol,
+                pdaPod,
+                polBreakdown,
+                podBreakdown,
+                calculationMode: polMode === podMode ? polMode : `POL:${polMode}|POD:${podMode}`,
+                currency: 'USD',
+                vesselName: document.getElementById('vessel-name')?.value || vessel.vessel_name || vessel.vesselName || State.vessel || '',
+                imoNumber: vessel.imo || vessel.imo_number || document.getElementById('vessel-imo')?.value || '',
+                cargoQuantity: numberValue('cargo-qty'),
+                calculatedAt: new Date().toISOString(),
+                calculationContext: {
+                    reason,
+                    cargoType: document.getElementById('cargo-type')?.value || State.cargoType || '',
+                    dwt: numberValue('vessel-dwt') || Number(State.dwt) || 0,
+                    gt: numberValue('vessel-identity-gt') || Number(vessel.gt) || 0,
+                    loa: numberValue('vessel-loa') || Number(vessel.loa) || 0,
+                    loadRate: numberValue('rate-load'),
+                    dischargeRate: numberValue('rate-disch'),
+                    pdaPolBase: Number(document.getElementById('pda-pol')?.dataset?.basePda || State.basePdaPol) || pdaPol,
+                    pdaPodBase: Number(document.getElementById('pda-pod')?.dataset?.basePda || State.basePdaPod) || pdaPod
+                }
+            };
+        }
+
+        async function persistPdaEstimation(payload) {
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+                try {
+                    const response = await fetch('/api/pda-estimations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (response.ok && result?.success === true) return result;
+                    lastError = new Error(result?.error || `PDA persistence failed (HTTP ${response.status})`);
+                } catch (error) {
+                    lastError = error;
+                }
+                if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 300));
+            }
+            throw lastError || new Error('PDA persistence failed');
+        }
+
+        function schedulePdaEstimationPersistence(reason = 'parametric-estimator', delay = 500) {
+            if (typeof fetch !== 'function') return;
+            const persistenceState = window.pdaEstimationPersistenceState || {
+                timer: null,
+                lastFingerprint: '',
+                pendingFingerprint: ''
+            };
+            window.pdaEstimationPersistenceState = persistenceState;
+            if (persistenceState.timer) clearTimeout(persistenceState.timer);
+            persistenceState.timer = setTimeout(async () => {
+                persistenceState.timer = null;
+                const payload = buildPdaPersistencePayload(reason);
+                if (!payload) return;
+                const fingerprint = JSON.stringify({ ...payload, calculatedAt: '' });
+                if (fingerprint === persistenceState.lastFingerprint || fingerprint === persistenceState.pendingFingerprint) return;
+                persistenceState.pendingFingerprint = fingerprint;
+                try {
+                    const result = await persistPdaEstimation(payload);
+                    persistenceState.lastFingerprint = fingerprint;
+                    window.dispatchEvent(new CustomEvent('PDA_ESTIMATION_PERSISTED', { detail: result.estimation || null }));
+                } catch (error) {
+                    console.warn('[PDA Persistence] No se pudo guardar la estimación:', error?.message || error);
+                } finally {
+                    if (persistenceState.pendingFingerprint === fingerprint) persistenceState.pendingFingerprint = '';
+                }
+            }, delay);
+        }
+        window.persistPdaEstimation = persistPdaEstimation;
+        window.schedulePdaEstimationPersistence = schedulePdaEstimationPersistence;
+
         async function autoFillPDA(type, showNotification = true, options = {}) {
 	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
 	                ? window.autoFillPdaDebounceTimers
@@ -36649,6 +36780,7 @@ function scheduleReactiveEngine() {
             };
             State.pdaPol = parseFloat(document.getElementById('pda-pol').value) || 0;
             State.pdaPod = parseFloat(document.getElementById('pda-pod').value) || 0;
+            schedulePdaEstimationPersistence('run-engine');
             State.stevedoringCosts = parseFloat(document.getElementById('stevedoring-costs').value) || 0;
             State.pdaMisc = parseFloat(document.getElementById('pda-misc').value) || 0;
             State.cargoSurcharge = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
