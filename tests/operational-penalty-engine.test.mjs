@@ -109,7 +109,8 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
     totalBerths: 7,
     standardHours: 12,
     overtimeHours: 36,
-    penaltyAmount: 900,
+    penaltyAmount: 0,
+    overtimeSurcharge: 1250,
     penaltyCountries: ['Argelia'],
   }, documentRef);
 
@@ -120,7 +121,14 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   assert.equal(elements.get('exec-risk-level').textContent, 'ALTO');
   assert.equal(elements.get('exec-risk-level').style.color, '#b91c1c');
   assert.match(elements.get('exec-insight-text').textContent, /12\.0 h a turnos ordinarios y 36\.0 h a Overtime/i);
+  assert.match(elements.get('exec-insight-text').textContent, /coste incremental de \$1,250\.00/i);
   assert.match(elements.get('exec-insight-text').textContent, /1 de 7 muelles/i);
+});
+
+test('executive view exposes the existing full report action', () => {
+  assert.match(indexSource, /id="btn-executive-report-summary"[^>]*onclick="generateExecutiveReport\(\)"/);
+  assert.match(indexSource, /Ver Reporte Ejecutivo del Viaje/);
+  assert.match(indexSource, /querySelectorAll\('\[data-executive-report-action\]'\)/);
 });
 
 test('executive dashboard stays neutral until POL, POD and cargo are defined', () => {
