@@ -49,5 +49,20 @@
 .dossier-modal__confirm { display: inline-flex; align-items: center; gap: 8px; color: #fff; background: #168b7a; box-shadow: 0 7px 16px rgba(22, 139, 122, .2); }
 .dossier-modal__confirm:hover { background: #0f766e; }
 .dossier-modal__confirm:disabled { cursor: wait; opacity: .65; }
+.new-estimation-modal__dialog { width: min(100%, 620px); }
+.new-estimation-modal__header { border-bottom-color: #fde68a; background: linear-gradient(135deg, #fffdf5 0%, #fff 72%); }
+.new-estimation-modal__heading { display: flex; align-items: center; gap: 14px; }
+.new-estimation-modal__icon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid #fcd34d; border-radius: 12px; color: #b45309; background: #fef3c7; box-shadow: 0 8px 18px rgba(180, 83, 9, .12); }
+.new-estimation-modal__body > p:first-child { color: #475569; font-size: 14px; line-height: 1.65; }
+.new-estimation-modal__reference { border-color: #fde68a; background: #fffbeb; }
+.new-estimation-modal__actions { flex-wrap: wrap; }
+.new-estimation-modal__discard { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 16px; color: #b91c1c; background: #fff; font-size: 12px; font-weight: 800; }
+.new-estimation-modal__discard:hover { border-color: #fca5a5; background: #fef2f2; }
+.new-estimation-modal__discard:disabled { cursor: wait; opacity: .55; }
+@media (max-width: 640px) {
+    .new-estimation-modal__actions { display: grid; grid-template-columns: 1fr; }
+    .new-estimation-modal__actions button { justify-content: center; width: 100%; }
+    .new-estimation-modal__actions .dossier-modal__cancel { order: 3; }
+}
 @keyframes dossier-modal-enter { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 720px) { .dossiers-toolbar { grid-template-columns: 1fr; } }

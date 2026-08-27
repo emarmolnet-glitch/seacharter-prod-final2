@@ -17,13 +17,28 @@ test('dossiers uses a light corporate hero and teal active navigation', () => {
   assert.match(styles, /#tab-btn-dossiers\.bg-blue-600\s*\{\s*background:\s*#168b7a/i);
 });
 
-test('save and new-estimation actions open the dossier modal before persistence', () => {
-  assert.match(html, /window\.DossierManager\.requestNewEstimation\(\)/);
+test('save and new-estimation actions open dedicated modals before persistence', () => {
+  assert.match(html, /window\.DossierManager\?\.requestNewEstimation\(\)/);
   assert.match(html, /window\.DossierManager\?\.requestSave/);
   assert.match(html, /id="dossier-save-modal"/);
+  assert.match(html, /id="new-estimation-modal"/);
+  assert.match(html, /Guardar y Continuar/);
+  assert.match(html, /Descartar \(Empezar de cero\)/);
   assert.match(script, /function requestSave\(\)/);
   assert.match(script, /function requestNewEstimation\(\)/);
   assert.match(script, /await persistCurrent\(clientName, internalNotes\)/);
+  assert.match(script, /await persistCurrent\(state\.activeClientName \|\| inferredClientName\(\), state\.activeInternalNotes\)/);
+  assert.match(script, /resetGlobalState\(\)/);
+  assert.doesNotMatch(html, /else resetTotalEstimation\(\)/);
+});
+
+test('new estimation reset is centralized in the store and clears generated modules', () => {
+  assert.match(html, /resetGlobalState\(options = \{\}\)/);
+  assert.match(html, /function resetGlobalState\(\{ silent = false \} = \{\}\)/);
+  assert.match(html, /window\.MapController\?\.reset\?\.\(\)/);
+  assert.match(html, /window\.VoyageDraftStore\?\.getState\?\.\(\)\.clearDraft\?\.\(\)/);
+  assert.match(html, /resetFactoryControls\(\['view-gencon', 'view-asbatankvoy', 'view-auditor'\]\)/);
+  assert.match(html, /core-pro:global-reset/);
 });
 
 test('client and notes are injected into the persisted dossier payload', () => {

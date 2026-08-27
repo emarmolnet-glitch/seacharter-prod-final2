@@ -3,7 +3,7 @@ import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 
-const DEFAULT_CEREBRO_IA_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+const DEFAULT_CEREBRO_IA_ENDPOINT = "/api/cerebro-ia";
 const DEFAULT_CHAT_ASSISTANT_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/chat-assistant";
 const REQUEST_TIMEOUT_MS = 45_000;
 const AI_HISTORY_LIMIT = 6;
@@ -268,8 +268,7 @@ function getActiveAssistantEndpoint() {
   if (iaActiva === 'cerebro') {
     const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
     const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
-    // Para Cerebro sí usamos la ruta absoluta
-    return runtimeEndpoint || buildEndpoint || "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+    return runtimeEndpoint || buildEndpoint || DEFAULT_CEREBRO_IA_ENDPOINT;
   }
   
   // SOLUCIÓN CORS: Para el Asistente Core volvemos a usar LA RUTA RELATIVA

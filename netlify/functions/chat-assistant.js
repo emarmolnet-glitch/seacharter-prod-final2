@@ -5,6 +5,8 @@ import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/c
 import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } from "./_shared/data-bridge-tooling.mjs";
 import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
 
+export const CHAT_ASSISTANT_MODEL = "gemini-3.1-pro-preview";
+
 export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
   const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage, cálculos, PDAs e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
@@ -153,7 +155,7 @@ export default async (req) => {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: CHAT_ASSISTANT_MODEL,
       systemInstruction: finalInstruction,
       tools: [...DATA_BRIDGE_TOOLS, ...WEATHER_TOOLS],
     });

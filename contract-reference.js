@@ -52,6 +52,14 @@
 
     const generateReference = generateVoyageRef;
 
+    function generateNextVoyageRef(currentReference = '') {
+        const year = new Date().getFullYear();
+        const match = normalizeReference(currentReference).match(/^RDM\/(\d{4})-(\d{4})$/);
+        if (!match || Number(match[1]) !== year) return generateVoyageRef();
+        const nextSequence = (Number(match[2]) + 1) % 10000;
+        return `RDM/${year}-${String(nextSequence).padStart(4, '0')}`;
+    }
+
     function persistReference(reference, notify = false) {
         const normalized = normalizeReference(reference);
         if (!normalized) return '';
@@ -77,7 +85,7 @@
     }
 
     function createNewReference() {
-        return persistReference(generateVoyageRef(), true);
+        return persistReference(generateNextVoyageRef(getActiveContractRef()), true);
     }
 
     const contractReferenceManager = Object.freeze({
@@ -85,6 +93,7 @@
         createNewReference,
         ensureUrlReference,
         generateReference,
+        generateNextVoyageRef,
         generateVoyageRef,
         getActiveContractRef,
         normalizeReference,
