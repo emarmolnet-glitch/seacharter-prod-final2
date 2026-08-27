@@ -51,6 +51,174 @@
         hierro_acero_piezas: 1.0
     };
     const PASSIVE_PORT_METHODS = new Set(['cinta_transportadora', 'camion_tolva']);
+    const ISLAMIC_WEEKEND_COUNTRIES = Object.freeze([
+        'Algeria',
+        'United Arab Emirates',
+        'Saudi Arabia',
+        'Egypt',
+        'Qatar',
+        'Oman',
+        'Kuwait',
+        'Iraq',
+        'Libya',
+        'Bahrain'
+    ]);
+    const ISLAMIC_WEEKEND_COUNTRY_CODES = new Set(['DZ', 'AE', 'SA', 'EG', 'QA', 'OM', 'KW', 'IQ', 'LY', 'BH']);
+    const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+    function normalizeCountryKey(value) {
+        return toText(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase();
+    }
+
+    function parseOperationalDate(value) {
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+        }
+        const text = toText(value);
+        if (!text) return null;
+        const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        const date = isoDate
+            ? new Date(Date.UTC(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3])))
+            : new Date(text);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function usesFridayWeekend(portCountry) {
+        const normalizedCountry = normalizeCountryKey(portCountry);
+        if (ISLAMIC_WEEKEND_COUNTRY_CODES.has(normalizedCountry)) return true;
+        return ISLAMIC_WEEKEND_COUNTRIES.some((country) => normalizeCountryKey(country) === normalizedCountry);
+    }
+
+    function calculateOperationalRisk(basePDA, etaDate, portDays, portCountry, vesselDraft, portMaxDraft, operationalContext = {}) {
+        const normalizedPda = Math.max(0, toNumber(basePDA));
+        const normalizedPortDays = Math.max(0, toNumber(portDays));
+        const startDate = parseOperationalDate(etaDate);
+        const fridayWeekend = usesFridayWeekend(portCountry);
+        let hasWeekendPenalty = false;
+        const weekendDates = [];
+
+        if (startDate && normalizedPortDays > 0) {
+            const startTime = startDate.getTime();
+            const endTime = startTime + (normalizedPortDays * DAY_IN_MS);
+            const cursor = new Date(startTime);
+            cursor.setUTCHours(0, 0, 0, 0);
+            while (cursor.getTime() <= endTime) {
+                const day = cursor.getUTCDay();
+                const isWeekendDay = fridayWeekend ? day === 5 : day === 0 || day === 6;
+                if (isWeekendDay) {
+                    hasWeekendPenalty = true;
+                    weekendDates.push(cursor.toISOString().slice(0, 10));
+                }
+                cursor.setUTCDate(cursor.getUTCDate() + 1);
+            }
+        }
+
+        const normalizedVesselDraft = Math.max(0, toNumber(vesselDraft));
+        const normalizedPortMaxDraft = Math.max(0, toNumber(portMaxDraft));
+        const isDraftExceeded = normalizedVesselDraft > 0
+            && normalizedPortMaxDraft > 0
+            && normalizedVesselDraft > normalizedPortMaxDraft;
+        const hasAdjustedRates = Boolean(operationalContext?.hasAdjustedRates);
+        const riskLevel = isDraftExceeded
+            ? 'ALTO'
+            : (hasWeekendPenalty || hasAdjustedRates ? 'MODERADO' : 'BAJO');
+        const adjustedPDA = hasWeekendPenalty ? normalizedPda * 1.15 : normalizedPda;
+
+        return {
+            adjustedPDA,
+            basePDA: normalizedPda,
+            penaltyAmount: adjustedPDA - normalizedPda,
+            hasWeekendPenalty,
+            isDraftExceeded,
+            hasAdjustedRates,
+            riskLevel,
+            portCountry: toText(portCountry),
+            weekendDates
+        };
+    }
+
+    function updateExecutiveDashboard(calcResults = {}, riskData = {}, documentRef = root.document) {
+        if (!documentRef || typeof documentRef.getElementById !== 'function') return false;
+
+        const setText = (id, value) => {
+            const element = documentRef.getElementById(id);
+            if (!element || value === undefined || value === null) return;
+            element.textContent = String(value);
+        };
+        const formatMoney = (value, decimals = 0) => {
+            const amount = Number(value);
+            if (!Number.isFinite(amount)) return '$0';
+            const sign = amount > 0 ? '+' : '';
+            return `${sign}${amount.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            })}`;
+        };
+        const formatRate = (value) => `$${Math.max(0, toNumber(value)).toFixed(2)} / MT`;
+        const formatDays = (value) => `${Math.max(0, toNumber(value)).toFixed(1)} días`;
+        const formatTons = (value) => `${Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })} MT`;
+        const formatDailyRate = (value) => `${Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })} MT/día`;
+
+        setText('exec-pol', calcResults.pol || 'POL');
+        setText('exec-pod', calcResults.pod || 'POD');
+        setText('exec-total-profit', formatMoney(calcResults.totalProfit));
+        setText('exec-total-margin', formatMoney(calcResults.totalProfit));
+        setText('exec-cargo-qty', formatTons(calcResults.cargoQty));
+        setText('exec-cargo-type', calcResults.cargoType || 'Carga no definida');
+        setText('exec-load-rate', formatDailyRate(calcResults.loadRate));
+        setText('exec-disch-rate', formatDailyRate(calcResults.dischargeRate));
+        setText('exec-vessel-type', calcResults.vesselType || 'Buque no definido');
+        setText('exec-sea-days', formatDays(calcResults.seaDays));
+        setText('exec-port-days', formatDays(calcResults.portDays));
+        setText('exec-total-days', formatDays(calcResults.totalDays));
+        setText('exec-buy-freight', formatRate(calcResults.buyFreight));
+        setText('exec-tce', `${formatMoney(calcResults.tce)} / día`);
+        setText('exec-sell-freight', formatRate(calcResults.sellFreight));
+        setText('exec-charterer-profit', formatMoney(calcResults.chartererProfit));
+        setText('exec-spread-mt', `${formatMoney(toNumber(calcResults.sellFreight) - toNumber(calcResults.buyFreight), 2)} / MT`);
+
+        const riskLevel = ['BAJO', 'MODERADO', 'ALTO'].includes(riskData.riskLevel) ? riskData.riskLevel : 'BAJO';
+        const riskElement = documentRef.getElementById('exec-risk-level');
+        const riskStyles = {
+            BAJO: { color: '#047857', backgroundColor: '#d1fae5' },
+            MODERADO: { color: '#b45309', backgroundColor: '#fef3c7' },
+            ALTO: { color: '#b91c1c', backgroundColor: '#fee2e2' }
+        };
+        if (riskElement) {
+            riskElement.textContent = riskLevel;
+            riskElement.style.color = riskStyles[riskLevel].color;
+            riskElement.style.backgroundColor = riskStyles[riskLevel].backgroundColor;
+            riskElement.style.padding = '0.2rem 0.55rem';
+            riskElement.style.borderRadius = '9999px';
+        }
+
+        const countries = Array.isArray(riskData.penaltyCountries)
+            ? riskData.penaltyCountries.filter(Boolean)
+            : [riskData.portCountry].filter(Boolean);
+        const insightParts = ['Operación sólida.'];
+        if (riskData.hasWeekendPenalty) {
+            insightParts.push(`Se ha aplicado un recargo automático de 15% en PDA por operativa en fin de semana${countries.length ? ` en ${countries.join(' y ')}` : ''}.`);
+        } else {
+            insightParts.push('No se requieren recargos de Overtime por calendario portuario.');
+        }
+        if (riskData.isDraftExceeded) {
+            insightParts.push('El calado del buque supera el límite operativo informado por WPI; requiere revisión inmediata.');
+        } else if (riskData.hasDraftData === false) {
+            insightParts.push('El límite de calado WPI no está disponible y requiere validación manual.');
+        } else {
+            insightParts.push('Calado del buque dentro de los límites del puerto.');
+        }
+        if (riskData.hasAdjustedRates) {
+            insightParts.push('Los ritmos operativos contienen ajustes y elevan el seguimiento a riesgo moderado.');
+        }
+        setText('exec-insight-text', insightParts.join(' '));
+        return true;
+    }
 
     // =========================================================================
     // F\u00cdSICA DE IZADA \u2014 BIG BAGS MANIPULADOS CON GR\u00daA PORTUARIA (PORT CRANE)
@@ -1512,6 +1680,9 @@
         SMART_LOADING_BASE_RATE_PER_DAY,
         SMART_LOADING_INTERFERENCE_FACTORS,
         PASSIVE_PORT_METHODS,
+        ISLAMIC_WEEKEND_COUNTRIES,
+        calculateOperationalRisk,
+        updateExecutiveDashboard,
         BIG_BAGS_PORT_CRANE,
         isBigBagsPortCraneMethod,
         getBigBagsPortCraneLiftCapacityMt,
@@ -1542,6 +1713,9 @@
     };
 
     root.SeaCharterVoyageCostEngine = api;
+    root.ISLAMIC_WEEKEND_COUNTRIES = ISLAMIC_WEEKEND_COUNTRIES;
+    root.calculateOperationalRisk = calculateOperationalRisk;
+    root.updateExecutiveDashboard = updateExecutiveDashboard;
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;

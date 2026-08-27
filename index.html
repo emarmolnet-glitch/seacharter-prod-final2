@@ -8538,7 +8538,7 @@
                         </div>
                         <div class="text-left md:text-right">
                             <span class="block text-xs text-emerald-600 font-bold uppercase tracking-wide">Margen Total (Spread)</span>
-                            <span class="text-3xl font-black text-emerald-700" id="exec-total-margin">+$45,000</span>
+                            <span class="text-3xl font-black text-emerald-700" id="exec-total-profit">+$45,000</span>
                         </div>
                     </div>
 
@@ -8549,6 +8549,16 @@
                             <div>Volumen: <strong class="text-slate-800 text-base" id="exec-cargo-qty">10,000 MT</strong> (<span id="exec-cargo-type">Cemento</span>)</div>
                             <div>Ritmo Carga: <strong class="text-slate-800 text-base" id="exec-load-rate">3,000</strong> MT/día</div>
                             <div>Ritmo Desc.: <strong class="text-slate-800 text-base" id="exec-disch-rate">2,500</strong> MT/día</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm">
+                        <h4 class="text-xs text-slate-400 font-bold uppercase mb-3 tracking-wider">⏱️ Buque y Duración Operativa</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-slate-600">
+                            <div>Tipo: <strong class="block text-slate-800" id="exec-vessel-type">N/D</strong></div>
+                            <div>Navegación: <strong class="block text-slate-800" id="exec-sea-days">0.0 días</strong></div>
+                            <div>Puerto: <strong class="block text-slate-800" id="exec-port-days">0.0 días</strong></div>
+                            <div>Total: <strong class="block text-slate-800" id="exec-total-days">0.0 días</strong></div>
                         </div>
                     </div>
 
@@ -8579,8 +8589,9 @@
                                 <span class="text-2xl font-black text-blue-900" id="exec-sell-freight">$28.50 <span class="text-sm font-normal text-blue-600">/ MT</span></span>
                             </div>
                             <div>
-                                <span class="block text-xs text-blue-600 font-medium mb-1 uppercase tracking-wide">Margen Unitario (Spread)</span>
-                                <span class="text-xl font-bold text-blue-700" id="exec-spread-mt">+$4.50 <span class="text-sm font-normal text-blue-700">/ MT</span></span>
+                                <span class="block text-xs text-blue-600 font-medium mb-1 uppercase tracking-wide">Beneficio Total Fletador</span>
+                                <span class="text-xl font-bold text-blue-700" id="exec-charterer-profit">+$45,000</span>
+                                <span class="mt-2 block text-xs font-semibold text-blue-600">Spread: <span id="exec-spread-mt">+$4.50 / MT</span></span>
                             </div>
                         </div>
                     </div>
@@ -35008,6 +35019,7 @@ function scheduleReactiveEngine() {
                     costBreakdown: State.costBreakdown,
                     voyageFinancials: State.voyageFinancials,
                     meteoceanRisk: State.meteoceanRisk,
+                    operationalRisk: State.operationalRisk,
                     breakEven: State.breakEven,
                     breakEvenArmador: State.breakEvenArmador,
                     baseVoyageCosts: State.baseVoyageCosts,
@@ -35116,6 +35128,45 @@ function scheduleReactiveEngine() {
             };
         }
         window.resolveVoyageFreightBase = resolveVoyageFreightBase;
+
+        function resolveOperationalPortContext(role) {
+            const normalizedRole = String(role || '').toLowerCase() === 'pod' ? 'pod' : 'pol';
+            const input = document.getElementById(`port-${normalizedRole}`);
+            const label = String(input?.value || State?.[normalizedRole] || '').trim();
+            const draftPort = window.VoyageDraftStore?.getState?.()?.draft?.[normalizedRole] || null;
+            const record = (typeof resolvePortRecordForSmartCalculations === 'function'
+                ? resolvePortRecordForSmartCalculations(label)
+                : null) || PORT_DB[label] || null;
+            const countryCode = String(
+                input?.dataset?.selectedCountryCode
+                || draftPort?.countryCode
+                || record?.countryCode
+                || ''
+            ).trim().toUpperCase();
+            const countryFallback = typeof getCountryFromPort === 'function' ? getCountryFromPort(label) : '';
+            let countryName = String(record?.country || countryFallback || countryCode || '').trim();
+            if (countryCode && typeof Intl?.DisplayNames === 'function') {
+                try {
+                    countryName = new Intl.DisplayNames(['es'], { type: 'region' }).of(countryCode) || countryName;
+                } catch (_) {}
+            }
+            const maxDraft = Math.max(0, Number(
+                input?.dataset?.selectedPortDraft
+                || draftPort?.maxOperationalDraftMeters
+                || record?.maxOperationalDraftMeters
+                || 0
+            ) || 0);
+            return { label, countryCode, countryName, maxDraft };
+        }
+
+        function addOperationalDays(dateValue, days) {
+            const text = String(dateValue || '').trim();
+            if (!text) return '';
+            const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00Z` : text);
+            if (Number.isNaN(date.getTime())) return text;
+            date.setTime(date.getTime() + (Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000));
+            return date.toISOString().slice(0, 10);
+        }
 
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
@@ -35289,19 +35340,18 @@ function scheduleReactiveEngine() {
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
             const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
             const stevedoringAllocation = resolveStevedoringAllocation(freightConditions, cargo);
-            const pdaRecurrente = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
-                         (parseFloat(document.getElementById('pda-pod').value) || 0) + 
-                         stevedoringAllocation.ownerCost +
-                         canalCost;
-            const basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
+            const basePdaPol = parseFloat(document.getElementById('pda-pol').value) || 0;
+            const basePdaPod = parseFloat(document.getElementById('pda-pod').value) || 0;
+            let pdaRecurrente = basePdaPol + basePdaPod + stevedoringAllocation.ownerCost + canalCost;
+            let basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
             const operacionModo = getOperacionModo();
             const coaNumEmbarques = Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1);
             const coaTotalTmInput = parseFloat(document.getElementById('coa-total-tm')?.value) || 0;
             const coaTotalTmContrato = operacionModo === 'COA'
                 ? Math.max(coaTotalTmInput, cargo * coaNumEmbarques, cargo)
                 : 0;
-            const pdaDiluidoPorViaje = operacionModo === 'COA' ? (pdaRecurrente * COA_PDA_DILUTION_FACTOR) : pdaRecurrente;
-            const portExpensesForMode = operacionModo === 'COA'
+            let pdaDiluidoPorViaje = operacionModo === 'COA' ? (pdaRecurrente * COA_PDA_DILUTION_FACTOR) : pdaRecurrente;
+            let portExpensesForMode = operacionModo === 'COA'
                 ? (pdaDiluidoPorViaje + costeTrincaje + costeManiobraEspecial)
                 : basePortExpenses;
 
@@ -35452,6 +35502,88 @@ function scheduleReactiveEngine() {
             if (typeof syncShortLiftActualCargoIntake === 'function') {
                 syncShortLiftActualCargoIntake(cargo);
             }
+            const fallbackOperationalPortContext = (role) => {
+                const input = document.getElementById(`port-${role}`);
+                return {
+                    label: String(input?.value || State?.[role] || '').trim(),
+                    countryCode: String(input?.dataset?.selectedCountryCode || '').trim().toUpperCase(),
+                    countryName: String(input?.dataset?.selectedCountryCode || '').trim().toUpperCase(),
+                    maxDraft: Math.max(0, Number(input?.dataset?.selectedPortDraft) || 0)
+                };
+            };
+            const polOperationalContext = typeof resolveOperationalPortContext === 'function'
+                ? resolveOperationalPortContext('pol')
+                : fallbackOperationalPortContext('pol');
+            const podOperationalContext = typeof resolveOperationalPortContext === 'function'
+                ? resolveOperationalPortContext('pod')
+                : fallbackOperationalPortContext('pod');
+            const vesselDraft = Math.max(0, Number(
+                State?.calculatedDraft
+                || State?.actualDraft
+                || document.getElementById('vessel-draft')?.value
+                || 0
+            ) || 0);
+            const etaBase = firstNonEmpty(
+                document.getElementById('res-adjusted-eta')?.textContent,
+                document.getElementById('eta-radar')?.value,
+                getNormalizedDateInputValue('gc-laycan-date'),
+                getNormalizedDateInputValue('asb-laycan-date'),
+                getNormalizedDateInputValue('map-laycan-date'),
+                State.laycanDate
+            );
+            const podEta = typeof addOperationalDays === 'function'
+                ? addOperationalDays(etaBase, dPortLoad + dLaden)
+                : etaBase;
+            const hasAdjustedRates = Math.abs(rateLoad - ritmoRealPol) > 0.01
+                || Math.abs(rateDisch - ritmoRealPod) > 0.01
+                || extraRatePenaltyDays > 0;
+            const calculateRisk = window.calculateOperationalRisk
+                || window.SeaCharterVoyageCostEngine?.calculateOperationalRisk;
+            const emptyOperationalRisk = {
+                adjustedPDA: 0,
+                basePDA: 0,
+                penaltyAmount: 0,
+                hasWeekendPenalty: false,
+                isDraftExceeded: false,
+                hasAdjustedRates,
+                riskLevel: hasAdjustedRates ? 'MODERADO' : 'BAJO',
+                weekendDates: []
+            };
+            const polOperationalRisk = calculateRisk
+                ? calculateRisk(basePdaPol, etaBase, dPortLoad, polOperationalContext.countryCode || polOperationalContext.countryName, vesselDraft, polOperationalContext.maxDraft, { hasAdjustedRates })
+                : { ...emptyOperationalRisk, adjustedPDA: basePdaPol, basePDA: basePdaPol };
+            const podOperationalRisk = calculateRisk
+                ? calculateRisk(basePdaPod, podEta, dPortDisch, podOperationalContext.countryCode || podOperationalContext.countryName, vesselDraft, podOperationalContext.maxDraft, { hasAdjustedRates })
+                : { ...emptyOperationalRisk, adjustedPDA: basePdaPod, basePDA: basePdaPod };
+            const operationalPenaltyAmount = polOperationalRisk.penaltyAmount + podOperationalRisk.penaltyAmount;
+            pdaRecurrente = polOperationalRisk.adjustedPDA
+                + podOperationalRisk.adjustedPDA
+                + stevedoringAllocation.ownerCost
+                + canalCost;
+            basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
+            pdaDiluidoPorViaje = operacionModo === 'COA' ? (pdaRecurrente * COA_PDA_DILUTION_FACTOR) : pdaRecurrente;
+            portExpensesForMode = operacionModo === 'COA'
+                ? (pdaDiluidoPorViaje + costeTrincaje + costeManiobraEspecial)
+                : basePortExpenses;
+            const operationalRiskLevel = (polOperationalRisk.riskLevel === 'ALTO' || podOperationalRisk.riskLevel === 'ALTO')
+                ? 'ALTO'
+                : ((polOperationalRisk.riskLevel === 'MODERADO' || podOperationalRisk.riskLevel === 'MODERADO') ? 'MODERADO' : 'BAJO');
+            const operationalRisk = {
+                adjustedPDA: polOperationalRisk.adjustedPDA + podOperationalRisk.adjustedPDA,
+                basePDA: basePdaPol + basePdaPod,
+                penaltyAmount: operationalPenaltyAmount,
+                hasWeekendPenalty: polOperationalRisk.hasWeekendPenalty || podOperationalRisk.hasWeekendPenalty,
+                isDraftExceeded: polOperationalRisk.isDraftExceeded || podOperationalRisk.isDraftExceeded,
+                hasAdjustedRates,
+                hasDraftData: polOperationalContext.maxDraft > 0 && podOperationalContext.maxDraft > 0,
+                riskLevel: operationalRiskLevel,
+                penaltyCountries: [
+                    polOperationalRisk.hasWeekendPenalty ? polOperationalContext.countryName : '',
+                    podOperationalRisk.hasWeekendPenalty ? podOperationalContext.countryName : ''
+                ].filter(Boolean),
+                pol: { ...polOperationalRisk, ...polOperationalContext, etaDate: etaBase, portDays: dPortLoad },
+                pod: { ...podOperationalRisk, ...podOperationalContext, etaDate: podEta, portDays: dPortDisch }
+            };
             const smartOperationalDays = totalDays;
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
             const smartPortExpenses = isZeroCalculation ? 0 : (portExpensesForMode + tugTotalCost);
@@ -35650,7 +35782,8 @@ function scheduleReactiveEngine() {
             const podBreakdown = getPortPdaBreakdown('pod', pdaPodVal);
             const combinedBreakdown = [
                 ...polBreakdown.map(b => ({ item: `POL (${document.getElementById('port-pol')?.value || State.pol || 'Carga'}): ${b.item}`, amount: b.amount })),
-                ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount }))
+                ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount })),
+                ...(operationalPenaltyAmount > 0 ? [{ item: 'Recargo Overtime por fin de semana (15%)', amount: operationalPenaltyAmount }] : [])
             ];
             State.pdaPolBreakdown = polBreakdown;
             State.pdaPodBreakdown = podBreakdown;
@@ -36231,6 +36364,9 @@ function scheduleReactiveEngine() {
                 capex: totalCapex,
                 pda: smartPortExpenses,
                 basePda: pdas,
+                operationalPdaBase: operationalRisk.basePDA,
+                operationalPdaAdjusted: operationalRisk.adjustedPDA,
+                operationalPenalty: operationalPenaltyAmount,
                 stevedoringEnteredCost: stevedoringAllocation.enteredCost,
                 stevedoringOwnerCost: stevedoringAllocation.ownerCost,
                 stevedoringOwnerFactor: stevedoringAllocation.ownerFactor,
@@ -36299,6 +36435,7 @@ function scheduleReactiveEngine() {
                 demurrageRisk: historicalRisk.isDemurrageRisk
             };
             State.meteoceanRisk = meteoceanRisk;
+            State.operationalRisk = operationalRisk;
             
             State.netProfitOwner = netProfitOwner;
             State.netProfitOwnerDaily = netProfitOwnerDaily;
@@ -36349,6 +36486,8 @@ function scheduleReactiveEngine() {
             State.costCapex = totalCapex;
             State.costPda = pdas;
             State.adjustedCostPda = smartCostsComplete ? smartPortExpenses : pdas;
+            State.adjustedPdaPol = polOperationalRisk.adjustedPDA;
+            State.adjustedPdaPod = podOperationalRisk.adjustedPDA;
             State.costTotal = adjustedCostTotal;
             State.baseVoyageCosts = costTotal;
             State.breakEven = breakEven;
@@ -36384,6 +36523,8 @@ function scheduleReactiveEngine() {
                 commissionFactor,
                 meteoceanPenaltyCost,
                 meteoceanBufferDays,
+                operationalPenaltyAmount,
+                operationalRisk,
                 source: 'runEngine'
             };
             syncInverseTceFromVoyage(cargo, T_sea, T_port);
@@ -36568,6 +36709,27 @@ function scheduleReactiveEngine() {
             // Trigger adjusted smart ETA/voyage calculations
             if (typeof calculateAdjustedEtaAndDays === 'function') {
                 calculateAdjustedEtaAndDays();
+            }
+            const syncExecutiveDashboard = window.updateExecutiveDashboard
+                || window.SeaCharterVoyageCostEngine?.updateExecutiveDashboard;
+            if (typeof syncExecutiveDashboard === 'function') {
+                syncExecutiveDashboard({
+                    pol: idxLoad,
+                    pod: idxDisch,
+                    totalProfit: netProfitCharterer,
+                    cargoQty: cargo,
+                    cargoType: document.getElementById('cargo-type-manual')?.value || document.getElementById('cargo-type')?.value || State.cargoType,
+                    loadRate: rateLoad,
+                    dischargeRate: rateDisch,
+                    vesselType: ownerClassAnalysis?.shipClass?.label || State.vesselType || State.vessel?.type || 'Buque estándar',
+                    seaDays: T_sea,
+                    portDays: T_port,
+                    totalDays,
+                    buyFreight: freightBuy,
+                    tce: tceOwner,
+                    sellFreight: freightSell,
+                    chartererProfit: netProfitCharterer
+                }, operationalRisk);
             }
 
             // Actualizar el aviso de cumplimiento CBAM (encapsulado: nunca interrumpe el motor)
