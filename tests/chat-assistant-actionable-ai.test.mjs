@@ -67,12 +67,14 @@ test('update_fields is processed once per completed assistant response', () => {
   assert.match(frontendSource, /try \{[\s\S]*await executeActionableAiUpdateFields\(actionObj\)[\s\S]*finally \{[\s\S]*updateFieldsActionInProgress = false/);
 });
 
-test('update_fields writes POL and POD without triggering autocomplete events', () => {
+test('update_fields selects POL and POD through Datalastic before calculating the route', () => {
   assert.match(frontendSource, /const updateInputs = \(ids, value, dispatchEvents = true\) =>/);
   assert.match(frontendSource, /if \(!dispatchEvents\) return/);
-  assert.match(frontendSource, /updateInputs\(\["map-port-pol", "port-pol"\], p\.pol, false\)/);
-  assert.match(frontendSource, /updateInputs\(\["map-port-pod", "port-pod"\], p\.pod, false\)/);
-  assert.match(frontendSource, /input\.dispatchEvent\(new Event\("input", \{ bubbles: true \}\)\)/);
+  assert.match(frontendSource, /selectedRoutePorts = await selectActionableAiWpiRoute\(polQuery, podQuery\)/);
+  assert.match(frontendSource, /pol: selectedRoutePorts\.pol\.officialLabel/);
+  assert.match(frontendSource, /pod: selectedRoutePorts\.pod\.officialLabel/);
+  assert.match(frontendSource, /source: "assistant-update-fields"/);
+  assert.match(frontendSource, /if \(selectedRoutePorts\) \{[\s\S]*await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
 });
 
 test('Core PRO executes hidden calculate_route actions through the existing map workflow', () => {
@@ -88,8 +90,8 @@ test('Core PRO executes hidden calculate_route actions through the existing map 
   assert.match(frontendSource, /const selectedPorts = await selectActionableAiWpiRoute\(pol, pod\)/);
   assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pol\)\)/);
   assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pod\)\)/);
-  assert.match(frontendSource, /setActionableAiInputValue\(cargoInput, tonnage\)/);
-  assert.match(frontendSource, /routeButton\.click\(\)/);
+  assert.match(frontendSource, /if \(hasTonnage && cargoInput\) setActionableAiInputValue\(cargoInput, tonnage\)/);
+  assert.match(frontendSource, /await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
   assert.match(frontendSource, /if \(action\) await executeActionableAiAction\(action\)/);
 });
 
