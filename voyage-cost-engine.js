@@ -444,6 +444,13 @@
         insightParts.push(overtimeSurcharge > 0
             ? `Se ha integrado un coste incremental de ${moneyFormatter.format(overtimeSurcharge)} en la PDA por recargos operativos (FHEX/SHEX).`
             : `No se ha aplicado coste incremental en la PDA por recargos operativos (FHEX/SHEX): ${moneyFormatter.format(0)}.`);
+        const projectCargoAssessment = calcResults.projectCargoAssessment;
+        if (projectCargoAssessment?.isProjectCargo) {
+            insightParts.push(projectCargoAssessment.insightMessage);
+            if (Array.isArray(projectCargoAssessment.requiredEquipment) && projectCargoAssessment.requiredEquipment.length > 0) {
+                insightParts.push(`Medios obligatorios: ${projectCargoAssessment.requiredEquipment.join(', ')}.`);
+            }
+        }
         setText('exec-insight-text', insightParts.join(' '));
         return true;
     }

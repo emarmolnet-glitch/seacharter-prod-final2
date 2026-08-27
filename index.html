@@ -314,6 +314,7 @@
     <script defer src="./npl-data-analysis-engine.js"></script>
     <script defer src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
+    <script src="./project-cargo-engine.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
@@ -8908,6 +8909,43 @@
                                     <option value="GENCON">GENCON</option>
                                     <option value="ASBATANKVOY">ASBATANKVOY</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <div id="project-cargo-parameters" class="hidden mb-4 rounded-lg border border-amber-300/70 bg-amber-50/70 p-4 shadow-sm">
+                            <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p class="text-xs font-black uppercase tracking-[0.12em] text-amber-800">ProjectCargoEngine</p>
+                                    <p class="text-[11px] text-slate-600">Parámetros unitarios para dimensionar izado, trincaje y maquinaria portuaria.</p>
+                                </div>
+                                <span class="rounded-full border border-amber-300 bg-white px-3 py-1 text-[10px] font-bold text-amber-800">No usa tarifa estándar</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                                <div class="input-group">
+                                    <label for="project-unit-weight" class="text-amber-900">Peso unitario (MT)</label>
+                                    <input type="number" id="project-unit-weight" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                </div>
+                                <div class="input-group">
+                                    <label for="project-length" class="text-amber-900">Largo (m)</label>
+                                    <input type="number" id="project-length" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                </div>
+                                <div class="input-group">
+                                    <label for="project-width" class="text-amber-900">Ancho (m)</label>
+                                    <input type="number" id="project-width" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                </div>
+                                <div class="input-group">
+                                    <label for="project-height" class="text-amber-900">Alto (m)</label>
+                                    <input type="number" id="project-height" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                </div>
+                                <div class="input-group col-span-2 md:col-span-1">
+                                    <label for="project-handling-mode" class="text-amber-900">Configuración operativa</label>
+                                    <select id="project-handling-mode" class="input-gc" onchange="runEngine()">
+                                        <option value="direct-lift">Izado directo</option>
+                                        <option value="roro-mafi">RoRo con MAFI</option>
+                                        <option value="roro-spmt">RoRo / traslado con SPMT</option>
+                                        <option value="static-roro">Carga estática pesada en RoRo</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -31477,6 +31515,27 @@
 	            return items;
 	        }
 
+        function calculateActiveProjectCargo() {
+            const cargoType = [
+                document.getElementById('cargo-type')?.value,
+                document.getElementById('cargo-product')?.value,
+                window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value)
+            ].filter(Boolean).join(' ');
+            const calculate = window.ProjectCargoEngine?.calculateProjectCargoRequirements;
+            if (typeof calculate !== 'function') {
+                return { isProjectCargo: false, estimatedLashingCost: 0, portCostAllocation: { pol: 0, pod: 0 }, requiredEquipment: [], craneRequirements: '', insightMessage: '' };
+            }
+            return calculate({
+                cargoType,
+                unitWeightMT: document.getElementById('project-unit-weight')?.value,
+                length: document.getElementById('project-length')?.value,
+                width: document.getElementById('project-width')?.value,
+                height: document.getElementById('project-height')?.value,
+                handlingMode: document.getElementById('project-handling-mode')?.value,
+                operationDays: document.getElementById('dias-preparacion')?.value
+            });
+        }
+
         function readOperationalPdaBase(type) {
             const input = document.getElementById(`pda-${type}`);
             if (!input) return 0;
@@ -31515,10 +31574,10 @@
             return totalPda;
         }
 
-        function buildOperationalPdaBreakdown(type, basePda, incrementalCost) {
+        function buildOperationalPdaBreakdown(type, basePda, incrementalCost, projectCargoCost = 0) {
             const stateKey = type === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
             const existingBaseBreakdown = Array.isArray(State[stateKey])
-                ? State[stateKey].filter(item => item?.kind !== 'operational-overtime')
+                ? State[stateKey].filter(item => item?.kind !== 'operational-overtime' && item?.kind !== 'project-cargo')
                 : [];
             if (existingBaseBreakdown.length > 0) State[stateKey] = existingBaseBreakdown;
             const breakdown = getPortPdaBreakdown(type, basePda).map(item => ({ ...item }));
@@ -31528,6 +31587,14 @@
                     item: 'Coste Incremental Overtime',
                     amount: normalizedIncrement,
                     kind: 'operational-overtime'
+                });
+            }
+            const normalizedProjectCargoCost = Math.max(0, Number(projectCargoCost) || 0);
+            if (normalizedProjectCargoCost > 0) {
+                breakdown.push({
+                    item: 'Project Cargo — Izado, Estiba y Trincaje',
+                    amount: normalizedProjectCargoCost,
+                    kind: 'project-cargo'
                 });
             }
             State[stateKey] = breakdown;
@@ -35552,8 +35619,9 @@ function scheduleReactiveEngine() {
             
             const opex = parseFloat(document.getElementById('opex-daily').value) || 0;
             const tipoCargaOperativa = normalizarTipoCarga();
-            const costeTrincaje = costeTrincajeCondicional();
-            const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
+            const projectCargoAssessment = calculateActiveProjectCargo();
+            const costeTrincaje = projectCargoAssessment.isProjectCargo ? 0 : costeTrincajeCondicional();
+            const costeManiobraEspecial = projectCargoAssessment.isProjectCargo ? 0 : (tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0);
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const canalCost = parseFloat(document.getElementById('pda-misc').value) || 0;
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
@@ -35802,8 +35870,10 @@ function scheduleReactiveEngine() {
             const podOperationalRisk = calculateRisk
                 ? calculateRisk(basePdaPod, podEta, dPortDisch, podOperationalContext.countryCode || podOperationalContext.countryName, vesselDraft, podOperationalContext.maxDraft, buildOperationalContext(podOperationalContext, rateDisch))
                 : { ...emptyOperationalRisk, adjustedPDA: basePdaPod, basePDA: basePdaPod };
-            const pdaPolIncrementalCost = Math.max(0, Number(polOperationalRisk.penaltyAmount) || 0);
-            const pdaPodIncrementalCost = Math.max(0, Number(podOperationalRisk.penaltyAmount) || 0);
+            const projectCargoPolCost = Math.max(0, Number(projectCargoAssessment.portCostAllocation?.pol) || 0);
+            const projectCargoPodCost = Math.max(0, Number(projectCargoAssessment.portCostAllocation?.pod) || 0);
+            const pdaPolIncrementalCost = Math.max(0, Number(polOperationalRisk.penaltyAmount) || 0) + projectCargoPolCost;
+            const pdaPodIncrementalCost = Math.max(0, Number(podOperationalRisk.penaltyAmount) || 0) + projectCargoPodCost;
             const totalPdaPol = publishOperationalPdaTotal('pol', basePdaPol, pdaPolIncrementalCost);
             const totalPdaPod = publishOperationalPdaTotal('pod', basePdaPod, pdaPodIncrementalCost);
             const operationalPenaltyAmount = polOperationalRisk.penaltyAmount + podOperationalRisk.penaltyAmount;
@@ -36044,8 +36114,8 @@ function scheduleReactiveEngine() {
                 pdaPolVal = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
                 pdaPodVal = parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0;
             }
-            const polBreakdown = buildOperationalPdaBreakdown('pol', basePdaPol, pdaPolIncrementalCost);
-            const podBreakdown = buildOperationalPdaBreakdown('pod', basePdaPod, pdaPodIncrementalCost);
+            const polBreakdown = buildOperationalPdaBreakdown('pol', basePdaPol, polOperationalRisk.penaltyAmount, projectCargoPolCost);
+            const podBreakdown = buildOperationalPdaBreakdown('pod', basePdaPod, podOperationalRisk.penaltyAmount, projectCargoPodCost);
             const combinedBreakdown = [
                 ...polBreakdown.map(b => ({ item: `POL (${document.getElementById('port-pol')?.value || State.pol || 'Carga'}): ${b.item}`, amount: b.amount })),
                 ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount }))
@@ -36633,6 +36703,9 @@ function scheduleReactiveEngine() {
                 operationalPdaBase: operationalRisk.basePDA,
                 operationalPdaAdjusted: operationalRisk.adjustedPDA,
                 operationalPenalty: operationalPenaltyAmount,
+                projectCargo: projectCargoAssessment.estimatedLashingCost,
+                projectCargoPol: projectCargoPolCost,
+                projectCargoPod: projectCargoPodCost,
                 operationalStandardHours: operationalRisk.standardHours,
                 operationalOvertimeHours: operationalRisk.overtimeHours,
                 compatibleBerths: operationalRisk.compatibleBerths,
@@ -36706,6 +36779,7 @@ function scheduleReactiveEngine() {
             };
             State.meteoceanRisk = meteoceanRisk;
             State.operationalRisk = operationalRisk;
+            State.projectCargoAssessment = projectCargoAssessment;
             
             State.netProfitOwner = netProfitOwner;
             State.netProfitOwnerDaily = netProfitOwnerDaily;
@@ -37008,7 +37082,8 @@ function scheduleReactiveEngine() {
                     tce: tceOwner,
                     sellFreight: freightSell,
                     chartererProfit: netProfitCharterer,
-                    pdaIncrementalCost: operationalPenaltyAmount
+                    pdaIncrementalCost: operationalPenaltyAmount,
+                    projectCargoAssessment
                 }, operationalRisk);
             }
 
@@ -60001,7 +60076,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase();
-            if (normalized.includes('proyecto') || normalized.includes('especial')) return 'proyecto';
+            if (normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('heavy lift') || normalized.includes('breakbulk') || normalized.includes('break bulk')) return 'proyecto';
             if (normalized.includes('hierro') || normalized.includes('acero')) return 'acero';
             if (normalized.includes('big bag')) return 'big_bags';
             if (normalized.includes('granel')) return 'granel';
@@ -60333,7 +60408,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function actualizarCamposTipoCarga() {
             const tipoCarga = normalizarTipoCarga();
             const isAcero = tipoCarga === 'acero';
-            const isProyecto = tipoCarga === 'proyecto';
+            const projectCargoTypeText = `${document.getElementById('cargo-type')?.value || ''} ${document.getElementById('cargo-product')?.value || ''} ${window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || ''}`;
+            const isProyecto = tipoCarga === 'proyecto' || Boolean(window.ProjectCargoEngine?.isProjectCargoType?.(projectCargoTypeText));
             const requiresPieceWeight = Boolean(getSelectedCargoProduct()?.requiresPieceWeight);
             const toggle = (id, show) => {
                 const el = document.getElementById(id);
@@ -60347,6 +60423,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             toggle('contenedor-trincaje', isAcero || isProyecto);
             toggle('contenedor-maniobra-especial', isProyecto);
             toggle('contenedor-dias-preparacion', isProyecto);
+            toggle('project-cargo-parameters', isProyecto);
             const specialInput = document.getElementById('coste-maniobra-especial');
             const prepInput = document.getElementById('dias-preparacion');
             ['peso-pieza-mt', 'crane-swl-mt'].forEach((id) => {
