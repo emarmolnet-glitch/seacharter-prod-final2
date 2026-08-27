@@ -1,0 +1,1 @@
+ALTER TABLE "charter_dossiers" ADD COLUMN "internal_notes" text;

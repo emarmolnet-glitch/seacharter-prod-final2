@@ -325,6 +325,7 @@
     <script type="module" src="./src/due-diligence-entry.js"></script>
     <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
     <script defer src="./session-draft.js"></script>
+    <script defer src="./dossiers.js"></script>
     <script type="module" src="./src/voyage-draft-entry.js"></script>
     <script type="module" src="./src/nlp-input-entry.jsx"></script>
     <script type="module" src="./src/maritime-weather-entry.jsx"></script>
@@ -8142,6 +8143,7 @@
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
     <link href="./market-contacts.css" rel="stylesheet">
+    <link href="./dossiers.css" rel="stylesheet">
 </head>
 <body class="theme-light bg-slate-900 h-screen flex flex-col overflow-hidden" data-app-ready="false" aria-busy="true">
 
@@ -8236,7 +8238,7 @@
                 <button
                     id="new-estimation-btn"
                     type="button"
-                    onclick="resetTotalEstimation(); closeMobileSessionMenu();"
+                    onclick="if (window.DossierManager) window.DossierManager.requestNewEstimation(); else resetTotalEstimation(); closeMobileSessionMenu();"
                     class="tools-dropdown-trigger flex items-center justify-center"
                     title="Nueva Estimación"
                     aria-label="Nueva Estimación"
@@ -12896,7 +12898,75 @@
             </div>
         </div>
 
+        <div id="view-dossiers" class="view-section absolute inset-0 overflow-y-auto p-4 md:p-7 scroll-smooth hidden">
+            <div class="dossiers-shell space-y-5">
+                <section class="dossiers-hero-card px-5 py-6 md:px-8 md:py-7">
+                    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+                        <div>
+                            <p class="dossiers-kicker text-[10px] font-black uppercase">CRM de Fletamentos · Historial Operativo</p>
+                            <h2 class="mt-2 text-2xl md:text-3xl font-black tracking-tight text-slate-800">Gestor de Dossiers</h2>
+                            <p class="mt-2 max-w-2xl text-sm text-slate-500">Recupera estimaciones completas, continúa negociaciones y conserva una única versión activa por referencia.</p>
+                        </div>
+                        <div class="dossiers-count-card">
+                            <span class="block text-[9px] font-bold uppercase tracking-[.14em] text-teal-700/70">Cartera registrada</span>
+                            <strong id="dossiers-count" class="mt-1 block text-lg text-slate-800">0 expedientes</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="dossiers-card overflow-hidden">
+                    <div class="dossiers-toolbar border-b border-slate-200 p-4 md:p-5">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input id="dossiers-search" class="dossiers-search" type="search" placeholder="Buscar referencia, ruta, mercancía o cliente..." autocomplete="off">
+                        </div>
+                        <button type="button" onclick="window.DossierManager?.loadList()" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                            <i class="fa-solid fa-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="dossiers-table" aria-label="Historial de dossiers de fletamento">
+                            <thead><tr><th>Referencia</th><th>Ruta</th><th>Mercancía y Volumen</th><th>Cliente / Fletador</th><th>Fecha de Guardado</th><th>Estado</th><th class="text-right">Acción</th></tr></thead>
+                            <tbody id="dossiers-table-body"><tr><td colspan="7"><div class="dossiers-empty">Abre la pestaña para cargar los expedientes.</div></td></tr></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
     </main>
+
+    <div id="dossier-save-modal" class="dossier-modal" aria-hidden="true">
+        <div class="dossier-modal__backdrop" data-close-dossier-modal></div>
+        <section class="dossier-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="dossier-save-title">
+            <div class="dossier-modal__header">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-[.14em] text-teal-700">Dossier Comercial</p>
+                    <h2 id="dossier-save-title" class="mt-1 text-xl font-black text-slate-800">Guardar Expediente</h2>
+                </div>
+                <button type="button" class="dossier-modal__close" data-close-dossier-modal aria-label="Cancelar guardado"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="dossier-modal__body">
+                <div class="dossier-reference-box">
+                    <span>Referencia actual</span>
+                    <strong id="dossier-modal-reference">REF: —</strong>
+                </div>
+                <label class="dossier-field">
+                    <span>Nombre del Cliente / Fletador <em>(Opcional)</em></span>
+                    <input id="dossier-client-name" type="text" maxlength="240" placeholder="Ej. Atlantic Commodities Ltd." autocomplete="organization">
+                </label>
+                <label class="dossier-field">
+                    <span>Notas internas <em>(Opcional)</em></span>
+                    <textarea id="dossier-internal-notes" rows="4" maxlength="4000" placeholder="Condiciones negociadas, próximos pasos o contexto comercial..."></textarea>
+                </label>
+                <p id="dossier-modal-error" class="hidden text-xs font-semibold text-red-600" role="alert"></p>
+            </div>
+            <div class="dossier-modal__actions">
+                <button type="button" class="dossier-modal__cancel" data-close-dossier-modal>Cancelar</button>
+                <button type="button" id="dossier-confirm-save" class="dossier-modal__confirm"><i class="fa-solid fa-floppy-disk"></i> Confirmar Guardado</button>
+            </div>
+        </section>
+    </div>
 
     <!-- SECCIÓN DE IMPRESIÓN DEL INFORME EJECUTIVO -->
     <div id="executive-report-print-view" class="hidden font-sans">
@@ -16054,6 +16124,7 @@
         }
 
         function resetTotalEstimation({ silent = false } = {}) {
+            if (!silent) window.DossierManager?.clearActive();
             const referenceManager = window.ContractReference || window.ContractRefManager;
             const initialReference = String(State.activeReference || '').trim();
             const nextActiveReference = silent && initialReference
@@ -26724,6 +26795,7 @@
         const PRIMARY_MODULES = [
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
+            { id: 'dossiers', label: 'Dossiers' },
             { id: 'decisiones', label: 'Decisiones' },
             { id: 'tracking', label: 'Tracking', presentation: 'module-overlay' },
             { id: 'ais', label: 'Densidad' },
@@ -27552,6 +27624,9 @@
             }
             if (tabId === 'estimator') {
                 window.SeaAssistantAlerts?.evaluateCurrentContext?.();
+            }
+            if (tabId === 'dossiers') {
+                window.DossierManager?.loadList();
             }
             return true;
         }
@@ -41671,6 +41746,8 @@ function scheduleReactiveEngine() {
             return activeReference;
         }
 
+        window.syncActiveContractReference = syncActiveContractReference;
+
         window.addEventListener('contract-reference:changed', (event) => {
             const reference = event.detail?.reference;
             if (!reference) return;
@@ -48757,7 +48834,7 @@ ADDITIONAL NOTES:
         }
 
         const AUDIT_SESSION_STATE_KEYS = [
-            'vessel', 'dwt', 'class', 'opex', 'vesselDwtFixed', 'userHasEditedSpecialty',
+            'activeReference', 'vessel', 'dwt', 'class', 'opex', 'vesselDwtFixed', 'userHasEditedSpecialty',
             'portBallast', 'pol', 'pod', 'distBallast', 'distLaden', 'totalDays',
             'cargo', 'loadRate', 'dischRate', 'cargoType', 'cargoTypeCode', 'cargoTypeManual',
             'charterPartyStandard', 'costBunkers', 'costOpex', 'costPda', 'costTotal',
@@ -48808,8 +48885,51 @@ ADDITIONAL NOTES:
                 savedAt: new Date().toISOString(),
                 recapText: text,
                 calculatorState: getPrimitiveCalculatorStateSnapshot(),
-                fields: getSessionFieldSnapshot()
+                fields: getSessionFieldSnapshot(),
+                workspaceState: captureHolisticWorkspaceState()
             };
+        }
+
+        function captureHolisticWorkspaceState() {
+            const htmlById = {};
+            ['resultsContent', 'gc-print-view', 'asb-print-view'].forEach((id) => {
+                const element = document.getElementById(id);
+                if (element) htmlById[id] = element.innerHTML;
+            });
+            const calculatorObjects = {};
+            ['portBallastCoordinates', 'polCoordinates', 'podCoordinates', 'smartAdjustments'].forEach((key) => {
+                const value = State?.[key];
+                if (value && typeof value === 'object') calculatorObjects[key] = value;
+            });
+            return {
+                htmlById,
+                calculatorObjects,
+                masterReportWorkflowState: typeof masterReportWorkflowState === 'object'
+                    ? JSON.parse(JSON.stringify(masterReportWorkflowState))
+                    : null,
+                auditVisible: !document.getElementById('resultsContent')?.classList.contains('hidden')
+            };
+        }
+
+        function restoreHolisticWorkspaceState(workspaceState) {
+            if (!workspaceState || typeof workspaceState !== 'object') return;
+            if (workspaceState.calculatorObjects && typeof workspaceState.calculatorObjects === 'object') {
+                Object.assign(State, workspaceState.calculatorObjects);
+            }
+            if (workspaceState.masterReportWorkflowState && typeof masterReportWorkflowState === 'object') {
+                Object.keys(masterReportWorkflowState).forEach((key) => delete masterReportWorkflowState[key]);
+                Object.assign(masterReportWorkflowState, workspaceState.masterReportWorkflowState);
+            }
+            Object.entries(workspaceState.htmlById || {}).forEach(([id, html]) => {
+                const element = document.getElementById(id);
+                if (element && typeof html === 'string') {
+                    element.innerHTML = window.DOMPurify?.sanitize ? window.DOMPurify.sanitize(html) : html;
+                }
+            });
+            if (workspaceState.auditVisible) {
+                document.getElementById('resultsContent')?.classList.remove('hidden');
+                document.getElementById('emptyState')?.classList.add('hidden');
+            }
         }
 
         function persistLocalAuditSession(payload) {
@@ -48851,15 +48971,19 @@ ADDITIONAL NOTES:
                     || payload.fields !== undefined);
         }
 
-        function saveAuditSession() {
+        async function saveAuditSession() {
             try {
+                if (window.DossierManager?.requestSave) {
+                    await window.DossierManager.requestSave();
+                    return;
+                }
                 const payload = buildAuditSessionPayload();
                 const dateStamp = new Date().toISOString().slice(0, 10);
                 downloadSessionPayload(payload, `seacharter-session-${dateStamp}.json`);
                 if (typeof showToast === 'function') showToast('Sesión exportada correctamente');
             } catch (err) {
                 console.error("Error guardando sesión:", err);
-                if (typeof showToast === 'function') showToast('No se pudo exportar la sesión.');
+                if (typeof showToast === 'function') showToast('No se pudo guardar el dossier.');
             }
         }
 
@@ -49538,8 +49662,14 @@ ADDITIONAL NOTES:
                 runEngine();
             }
 
+            restoreHolisticWorkspaceState(decodedData.workspaceState);
+
             switchTab('estimator');
         }
+
+        window.buildAuditSessionPayload = buildAuditSessionPayload;
+        window.persistLocalAuditSession = persistLocalAuditSession;
+        window.applyAuditSessionPayload = applyAuditSessionPayload;
 
         function loadAuditSession() {
             document.getElementById('load-session-file-input')?.click();
@@ -49553,6 +49683,7 @@ ADDITIONAL NOTES:
                 try {
                     const result = event.target.result;
                     const decodedData = parseAuditSessionPayload(result);
+                    window.DossierManager?.clearActive();
                     await applyAuditSessionPayload(decodedData);
                     persistLocalAuditSession(decodedData);
                     showToast('Sesión importada correctamente');
