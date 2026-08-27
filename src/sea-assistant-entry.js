@@ -1828,7 +1828,7 @@ const fileInput = root.querySelector("#sca-file-input");
   window.addEventListener("sea-assistant:open", openFromContext);
 
   header.addEventListener("mousedown", (event) => {
-    if (event.button !== 0 || event.target.closest("button")) return;
+    if (event.button !== 0 || event.target.closest("button") || event.target.closest("#sea-assistant-ai-switcher")) return;
 
     if (!hasCustomPosition) initializePosition();
     isDragging = true;
