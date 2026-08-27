@@ -290,6 +290,47 @@
         const formatDays = (value) => `${Math.max(0, toNumber(value)).toFixed(1)} días`;
         const formatTons = (value) => `${Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 })} MT`;
         const formatDailyRate = (value) => Math.max(0, toNumber(value)).toLocaleString('en-US', { maximumFractionDigits: 0 });
+        const formatOperationalDuration = (hours) => {
+            const normalizedHours = Math.max(0, toNumber(hours));
+            const roundedHours = Math.round(normalizedHours);
+            if (normalizedHours < 48) return `~${roundedHours.toLocaleString('es-ES')} horas`;
+            const days = normalizedHours / 24;
+            return `~${days.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} días (${roundedHours.toLocaleString('es-ES')} horas)`;
+        };
+        const normalizeInsightText = (value) => toText(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+        const buildEquipmentRequirement = () => {
+            const cargoType = toText(calcResults.cargoType) || 'carga declarada';
+            const cargoKey = normalizeInsightText(cargoType);
+            const methodsKey = normalizeInsightText(`${calcResults.loadMethod || ''} ${calcResults.dischargeMethod || ''}`);
+            const usesShipGear = /(grua barco|grua del buque|ship crane|geared|_barco)/.test(methodsKey);
+            const equipmentPrefix = `Por la naturaleza de la carga (${cargoType}),`;
+
+            if (/big bags?|sacos|ensacad/.test(`${cargoKey} ${methodsKey}`)) {
+                return `${equipmentPrefix} se requiere operatividad total de las grúas del buque (Geared), aparejos certificados y supervisión especial de estiba.`;
+            }
+            if (/cement|clin?ker|yeso|cal|powder|polvo/.test(cargoKey)) {
+                return `${equipmentPrefix} se requieren bodegas limpias y secas, control de polvo y medios neumáticos o cinta transportadora compatibles en terminal.`;
+            }
+            if (/hierro|acero|steel|metal/.test(cargoKey)) {
+                return `${equipmentPrefix} se requieren grúas y aparejos certificados, material de trincaje y control reforzado de estiba y distribución de pesos.`;
+            }
+            if (/maquinaria|vehiculo|equipo pesado|heavy|project cargo/.test(cargoKey)) {
+                return `${equipmentPrefix} se requiere capacidad Geared o Heavy Lift validada, plan de izado y medios de trincaje certificados.`;
+            }
+            if (/fertiliz|quimic|plastic/.test(cargoKey)) {
+                return `${equipmentPrefix} se requieren bodegas limpias y secas, protección frente a humedad y segregación conforme a la ficha de seguridad.`;
+            }
+            if (/cereal|grano|soja|carbon|mineral|granel|bulk/.test(cargoKey)) {
+                return `${equipmentPrefix} se requieren bodegas limpias, ventilación adecuada y disponibilidad de cucharas (grabs) o cinta transportadora en puerto.`;
+            }
+            if (usesShipGear) {
+                return `${equipmentPrefix} la secuencia prevista depende de la plena disponibilidad de las grúas del buque (Geared) y de aparejos certificados.`;
+            }
+            return `${equipmentPrefix} deben confirmarse con POL y POD los medios de manipulación, la compatibilidad de bodegas y el plan de estiba antes del cierre.`;
+        };
         const hasVoyageDefinition = calcResults.forceEmpty !== true && Boolean(
             toText(calcResults.pol) &&
             toText(calcResults.pod) &&
@@ -357,7 +398,19 @@
         const countries = Array.isArray(riskData.penaltyCountries)
             ? riskData.penaltyCountries.filter(Boolean)
             : [riskData.portCountry].filter(Boolean);
-        const insightParts = ['Operación sólida.'];
+        const cargoQuantity = Math.max(0, toNumber(calcResults.cargoQty));
+        const loadRate = Math.max(0, toNumber(calcResults.loadRate));
+        const dischargeRate = Math.max(0, toNumber(calcResults.dischargeRate));
+        const hasOperationalRates = loadRate > 0 && dischargeRate > 0;
+        const insightParts = [];
+        if (hasOperationalRates) {
+            const loadingHours = (cargoQuantity / loadRate) * 24;
+            const dischargeHours = (cargoQuantity / dischargeRate) * 24;
+            insightParts.push(`Tiempo operativo estimado: ${formatOperationalDuration(loadingHours)} de carga en ${toText(calcResults.pol)} y ${formatOperationalDuration(dischargeHours)} de descarga en ${toText(calcResults.pod)}.`);
+            insightParts.push(buildEquipmentRequirement());
+        } else {
+            insightParts.push('Define ritmos efectivos de carga y descarga en Modo Técnico para completar la previsión horaria y los medios requeridos.');
+        }
         const overtimeHours = Math.max(0, toNumber(riskData.overtimeHours));
         const standardHours = Math.max(0, toNumber(riskData.standardHours));
         const overtimeSurcharge = Math.max(0, toNumber(
@@ -366,7 +419,7 @@
             ?? riskData.penaltyAmount
         ));
         if (overtimeHours > 0) {
-            insightParts.push(`La simulación horaria asigna ${standardHours.toFixed(1)} h a turnos ordinarios y ${overtimeHours.toFixed(1)} h a Overtime${countries.length ? ` en ${countries.join(' y ')}` : ''}, con un coste incremental de ${moneyFormatter.format(overtimeSurcharge)} integrado en la PDA.`);
+            insightParts.push(`La simulación horaria asigna ${standardHours.toFixed(1)} h a turnos ordinarios y ${overtimeHours.toFixed(1)} h a Overtime${countries.length ? ` en ${countries.join(' y ')}` : ''}.`);
         } else {
             insightParts.push('La ventana operativa no genera horas de Overtime facturables con las tarifas informadas.');
         }
@@ -388,6 +441,9 @@
         if (riskData.hasAdjustedRates) {
             insightParts.push('Los ritmos operativos contienen ajustes y elevan el seguimiento a riesgo moderado.');
         }
+        insightParts.push(overtimeSurcharge > 0
+            ? `Se ha integrado un coste incremental de ${moneyFormatter.format(overtimeSurcharge)} en la PDA por recargos operativos (FHEX/SHEX).`
+            : `No se ha aplicado coste incremental en la PDA por recargos operativos (FHEX/SHEX): ${moneyFormatter.format(0)}.`);
         setText('exec-insight-text', insightParts.join(' '));
         return true;
     }
