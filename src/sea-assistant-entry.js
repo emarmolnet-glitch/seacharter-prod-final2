@@ -76,11 +76,51 @@ const icons = {
     </svg>`,
 };
 
+// --- NUEVO ESTADO GLOBAL PARA EL SELECTOR DE IA ---
+let iaActiva = 'local'; // Puede ser 'local' o 'cerebro'
+
+// Función para actualizar visualmente la cabecera y el input
+function updateAiUI(type) {
+  iaActiva = type;
+  const dot = document.getElementById('sea-assistant-dot');
+  const title = document.getElementById('sea-assistant-title');
+  const input = document.querySelector('.sca-input');
+  
+  if (!dot || !title || !input) return;
+
+  if (type === 'cerebro') {
+    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-[#6366f1]"; // Morado/Azul Cerebro
+    title.textContent = "🧠 Cerebro.ia";
+    input.placeholder = "Analizando con Data Bridge. Describe la carga...";
+  } else {
+    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-green-500"; // Verde Core
+    title.textContent = "🤖 Asistente Core";
+    input.placeholder = "Haz una consulta rápida de fletamento...";
+  }
+}
+
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
   message.className = `sca-message sca-message--${role}${options.error ? " sca-message--error" : ""}`;
   message.dataset.role = role;
   message.dataset.messageText = String(text || "");
+
+  // 1. CHIVATO VISUAL (Solo para el bot y si no es un error)
+  let chivatoHTML = '';
+  if (role === "assistant" && !options.error) {
+    if (options.aiType === 'cerebro') {
+      chivatoHTML = `<div style="font-size: 10px; font-weight: 600; color: #6366f1; margin-bottom: 4px; padding-left: 4px;">🧠 Cerebro.ia (Data Bridge)</div>`;
+    } else if (options.aiType === 'local') {
+      chivatoHTML = `<div style="font-size: 10px; font-weight: 600; color: #10b981; margin-bottom: 4px; padding-left: 4px;">🤖 Asistente Core</div>`;
+    }
+  }
+
+  // Si hay chivato, lo añadimos primero
+  if (chivatoHTML) {
+    const chivatoWrapper = document.createElement("div");
+    chivatoWrapper.innerHTML = chivatoHTML;
+    message.appendChild(chivatoWrapper.firstElementChild);
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "sca-bubble p-3 rounded-xl break-words text-[13px]";
@@ -98,6 +138,7 @@ function createMessage(role, text, options = {}) {
   } else {
     bubble.textContent = text;
   }
+  
   message.appendChild(bubble);
 
   if (options.meta) {
@@ -221,18 +262,14 @@ function isSimulationQuery(mensaje) {
   return simulationKeywords.some(keyword => msgLower.includes(keyword));
 }
 
-// --- 2. SELECTOR DE ENDPOINT ---
-// --- 2. SELECTOR DE ENDPOINT (En el archivo sea-assistant-entry.js) ---
-function getDataBridgeAssistantEndpoint(isSimulation = true) {
-  if (isSimulation) {
-    // Para cálculos: Va al servidor externo de Data Bridge
+// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
+function getActiveAssistantEndpoint() {
+  if (iaActiva === 'cerebro') {
     const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
     const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
-    return runtimeEndpoint || buildEndpoint || "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+    return runtimeEndpoint || buildEndpoint || DEFAULT_CEREBRO_IA_ENDPOINT;
   }
-  
-  // Para chat y dudas: Va al backend local de Core PRO (ruta relativa, cero errores CORS)
-  return "/.netlify/functions/chat-assistant";
+  return DEFAULT_CHAT_ASSISTANT_ENDPOINT;
 }
 
 // --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
@@ -246,9 +283,12 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
     ConversationHistory: historial,
   };
 
-  const isSimulation = isSimulationQuery(userText) || attachedFiles.length > 0;
-  const endpointUrl = getDataBridgeAssistantEndpoint(isSimulation);
-  
+  // AUTO-ENRUTAMIENTO: Si sube archivos o hace cálculos, saltamos a Cerebro automáticamente
+  if (attachedFiles.length > 0 || (iaActiva === 'local' && isSimulationQuery(userText))) {
+    if (typeof updateAiUI === 'function') updateAiUI('cerebro');
+  }
+
+  const endpointUrl = getActiveAssistantEndpoint();
   let response;
 
   if (attachedFiles.length > 0) {
@@ -1361,9 +1401,11 @@ function mountSeaAssistant() {
   root.innerHTML = `
     <div class="sca-panel w-[400px] h-[550px] flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden" id="sea-assistant-panel" role="dialog" aria-labelledby="sea-assistant-title" hidden>
       <header class="sca-header flex justify-between items-center p-3 border-b bg-white rounded-t-xl">
-        <div class="sca-header-main flex items-center gap-2 min-w-0">
-          <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-hidden="true"></span>
-          <h2 class="sca-title font-bold" id="sea-assistant-title">Asistente IA</h2>
+        <!-- CABECERA DINÁMICA INTERACTIVA -->
+        <div class="sca-header-main flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 p-1.5 rounded-md transition-colors" id="sea-assistant-ai-switcher" title="Clic para cambiar de asistente">
+          <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" id="sea-assistant-dot" aria-hidden="true"></span>
+          <h2 class="sca-title font-bold text-[14px]" id="sea-assistant-title">🤖 Asistente Core</h2>
+          <span style="font-size: 10px; color: #94a3b8; margin-left: 2px;">▼</span>
         </div>
         <div class="sca-header-actions flex gap-2 items-center">
           <button class="sca-speech-toggle w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-600 transition-colors border-0 shrink-0" type="button" aria-label="Activar respuestas por voz" aria-pressed="false" title="Activar voz">${icons.speakerMuted}</button>
@@ -1381,7 +1423,7 @@ function mountSeaAssistant() {
             ${icons.clip}
             <input type="file" id="sca-file-input" multiple accept=".pdf, .xlsx, .xls, .docx, .txt, image/*" class="hidden" />
           </label>
-          <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Escribe tu consulta o adjunta documentos..." aria-label="Mensaje para el asistente" required></textarea>
+          <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Haz una consulta rápida de fletamento..." aria-label="Mensaje para el asistente" required></textarea>
           <button class="sca-mic w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
           <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
           <button class="sca-send w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
