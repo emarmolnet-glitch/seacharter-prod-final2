@@ -94,9 +94,12 @@ test('parametric PDA results persist automatically and skip duplicate writes', a
   assert.equal(requests.length, 1, 'unchanged PDA values must not create duplicate writes');
 });
 
-test('runEngine schedules persistence after publishing POL and POD state', () => {
+test('runEngine persists the operational PDA total immediately after publishing its breakdown', () => {
   assert.match(
     indexSource,
-    /State\.pdaPol =[^\n]+\n\s*State\.pdaPod =[^\n]+\n\s*schedulePdaEstimationPersistence\('run-engine'\);/,
+    /State\.pdaPolBreakdown = polBreakdown;\n\s*State\.pdaPodBreakdown = podBreakdown;\n\s*schedulePdaEstimationPersistence\('operational-pda-total', 0\);/,
   );
+  assert.match(indexSource, /pdaPolIncrementalCost:/);
+  assert.match(indexSource, /pdaPodIncrementalCost:/);
+  assert.match(indexSource, /pdaIncrementalCost:/);
 });
