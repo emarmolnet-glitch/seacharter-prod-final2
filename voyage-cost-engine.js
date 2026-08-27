@@ -360,7 +360,9 @@
         const insightParts = ['Operación sólida.'];
         const overtimeHours = Math.max(0, toNumber(riskData.overtimeHours));
         const standardHours = Math.max(0, toNumber(riskData.standardHours));
-        const overtimeSurcharge = Math.max(0, toNumber(riskData.penaltyAmount));
+        const overtimeSurcharge = Math.max(0, toNumber(
+            riskData.overtimeSurcharge ?? riskData.penaltyAmount
+        ));
         if (overtimeHours > 0) {
             insightParts.push(`La simulación horaria asigna ${standardHours.toFixed(1)} h a turnos ordinarios y ${overtimeHours.toFixed(1)} h a Overtime${countries.length ? ` en ${countries.join(' y ')}` : ''}, con un coste incremental de ${moneyFormatter.format(overtimeSurcharge)} integrado en la PDA.`);
         } else {

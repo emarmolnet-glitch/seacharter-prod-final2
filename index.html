@@ -8530,11 +8530,17 @@
 
                     <!-- CABECERA: ESTADO DE LA OPERACIÓN -->
                     <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-xl shadow-sm">
-                        <div>
-                            <h3 class="text-emerald-800 font-extrabold text-xl mb-1 flex items-center gap-2">
-                                <span id="exec-operation-icon" class="text-slate-400">⚪</span> <span id="exec-operation-status">OPERACIÓN PENDIENTE</span>
-                            </h3>
-                            <p class="text-emerald-700 text-sm font-medium ml-6">Ruta: <span id="exec-pol" class="font-bold text-emerald-900">N/D</span> ➔ <span id="exec-pod" class="font-bold text-emerald-900">N/D</span></p>
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 class="text-emerald-800 font-extrabold text-xl mb-1 flex items-center gap-2">
+                                    <span id="exec-operation-icon" class="text-slate-400">⚪</span> <span id="exec-operation-status">OPERACIÓN PENDIENTE</span>
+                                </h3>
+                                <p class="text-emerald-700 text-sm font-medium ml-6">Ruta: <span id="exec-pol" class="font-bold text-emerald-900">N/D</span> ➔ <span id="exec-pod" class="font-bold text-emerald-900">N/D</span></p>
+                            </div>
+                            <button id="btn-executive-report-summary" type="button" data-executive-report-action onclick="generateExecutiveReport()" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 sm:shrink-0">
+                                <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                                <span>Ver Reporte Ejecutivo del Viaje</span>
+                            </button>
                         </div>
                     </div>
 
@@ -9587,7 +9593,7 @@
                             <button id="btn-market-report" onclick="generateMarketReport()" class="w-full min-h-12 bg-emerald-700 hover:bg-emerald-800 border border-emerald-800 text-white text-xs font-bold px-4 py-3 rounded-lg shadow transition col-span-1 sm:col-span-2">
                                 <i class="fa-solid fa-file-pdf mr-1.5"></i> Generar Reporte de Mercado Actual
                             </button>
-                            <button id="btn-executive-report" onclick="generateExecutiveReport()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
+                            <button id="btn-executive-report" data-executive-report-action onclick="generateExecutiveReport()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
                                 <i class="fa-solid fa-eye mr-1"></i> Reporte Ejecutivo
                             </button>
                             <button id="btn-list-vessels" onclick="openListVesselsModal()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
@@ -34538,7 +34544,7 @@ function scheduleReactiveEngine() {
             const list = document.getElementById('core-kill-switch-list');
             const title = document.getElementById('core-kill-switch-title');
             const icon = alert?.querySelector('i');
-            const reportBtn = document.getElementById('btn-executive-report');
+            const reportButtons = document.querySelectorAll('[data-executive-report-action]');
             const visibleMessages = blocked ? messages : warnings;
             if (alert) {
                 alert.className = blocked
@@ -34557,12 +34563,12 @@ function scheduleReactiveEngine() {
                     : 'ADVERTENCIA DE COSTE: ALTO PESO DE COMBUSTIBLE';
             }
             if (list) list.innerHTML = visibleMessages.map((message) => `<li>${String(message).replace(/[<>&]/g, '')}</li>`).join('');
-            if (reportBtn) {
+            reportButtons.forEach((reportBtn) => {
                 reportBtn.disabled = blocked;
                 reportBtn.classList.toggle('opacity-50', blocked);
                 reportBtn.classList.toggle('cursor-not-allowed', blocked);
                 reportBtn.title = blocked ? 'Bloqueado por validación activa. Corrige los campos en rojo.' : 'Reporte Ejecutivo';
-            }
+            });
             State.coreValidation = { blocked, messages, warnings };
         }
 
@@ -35758,6 +35764,8 @@ function scheduleReactiveEngine() {
                 adjustedPDA: polOperationalRisk.adjustedPDA + podOperationalRisk.adjustedPDA,
                 basePDA: basePdaPol + basePdaPod,
                 penaltyAmount: operationalPenaltyAmount,
+                overtimeSurcharge: (polOperationalRisk.shiftSimulation?.overtimeSurcharge || 0)
+                    + (podOperationalRisk.shiftSimulation?.overtimeSurcharge || 0),
                 hasWeekendPenalty: polOperationalRisk.hasWeekendPenalty || podOperationalRisk.hasWeekendPenalty,
                 hasOvertime: polOperationalRisk.hasOvertime || podOperationalRisk.hasOvertime,
                 standardHours: (polOperationalRisk.shiftSimulation?.standardHours || 0) + (podOperationalRisk.shiftSimulation?.standardHours || 0),
