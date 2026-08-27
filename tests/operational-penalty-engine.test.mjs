@@ -101,6 +101,11 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
     pod: 'Valencia',
     totalProfit: 45000,
     cargoQty: 10000,
+    cargoType: 'Big Bags',
+    loadRate: 2000,
+    dischargeRate: 1600,
+    loadMethod: 'Big Bags - Grúa Barco',
+    dischargeMethod: 'Big Bags - Grúa Barco',
   }, {
     riskLevel: 'ALTO',
     hasWeekendPenalty: true,
@@ -120,9 +125,30 @@ test('executive dashboard sync tolerates hidden DOM and formats risk state', () 
   assert.equal(elements.get('exec-operation-status').textContent, 'OPERACIÓN RENTABLE');
   assert.equal(elements.get('exec-risk-level').textContent, 'ALTO');
   assert.equal(elements.get('exec-risk-level').style.color, '#b91c1c');
+  assert.match(elements.get('exec-insight-text').textContent, /5,0 días \(120 horas\) de carga en Bejaia/i);
+  assert.match(elements.get('exec-insight-text').textContent, /6,3 días \(150 horas\) de descarga en Valencia/i);
+  assert.match(elements.get('exec-insight-text').textContent, /naturaleza de la carga \(Big Bags\).*grúas del buque \(Geared\).*supervisión especial de estiba/i);
   assert.match(elements.get('exec-insight-text').textContent, /12\.0 h a turnos ordinarios y 36\.0 h a Overtime/i);
-  assert.match(elements.get('exec-insight-text').textContent, /coste incremental de \$1,250\.00/i);
   assert.match(elements.get('exec-insight-text').textContent, /1 de 7 muelles/i);
+  assert.match(elements.get('exec-insight-text').textContent, /coste incremental de \$1,250\.00 en la PDA por recargos operativos \(FHEX\/SHEX\)\.$/i);
+});
+
+test('executive insight requests technical rates when the voyage lacks effective rhythms', () => {
+  const elements = new Map([
+    ['exec-insight-text', { style: {} }],
+    ['exec-risk-level', { style: {} }],
+  ]);
+  const documentRef = { getElementById: (id) => elements.get(id) || null };
+
+  engine.updateExecutiveDashboard({
+    pol: 'Bilbao',
+    pod: 'Rotterdam',
+    cargoQty: 12000,
+    cargoType: 'Cemento, yeso, cal y clínker',
+  }, {}, documentRef);
+
+  assert.match(elements.get('exec-insight-text').textContent, /Define ritmos efectivos de carga y descarga en Modo Técnico/i);
+  assert.doesNotMatch(elements.get('exec-insight-text').textContent, /Tiempo operativo estimado/i);
 });
 
 test('executive view exposes the existing full report action', () => {

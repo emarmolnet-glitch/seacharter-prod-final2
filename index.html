@@ -36988,9 +36988,18 @@ function scheduleReactiveEngine() {
                     pod: idxDisch,
                     totalProfit: netProfitCharterer,
                     cargoQty: cargo,
-                    cargoType: document.getElementById('cargo-type-manual')?.value || document.getElementById('cargo-type')?.value || State.cargoType,
+                    cargoType: window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value)
+                        || State.cargoTypeManual
+                        || document.getElementById('cargo-type')?.value
+                        || State.cargoType,
                     loadRate: rateLoad,
                     dischargeRate: rateDisch,
+                    loadMethod: document.getElementById('metodo_carga')?.selectedOptions?.[0]?.text
+                        || document.getElementById('metodo_carga')?.value
+                        || State.loadMethod,
+                    dischargeMethod: document.getElementById('metodo_descarga_pod')?.selectedOptions?.[0]?.text
+                        || document.getElementById('metodo_descarga_pod')?.value
+                        || State.dischargeMethod,
                     vesselType: ownerClassAnalysis?.shipClass?.label || State.vesselType || State.vessel?.type || 'Buque estándar',
                     seaDays: T_sea,
                     portDays: T_port,
