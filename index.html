@@ -35156,7 +35156,25 @@ function scheduleReactiveEngine() {
                 || record?.maxOperationalDraftMeters
                 || 0
             ) || 0);
-            return { label, countryCode, countryName, maxDraft };
+            let datasetBerths = [];
+            try {
+                datasetBerths = JSON.parse(input?.dataset?.selectedBerths || '[]');
+            } catch (_) {}
+            const berthSource = Array.isArray(datasetBerths) && datasetBerths.length
+                ? datasetBerths
+                : (draftPort?.berths || record?.berths || record?.terminales || []);
+            const berths = (Array.isArray(berthSource) ? berthSource : []).map((berth, index) => ({
+                name: String(berth?.name || berth?.nombre || berth?.berth || `Muelle ${index + 1}`).trim(),
+                max_draft: Math.max(0, Number(
+                    berth?.max_draft
+                    ?? berth?.maxDraft
+                    ?? berth?.maxDraftMeters
+                    ?? berth?.maxOperationalDraftMeters
+                    ?? berth?.calado
+                    ?? 0
+                ) || 0)
+            })).filter((berth) => berth.max_draft > 0);
+            return { label, countryCode, countryName, maxDraft, berths };
         }
 
         function addOperationalDays(dateValue, days) {
@@ -35165,7 +35183,7 @@ function scheduleReactiveEngine() {
             const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00Z` : text);
             if (Number.isNaN(date.getTime())) return text;
             date.setTime(date.getTime() + (Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000));
-            return date.toISOString().slice(0, 10);
+            return /T\d{2}:\d{2}/.test(text) ? date.toISOString() : date.toISOString().slice(0, 10);
         }
 
         // --- MOTOR PRINCIPAL ---
@@ -35508,7 +35526,8 @@ function scheduleReactiveEngine() {
                     label: String(input?.value || State?.[role] || '').trim(),
                     countryCode: String(input?.dataset?.selectedCountryCode || '').trim().toUpperCase(),
                     countryName: String(input?.dataset?.selectedCountryCode || '').trim().toUpperCase(),
-                    maxDraft: Math.max(0, Number(input?.dataset?.selectedPortDraft) || 0)
+                    maxDraft: Math.max(0, Number(input?.dataset?.selectedPortDraft) || 0),
+                    berths: []
                 };
             };
             const polOperationalContext = typeof resolveOperationalPortContext === 'function'
@@ -35523,7 +35542,7 @@ function scheduleReactiveEngine() {
                 || document.getElementById('vessel-draft')?.value
                 || 0
             ) || 0);
-            const etaBase = firstNonEmpty(
+            const etaBaseDate = firstNonEmpty(
                 document.getElementById('res-adjusted-eta')?.textContent,
                 document.getElementById('eta-radar')?.value,
                 getNormalizedDateInputValue('gc-laycan-date'),
@@ -35531,6 +35550,15 @@ function scheduleReactiveEngine() {
                 getNormalizedDateInputValue('map-laycan-date'),
                 State.laycanDate
             );
+            const etaBaseTime = firstNonEmpty(
+                document.getElementById('gc-laycan-time')?.value,
+                document.getElementById('asb-laycan-time')?.value,
+                document.getElementById('map-laycan-time')?.value,
+                '00:00'
+            );
+            const etaBase = /^\d{4}-\d{2}-\d{2}$/.test(etaBaseDate) && /^\d{2}:\d{2}/.test(etaBaseTime)
+                ? `${etaBaseDate}T${etaBaseTime.slice(0, 5)}:00Z`
+                : etaBaseDate;
             const podEta = typeof addOperationalDays === 'function'
                 ? addOperationalDays(etaBase, dPortLoad + dLaden)
                 : etaBase;
@@ -35544,16 +35572,34 @@ function scheduleReactiveEngine() {
                 basePDA: 0,
                 penaltyAmount: 0,
                 hasWeekendPenalty: false,
+                hasOvertime: false,
                 isDraftExceeded: false,
+                hasMinorityBerthAvailability: false,
                 hasAdjustedRates,
                 riskLevel: hasAdjustedRates ? 'MODERADO' : 'BAJO',
-                weekendDates: []
+                weekendDates: [],
+                shiftSimulation: { totalPortHours: 0, standardHours: 0, overtimeHours: 0, overtimeSurcharge: 0 },
+                berthAvailability: { totalBerths: 0, compatibleCount: 0, compatibilityRatio: null }
             };
+            const polPortHours = rateLoad > 0 ? (cargo / rateLoad) * 24 : dPortLoad * 24;
+            const podPortHours = rateDisch > 0 ? (cargo / rateDisch) * 24 : dPortDisch * 24;
+            const totalStevedoringHours = polPortHours + podPortHours;
+            const stevedoringHourlyRate = totalStevedoringHours > 0
+                ? stevedoringAllocation.ownerCost / totalStevedoringHours
+                : 0;
+            const buildOperationalContext = (portContext, portDailyRate) => ({
+                hasAdjustedRates,
+                cargoQuantity: cargo,
+                portDailyRate,
+                berths: portContext.berths,
+                standardHourlyRate: stevedoringHourlyRate,
+                overtimeMultiplier: 1.5
+            });
             const polOperationalRisk = calculateRisk
-                ? calculateRisk(basePdaPol, etaBase, dPortLoad, polOperationalContext.countryCode || polOperationalContext.countryName, vesselDraft, polOperationalContext.maxDraft, { hasAdjustedRates })
+                ? calculateRisk(basePdaPol, etaBase, dPortLoad, polOperationalContext.countryCode || polOperationalContext.countryName, vesselDraft, polOperationalContext.maxDraft, buildOperationalContext(polOperationalContext, rateLoad))
                 : { ...emptyOperationalRisk, adjustedPDA: basePdaPol, basePDA: basePdaPol };
             const podOperationalRisk = calculateRisk
-                ? calculateRisk(basePdaPod, podEta, dPortDisch, podOperationalContext.countryCode || podOperationalContext.countryName, vesselDraft, podOperationalContext.maxDraft, { hasAdjustedRates })
+                ? calculateRisk(basePdaPod, podEta, dPortDisch, podOperationalContext.countryCode || podOperationalContext.countryName, vesselDraft, podOperationalContext.maxDraft, buildOperationalContext(podOperationalContext, rateDisch))
                 : { ...emptyOperationalRisk, adjustedPDA: basePdaPod, basePDA: basePdaPod };
             const operationalPenaltyAmount = polOperationalRisk.penaltyAmount + podOperationalRisk.penaltyAmount;
             pdaRecurrente = polOperationalRisk.adjustedPDA
@@ -35568,18 +35614,31 @@ function scheduleReactiveEngine() {
             const operationalRiskLevel = (polOperationalRisk.riskLevel === 'ALTO' || podOperationalRisk.riskLevel === 'ALTO')
                 ? 'ALTO'
                 : ((polOperationalRisk.riskLevel === 'MODERADO' || podOperationalRisk.riskLevel === 'MODERADO') ? 'MODERADO' : 'BAJO');
+            const berthRiskPort = [polOperationalRisk, podOperationalRisk].sort((left, right) => {
+                const leftRatio = left.berthAvailability?.compatibilityRatio;
+                const rightRatio = right.berthAvailability?.compatibilityRatio;
+                return (leftRatio === null || leftRatio === undefined ? 2 : leftRatio)
+                    - (rightRatio === null || rightRatio === undefined ? 2 : rightRatio);
+            })[0];
             const operationalRisk = {
                 adjustedPDA: polOperationalRisk.adjustedPDA + podOperationalRisk.adjustedPDA,
                 basePDA: basePdaPol + basePdaPod,
                 penaltyAmount: operationalPenaltyAmount,
                 hasWeekendPenalty: polOperationalRisk.hasWeekendPenalty || podOperationalRisk.hasWeekendPenalty,
+                hasOvertime: polOperationalRisk.hasOvertime || podOperationalRisk.hasOvertime,
+                standardHours: (polOperationalRisk.shiftSimulation?.standardHours || 0) + (podOperationalRisk.shiftSimulation?.standardHours || 0),
+                overtimeHours: (polOperationalRisk.shiftSimulation?.overtimeHours || 0) + (podOperationalRisk.shiftSimulation?.overtimeHours || 0),
                 isDraftExceeded: polOperationalRisk.isDraftExceeded || podOperationalRisk.isDraftExceeded,
+                hasMinorityBerthAvailability: polOperationalRisk.hasMinorityBerthAvailability || podOperationalRisk.hasMinorityBerthAvailability,
+                compatibleBerths: berthRiskPort?.berthAvailability?.compatibleCount || 0,
+                totalBerths: berthRiskPort?.berthAvailability?.totalBerths || 0,
                 hasAdjustedRates,
-                hasDraftData: polOperationalContext.maxDraft > 0 && podOperationalContext.maxDraft > 0,
+                hasDraftData: (polOperationalContext.berths.length > 0 || polOperationalContext.maxDraft > 0)
+                    && (podOperationalContext.berths.length > 0 || podOperationalContext.maxDraft > 0),
                 riskLevel: operationalRiskLevel,
                 penaltyCountries: [
-                    polOperationalRisk.hasWeekendPenalty ? polOperationalContext.countryName : '',
-                    podOperationalRisk.hasWeekendPenalty ? podOperationalContext.countryName : ''
+                    polOperationalRisk.hasOvertime ? polOperationalContext.countryName : '',
+                    podOperationalRisk.hasOvertime ? podOperationalContext.countryName : ''
                 ].filter(Boolean),
                 pol: { ...polOperationalRisk, ...polOperationalContext, etaDate: etaBase, portDays: dPortLoad },
                 pod: { ...podOperationalRisk, ...podOperationalContext, etaDate: podEta, portDays: dPortDisch }
@@ -35783,7 +35842,10 @@ function scheduleReactiveEngine() {
             const combinedBreakdown = [
                 ...polBreakdown.map(b => ({ item: `POL (${document.getElementById('port-pol')?.value || State.pol || 'Carga'}): ${b.item}`, amount: b.amount })),
                 ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount })),
-                ...(operationalPenaltyAmount > 0 ? [{ item: 'Recargo Overtime por fin de semana (15%)', amount: operationalPenaltyAmount }] : [])
+                ...(operationalPenaltyAmount > 0 ? [{
+                    item: `Overtime simulado (${operationalRisk.overtimeHours.toFixed(1)} h extra / ${operationalRisk.standardHours.toFixed(1)} h normales)`,
+                    amount: operationalPenaltyAmount
+                }] : [])
             ];
             State.pdaPolBreakdown = polBreakdown;
             State.pdaPodBreakdown = podBreakdown;
@@ -35798,7 +35860,7 @@ function scheduleReactiveEngine() {
             if (pdaEl) {
                 pdaEl.innerText = `$${Math.round(smartPortExpenses).toLocaleString()}`;
             }
-            renderStevedoringCostBreakdown(stevedoringAllocation);
+            renderStevedoringCostBreakdown(stevedoringAllocation, operationalRisk);
             document.getElementById('res-cost-ets').innerText = `$${Math.round(etsCost).toLocaleString()}`;
             document.getElementById('res-cost-total').innerText = `$${Math.round(adjustedCostTotal).toLocaleString()}`;
 
@@ -36367,6 +36429,10 @@ function scheduleReactiveEngine() {
                 operationalPdaBase: operationalRisk.basePDA,
                 operationalPdaAdjusted: operationalRisk.adjustedPDA,
                 operationalPenalty: operationalPenaltyAmount,
+                operationalStandardHours: operationalRisk.standardHours,
+                operationalOvertimeHours: operationalRisk.overtimeHours,
+                compatibleBerths: operationalRisk.compatibleBerths,
+                totalBerths: operationalRisk.totalBerths,
                 stevedoringEnteredCost: stevedoringAllocation.enteredCost,
                 stevedoringOwnerCost: stevedoringAllocation.ownerCost,
                 stevedoringOwnerFactor: stevedoringAllocation.ownerFactor,
@@ -57616,12 +57682,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return { condition: normalizedCondition, ownerFactor, enteredCost, ownerCost, autoEstimated, note };
         }
 
-        function renderStevedoringCostBreakdown(allocation) {
+        function renderStevedoringCostBreakdown(allocation, operationalRisk = null) {
             const value = document.getElementById('res-cost-stevedoring');
             const note = document.getElementById('res-cost-stevedoring-note');
             const container = document.getElementById('stevedoring-cost-breakdown');
             if (value) value.textContent = `$${Math.round(Number(allocation?.ownerCost) || 0).toLocaleString()}`;
-            if (note) note.textContent = allocation?.note || '';
+            if (note) {
+                const standardHours = Math.max(0, Number(operationalRisk?.standardHours) || 0);
+                const overtimeHours = Math.max(0, Number(operationalRisk?.overtimeHours) || 0);
+                const overtimeCost = Math.max(0, Number(operationalRisk?.penaltyAmount) || 0);
+                const shiftSummary = standardHours > 0 || overtimeHours > 0
+                    ? ` Simulación: ${standardHours.toFixed(1)} h ordinarias + ${overtimeHours.toFixed(1)} h Overtime; incremento PDA $${Math.round(overtimeCost).toLocaleString('en-US')}.`
+                    : '';
+                note.textContent = `${allocation?.note || ''}${shiftSummary}`.trim();
+            }
             if (container) {
                 const hasOwnerCost = Number(allocation?.ownerCost) > 0;
                 container.classList.toggle('border-slate-200', !hasOwnerCost);

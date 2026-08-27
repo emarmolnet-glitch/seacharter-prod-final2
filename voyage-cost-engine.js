@@ -64,7 +64,13 @@
         'Bahrain'
     ]);
     const ISLAMIC_WEEKEND_COUNTRY_CODES = new Set(['DZ', 'AE', 'SA', 'EG', 'QA', 'OM', 'KW', 'IQ', 'LY', 'BH']);
-    const DAY_IN_MS = 24 * 60 * 60 * 1000;
+    const HOUR_IN_MS = 60 * 60 * 1000;
+    const DEFAULT_SHIFT_SCHEDULE = Object.freeze([
+        Object.freeze({ name: 'Turno 4', startHour: 0, endHour: 6, overtime: true }),
+        Object.freeze({ name: 'Turno 1', startHour: 6, endHour: 12, overtime: false }),
+        Object.freeze({ name: 'Turno 2', startHour: 12, endHour: 18, overtime: false }),
+        Object.freeze({ name: 'Turno 3', startHour: 18, endHour: 24, overtime: true })
+    ]);
 
     function normalizeCountryKey(value) {
         return toText(value)
@@ -79,7 +85,7 @@
         }
         const text = toText(value);
         if (!text) return null;
-        const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         const date = isoDate
             ? new Date(Date.UTC(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3])))
             : new Date(text);
@@ -92,51 +98,172 @@
         return ISLAMIC_WEEKEND_COUNTRIES.some((country) => normalizeCountryKey(country) === normalizedCountry);
     }
 
-    function calculateOperationalRisk(basePDA, etaDate, portDays, portCountry, vesselDraft, portMaxDraft, operationalContext = {}) {
-        const normalizedPda = Math.max(0, toNumber(basePDA));
-        const normalizedPortDays = Math.max(0, toNumber(portDays));
-        const startDate = parseOperationalDate(etaDate);
-        const fridayWeekend = usesFridayWeekend(portCountry);
-        let hasWeekendPenalty = false;
-        const weekendDates = [];
+    function normalizeBerths(berths, fallbackMaxDraft = 0) {
+        const normalized = (Array.isArray(berths) ? berths : []).map((berth, index) => {
+            const maxDraft = Math.max(0, toNumber(
+                berth?.max_draft
+                ?? berth?.maxDraft
+                ?? berth?.maxDraftMeters
+                ?? berth?.maxOperationalDraftMeters
+                ?? berth?.calado
+            ));
+            return {
+                name: toText(berth?.name || berth?.nombre || berth?.berth || `Muelle ${index + 1}`),
+                maxDraft
+            };
+        }).filter((berth) => berth.maxDraft > 0);
 
-        if (startDate && normalizedPortDays > 0) {
-            const startTime = startDate.getTime();
-            const endTime = startTime + (normalizedPortDays * DAY_IN_MS);
-            const cursor = new Date(startTime);
-            cursor.setUTCHours(0, 0, 0, 0);
-            while (cursor.getTime() <= endTime) {
+        const normalizedFallbackDraft = Math.max(0, toNumber(fallbackMaxDraft));
+        if (!normalized.length && normalizedFallbackDraft > 0) {
+            normalized.push({ name: 'Límite general del puerto', maxDraft: normalizedFallbackDraft });
+        }
+        return normalized;
+    }
+
+    function evaluateBerthAvailability(vesselDraft, berths, fallbackMaxDraft = 0) {
+        const normalizedVesselDraft = Math.max(0, toNumber(vesselDraft));
+        const normalizedBerths = normalizeBerths(berths, fallbackMaxDraft);
+        const compatibleBerths = normalizedVesselDraft > 0
+            ? normalizedBerths.filter((berth) => normalizedVesselDraft <= berth.maxDraft)
+            : normalizedBerths.slice();
+        const incompatibleBerths = normalizedBerths.filter((berth) => !compatibleBerths.includes(berth));
+        const totalBerths = normalizedBerths.length;
+        const compatibleCount = compatibleBerths.length;
+        const compatibilityRatio = totalBerths > 0 ? compatibleCount / totalBerths : null;
+        const isDraftExceeded = normalizedVesselDraft > 0 && totalBerths > 0 && compatibleCount === 0;
+        const hasMinorityAvailability = normalizedVesselDraft > 0
+            && totalBerths > 1
+            && compatibleCount > 0
+            && compatibleCount < (totalBerths / 2);
+
+        return {
+            berths: normalizedBerths,
+            compatibleBerths,
+            incompatibleBerths,
+            totalBerths,
+            compatibleCount,
+            compatibilityRatio,
+            isDraftExceeded,
+            hasMinorityAvailability
+        };
+    }
+
+    function getShiftForHour(hour, schedule) {
+        return schedule.find((shift) => hour >= shift.startHour && hour < shift.endHour)
+            || DEFAULT_SHIFT_SCHEDULE[0];
+    }
+
+    function simulateShiftSchedule(etaDate, totalPortHours, portCountry, operationalContext = {}) {
+        const startDate = parseOperationalDate(etaDate);
+        const normalizedTotalHours = Math.max(0, toNumber(totalPortHours));
+        const configuredSchedule = Array.isArray(operationalContext.shiftSchedule)
+            ? operationalContext.shiftSchedule
+            : DEFAULT_SHIFT_SCHEDULE;
+        const schedule = configuredSchedule.map((shift, index) => ({
+            name: toText(shift?.name || `Turno ${index + 1}`),
+            startHour: Math.min(23, Math.max(0, toNumber(shift?.startHour))),
+            endHour: Math.min(24, Math.max(1, toNumber(shift?.endHour))),
+            overtime: Boolean(shift?.overtime)
+        })).filter((shift) => shift.endHour > shift.startHour);
+        const effectiveSchedule = schedule.length ? schedule : DEFAULT_SHIFT_SCHEDULE;
+        const fridayWeekend = usesFridayWeekend(portCountry);
+        const weekendDates = new Set();
+        const segments = [];
+        let standardHours = 0;
+        let overtimeHours = 0;
+
+        if (startDate && normalizedTotalHours > 0) {
+            let cursorMs = startDate.getTime();
+            let remainingHours = normalizedTotalHours;
+            while (remainingHours > 0.000001) {
+                const cursor = new Date(cursorMs);
                 const day = cursor.getUTCDay();
-                const isWeekendDay = fridayWeekend ? day === 5 : day === 0 || day === 6;
-                if (isWeekendDay) {
-                    hasWeekendPenalty = true;
-                    weekendDates.push(cursor.toISOString().slice(0, 10));
+                const isWeekend = fridayWeekend ? day === 5 : day === 0 || day === 6;
+                const hour = cursor.getUTCHours() + (cursor.getUTCMinutes() / 60) + (cursor.getUTCSeconds() / 3600);
+                const shift = getShiftForHour(hour, effectiveSchedule);
+                const shiftEnd = new Date(cursorMs);
+                if (shift.endHour === 24) {
+                    shiftEnd.setUTCHours(24, 0, 0, 0);
+                } else {
+                    shiftEnd.setUTCHours(shift.endHour, 0, 0, 0);
                 }
-                cursor.setUTCDate(cursor.getUTCDate() + 1);
+                const hoursToBoundary = Math.max(0.000001, (shiftEnd.getTime() - cursorMs) / HOUR_IN_MS);
+                const segmentHours = Math.min(remainingHours, hoursToBoundary);
+                const overtime = isWeekend || shift.overtime;
+                if (overtime) overtimeHours += segmentHours;
+                else standardHours += segmentHours;
+                if (isWeekend) weekendDates.add(cursor.toISOString().slice(0, 10));
+                segments.push({
+                    shift: shift.name,
+                    date: cursor.toISOString().slice(0, 10),
+                    hours: segmentHours,
+                    overtime,
+                    weekend: isWeekend
+                });
+                cursorMs += segmentHours * HOUR_IN_MS;
+                remainingHours -= segmentHours;
             }
         }
 
-        const normalizedVesselDraft = Math.max(0, toNumber(vesselDraft));
-        const normalizedPortMaxDraft = Math.max(0, toNumber(portMaxDraft));
-        const isDraftExceeded = normalizedVesselDraft > 0
-            && normalizedPortMaxDraft > 0
-            && normalizedVesselDraft > normalizedPortMaxDraft;
+        const standardHourlyRate = Math.max(0, toNumber(operationalContext.standardHourlyRate));
+        const overtimeMultiplier = Math.max(1, toNumber(operationalContext.overtimeMultiplier) || 1.5);
+        const overtimeHourlyRate = Math.max(
+            standardHourlyRate,
+            toNumber(operationalContext.overtimeHourlyRate) || (standardHourlyRate * overtimeMultiplier)
+        );
+        const standardCost = standardHours * standardHourlyRate;
+        const overtimeCost = overtimeHours * overtimeHourlyRate;
+        const baselineCost = normalizedTotalHours * standardHourlyRate;
+        const weightedCost = standardCost + overtimeCost;
+
+        return {
+            totalPortHours: normalizedTotalHours,
+            standardHours,
+            overtimeHours,
+            standardHourlyRate,
+            overtimeHourlyRate,
+            overtimeMultiplier,
+            standardCost,
+            overtimeCost,
+            baselineCost,
+            weightedCost,
+            overtimeSurcharge: Math.max(0, weightedCost - baselineCost),
+            hasWeekendPenalty: weekendDates.size > 0,
+            weekendDates: Array.from(weekendDates),
+            segments
+        };
+    }
+
+    function calculateOperationalRisk(basePDA, etaDate, portDays, portCountry, vesselDraft, portMaxDraft, operationalContext = {}) {
+        const normalizedPda = Math.max(0, toNumber(basePDA));
+        const cargoQuantity = Math.max(0, toNumber(operationalContext?.cargoQuantity));
+        const portDailyRate = Math.max(0, toNumber(operationalContext?.portDailyRate));
+        const totalPortHours = cargoQuantity > 0 && portDailyRate > 0
+            ? (cargoQuantity / portDailyRate) * 24
+            : Math.max(0, toNumber(portDays)) * 24;
+        const shiftSimulation = simulateShiftSchedule(etaDate, totalPortHours, portCountry, operationalContext);
+        const berthAvailability = evaluateBerthAvailability(vesselDraft, operationalContext?.berths, portMaxDraft);
+        const isDraftExceeded = berthAvailability.isDraftExceeded;
         const hasAdjustedRates = Boolean(operationalContext?.hasAdjustedRates);
-        const riskLevel = isDraftExceeded
+        const riskLevel = (isDraftExceeded || berthAvailability.hasMinorityAvailability)
             ? 'ALTO'
-            : (hasWeekendPenalty || hasAdjustedRates ? 'MODERADO' : 'BAJO');
-        const adjustedPDA = hasWeekendPenalty ? normalizedPda * 1.15 : normalizedPda;
+            : (shiftSimulation.overtimeHours > 0 || hasAdjustedRates ? 'MODERADO' : 'BAJO');
+        const adjustedPDA = normalizedPda + shiftSimulation.overtimeSurcharge;
 
         return {
             adjustedPDA,
             basePDA: normalizedPda,
             penaltyAmount: adjustedPDA - normalizedPda,
-            hasWeekendPenalty,
+            hasWeekendPenalty: shiftSimulation.hasWeekendPenalty,
+            hasOvertime: shiftSimulation.overtimeHours > 0,
             isDraftExceeded,
+            hasMinorityBerthAvailability: berthAvailability.hasMinorityAvailability,
             hasAdjustedRates,
             riskLevel,
             portCountry: toText(portCountry),
-            weekendDates
+            weekendDates: shiftSimulation.weekendDates,
+            berthAvailability,
+            shiftSimulation
         };
     }
 
@@ -201,17 +328,28 @@
             ? riskData.penaltyCountries.filter(Boolean)
             : [riskData.portCountry].filter(Boolean);
         const insightParts = ['Operación sólida.'];
-        if (riskData.hasWeekendPenalty) {
-            insightParts.push(`Se ha aplicado un recargo automático de 15% en PDA por operativa en fin de semana${countries.length ? ` en ${countries.join(' y ')}` : ''}.`);
+        const overtimeHours = Math.max(0, toNumber(riskData.overtimeHours));
+        const standardHours = Math.max(0, toNumber(riskData.standardHours));
+        const overtimeSurcharge = Math.max(0, toNumber(riskData.penaltyAmount));
+        if (overtimeHours > 0) {
+            insightParts.push(`La simulación horaria asigna ${standardHours.toFixed(1)} h a turnos ordinarios y ${overtimeHours.toFixed(1)} h a Overtime${countries.length ? ` en ${countries.join(' y ')}` : ''}, con un coste incremental de ${moneyFormatter.format(overtimeSurcharge)} integrado en la PDA.`);
         } else {
-            insightParts.push('No se requieren recargos de Overtime por calendario portuario.');
+            insightParts.push('La ventana operativa no genera horas de Overtime facturables con las tarifas informadas.');
         }
         if (riskData.isDraftExceeded) {
-            insightParts.push('El calado del buque supera el límite operativo informado por WPI; requiere revisión inmediata.');
+            insightParts.push('El calado del buque no es compatible con ningún muelle informado; requiere revisión inmediata.');
+        } else if (riskData.hasMinorityBerthAvailability) {
+            const compatibleBerths = Math.max(0, toNumber(riskData.compatibleBerths));
+            const totalBerths = Math.max(0, toNumber(riskData.totalBerths));
+            insightParts.push(`Solo ${compatibleBerths} de ${totalBerths} muelles admiten el calado del buque; el riesgo de espera en fondeo escala a ALTO.`);
         } else if (riskData.hasDraftData === false) {
-            insightParts.push('El límite de calado WPI no está disponible y requiere validación manual.');
+            insightParts.push('No hay matriz de calados por muelle disponible y se requiere validación manual.');
         } else {
-            insightParts.push('Calado del buque dentro de los límites del puerto.');
+            const compatibleBerths = Math.max(0, toNumber(riskData.compatibleBerths));
+            const totalBerths = Math.max(0, toNumber(riskData.totalBerths));
+            insightParts.push(totalBerths > 0
+                ? `El calado es compatible con ${compatibleBerths} de ${totalBerths} muelles informados.`
+                : 'Calado del buque dentro del límite general informado por el puerto.');
         }
         if (riskData.hasAdjustedRates) {
             insightParts.push('Los ritmos operativos contienen ajustes y elevan el seguimiento a riesgo moderado.');
