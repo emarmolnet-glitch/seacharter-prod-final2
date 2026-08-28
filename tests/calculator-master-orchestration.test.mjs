@@ -50,6 +50,10 @@ function createBranchHarness({ vesselDwt, centralizedClass, pricingClass }) {
 
 test('section 2 button runs the complete calculation orchestrator', () => {
   assert.match(indexSource, /id="btn-validate-section2"[^>]*onclick="handleMasterValidationAndCalculate\(event\)"/);
+  assert.match(indexSource, /id="btn-validate-section2-executive"[^>]*onclick="handleMasterValidationAndCalculate\(event\)"/);
+  assert.ok(indexSource.indexOf('id="btn-validate-section2-executive"') < indexSource.indexOf('id="btn-validate-section2"'));
+  assert.match(indexSource, /document\.querySelectorAll\('\[data-master-validation-action\]'\)/);
+  assert.match(indexSource, /buttons\.forEach\(\(button\) =>/);
   assert.match(indexSource, /let isCalculatingMaster = false/);
   assert.match(indexSource, /Calculando operación completa\.\.\./);
   assert.match(indexSource, /finally \{[\s\S]*isCalculatingMaster = false;[\s\S]*setMasterCalculationLoading\(false\)/);
