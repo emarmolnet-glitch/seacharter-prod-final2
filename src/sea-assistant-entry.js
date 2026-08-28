@@ -294,40 +294,58 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
   const endpointUrl = getActiveAssistantEndpoint();
   let response;
 
-  if (attachedFiles.length > 0) {
-    const formData = new FormData();
-    formData.append("body", JSON.stringify(sanitizePayloadForAI(requestPayload)));
-    
-    attachedFiles.forEach((file, index) => {
-      formData.append(`documento_${index}`, file);
-    });
+  try {
+    if (attachedFiles.length > 0) {
+      const formData = new FormData();
+      formData.append("body", JSON.stringify(sanitizePayloadForAI(requestPayload)));
 
-    response = await fetch(endpointUrl, {
-      method: "POST",
-      body: formData,
-      signal,
-    });
-  } else {
-    const sanitizedPayload = sanitizePayloadForAI(requestPayload);
-    sanitizedPayload.contexto = collectChatContext();
-    sanitizedPayload.mensaje = userText;
+      attachedFiles.forEach((file, index) => {
+        formData.append(`documento_${index}`, file);
+      });
 
-    response = await fetch(endpointUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sanitizedPayload),
-      signal,
+      response = await fetch(endpointUrl, {
+        method: "POST",
+        body: formData,
+        signal,
+      });
+    } else {
+      const sanitizedPayload = sanitizePayloadForAI(requestPayload);
+      sanitizedPayload.contexto = collectChatContext();
+      sanitizedPayload.mensaje = userText;
+
+      response = await fetch(endpointUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sanitizedPayload),
+        signal,
+      });
+    }
+  } catch (error) {
+    console.error("❌ [Cerebro.ia/API] Error durante fetch", {
+      endpointUrl,
+      error,
     });
+    throw error;
   }
   
   const responseText = await response.text();
   let payload = null;
+  console.group("🧠 [Cerebro.ia/API] Respuesta recibida");
+  console.log("Endpoint solicitado:", endpointUrl);
+  console.log("Estado HTTP:", response.status, response.statusText, "ok:", response.ok);
+  console.log("Respuesta cruda de la API:", responseText);
   try {
     payload = responseText ? JSON.parse(responseText) : null;
-  } catch {
+    console.log("JSON parseado:", payload);
+  } catch (error) {
+    console.error("No se pudo parsear la respuesta como JSON; se conserva el texto crudo.", error);
     payload = responseText;
   }
+  console.log("Propiedad action recibida:", payload?.action ?? payload?.data?.action ?? null);
+  console.log("Payload de acción recibido:", payload?.payload ?? payload?.data?.payload ?? null);
+  console.groupEnd();
   if (!response.ok || payload?.success === false) {
+    console.error("❌ [Cerebro.ia/API] Respuesta marcada como error", payload);
     throw new Error(payload?.error || "No pude conectar con el asistente en este momento.");
   }
   return normalizeDataBridgeAssistantResponse(payload);
@@ -335,6 +353,8 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
 
 // --- 4. SE MANTIENE TU FUNCIÓN ORIGINAL INTACTA ---
 function normalizeDataBridgeAssistantResponse(payload) {
+  console.group("🔎 [Cerebro.ia/Normalización] Evaluando respuesta");
+  console.log("Objeto completo:", payload);
   const candidates = [
     payload?.informe,
     payload?.reply,
@@ -355,16 +375,28 @@ function normalizeDataBridgeAssistantResponse(payload) {
     typeof payload === "string" ? payload : null,
   ];
   const respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
-  if (!respuesta) throw new Error("Data Bridge no devolvió una respuesta analítica para el chat.");
   const rawAction = payload?.action ?? payload?.data?.action ?? null;
   const actionPayload = payload?.payload ?? payload?.data?.payload ?? null;
-  return {
+  console.log("Texto de respuesta seleccionado:", respuesta || null);
+  console.log("Acción normalizada:", rawAction);
+  console.log("Payload normalizado:", actionPayload);
+  if (!respuesta) {
+    console.error("La respuesta no contiene ninguna propiedad textual utilizable.", payload);
+    console.groupEnd();
+    throw new Error("Data Bridge no devolvió una respuesta analítica para el chat.");
+  }
+  const normalizedResponse = {
     success: true,
     respuesta,
     action: typeof rawAction === "string"
       ? { action: rawAction, payload: actionPayload || {} }
-      : rawAction,
+      : rawAction && typeof rawAction === "object" && actionPayload && !rawAction.payload
+        ? { ...rawAction, payload: actionPayload }
+        : rawAction,
   };
+  console.log("Respuesta entregada al chat:", normalizedResponse);
+  console.groupEnd();
+  return normalizedResponse;
 }
 
 const ACTIONABLE_AI_JSON_BLOCK = /```json\s*(\{[\s\S]*?\})\s*```/i;
@@ -432,7 +464,9 @@ function findActionableAiJsonObject(responseText) {
         if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(parsed?.action)) {
           return { action: parsed, start, end: end + 1 };
         }
-      } catch {}
+      } catch (error) {
+        console.error("❌ [Cerebro.ia/Parser] JSON inline inválido", { rawJson, error });
+      }
       break;
     }
   }
@@ -451,7 +485,12 @@ function extractActionableAiResponse(responseText) {
           action,
         };
       }
-    } catch {}
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/Parser] Bloque JSON inválido", {
+        rawJson: jsonBlock[1],
+        error,
+      });
+    }
   }
 
   const inlineJson = findActionableAiJsonObject(originalText);
@@ -510,9 +549,12 @@ function executeActionableAiUpdate(action) {
 }
 
 async function executeActionableAiUpdateFields(actionObj) {
+    console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple");
+    console.log("Objeto de acción recibido:", actionObj);
+    try {
     // 1. Verificación robusta: Asegurarse de que actionObj existe.
     if (!actionObj) {
-        console.warn("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
+        console.error("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
         return false;
     }
 
@@ -520,43 +562,91 @@ async function executeActionableAiUpdateFields(actionObj) {
     // El servidor puede enviar { action: "...", payload: {...} } 
     // o simplemente enviar el payload directamente si hubo algún parseo intermedio.
     let p = actionObj.payload || actionObj; 
+    console.log("Payload efectivo que se va a aplicar:", p);
     
     // 3. Verificación del Payload: Si el payload está vacío (por ejemplo, es un string vacío), abortamos.
     if (!p || typeof p !== 'object' || Object.keys(p).length === 0) {
-        console.warn("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
+        console.error("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
         return false;
     }
 
     const updateInputs = (ids, value, dispatchEvents = true) => {
-        if (value === undefined || value === null || value === "") return;
-        
+        if (value === undefined || value === null || value === "") {
+            console.log("Valor omitido por estar vacío:", { ids, value });
+            return;
+        }
+
         ids.forEach((id) => {
-            const elements = document.querySelectorAll(`#${id}, [name="${id}"], .${id}`);
+            const selector = `#${id}, [name="${id}"], .${id}`;
+            let elements;
+            try {
+                elements = document.querySelectorAll(selector);
+            } catch (error) {
+                console.error("Selector DOM inválido durante update_fields:", { selector, error });
+                return;
+            }
+            console.log("Búsqueda DOM:", {
+                selector,
+                encontrados: elements.length,
+                elementos: Array.from(elements),
+            });
+            if (elements.length === 0) {
+                console.error("No se encontró ningún elemento para el selector:", selector);
+            }
             
             elements.forEach((input) => {
+                const previousValue = input.value;
+                if (input.id === "rate-load" || input.id === "rate-disch") {
+                    const side = input.id === "rate-disch" ? "pod" : "pol";
+                    window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
+                    input.readOnly = false;
+                    input.disabled = false;
+                    input.removeAttribute("readonly");
+                    input.removeAttribute("disabled");
+                    input.dataset.manualOverride = "true";
+                    input.dataset.draftCalcMode = "manual";
+                    if (side === "pod") input.dataset.podCalcMode = "manual";
+                }
+
                 if (input.tagName === 'SELECT') {
                     // Búsqueda inteligente en desplegables por texto o valor parcial
                     let matched = false;
                     const valStr = String(value).toLowerCase();
-                    for (let option of input.options) {
+                    for (const option of input.options) {
                         if (option.value.toLowerCase() === valStr || option.text.toLowerCase().includes(valStr)) {
                             input.value = option.value;
                             matched = true;
                             break;
                         }
                     }
-                    if (!matched && input.options.length > 0) {
-                        input.selectedIndex = 0; // fallback seguro
+                    if (!matched) {
+                        console.error("No existe una opción compatible en el select:", {
+                            selector,
+                            valorSolicitado: value,
+                            opciones: Array.from(input.options).map((option) => ({ value: option.value, text: option.text })),
+                        });
+                        return;
                     }
                 } else {
                     input.value = String(value);
                 }
+
+                console.log("Valor asignado al elemento:", {
+                    selector,
+                    element: input,
+                    anterior: previousValue,
+                    actual: input.value,
+                });
 
                 if (!dispatchEvents) return;
                 
                 input.dispatchEvent(new Event("input", { bubbles: true }));
                 input.dispatchEvent(new Event("change", { bubbles: true }));
                 input.dispatchEvent(new Event("blur", { bubbles: true }));
+                window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
+                    detail: { field: id, value: input.value, inputId: input.id || null },
+                }));
+                console.log("Eventos disparados:", ["input", "change", "blur", "sea-assistant:field-updated"]);
             });
         });
     };
@@ -565,18 +655,30 @@ async function executeActionableAiUpdateFields(actionObj) {
     const podQuery = String(p.pod || "").trim();
     let selectedRoutePorts = null;
 
+    updateInputs(["map-port-pol", "port-pol"], p.pol);
+    updateInputs(["map-port-pod", "port-pod"], p.pod);
+
     if (polQuery && podQuery) {
-        selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
-        p = {
-            ...p,
-            pol: selectedRoutePorts.pol.officialLabel,
-            pod: selectedRoutePorts.pod.officialLabel,
-            pol_port: selectedRoutePorts.pol,
-            pod_port: selectedRoutePorts.pod,
-        };
-    } else {
-        updateInputs(["map-port-pol", "port-pol"], p.pol, false);
-        updateInputs(["map-port-pod", "port-pod"], p.pod, false);
+        console.log("Intentando validar POL/POD mediante WPI:", { polQuery, podQuery });
+        try {
+            selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
+            p = {
+                ...p,
+                pol: selectedRoutePorts.pol.officialLabel,
+                pod: selectedRoutePorts.pod.officialLabel,
+                pol_port: selectedRoutePorts.pol,
+                pod_port: selectedRoutePorts.pod,
+            };
+            console.log("Puertos WPI validados:", selectedRoutePorts);
+            updateInputs(["map-port-pol", "port-pol"], p.pol);
+            updateInputs(["map-port-pod", "port-pod"], p.pod);
+        } catch (error) {
+            console.error("Falló la validación WPI; se conservan los nombres crudos y continúa la inyección.", {
+                polQuery,
+                podQuery,
+                error,
+            });
+        }
     }
 
     // 4. Inyección de datos
@@ -655,18 +757,55 @@ async function executeActionableAiUpdateFields(actionObj) {
     });
 
     // 7. Autocompletado del estado global y disparo exclusivo del MAPA
-    if (selectedRoutePorts) {
+    const routeState = {
+        ...(p.pol ? { pol: p.pol } : {}),
+        ...(p.pod ? { pod: p.pod } : {}),
+    };
+    const tonnage = Number(p.tonnage);
+    const loadingRate = Number(p.loadingRate);
+    const dischargeRate = Number(p.dischargeRate);
+    if (Number.isFinite(tonnage) && tonnage > 0) {
+        Object.assign(routeState, {
+            tonnage,
+            cargo: tonnage,
+            cargoQty: tonnage,
+            cargoQuantity: tonnage,
+        });
+    }
+    if (Number.isFinite(loadingRate) && loadingRate > 0) {
+        Object.assign(routeState, {
+            loadRate: loadingRate,
+            ratePOL: loadingRate,
+            ritmoRealPol: loadingRate,
+            ritmoMode: "manual",
+            ritmoMode_pol: "manual",
+        });
+    }
+    if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+        Object.assign(routeState, {
+            dischargeRate,
+            dischRate: dischargeRate,
+            ratePOD: dischargeRate,
+            ritmoRealPod: dischargeRate,
+            ritmoMode_pod: "manual",
+            podCalcMode: "manual",
+        });
+    }
+    if (Object.keys(routeState).length > 0) {
         if (!window.State) window.State = {};
-        const routeState = {
-            pol: p.pol,
-            pod: p.pod,
-        };
-        const tonnage = Number(p.tonnage);
-        if (Number.isFinite(tonnage) && tonnage > 0) routeState.tonnage = tonnage;
         Object.assign(window.State, routeState);
         window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
         window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
+        console.log("Estado global sincronizado:", routeState);
+    }
+
+    if (selectedRoutePorts) {
         const routeButton = document.getElementById("btn-map-locate-route");
+        console.log("Botón de cálculo de ruta:", {
+            selector: "#btn-map-locate-route",
+            encontrado: Boolean(routeButton),
+            element: routeButton,
+        });
         if (typeof window.runOnDemandMapRouteWorkflow === "function") {
             await window.runOnDemandMapRouteWorkflow(routeButton);
         } else {
@@ -684,7 +823,17 @@ async function executeActionableAiUpdateFields(actionObj) {
         console.log("📍 Modo Mapa detectado: Fetch de velocidad y motor financiero diferidos.");
     }
     
+    console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
     return true;
+    } catch (error) {
+        console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", {
+            actionObj,
+            error,
+        });
+        throw error;
+    } finally {
+        console.groupEnd();
+    }
 }
 async function executeActionableAiSearchVessel(action) {
   if (action?.action !== "search_vessel") return false;
@@ -790,7 +939,11 @@ async function executeActionableAiRoute(action) {
 }
 
 async function executeActionableAiCompleteForm(action) {
-  if (action?.action !== "fill_complete_form") return false;
+  if (action?.action === "fill_complete_form") {
+    console.log("🧾 [Cerebro.ia/fill_complete_form] Acción reconocida", action);
+  } else {
+    return false;
+  }
   const pol = String(action.pol || "").trim();
   const pod = String(action.pod || "").trim();
   const tonnage = Number(action.tonnage);
@@ -813,33 +966,51 @@ async function executeActionableAiCompleteForm(action) {
 }
 
 async function executeActionableAiAction(actionObj) {
-    // 1. CHIVATO GIGANTE EN CONSOLA para ver qué llega realmente
-    console.log("🤖 [MOTOR AI] Datos crudos recibidos del servidor:", actionObj);
-    
-    if (!actionObj) return false;
-
-    // 2. Extraer la acción, venga en el formato que venga
-    const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
-    
-    // 3. La inyección múltiple pertenece exclusivamente a update_fields.
-    if (actionName === "update_fields") {
-        if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) return false;
-        processedUpdateFieldsActions.add(actionObj);
-        updateFieldsActionInProgress = true;
-        console.log("🚀 [MOTOR AI] Acción reconocida. Disparando inyección de campos...");
-        try {
-            return await executeActionableAiUpdateFields(actionObj);
-        } finally {
-            updateFieldsActionInProgress = false;
+    console.group("🤖 [Cerebro.ia/Motor] Evaluando acción");
+    console.log("Datos crudos recibidos del servidor:", actionObj);
+    try {
+        if (!actionObj) {
+            console.error("No existe un objeto de acción ejecutable.");
+            return false;
         }
-    }
 
-    if (actionName === "search_vessel") return executeActionableAiSearchVessel(actionObj);
-    if (actionName === "fill_complete_form") return executeActionableAiCompleteForm(actionObj);
-    if (actionName === "calculate_route") return executeActionableAiRoute(actionObj);
-    
-    console.warn("⚠️ [MOTOR AI] Acción descartada o redirigida al motor antiguo:", actionName);
-    return executeActionableAiUpdate(actionObj);
+        const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
+        console.log("Nombre de acción resuelto:", actionName);
+        console.log("Payload disponible:", actionObj.payload ?? actionObj);
+
+        if (actionName === "update_fields") {
+            if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) {
+                console.error("La acción update_fields se descartó por estar duplicada o en curso.", {
+                    updateFieldsActionInProgress,
+                    alreadyProcessed: processedUpdateFieldsActions.has(actionObj),
+                });
+                return false;
+            }
+            processedUpdateFieldsActions.add(actionObj);
+            updateFieldsActionInProgress = true;
+            console.log("Acción update_fields reconocida; iniciando inyección.");
+            try {
+                return await executeActionableAiUpdateFields(actionObj);
+            } catch (error) {
+                console.error("Falló la ejecución de update_fields.", { actionObj, error });
+                throw error;
+            } finally {
+                updateFieldsActionInProgress = false;
+            }
+        }
+
+        if (actionName === "search_vessel") return executeActionableAiSearchVessel(actionObj);
+        if (actionObj?.action === "fill_complete_form") return executeActionableAiCompleteForm(actionObj);
+        if (actionName === "calculate_route") return executeActionableAiRoute(actionObj);
+
+        console.warn("Acción descartada o redirigida al motor antiguo:", actionName);
+        return executeActionableAiUpdate(actionObj);
+    } catch (error) {
+        console.error("❌ [Cerebro.ia/Motor] Error ejecutando la acción", { actionObj, error });
+        throw error;
+    } finally {
+        console.groupEnd();
+    }
 }
 
 function createVoyageActionCard(scenario) {
@@ -891,7 +1062,8 @@ function createVoyageActionCard(scenario) {
         : result?.routeOnly
           ? "Ruta y fallbacks seguros inyectados. Los datos operativos pueden completarse después."
           : "DraftVoyage y módulos operativos actualizados correctamente.";
-    } catch {
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/VoyageCard] Error inyectando escenario", { scenario, error });
       button.disabled = false;
       card.classList.add("is-error");
       status.textContent = "No se pudieron inyectar los datos. Revisa los campos e inténtalo de nuevo.";
@@ -948,7 +1120,8 @@ function createCalculatorAutofillActionCard(action) {
       status.textContent = result?.cargoPreserved
         ? "Ritmos, métodos, DWT y clase actualizados; se conservó la carga ya indicada."
         : "Carga, ritmos, métodos, DWT y clase actualizados simultáneamente.";
-    } catch {
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/AutofillCard] Error aplicando parámetros", { action, error });
       button.disabled = false;
       card.classList.add("is-error");
       status.textContent = "No se pudieron aplicar los parámetros. Revisa la Calculadora e inténtalo de nuevo.";
@@ -1202,7 +1375,9 @@ function scrapeVisiblePdaBreakdown() {
     }
     const calcState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
     if (calcState.portCosts || calcState.pda) return JSON.stringify(calcState.portCosts || calcState.pda);
-  } catch (e) {}
+  } catch (error) {
+    console.error("❌ [Cerebro.ia/Contexto] Error leyendo el desglose PDA", error);
+  }
   return "Desglose de PDA no disponible o no visible en pantalla.";
 }
 
@@ -1549,7 +1724,8 @@ const fileInput = root.querySelector("#sca-file-input");
 
   try {
     speechEnabled = supportsSpeechSynthesis && window.localStorage.getItem(SPEECH_PREFERENCE_KEY) === "true";
-  } catch {
+  } catch (error) {
+    console.error("❌ [Cerebro.ia/Voz] Error leyendo la preferencia de voz", error);
     speechEnabled = false;
   }
 
@@ -1581,7 +1757,9 @@ const fileInput = root.querySelector("#sca-file-input");
     if (!speechEnabled) cancelSpeech();
     try {
       window.localStorage.setItem(SPEECH_PREFERENCE_KEY, String(speechEnabled));
-    } catch {}
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/Voz] Error guardando la preferencia de voz", error);
+    }
     syncSpeechToggle();
   };
 
@@ -1667,7 +1845,8 @@ const fileInput = root.querySelector("#sca-file-input");
     recognitionStateRef.current.shouldSubmit = false;
     try {
       recognition.stop();
-    } catch {
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/Voz] Error deteniendo el reconocimiento", error);
       recognitionStateRef.current.isStarting = false;
       setListening(false);
     }
@@ -1759,7 +1938,8 @@ const fileInput = root.querySelector("#sca-file-input");
       recognitionStateRef.current.isStarting = true;
       try {
         recognition.start();
-      } catch {
+      } catch (error) {
+        console.error("❌ [Cerebro.ia/Voz] Error iniciando el reconocimiento", error);
         recognitionStateRef.current.isStarting = false;
         setListening(false);
         voiceFeedback.textContent = "No se pudo iniciar el dictado. Inténtalo de nuevo.";
@@ -1944,37 +2124,43 @@ const fileInput = root.querySelector("#sca-file-input");
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     activeRequestController = controller;
 
+    console.group("📨 [Cerebro.ia/Chat] Procesando respuesta normalizada");
     try {
       const response = await requestAssistantResponse(userText, history, controller.signal, filesToSend);
-      
-      let actionToExecute = null;
+      console.log("Respuesta recibida por el submit:", response);
+
+      const actionableResponse = extractActionableAiResponse(response.respuesta);
+      let action = actionableResponse.action;
       if (response.action) {
         if (typeof response.action === "string") {
-          actionToExecute = {
+          action = {
             action: response.action,
             payload: response.payload || response.data?.payload || {}
           };
         } else if (typeof response.action === "object") {
-          actionToExecute = response.action;
+          action = response.action;
         }
       }
 
-      if (!actionToExecute) {
-        const actionableResponse = extractActionableAiResponse(response.respuesta);
-        actionToExecute = actionableResponse.action;
+      console.log("Acción seleccionada para ejecución:", action);
+
+      if (action) await executeActionableAiAction(action);
+      if (action) {
+        console.log("La acción terminó de ejecutarse.");
+      } else {
+        console.log("La respuesta no contiene una acción ejecutable.");
       }
 
-      if (actionToExecute) {
-        await executeActionableAiAction(actionToExecute);
-      }
-
-      const textoVisible = response.respuesta || "Acción completada.";
+      const textoVisible = actionableResponse.visibleText || "Acción completada.";
       replaceWithAssistantMessage(
         thinkingMessage,
         textoVisible,
         { meta: formatTime() },
       );
+      console.groupEnd();
     } catch (error) {
+      console.error("❌ [Cerebro.ia/Chat] Error procesando la respuesta del asistente", error);
+      console.groupEnd();
       const errorText = error?.name === "AbortError"
         ? (stoppedByUser ? "Respuesta detenida." : "La solicitud tardó demasiado. Inténtalo de nuevo.")
         : (error?.message || "No se pudo consultar al asistente en este momento.");
