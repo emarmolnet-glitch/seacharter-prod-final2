@@ -264,14 +264,14 @@ function isSimulationQuery(mensaje) {
 
 // --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
 // --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
+// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
 function getActiveAssistantEndpoint() {
   if (iaActiva === 'cerebro') {
-    const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
-    const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
-    return runtimeEndpoint || buildEndpoint || DEFAULT_CEREBRO_IA_ENDPOINT;
+    // 🚀 FORZAMOS LA URL ABSOLUTA A DATA BRIDGE IGNORANDO LAS VARIABLES DE ENTORNO
+    return "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
   }
   
-  // SOLUCIÓN CORS: Para el Asistente Core volvemos a usar LA RUTA RELATIVA
+  // Para el Asistente Core local usamos la ruta relativa
   return "/.netlify/functions/chat-assistant";
 }
 
