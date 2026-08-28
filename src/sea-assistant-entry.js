@@ -797,6 +797,187 @@ async function executeActionableAiUpdateFields(actionObj) {
     }
 }
 
+// ============================================================================
+// BLOQUE RESTAURADO: FUNCIONES AUXILIARES Y MOTOR DE ENRUTAMIENTO
+// ============================================================================
+
+async function executeActionableAiSearchVessel(action) {
+  if (action?.action !== "search_vessel") return false;
+  document.getElementById("btn-sync-neon-matching")?.click();
+  return true;
+}
+
+function setActionableAiInputValue(input, value) {
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function normalizeSelectedWpiPort(result) {
+  if (!result) return null;
+  const latitude = Number(result.lat);
+  const longitude = Number(result.lon);
+  const officialLabel = String(result.label || "").trim();
+  const name = String(result.placeName || officialLabel.replace(/\s*\([A-Za-z]{2,3}\)\s*$/, "")).trim();
+  const countryCode = String(result.countryCode || "").trim().toUpperCase();
+  if (!officialLabel || !name || !countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    ...(result.port || {}),
+    uuid: String(result.uuid || result.port?.uuid || '').trim(),
+    unlocode: String(result.unlocode || result.port?.unlocode || '').trim().toUpperCase(),
+    maxOperationalDraftMeters: Number(result.maxOperationalDraftMeters ?? result.port?.maxOperationalDraftMeters) || null,
+    name,
+    officialLabel,
+    countryCode,
+    latitude,
+    longitude,
+    source: "DATALASTIC",
+  };
+}
+
+async function selectActionableAiWpiRoute(pol, pod) {
+  if (typeof window.selectFirstWpiAutocompleteMatch !== "function") {
+    throw new Error("La búsqueda de Datalastic todavía no está disponible.");
+  }
+
+  const selections = {};
+  for (const [role, value, inputIds] of [
+    ["pol", pol, ["map-port-pol", "port-pol"]],
+    ["pod", pod, ["map-port-pod", "port-pod"]],
+  ]) {
+    let primaryResult = null;
+    for (const inputId of inputIds) {
+      const result = await window.selectFirstWpiAutocompleteMatch(inputId, value);
+      if (!result) throw new Error(`No hay coincidencias WPI para ${role.toUpperCase()}: ${value}`);
+      primaryResult ||= result;
+    }
+    selections[role] = normalizeSelectedWpiPort(primaryResult);
+    if (!selections[role]) throw new Error(`La selección WPI de ${role.toUpperCase()} no contiene coordenadas válidas.`);
+  }
+  return selections;
+}
+
+async function executeActionableAiRoute(action) {
+  if (action?.action !== "calculate_route") return false;
+  const pol = String(action.pol || "").trim().slice(0, 200);
+  const pod = String(action.pod || "").trim().slice(0, 200);
+  const tonnage = Number(action.tonnage);
+  const hasTonnage = Number.isFinite(tonnage) && tonnage > 0;
+  if (!pol || !pod) return false;
+
+  const mapPolInput = document.getElementById("map-port-pol");
+  const mapPodInput = document.getElementById("map-port-pod");
+  const cargoInput = document.getElementById("cargo-qty");
+  const routeButton = document.getElementById("btn-map-locate-route");
+  if (!mapPolInput || !mapPodInput || !routeButton) return false;
+
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const selectedPol = selectedPorts.pol.officialLabel;
+  const selectedPod = selectedPorts.pod.officialLabel;
+
+  const routeState = {
+    pol: selectedPol,
+    pod: selectedPod,
+  };
+  if (hasTonnage) {
+    Object.assign(routeState, {
+      cargoQty: tonnage,
+      cargoQuantity: tonnage,
+      quantity: tonnage,
+    });
+  }
+  if (!window.State) window.State = {};
+  Object.assign(window.State, routeState);
+  window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
+  window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
+
+  if (hasTonnage && cargoInput) setActionableAiInputValue(cargoInput, tonnage);
+
+  if (typeof window.runOnDemandMapRouteWorkflow === "function") {
+    await window.runOnDemandMapRouteWorkflow(routeButton);
+  } else {
+    routeButton.click();
+  }
+  window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
+    detail: { pol: selectedPol, pod: selectedPod, tonnage: hasTonnage ? tonnage : null },
+  }));
+  return true;
+}
+
+async function executeActionableAiCompleteForm(action) {
+  if (action?.action === "fill_complete_form") {
+    console.log("🧾 [Cerebro.ia/fill_complete_form] Acción reconocida", action);
+  } else {
+    return false;
+  }
+  const pol = String(action.pol || "").trim();
+  const pod = String(action.pod || "").trim();
+  const tonnage = Number(action.tonnage);
+  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
+  if (typeof window.applyAssistantCompleteForm !== "function") return false;
+
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const validatedAction = {
+    ...action,
+    pol: selectedPorts.pol.officialLabel,
+    pod: selectedPorts.pod.officialLabel,
+    pol_port: selectedPorts.pol,
+    pod_port: selectedPorts.pod,
+  };
+  await window.applyAssistantCompleteForm(validatedAction);
+  window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-requested", {
+    detail: { pol: validatedAction.pol, pod: validatedAction.pod, tonnage },
+  }));
+  return true;
+}
+
+// --- MOTOR PRINCIPAL DE ENRUTAMIENTO ---
+async function executeActionableAiAction(actionObj) {
+    console.group("🤖 [Cerebro.ia/Motor] Evaluando acción");
+    console.log("Datos crudos recibidos del servidor:", actionObj);
+    try {
+        if (!actionObj) {
+            console.error("No existe un objeto de acción ejecutable.");
+            return false;
+        }
+
+        const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
+        console.log("Nombre de acción resuelto:", actionName);
+        console.log("Payload disponible:", actionObj.payload ?? actionObj);
+
+        if (actionName === "update_fields") {
+            if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) {
+                console.error("La acción update_fields se descartó por estar duplicada o en curso.");
+                return false;
+            }
+            processedUpdateFieldsActions.add(actionObj);
+            updateFieldsActionInProgress = true;
+            console.log("Acción update_fields reconocida; iniciando inyección.");
+            try {
+                return await executeActionableAiUpdateFields(actionObj);
+            } catch (error) {
+                console.error("Falló la ejecución de update_fields.", { actionObj, error });
+                throw error;
+            } finally {
+                updateFieldsActionInProgress = false;
+            }
+        }
+
+        if (actionName === "search_vessel") return typeof executeActionableAiSearchVessel === 'function' ? executeActionableAiSearchVessel(actionObj) : false;
+        if (actionObj?.action === "fill_complete_form") return typeof executeActionableAiCompleteForm === 'function' ? executeActionableAiCompleteForm(actionObj) : false;
+        if (actionName === "calculate_route") return typeof executeActionableAiRoute === 'function' ? executeActionableAiRoute(actionObj) : false;
+
+        console.warn("Acción descartada o redirigida al motor antiguo:", actionName);
+        return typeof executeActionableAiUpdate === 'function' ? executeActionableAiUpdate(actionObj) : false;
+    } catch (error) {
+        console.error("❌ [Cerebro.ia/Motor] Error ejecutando la acción", { actionObj, error });
+        throw error;
+    } finally {
+        console.groupEnd();
+    }
+}
+// ============================================================================
+
 function createVoyageActionCard(scenario) {
   const isPartial = scenario.is_partial || scenario.defaults_applied?.length > 0;
   const safePol = DOMPurify.sanitize(scenario.pol);
