@@ -672,22 +672,17 @@ async function executeActionableAiUpdateFields(actionObj) {
         const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
         updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
-        // ============================================================================
-        // 🚀 2. MOTOR LÉXICO AVANZADO (GRANEL VS ENVASADO + CBAM)
-        // ============================================================================
+        // 🚀 2. MOTOR LÉXICO AVANZADO
         const cargoTypeLower = (p.cargo_type || p.underlyingCommodity || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
         const methodLoadLower = (p.loadingMethod || p.metodo_carga || "").toLowerCase();
         const methodDischLower = (p.dischargeMethod || p.metodo_descarga_pod || methodLoadLower).toLowerCase();
 
-        // 🧠 CLAVE: Detectar si es a granel explícitamente
         const isGranel = cargoTypeLower.includes('granel') || cargoTypeLower.includes('bulk') || (p.category || "").toLowerCase().includes('granel');
 
-        // A. ACTIVAR BOTONES PÍLDORA DINÁMICAMENTE (Método de Carga)
         const pillButtons = Array.from(document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]'));
         
         const clickMethodPill = (methodStr, fallbackRule) => {
             let found = false;
-            // 1. Intentar MATCH EXACTO con lo que envía la IA (Ej: "Cinta Transportadora")
             if (methodStr) {
                 pillButtons.forEach(btn => {
                     const txt = btn.textContent.trim().toLowerCase();
@@ -698,7 +693,6 @@ async function executeActionableAiUpdateFields(actionObj) {
                     }
                 });
             }
-            // 2. Si no hay match exacto, usar la lógica de familias
             if (!found) {
                 pillButtons.forEach(btn => {
                     const txt = btn.textContent.trim().toLowerCase();
@@ -710,17 +704,15 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         };
 
-        // Determinar familia base
         let family = 'general';
         if (isGranel || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
         else if (cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
-        else if (cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags'; // Si era fertilizante a granel, el isGranel lo atrapó antes
+        else if (cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags';
         else if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) family = 'proyecto';
 
         clickMethodPill(methodLoadLower, family);
         if (methodDischLower !== methodLoadLower) clickMethodPill(methodDischLower, family);
 
-        // B. AJUSTAR DESPLEGABLES (SECTOR / PRODUCTO / ESPECIFICACIÓN) EN REACT
         const selects = document.querySelectorAll('select');
         selects.forEach(sel => {
             const options = Array.from(sel.options);
@@ -729,16 +721,10 @@ async function executeActionableAiUpdateFields(actionObj) {
                 const optText = opt.text.toLowerCase();
                 const optValue = String(opt.value).toLowerCase();
                 
-                // 1. MATCH EXACTO POR CÓDIGO (Ideal para el CBAM - Especificación Carga ej. "30")
                 if (p.cargoSpecification && (optValue === String(p.cargoSpecification) || optText.startsWith(String(p.cargoSpecification)))) return true;
-                
-                // 2. MATCH EXACTO POR STRING DE LA IA
                 if (p.product && optText.includes(p.product.toLowerCase())) return true;
                 if (p.category && optText === p.category.toLowerCase()) return true;
-                
-                // 3. MATCH SEMÁNTICO POR FAMILIAS (Fallbacks)
                 if (cargoTypeLower.includes('fertilizante') || cargoTypeLower.includes('abono')) return optText.includes('fertilizante') || optText.includes('abono');
-                
                 if (cargoTypeLower.includes('cemento') || cargoTypeLower.includes('clinker')) {
                     if (isGranel && optText.includes('cemento') && optText.includes('granel')) return true;
                     if (!isGranel && optText.includes('cemento') && optText.includes('big bag')) return true;
@@ -765,6 +751,98 @@ async function executeActionableAiUpdateFields(actionObj) {
                 console.log(`✅ [Core PRO] Desplegable ajustado dinámicamente a: ${targetOption.text}`);
             }
         });
+
+        // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
+        const routeState = {
+            ...(p.pol ? { pol: p.pol } : {}),
+            ...(p.pod ? { pod: p.pod } : {}),
+        };
+        const tonnage = Number(p.tonnage);
+        const loadingRate = Number(p.loadingRate);
+        const dischargeRate = Number(p.dischargeRate);
+        if (Number.isFinite(tonnage) && tonnage > 0) {
+            Object.assign(routeState, { tonnage, cargo: tonnage, cargoQty: tonnage, cargoQuantity: tonnage });
+        }
+        if (Number.isFinite(loadingRate) && loadingRate > 0) {
+            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual" });
+        }
+        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual" });
+        }
+        if (Object.keys(routeState).length > 0) {
+            if (!window.State) window.State = {};
+            Object.assign(window.State, routeState);
+            window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
+            window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
+        }
+
+        if (selectedRoutePorts) {
+            const routeButton = document.getElementById("btn-map-locate-route");
+            if (typeof window.runOnDemandMapRouteWorkflow === "function") {
+                await window.runOnDemandMapRouteWorkflow(routeButton);
+            } else {
+                routeButton?.click();
+            }
+        }
+
+        if (!isMapView) {
+            if (p.loadingRate || p.dischargeRate) window.recalcularDiasPuerto?.();
+        }
+        
+        console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
+        
+        // =========================================================
+        // 4. DISPARADOR FINAL Y RESOLUCIÓN DATALASTIC
+        // =========================================================
+        if (!isMapView) {
+            // Retraso de 1.5s para permitir que Datalastic busque los puertos
+            setTimeout(() => {
+                // A. Forzar selección en los menús de Datalastic
+                const datalasticOptions = Array.from(document.querySelectorAll('li, div, [role="option"]'))
+                    .filter(el => el.textContent.includes('DATALASTIC') && el.offsetParent !== null);
+                
+                if (datalasticOptions.length > 0) datalasticOptions[0].click();
+                if (datalasticOptions.length > 1) datalasticOptions[1].click();
+
+                ['port-pol', 'port-pod'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                });
+
+                // B. Escudo Anti-Prompts (Inyectar consumos por defecto)
+                if (!window.State) window.State = {};
+                Object.assign(window.State, {
+                    consFondeo: window.State.consFondeo || 2.0,
+                    consPuerto: window.State.consPuerto || 1.5,
+                    reportMasterType: window.State.reportMasterType || 1
+                });
+
+                const originalPrompt = window.prompt;
+                window.prompt = function(msg, defaultVal) {
+                    console.log("🛡️ [Cerebro.ia] Prompt auto-respondido:", msg);
+                    const m = String(msg).toLowerCase();
+                    if (m.includes("informe") || m.includes("master")) return "1";
+                    if (m.includes("fondeo") || m.includes("consumo")) return "2.0";
+                    return defaultVal || "0";
+                };
+
+                // C. Auto-Clic definitivo en Calcular
+                clickActionableAiFinalValidationButton();
+
+                // D. Restaurar el sistema de alertas al terminar
+                setTimeout(() => { window.prompt = originalPrompt; }, 1000);
+
+            }, 1500); // 1.5 segundos de magia de espera
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
+        throw error;
+    } finally {
+        console.groupEnd();
+    }
+}
         // ============================================================================
 
         // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
