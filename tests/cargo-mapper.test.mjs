@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getCargoMethodLabel,
+  inferCargoMethod,
   mapCargoDescription,
   normalizeText,
   normalizeNlpVoyagePayload,
@@ -56,6 +57,14 @@ test("converts retained UI literals back to select values during injection norma
   assert.equal(payload.methodPOD, "cinta_transportadora");
 });
 
+test("normalizes explicit grab and pallet method labels", () => {
+  const grab = normalizeNlpVoyagePayload({ methodPOL: "Cuchara (Grab) - Grúa Portuaria" });
+  assert.equal(grab.methodPOL, "cuchara_portuaria");
+
+  const pallet = normalizeNlpVoyagePayload({ methodPOL: "Paletizado con grúa barco" });
+  assert.equal(pallet.methodPOL, "paletizado_barco");
+});
+
 test("maps cement aliases to exact calculator taxonomy values", () => {
   assert.deepEqual(mapCargoDescription("25.000 TM de cemento"), {
     categoriaCarga: "Minerales y Construcción",
@@ -88,6 +97,26 @@ test("forces Big Bags equipment and copies POL method into POD", () => {
   const genericBigBags = normalizeNlpVoyagePayload({ cargo_type: "big bags" });
   assert.equal(genericBigBags.cargo_category, "Carga Unitizada / Envasada");
   assert.equal(genericBigBags.cargo_specification, "10");
+});
+
+test("reads Spanish mercancia responses and selects calculator defaults", () => {
+  const cement = normalizeNlpVoyagePayload({ mercancia: "cemento a granel" });
+  assert.equal(cement.cargo_type, "cemento a granel");
+  assert.equal(cement.cargo_specification, "10");
+  assert.equal(cement.cargo_category, "Minerales y Construcción");
+  assert.equal(cement.cargo_product, "Cemento a granel");
+  assert.equal(cement.methodPOL, "bombas_neumaticas");
+  assert.equal(cement.methodPOD, "bombas_neumaticas");
+
+  const steel = normalizeNlpVoyagePayload({ "mercancía": "bobinas de acero" });
+  assert.equal(steel.cargo_specification, "20");
+  assert.equal(steel.methodPOL, "hierro_acero_barco");
+});
+
+test("derives an operational method from cargo family when none is supplied", () => {
+  assert.equal(inferCargoMethod("clínker", "Minerales y Construcción", "Clínker", "10"), "cuchara_grab");
+  assert.equal(inferCargoMethod("carga paletizada", "Carga Unitizada / Envasada", "Carga Paletizada", "100"), "paletizado_barco");
+  assert.equal(inferCargoMethod("maquinaria", "Carga de Proyecto (Breakbulk)", "Piezas Especiales / Maquinaria", "90"), "hierro_acero_barco");
 });
 
 test("copies an explicit POL method when POD is empty", () => {

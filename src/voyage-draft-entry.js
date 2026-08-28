@@ -400,6 +400,7 @@ async function applyAssistantCompleteForm(payload = {}) {
     const cancelling = normalizeAssistantFormDate(payload.cancelling);
     const category = String(payload.category ?? payload.cargo_category ?? payload.cargoCategory ?? '').trim();
     const product = String(payload.product ?? payload.cargo_product ?? payload.cargoProduct ?? '').trim();
+    const cargoDescription = String(payload.cargo_type ?? payload.cargoType ?? payload.mercancia ?? payload['mercancía'] ?? payload.commodity ?? '').trim();
     const loadingMethod = payload.loadingMethod ?? payload.loading_method ?? payload.methodPOL;
     const dischargeMethod = payload.dischargeMethod ?? payload.discharge_method ?? payload.methodPOD ?? loadingMethod;
     const scenario = {
@@ -408,7 +409,7 @@ async function applyAssistantCompleteForm(payload = {}) {
         pod,
         cargo_qty: tonnage,
         cargoQty: tonnage,
-        cargo_type: product || category,
+        cargo_type: product || cargoDescription || category,
         cargo_category: category,
         cargo_product: product,
         laydays,

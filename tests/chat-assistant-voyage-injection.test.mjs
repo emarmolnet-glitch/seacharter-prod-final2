@@ -109,6 +109,8 @@ test('complete-form action maps every field and forces route plus cost calculati
   assert.match(draftEntrySource, /cargo_qty: tonnage/);
   assert.match(draftEntrySource, /cargo_category: category/);
   assert.match(draftEntrySource, /cargo_product: product/);
+  assert.match(draftEntrySource, /payload\.mercancia/);
+  assert.match(draftEntrySource, /cargo_type: product \|\| cargoDescription \|\| category/);
   assert.match(draftEntrySource, /laydays,/);
   assert.match(draftEntrySource, /cancelling,/);
   assert.match(draftEntrySource, /methodPOL: loadingMethod/);
