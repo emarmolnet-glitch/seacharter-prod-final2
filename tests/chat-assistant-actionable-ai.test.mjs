@@ -57,6 +57,15 @@ test('update_fields preserves the server payload and awaits the map workflow', (
   assert.match(frontendSource, /window\.runEngine\?\.\(\)/);
 });
 
+test('update_fields clicks VALIDAR ESPECIFICACIONES as its final action', () => {
+  assert.match(frontendSource, /function clickActionableAiFinalValidationButton\(\)/);
+  assert.match(frontendSource, /document\.querySelectorAll\("button"\)/);
+  assert.match(frontendSource, /normalizeButtonText\(button\)\.includes\("VALIDAR ESPECIFICACIONES"\)/);
+  assert.doesNotMatch(frontendSource, /findByText\("CALCULAR"\)/);
+  assert.match(frontendSource, /validationButton\.click\(\)/);
+  assert.match(frontendSource, /console\.log\("✅ \[Cerebro\.ia\/update_fields\] Inyección completada", p\);\s*if \(!isMapView\) clickActionableAiFinalValidationButton\(\);\s*return true;/);
+});
+
 test('update_fields is processed once per completed assistant response', () => {
   assert.match(frontendSource, /const processedUpdateFieldsActions = new WeakSet\(\)/);
   assert.match(frontendSource, /let updateFieldsActionInProgress = false/);

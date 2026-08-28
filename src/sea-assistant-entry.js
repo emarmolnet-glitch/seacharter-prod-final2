@@ -548,6 +548,28 @@ function executeActionableAiUpdate(action) {
   return true;
 }
 
+function clickActionableAiFinalValidationButton() {
+  const buttons = Array.from(document.querySelectorAll("button"));
+  const normalizeButtonText = (button) => String(button?.textContent || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  const isAvailable = (button) => !button.disabled && button.getAttribute("aria-disabled") !== "true";
+  const validationButton = buttons.find((button) => (
+    isAvailable(button) && normalizeButtonText(button).includes("VALIDAR ESPECIFICACIONES")
+  ));
+
+  if (!validationButton) {
+    console.warn("[Cerebro.ia/update_fields] No se encontró el botón disponible VALIDAR ESPECIFICACIONES.");
+    return false;
+  }
+
+  validationButton.click();
+  return true;
+}
+
 async function executeActionableAiUpdateFields(actionObj) {
     console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple");
     console.log("Objeto de acción recibido:", actionObj);
@@ -818,12 +840,12 @@ async function executeActionableAiUpdateFields(actionObj) {
         if (p.loadingRate || p.dischargeRate) {
             window.recalcularDiasPuerto?.();
         }
-        window.runEngine?.();
     } else {
         console.log("📍 Modo Mapa detectado: Fetch de velocidad y motor financiero diferidos.");
     }
     
     console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
+    if (!isMapView) clickActionableAiFinalValidationButton();
     return true;
     } catch (error) {
         console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", {
