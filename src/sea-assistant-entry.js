@@ -571,7 +571,7 @@ function clickActionableAiFinalValidationButton() {
 }
 
 async function executeActionableAiUpdateFields(actionObj) {
-    console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple universal");
+    console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple universal y precisa");
     console.log("Objeto de acción recibido:", actionObj);
     try {
         if (!actionObj) return false;
@@ -673,77 +673,98 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
         // ============================================================================
-        // 🚀 2. MOTOR LÉXICO UNIVERSAL (5 FAMILIAS DE FLETAMENTO)
+        // 🚀 2. MOTOR LÉXICO AVANZADO (GRANEL VS ENVASADO + CBAM)
         // ============================================================================
-        const cargoTypeLower = (p.cargo_type || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
-        const methodLower = (p.loadingMethod || p.dischargeMethod || p.metodo_carga || "").toLowerCase();
+        const cargoTypeLower = (p.cargo_type || p.underlyingCommodity || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
+        const methodLoadLower = (p.loadingMethod || p.metodo_carga || "").toLowerCase();
+        const methodDischLower = (p.dischargeMethod || p.metodo_descarga_pod || methodLoadLower).toLowerCase();
 
-        if (methodLower || cargoTypeLower) {
-            // A. ACTIVAR BOTONES PÍLDORA DINÁMICAMENTE (Mapeo de Familias)
-            const pillButtons = Array.from(document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]'));
-            const matchedBtns = pillButtons.filter(el => {
-                const txt = el.textContent.trim().toLowerCase();
+        // 🧠 CLAVE: Detectar si es a granel explícitamente
+        const isGranel = cargoTypeLower.includes('granel') || cargoTypeLower.includes('bulk') || (p.category || "").toLowerCase().includes('granel');
+
+        // A. ACTIVAR BOTONES PÍLDORA DINÁMICAMENTE (Método de Carga)
+        const pillButtons = Array.from(document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]'));
+        
+        const clickMethodPill = (methodStr, fallbackRule) => {
+            let found = false;
+            // 1. Intentar MATCH EXACTO con lo que envía la IA (Ej: "Cinta Transportadora")
+            if (methodStr) {
+                pillButtons.forEach(btn => {
+                    const txt = btn.textContent.trim().toLowerCase();
+                    if (txt.includes(methodStr) || methodStr.includes(txt)) {
+                        btn.click();
+                        console.log(`✅ [Core PRO] Botón Método EXACTO activado: ${btn.textContent.trim()}`);
+                        found = true;
+                    }
+                });
+            }
+            // 2. Si no hay match exacto, usar la lógica de familias
+            if (!found) {
+                pillButtons.forEach(btn => {
+                    const txt = btn.textContent.trim().toLowerCase();
+                    if (fallbackRule === 'granel' && txt.includes('cuchara') && txt.includes('grúa barco')) btn.click();
+                    if (fallbackRule === 'paletizado' && txt.includes('palletizado') && txt.includes('grúa barco')) btn.click();
+                    if (fallbackRule === 'bigbags' && txt.includes('big bags') && txt.includes('grúa barco')) btn.click();
+                    if (fallbackRule === 'proyecto' && (txt.includes('carga general') || txt.includes('proyecto') || txt.includes('heavy'))) btn.click();
+                });
+            }
+        };
+
+        // Determinar familia base
+        let family = 'general';
+        if (isGranel || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
+        else if (cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
+        else if (cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags'; // Si era fertilizante a granel, el isGranel lo atrapó antes
+        else if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) family = 'proyecto';
+
+        clickMethodPill(methodLoadLower, family);
+        if (methodDischLower !== methodLoadLower) clickMethodPill(methodDischLower, family);
+
+        // B. AJUSTAR DESPLEGABLES (SECTOR / PRODUCTO / ESPECIFICACIÓN) EN REACT
+        const selects = document.querySelectorAll('select');
+        selects.forEach(sel => {
+            const options = Array.from(sel.options);
+            
+            let targetOption = options.find(opt => {
+                const optText = opt.text.toLowerCase();
+                const optValue = String(opt.value).toLowerCase();
                 
-                // 1. Familia Paletizado
-                if ((methodLower.includes('paletiz') || methodLower.includes('pallet') || cargoTypeLower.includes('madera') || cargoTypeLower.includes('papel')) && (txt.includes('palletizado') || txt.includes('paletizado'))) return true;
+                // 1. MATCH EXACTO POR CÓDIGO (Ideal para el CBAM - Especificación Carga ej. "30")
+                if (p.cargoSpecification && (optValue === String(p.cargoSpecification) || optText.startsWith(String(p.cargoSpecification)))) return true;
                 
-                // 2. Familia Big Bags
-                if ((methodLower.includes('big bag') || cargoTypeLower.includes('cemento') || cargoTypeLower.includes('fertilizante')) && txt.includes('big bags')) return true;
+                // 2. MATCH EXACTO POR STRING DE LA IA
+                if (p.product && optText.includes(p.product.toLowerCase())) return true;
+                if (p.category && optText === p.category.toLowerCase()) return true;
                 
-                // 3. Familia Granel / Bulk
-                if ((methodLower.includes('granel') || methodLower.includes('bulk') || cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal|carbon|mineral|bauxita/)) && txt.includes('granel')) return true;
+                // 3. MATCH SEMÁNTICO POR FAMILIAS (Fallbacks)
+                if (cargoTypeLower.includes('fertilizante') || cargoTypeLower.includes('abono')) return optText.includes('fertilizante') || optText.includes('abono');
                 
-                // 4. Familia Carga General / Breakbulk
-                if ((methodLower.includes('general') || methodLower.includes('breakbulk') || cargoTypeLower.match(/acero|bobina|tubo/)) && (txt.includes('carga general') || txt.includes('breakbulk'))) return true;
+                if (cargoTypeLower.includes('cemento') || cargoTypeLower.includes('clinker')) {
+                    if (isGranel && optText.includes('cemento') && optText.includes('granel')) return true;
+                    if (!isGranel && optText.includes('cemento') && optText.includes('big bag')) return true;
+                    return optText.includes('cemento');
+                }
                 
-                // 5. Familia Project Cargo / Maquinaria / Heavy Lift / Voluminoso
-                if ((methodLower.includes('proyecto') || methodLower.includes('heavy') || cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|vehiculo|project|heavy/)) && (txt.includes('carga general') || txt.includes('breakbulk') || txt.includes('proyecto') || txt.includes('heavy'))) return true;
+                if (cargoTypeLower.match(/madera|forestal/)) return optText.match(/madera|forestal/);
+                if (cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal/)) return optText.match(/agrícola|grano|cereal/);
+                if (cargoTypeLower.match(/acero|bobina|tubo/)) return optText.match(/acero|metal|siderúrgica/);
+                if (cargoTypeLower.match(/carbon|mineral|bauxita|hierro/)) return optText.match(/mineral|carbón|construcción/);
+                if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) return optText.match(/proyecto|heavy|maquinaria|breakbulk|general/);
                 
                 return false;
             });
-            
-            matchedBtns.forEach(btn => {
-                btn.click();
-                console.log(`✅ [Core PRO] Botón activado: ${btn.textContent.trim()}`);
-            });
 
-            // B. AJUSTAR DESPLEGABLES (SECTOR / PRODUCTO) EN REACT
-            const selects = document.querySelectorAll('select');
-            selects.forEach(sel => {
-                const options = Array.from(sel.options);
-                
-                let targetOption = options.find(opt => {
-                    const optText = opt.text.toLowerCase();
-                    
-                    // Match directo
-                    if (optText.includes(cargoTypeLower) || cargoTypeLower.includes(optText)) return true;
-                    
-                    // Match semántico por familias de mercado marítimo
-                    if (cargoTypeLower.match(/madera|forestal/)) return optText.match(/madera|forestal/);
-                    if (cargoTypeLower.match(/cemento|clinker|yeso/)) return optText.match(/cemento/);
-                    if (cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal/)) return optText.match(/agrícola|grano|cereal/);
-                    if (cargoTypeLower.match(/acero|bobina|tubo/)) return optText.match(/acero|metal|siderúrgico/);
-                    if (cargoTypeLower.match(/carbon|mineral|bauxita|hierro/)) return optText.match(/mineral|carbón/);
-                    if (cargoTypeLower.match(/fertilizante|urea/)) return optText.match(/fertilizante/);
-                    
-                    // 5. Match Project Cargo / Maquinaria
-                    if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) return optText.match(/proyecto|heavy|maquinaria|carga general/);
-                    
-                    return false;
-                });
-
-                if (targetOption) {
-                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-                    if (nativeSetter) {
-                        nativeSetter.call(sel, targetOption.value);
-                    } else {
-                        sel.value = targetOption.value;
-                    }
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log(`✅ [Core PRO] Sector ajustado dinámicamente a: ${targetOption.text}`);
+            if (targetOption) {
+                const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+                if (nativeSetter) {
+                    nativeSetter.call(sel, targetOption.value);
+                } else {
+                    sel.value = targetOption.value;
                 }
-            });
-        }
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(`✅ [Core PRO] Desplegable ajustado dinámicamente a: ${targetOption.text}`);
+            }
+        });
         // ============================================================================
 
         // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
@@ -791,186 +812,6 @@ async function executeActionableAiUpdateFields(actionObj) {
         return true;
     } catch (error) {
         console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
-        throw error;
-    } finally {
-        console.groupEnd();
-    }
-}
-
-// ============================================================================
-// BLOQUE RESTAURADO: FUNCIONES AUXILIARES Y MOTOR DE ENRUTAMIENTO
-// ============================================================================
-
-async function executeActionableAiSearchVessel(action) {
-  if (action?.action !== "search_vessel") return false;
-  document.getElementById("btn-sync-neon-matching")?.click();
-  return true;
-}
-
-function setActionableAiInputValue(input, value) {
-  input.value = String(value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-function normalizeSelectedWpiPort(result) {
-  if (!result) return null;
-  const latitude = Number(result.lat);
-  const longitude = Number(result.lon);
-  const officialLabel = String(result.label || "").trim();
-  const name = String(result.placeName || officialLabel.replace(/\s*\([A-Za-z]{2,3}\)\s*$/, "")).trim();
-  const countryCode = String(result.countryCode || "").trim().toUpperCase();
-  if (!officialLabel || !name || !countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return {
-    ...(result.port || {}),
-    uuid: String(result.uuid || result.port?.uuid || '').trim(),
-    unlocode: String(result.unlocode || result.port?.unlocode || '').trim().toUpperCase(),
-    maxOperationalDraftMeters: Number(result.maxOperationalDraftMeters ?? result.port?.maxOperationalDraftMeters) || null,
-    name,
-    officialLabel,
-    countryCode,
-    latitude,
-    longitude,
-    source: "DATALASTIC",
-  };
-}
-
-async function selectActionableAiWpiRoute(pol, pod) {
-  if (typeof window.selectFirstWpiAutocompleteMatch !== "function") {
-    throw new Error("La búsqueda de Datalastic todavía no está disponible.");
-  }
-
-  const selections = {};
-  for (const [role, value, inputIds] of [
-    ["pol", pol, ["map-port-pol", "port-pol"]],
-    ["pod", pod, ["map-port-pod", "port-pod"]],
-  ]) {
-    let primaryResult = null;
-    for (const inputId of inputIds) {
-      const result = await window.selectFirstWpiAutocompleteMatch(inputId, value);
-      if (!result) throw new Error(`No hay coincidencias WPI para ${role.toUpperCase()}: ${value}`);
-      primaryResult ||= result;
-    }
-    selections[role] = normalizeSelectedWpiPort(primaryResult);
-    if (!selections[role]) throw new Error(`La selección WPI de ${role.toUpperCase()} no contiene coordenadas válidas.`);
-  }
-  return selections;
-}
-
-async function executeActionableAiRoute(action) {
-  if (action?.action !== "calculate_route") return false;
-  const pol = String(action.pol || "").trim().slice(0, 200);
-  const pod = String(action.pod || "").trim().slice(0, 200);
-  const tonnage = Number(action.tonnage);
-  const hasTonnage = Number.isFinite(tonnage) && tonnage > 0;
-  if (!pol || !pod) return false;
-
-  const mapPolInput = document.getElementById("map-port-pol");
-  const mapPodInput = document.getElementById("map-port-pod");
-  const cargoInput = document.getElementById("cargo-qty");
-  const routeButton = document.getElementById("btn-map-locate-route");
-  if (!mapPolInput || !mapPodInput || !routeButton) return false;
-
-  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
-  const selectedPol = selectedPorts.pol.officialLabel;
-  const selectedPod = selectedPorts.pod.officialLabel;
-
-  const routeState = {
-    pol: selectedPol,
-    pod: selectedPod,
-  };
-  if (hasTonnage) {
-    Object.assign(routeState, {
-      cargoQty: tonnage,
-      cargoQuantity: tonnage,
-      quantity: tonnage,
-    });
-  }
-  if (!window.State) window.State = {};
-  Object.assign(window.State, routeState);
-  window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
-  window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
-
-  if (hasTonnage && cargoInput) setActionableAiInputValue(cargoInput, tonnage);
-
-  if (typeof window.runOnDemandMapRouteWorkflow === "function") {
-    await window.runOnDemandMapRouteWorkflow(routeButton);
-  } else {
-    routeButton.click();
-  }
-  window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
-    detail: { pol: selectedPol, pod: selectedPod, tonnage: hasTonnage ? tonnage : null },
-  }));
-  return true;
-}
-
-async function executeActionableAiCompleteForm(action) {
-  if (action?.action === "fill_complete_form") {
-    console.log("🧾 [Cerebro.ia/fill_complete_form] Acción reconocida", action);
-  } else {
-    return false;
-  }
-  const pol = String(action.pol || "").trim();
-  const pod = String(action.pod || "").trim();
-  const tonnage = Number(action.tonnage);
-  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
-  if (typeof window.applyAssistantCompleteForm !== "function") return false;
-
-  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
-  const validatedAction = {
-    ...action,
-    pol: selectedPorts.pol.officialLabel,
-    pod: selectedPorts.pod.officialLabel,
-    pol_port: selectedPorts.pol,
-    pod_port: selectedPorts.pod,
-  };
-  await window.applyAssistantCompleteForm(validatedAction);
-  window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-requested", {
-    detail: { pol: validatedAction.pol, pod: validatedAction.pod, tonnage },
-  }));
-  return true;
-}
-
-// --- MOTOR PRINCIPAL DE ENRUTAMIENTO ---
-async function executeActionableAiAction(actionObj) {
-    console.group("🤖 [Cerebro.ia/Motor] Evaluando acción");
-    console.log("Datos crudos recibidos del servidor:", actionObj);
-    try {
-        if (!actionObj) {
-            console.error("No existe un objeto de acción ejecutable.");
-            return false;
-        }
-
-        const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
-        console.log("Nombre de acción resuelto:", actionName);
-        console.log("Payload disponible:", actionObj.payload ?? actionObj);
-
-        if (actionName === "update_fields") {
-            if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) {
-                console.error("La acción update_fields se descartó por estar duplicada o en curso.");
-                return false;
-            }
-            processedUpdateFieldsActions.add(actionObj);
-            updateFieldsActionInProgress = true;
-            console.log("Acción update_fields reconocida; iniciando inyección.");
-            try {
-                return await executeActionableAiUpdateFields(actionObj);
-            } catch (error) {
-                console.error("Falló la ejecución de update_fields.", { actionObj, error });
-                throw error;
-            } finally {
-                updateFieldsActionInProgress = false;
-            }
-        }
-
-        if (actionName === "search_vessel") return typeof executeActionableAiSearchVessel === 'function' ? executeActionableAiSearchVessel(actionObj) : false;
-        if (actionObj?.action === "fill_complete_form") return typeof executeActionableAiCompleteForm === 'function' ? executeActionableAiCompleteForm(actionObj) : false;
-        if (actionName === "calculate_route") return typeof executeActionableAiRoute === 'function' ? executeActionableAiRoute(actionObj) : false;
-
-        console.warn("Acción descartada o redirigida al motor antiguo:", actionName);
-        return typeof executeActionableAiUpdate === 'function' ? executeActionableAiUpdate(actionObj) : false;
-    } catch (error) {
-        console.error("❌ [Cerebro.ia/Motor] Error ejecutando la acción", { actionObj, error });
         throw error;
     } finally {
         console.groupEnd();
