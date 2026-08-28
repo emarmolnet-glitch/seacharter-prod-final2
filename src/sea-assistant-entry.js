@@ -76,10 +76,8 @@ const icons = {
     </svg>`,
 };
 
-// --- NUEVO ESTADO GLOBAL PARA EL SELECTOR DE IA ---
-let iaActiva = 'cerebro'; // Puede ser 'local' o 'cerebro'
+let iaActiva = 'cerebro';
 
-// Función para actualizar visualmente la cabecera y el input
 function updateAiUI(type) {
   iaActiva = type;
   const dot = document.getElementById('sea-assistant-dot');
@@ -89,11 +87,11 @@ function updateAiUI(type) {
   if (!dot || !title || !input) return;
 
   if (type === 'cerebro') {
-    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-[#6366f1]"; // Morado/Azul Cerebro
+    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-[#6366f1]";
     title.textContent = "🧠 Cerebro.ia";
     input.placeholder = "Analizando con Data Bridge. Describe la carga...";
   } else {
-    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-green-500"; // Verde Core
+    dot.className = "sca-presence-dot w-2.5 h-2.5 rounded-full shrink-0 bg-green-500";
     title.textContent = "🤖 Asistente Core";
     input.placeholder = "Haz una consulta rápida de fletamento...";
   }
@@ -105,7 +103,6 @@ function createMessage(role, text, options = {}) {
   message.dataset.role = role;
   message.dataset.messageText = String(text || "");
 
-  // 1. CHIVATO VISUAL (Solo para el bot y si no es un error)
   let chivatoHTML = '';
   if (role === "assistant" && !options.error) {
     if (options.aiType === 'cerebro') {
@@ -115,7 +112,6 @@ function createMessage(role, text, options = {}) {
     }
   }
 
-  // Si hay chivato, lo añadimos primero
   if (chivatoHTML) {
     const chivatoWrapper = document.createElement("div");
     chivatoWrapper.innerHTML = chivatoHTML;
@@ -252,7 +248,6 @@ function createThinkingMessage() {
   return message;
 }
 
-// --- 1. DETECTOR DE INTENCIÓN ---
 function isSimulationQuery(mensaje) {
   const msgLower = (mensaje || "").toLowerCase();
   const simulationKeywords = ['transportar', 'viaje', 'cotizar', 'simular', 'calcular ruta', 'flete'];
@@ -262,20 +257,13 @@ function isSimulationQuery(mensaje) {
   return simulationKeywords.some(keyword => msgLower.includes(keyword));
 }
 
-// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
-// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
-// --- 2. SELECTOR DE ENDPOINT BASADO EN IA ACTIVA ---
 function getActiveAssistantEndpoint() {
   if (iaActiva === 'cerebro') {
-    // 🚀 FORZAMOS LA URL ABSOLUTA A DATA BRIDGE IGNORANDO LAS VARIABLES DE ENTORNO
     return "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
   }
-  
-  // Para el Asistente Core local usamos la ruta relativa
   return "/.netlify/functions/chat-assistant";
 }
 
-// --- 3. FUNCIÓN DE LLAMADA ACTUALIZADA ---
 async function requestAssistantResponse(userText, historyElement, signal, attachedFiles = []) {
   const historial = collectConversationHistory(historyElement);
   
@@ -286,7 +274,6 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
     ConversationHistory: historial,
   };
 
-  // AUTO-ENRUTAMIENTO: Si sube archivos o hace cálculos, saltamos a Cerebro automáticamente
   if (attachedFiles.length > 0 || (iaActiva === 'local' && isSimulationQuery(userText))) {
     if (typeof updateAiUI === 'function') updateAiUI('cerebro');
   }
@@ -351,7 +338,6 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
   return normalizeDataBridgeAssistantResponse(payload);
 }
 
-// --- 4. SE MANTIENE TU FUNCIÓN ORIGINAL INTACTA ---
 function normalizeDataBridgeAssistantResponse(payload) {
   console.group("🔎 [Cerebro.ia/Normalización] Evaluando respuesta");
   console.log("Objeto completo:", payload);
@@ -843,59 +829,6 @@ async function executeActionableAiUpdateFields(actionObj) {
         console.groupEnd();
     }
 }
-// ===========================================================================
-
-        // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
-        const routeState = {
-            ...(p.pol ? { pol: p.pol } : {}),
-            ...(p.pod ? { pod: p.pod } : {}),
-        };
-        const tonnage = Number(p.tonnage);
-        const loadingRate = Number(p.loadingRate);
-        const dischargeRate = Number(p.dischargeRate);
-        if (Number.isFinite(tonnage) && tonnage > 0) {
-            Object.assign(routeState, { tonnage, cargo: tonnage, cargoQty: tonnage, cargoQuantity: tonnage });
-        }
-        if (Number.isFinite(loadingRate) && loadingRate > 0) {
-            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual" });
-        }
-        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual" });
-        }
-        if (Object.keys(routeState).length > 0) {
-            if (!window.State) window.State = {};
-            Object.assign(window.State, routeState);
-            window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
-            window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
-        }
-
-        if (selectedRoutePorts) {
-            const routeButton = document.getElementById("btn-map-locate-route");
-            if (typeof window.runOnDemandMapRouteWorkflow === "function") {
-                await window.runOnDemandMapRouteWorkflow(routeButton);
-            } else {
-                routeButton?.click();
-            }
-        }
-
-        if (!isMapView) {
-            if (p.loadingRate || p.dischargeRate) window.recalcularDiasPuerto?.();
-        }
-        
-        console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
-        
-        // 4. DISPARADOR FINAL AUTOMÁTICO
-        if (!isMapView) clickActionableAiFinalValidationButton();
-        
-        return true;
-    } catch (error) {
-        console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
-        throw error;
-    } finally {
-        console.groupEnd();
-    }
-}
-// ============================================================================
 
 function createVoyageActionCard(scenario) {
   const isPartial = scenario.is_partial || scenario.defaults_applied?.length > 0;
@@ -1355,7 +1288,6 @@ function collectChatContext() {
       desglosePDAs: scrapeVisiblePdaBreakdown(), 
       ...(dualModeContext ? { modoDual: dualModeContext } : {}),
     },
-    // --- CAMBIO APLICADO AQUÍ ---
     contrato: {
       tipo: contractType,
       clausulasDestacadas: ["gencon", "asbatankvoy", "editor"].includes(activeModuleDescriptor.id) 
@@ -1496,7 +1428,6 @@ function mountSeaAssistant() {
     <div class="sca-panel w-[400px] h-[550px] flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden" id="sea-assistant-panel" role="dialog" aria-labelledby="sea-assistant-title" hidden>
       <header class="sca-header flex justify-between items-center p-3 border-b bg-white rounded-t-xl">
         <div class="sca-header-main flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 p-1.5 rounded-md transition-colors" id="sea-assistant-ai-switcher" title="Clic para cambiar de asistente">
-          <!-- OJO AQUÍ: Color morado y texto Cerebro por defecto -->
           <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-[#6366f1] shrink-0" id="sea-assistant-dot" aria-hidden="true"></span>
           <h2 class="sca-title font-bold text-[14px]" id="sea-assistant-title">🧠 Cerebro.ia</h2>
           <span style="font-size: 10px; color: #94a3b8; margin-left: 2px;">▼</span>
@@ -1926,7 +1857,6 @@ const fileInput = root.querySelector("#sca-file-input");
   });
   window.addEventListener("sea-assistant:open", openFromContext);
 
-// --- AÑADE ESTO JUSTO AQUÍ ---
   const aiSwitcher = root.querySelector("#sea-assistant-ai-switcher");
   if (aiSwitcher) {
     aiSwitcher.addEventListener("mousedown", (e) => {
@@ -1934,15 +1864,12 @@ const fileInput = root.querySelector("#sca-file-input");
       updateAiUI(iaActiva === 'local' ? 'cerebro' : 'local');
     });
   }
-  // -----------------------------
-  // ESTO ES LO QUE YA TIENES:
+
   header.addEventListener("mousedown", (event) => {
-    // ESTA LÍNEA ES LA QUE PERMITE QUE EL CLIC FUNCIONE
     if (event.button !== 0 || event.target.closest("button") || event.target.closest("#sea-assistant-ai-switcher")) return;
 
     if (!hasCustomPosition) initializePosition();
     isDragging = true;
-    // ...
     dragStart = {
       x: event.clientX - position.x,
       y: event.clientY - position.y,
@@ -2068,8 +1995,7 @@ if (document.readyState === "loading") {
 } else {
   mountSeaAssistant();
 }
-// --- MOTOR GLOBAL DE EJECUCIÓN ASEGURADO ---
-// --- MOTOR GLOBAL DE EJECUCIÓN ASEGURADO ---
+
 async function executeActionableAiAction(actionObj) {
     if (!actionObj) return false;
     const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
@@ -2089,5 +2015,4 @@ async function executeActionableAiAction(actionObj) {
     return false;
 }
 
-// Lo exponemos globalmente solo como backup
 window.executeActionableAiAction = executeActionableAiAction;
