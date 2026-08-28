@@ -1991,7 +1991,8 @@ if (document.readyState === "loading") {
   mountSeaAssistant();
 }
 // --- MOTOR GLOBAL DE EJECUCIÓN ASEGURADO ---
-window.executeActionableAiAction = async function executeActionableAiAction(actionObj) {
+// --- MOTOR GLOBAL DE EJECUCIÓN ASEGURADO ---
+async function executeActionableAiAction(actionObj) {
     if (!actionObj) return false;
     const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
     
@@ -2008,4 +2009,7 @@ window.executeActionableAiAction = async function executeActionableAiAction(acti
         return executeActionableAiRoute(actionObj);
     }
     return false;
-};
+}
+
+// Lo exponemos globalmente solo como backup
+window.executeActionableAiAction = executeActionableAiAction;
