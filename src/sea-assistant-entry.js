@@ -574,284 +574,231 @@ async function executeActionableAiUpdateFields(actionObj) {
     console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple");
     console.log("Objeto de acción recibido:", actionObj);
     try {
-    // 1. Verificación robusta: Asegurarse de que actionObj existe.
-    if (!actionObj) {
-        console.error("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
-        return false;
-    }
-
-    // 2. Extracción del Payload (La Llave Maestra):
-    // El servidor puede enviar { action: "...", payload: {...} } 
-    // o simplemente enviar el payload directamente si hubo algún parseo intermedio.
-    let p = actionObj.payload || actionObj; 
-    console.log("Payload efectivo que se va a aplicar:", p);
-    
-    // 3. Verificación del Payload: Si el payload está vacío (por ejemplo, es un string vacío), abortamos.
-    if (!p || typeof p !== 'object' || Object.keys(p).length === 0) {
-        console.error("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
-        return false;
-    }
-
-    const updateInputs = (ids, value, dispatchEvents = true) => {
-        if (value === undefined || value === null || value === "") {
-            console.log("Valor omitido por estar vacío:", { ids, value });
-            return;
+        if (!actionObj) {
+            console.error("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
+            return false;
         }
 
-        ids.forEach((id) => {
-            const selector = `#${id}, [name="${id}"], .${id}`;
-            let elements;
-            try {
-                elements = document.querySelectorAll(selector);
-            } catch (error) {
-                console.error("Selector DOM inválido durante update_fields:", { selector, error });
-                return;
-            }
-            console.log("Búsqueda DOM:", {
-                selector,
-                encontrados: elements.length,
-                elementos: Array.from(elements),
-            });
-            if (elements.length === 0) {
-                console.error("No se encontró ningún elemento para el selector:", selector);
-            }
-            
-            elements.forEach((input) => {
-                const previousValue = input.value;
-                if (input.id === "rate-load" || input.id === "rate-disch") {
-                    const side = input.id === "rate-disch" ? "pod" : "pol";
-                    window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
-                    input.readOnly = false;
-                    input.disabled = false;
-                    input.removeAttribute("readonly");
-                    input.removeAttribute("disabled");
-                    input.dataset.manualOverride = "true";
-                    input.dataset.draftCalcMode = "manual";
-                    if (side === "pod") input.dataset.podCalcMode = "manual";
-                }
+        let p = actionObj.payload || actionObj; 
+        console.log("Payload efectivo que se va a aplicar:", p);
+        
+        if (!p || typeof p !== 'object' || Object.keys(p).length === 0) {
+            console.error("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
+            return false;
+        }
 
-                if (input.tagName === 'SELECT') {
-                    // Búsqueda inteligente en desplegables por texto o valor parcial
-                    let matched = false;
-                    const valStr = String(value).toLowerCase();
-                    for (const option of input.options) {
-                        if (option.value.toLowerCase() === valStr || option.text.toLowerCase().includes(valStr)) {
-                            input.value = option.value;
-                            matched = true;
+        const updateInputs = (ids, value, dispatchEvents = true) => {
+            if (value === undefined || value === null || value === "") return;
+            ids.forEach((id) => {
+                const selector = `#${id}, [name="${id}"], .${id}`;
+                let elements;
+                try {
+                    elements = document.querySelectorAll(selector);
+                } catch (error) {
+                    return;
+                }
+                elements.forEach((input) => {
+                    if (input.id === "rate-load" || input.id === "rate-disch") {
+                        const side = input.id === "rate-disch" ? "pod" : "pol";
+                        window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
+                        input.readOnly = false;
+                        input.disabled = false;
+                        input.removeAttribute("readonly");
+                        input.removeAttribute("disabled");
+                        input.dataset.manualOverride = "true";
+                        input.dataset.draftCalcMode = "manual";
+                        if (side === "pod") input.dataset.podCalcMode = "manual";
+                    }
+
+                    if (input.tagName === 'SELECT') {
+                        let matched = false;
+                        const valStr = String(value).toLowerCase();
+                        for (const option of input.options) {
+                            if (option.value.toLowerCase() === valStr || option.text.toLowerCase().includes(valStr)) {
+                                input.value = option.value;
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched) return;
+                    } else {
+                        input.value = String(value);
+                    }
+
+                    if (!dispatchEvents) return;
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                    input.dispatchEvent(new Event("change", { bubbles: true }));
+                    input.dispatchEvent(new Event("blur", { bubbles: true }));
+                    window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
+                        detail: { field: id, value: input.value, inputId: input.id || null },
+                    }));
+                });
+            });
+        };
+
+        const polQuery = String(p.pol || "").trim();
+        const podQuery = String(p.pod || "").trim();
+        let selectedRoutePorts = null;
+
+        updateInputs(["map-port-pol", "port-pol"], p.pol);
+        updateInputs(["map-port-pod", "port-pod"], p.pod);
+
+        if (polQuery && podQuery) {
+            try {
+                selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
+                p = {
+                    ...p,
+                    pol: selectedRoutePorts.pol.officialLabel,
+                    pod: selectedRoutePorts.pod.officialLabel,
+                    pol_port: selectedRoutePorts.pol,
+                    pod_port: selectedRoutePorts.pod,
+                };
+                updateInputs(["map-port-pol", "port-pol"], p.pol);
+                updateInputs(["map-port-pod", "port-pod"], p.pod);
+            } catch (error) {
+                console.error("Falló la validación WPI", error);
+            }
+        }
+
+        // Inyección de datos básicos
+        updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
+        updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
+        updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
+        updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
+        updateInputs(["cargo-product", "nlp-cargo-product", "input-producto", "producto-especifico", "product-select", "input-product"], p.product);
+        updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
+        updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
+        updateInputs(["metodo_carga"], p.loadingMethod);
+        updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
+
+        // Forzar modo MANUAL en ritmos
+        document.querySelectorAll('button, span, label, div').forEach(el => {
+            const txt = el.textContent.trim().toLowerCase();
+            if (txt === 'manual' || txt === 'auto / manual') el.click();
+        });
+        document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, #btn-rate-disch-manual, .rate-mode-manual, button[id*="manual"]')?.forEach(btn => btn.click());
+
+        const isMapView = getActiveModuleDescriptor().id === 'map';
+        const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
+        updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
+
+        // ============================================================================
+        // 🚀 NUEVA LÓGICA DE MAPEADO: MADERA/PALETIZADO vs CEMENTO/BIG BAGS
+        // ============================================================================
+        const cargoTypeLower = (p.cargo_type || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
+
+        if (cargoTypeLower.includes('madera') || cargoTypeLower.includes('paletiz') || cargoTypeLower.includes('pallet')) {
+            
+            // 1. Forzar clic en botones Píldora "Palletizado"
+            const pillButtons = Array.from(document.querySelectorAll('button, div, span'));
+            const palletBtns = pillButtons.filter(el => {
+                const txt = el.textContent.trim().toUpperCase();
+                return txt.includes('PALLETIZADO - GRÚA BARCO') || txt.includes('PALETIZADO - GRÚA BARCO');
+            });
+            palletBtns.forEach(btn => {
+                btn.click();
+                console.log("✅ [Core PRO] Píldora de Palletizado activada.");
+            });
+
+            // 2. Forzar desplegables (React compat)
+            const selects = document.querySelectorAll('select');
+            selects.forEach(sel => {
+                const options = Array.from(sel.options);
+                const targetOption = options.find(opt => 
+                    opt.text.toUpperCase().includes('MADERA') || 
+                    opt.text.toUpperCase().includes('FORESTAL') || 
+                    opt.text.toUpperCase().includes('GENERAL')
+                );
+
+                if (targetOption) {
+                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+                    if (nativeSetter) nativeSetter.call(sel, targetOption.value);
+                    else sel.value = targetOption.value;
+                    
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log(`✅ [Core PRO] Selector cambiado a Madera: ${targetOption.text}`);
+                }
+            });
+
+        } else {
+            // COMPORTAMIENTO POR DEFECTO: CEMENTO Y BIG BAGS
+            document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]').forEach(btn => {
+                const text = btn.textContent.toLowerCase();
+                if (text.includes('big bags') && text.includes('grúa barco')) btn.click();
+            });
+
+            document.querySelectorAll('select').forEach(sel => {
+                let matched = false;
+                for (let opt of sel.options) {
+                    if (opt.text.toLowerCase().includes('cemento') && !opt.text.toLowerCase().includes('granel')) {
+                        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+                        if (nativeSetter) nativeSetter.call(sel, opt.value);
+                        else sel.value = opt.value;
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    for (let opt of sel.options) {
+                        if (opt.text.toLowerCase().includes('cemento') || opt.value === '10') {
+                            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+                            if (nativeSetter) nativeSetter.call(sel, opt.value);
+                            else sel.value = opt.value;
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
                             break;
                         }
                     }
-                    if (!matched) {
-                        console.error("No existe una opción compatible en el select:", {
-                            selector,
-                            valorSolicitado: value,
-                            opciones: Array.from(input.options).map((option) => ({ value: option.value, text: option.text })),
-                        });
-                        return;
-                    }
-                } else {
-                    input.value = String(value);
                 }
-
-                console.log("Valor asignado al elemento:", {
-                    selector,
-                    element: input,
-                    anterior: previousValue,
-                    actual: input.value,
-                });
-
-                if (!dispatchEvents) return;
-                
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-                input.dispatchEvent(new Event("change", { bubbles: true }));
-                input.dispatchEvent(new Event("blur", { bubbles: true }));
-                window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
-                    detail: { field: id, value: input.value, inputId: input.id || null },
-                }));
-                console.log("Eventos disparados:", ["input", "change", "blur", "sea-assistant:field-updated"]);
-            });
-        });
-    };
-
-    const polQuery = String(p.pol || "").trim();
-    const podQuery = String(p.pod || "").trim();
-    let selectedRoutePorts = null;
-
-    updateInputs(["map-port-pol", "port-pol"], p.pol);
-    updateInputs(["map-port-pod", "port-pod"], p.pod);
-
-    if (polQuery && podQuery) {
-        console.log("Intentando validar POL/POD mediante WPI:", { polQuery, podQuery });
-        try {
-            selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
-            p = {
-                ...p,
-                pol: selectedRoutePorts.pol.officialLabel,
-                pod: selectedRoutePorts.pod.officialLabel,
-                pol_port: selectedRoutePorts.pol,
-                pod_port: selectedRoutePorts.pod,
-            };
-            console.log("Puertos WPI validados:", selectedRoutePorts);
-            updateInputs(["map-port-pol", "port-pol"], p.pol);
-            updateInputs(["map-port-pod", "port-pod"], p.pod);
-        } catch (error) {
-            console.error("Falló la validación WPI; se conservan los nombres crudos y continúa la inyección.", {
-                polQuery,
-                podQuery,
-                error,
             });
         }
-    }
+        // ============================================================================
 
-    // 4. Inyección de datos
-    updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
-    updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
-    updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
-    updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
-    updateInputs(["cargo-product", "nlp-cargo-product", "input-producto", "producto-especifico", "product-select", "input-product"], p.product);
-    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
-    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
-    updateInputs(["metodo_carga"], p.loadingMethod);
-    updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
-
-    // 1. Forzar modo MANUAL de forma agresiva en todos los selectores de ritmo
-    document.querySelectorAll('button, span, label, div').forEach(el => {
-        const txt = el.textContent.trim().toLowerCase();
-        if (txt === 'manual' || txt === 'auto / manual') el.click();
-    });
-    document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, #btn-rate-disch-manual, .rate-mode-manual, button[id*="manual"]')?.forEach(btn => btn.click());
-
-    // 2. Inyectar ritmos de carga y descarga asegurando el valor numérico exacto
-    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
-    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "dischargeRate"], p.dischargeRate);
-
-    // 3. Selección inteligente del Método de Carga (Priorizando Grúa Barco)
-    document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]').forEach(btn => {
-        const text = btn.textContent.toLowerCase();
-        if (text.includes('big bags') && text.includes('grúa barco')) {
-            btn.click();
+        // Autocompletado del estado global
+        const routeState = {
+            ...(p.pol ? { pol: p.pol } : {}),
+            ...(p.pod ? { pod: p.pod } : {}),
+        };
+        const tonnage = Number(p.tonnage);
+        const loadingRate = Number(p.loadingRate);
+        const dischargeRate = Number(p.dischargeRate);
+        if (Number.isFinite(tonnage) && tonnage > 0) {
+            Object.assign(routeState, { tonnage, cargo: tonnage, cargoQty: tonnage, cargoQuantity: tonnage });
         }
-    });
+        if (Number.isFinite(loadingRate) && loadingRate > 0) {
+            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual" });
+        }
+        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual" });
+        }
+        if (Object.keys(routeState).length > 0) {
+            if (!window.State) window.State = {};
+            Object.assign(window.State, routeState);
+            window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
+            window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
+        }
 
-    // --- NUEVA LÓGICA ANTI-LAG: Detectar si estamos en el mapa ---
-    const isMapView = getActiveModuleDescriptor().id === 'map';
-
-    // 4. Calcular DWT estimado si viene a 0
-    const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
-    
-    // Si estamos en el mapa, pasamos 'false' para que inyecte silenciosamente sin disparar el fetch de velocidad del barco
-    updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
-
-    // 5. Mapear Producto Específico (Priorizando "Big Bags" antes que términos genéricos)
-    document.querySelectorAll('select').forEach(sel => {
-        const prodText = (p.product || 'big bags').toLowerCase();
-        let matched = false;
-        
-        for (let opt of sel.options) {
-            if (opt.text.toLowerCase().includes(prodText) || opt.value.toLowerCase().includes(prodText)) {
-                sel.value = opt.value;
-                sel.dispatchEvent(new Event('change', { bubbles: true }));
-                matched = true;
-                break;
+        if (selectedRoutePorts) {
+            const routeButton = document.getElementById("btn-map-locate-route");
+            if (typeof window.runOnDemandMapRouteWorkflow === "function") {
+                await window.runOnDemandMapRouteWorkflow(routeButton);
+            } else {
+                routeButton?.click();
             }
+        }
+
+        if (!isMapView) {
+            if (p.loadingRate || p.dischargeRate) window.recalcularDiasPuerto?.();
         }
         
-        if (!matched) {
-            for (let opt of sel.options) {
-                if (opt.text.toLowerCase().includes('cemento') && !opt.text.toLowerCase().includes('granel')) {
-                    sel.value = opt.value;
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                    break;
-                }
-            }
-        }
-    });
-
-    // 6. Mapear Especificación de Carga para Cemento (Código 10)
-    document.querySelectorAll('select').forEach(sel => {
-        for (let opt of sel.options) {
-            if (opt.text.toLowerCase().includes('cemento') || opt.value === '10') {
-                sel.value = opt.value;
-                sel.dispatchEvent(new Event('change', { bubbles: true }));
-                break;
-            }
-        }
-    });
-
-    // 7. Autocompletado del estado global y disparo exclusivo del MAPA
-    const routeState = {
-        ...(p.pol ? { pol: p.pol } : {}),
-        ...(p.pod ? { pod: p.pod } : {}),
-    };
-    const tonnage = Number(p.tonnage);
-    const loadingRate = Number(p.loadingRate);
-    const dischargeRate = Number(p.dischargeRate);
-    if (Number.isFinite(tonnage) && tonnage > 0) {
-        Object.assign(routeState, {
-            tonnage,
-            cargo: tonnage,
-            cargoQty: tonnage,
-            cargoQuantity: tonnage,
-        });
-    }
-    if (Number.isFinite(loadingRate) && loadingRate > 0) {
-        Object.assign(routeState, {
-            loadRate: loadingRate,
-            ratePOL: loadingRate,
-            ritmoRealPol: loadingRate,
-            ritmoMode: "manual",
-            ritmoMode_pol: "manual",
-        });
-    }
-    if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-        Object.assign(routeState, {
-            dischargeRate,
-            dischRate: dischargeRate,
-            ratePOD: dischargeRate,
-            ritmoRealPod: dischargeRate,
-            ritmoMode_pod: "manual",
-            podCalcMode: "manual",
-        });
-    }
-    if (Object.keys(routeState).length > 0) {
-        if (!window.State) window.State = {};
-        Object.assign(window.State, routeState);
-        window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
-        window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
-        console.log("Estado global sincronizado:", routeState);
-    }
-
-    if (selectedRoutePorts) {
-        const routeButton = document.getElementById("btn-map-locate-route");
-        console.log("Botón de cálculo de ruta:", {
-            selector: "#btn-map-locate-route",
-            encontrado: Boolean(routeButton),
-            element: routeButton,
-        });
-        if (typeof window.runOnDemandMapRouteWorkflow === "function") {
-            await window.runOnDemandMapRouteWorkflow(routeButton);
-        } else {
-            routeButton?.click();
-        }
-    }
-
-    // 8. BLOQUEO DEL MOTOR PESADO: Solo calculamos finanzas y ritmos si NO estamos en el mapa
-    if (!isMapView) {
-        if (p.loadingRate || p.dischargeRate) {
-            window.recalcularDiasPuerto?.();
-        }
-    } else {
-        console.log("📍 Modo Mapa detectado: Fetch de velocidad y motor financiero diferidos.");
-    }
-    
-    console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
-    if (!isMapView) clickActionableAiFinalValidationButton();
-    return true;
+        console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
+        
+        // 🚀 Clic automático final en calcular
+        if (!isMapView) clickActionableAiFinalValidationButton();
+        
+        return true;
     } catch (error) {
-        console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", {
-            actionObj,
-            error,
-        });
+        console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
         throw error;
     } finally {
         console.groupEnd();
