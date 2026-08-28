@@ -1468,12 +1468,15 @@ function collectChatContext() {
         beneficioArmadorUsd: firstNumber(state.netProfitOwner, calculatedState.netProfitOwner),
         beneficioFletadorUsd: firstNumber(state.netProfitCharterer, calculatedState.netProfitCharterer),
       },
-      desglosePDAs: scrapeVisiblePdaBreakdown(), // <--- ¡AQUÍ ESTÁ LA LÍNEA NUEVA!
+      desglosePDAs: scrapeVisiblePdaBreakdown(), 
       ...(dualModeContext ? { modoDual: dualModeContext } : {}),
     },
+    // --- CAMBIO APLICADO AQUÍ ---
     contrato: {
       tipo: contractType,
-      clausulasDestacadas: getHighlightedClauses(contractType),
+      clausulasDestacadas: ["gencon", "asbatankvoy", "editor"].includes(activeModuleDescriptor.id) 
+        ? getHighlightedClauses(contractType) 
+        : [],
     },
   };
 }
