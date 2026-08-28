@@ -26,7 +26,7 @@ test('route, weather, and Radar requests stay idle until an explicit button clic
   assert.match(manualRoute, /calculateVoyageRouteService\(\{ portBallast, pol, pod, geocode: true \}\)/);
   assert.match(manualRoute, /applyRouteServiceResult\(routeResult\)[\s\S]*renderMasterRouteMap\(routeResult\)[\s\S]*updateRouteSummary\(\)/);
   assert.match(manualRoute, /finally \{[\s\S]*button\.disabled = false[\s\S]*button\.removeAttribute\('aria-busy'\)[\s\S]*button\.innerHTML = originalContent/);
-  assert.match(manualRoute, /void Promise\.allSettled\(\[[\s\S]*restorePersistentDataBridgeConnection\(\)[\s\S]*refreshDataBridgeMasterStatsOnDemand\(\)/);
+  assert.match(manualRoute, /void Promise\.allSettled\(\[[\s\S]*window\.restorePersistentDataBridgeConnection\?\.\(\)[\s\S]*refreshDataBridgeMasterStatsOnDemand\(\)/);
   assert.match(source, /host\.querySelector\('\[data-radar-global-button\]'\)\?\.addEventListener\('click',[\s\S]*window\.executeMatchingRadarSweep\?\.\(\{ trigger: 'user' \}\)/);
   assert.match(source, /window\.startDatalasticRadarPolling = startDatalasticRadarPolling;[\s\S]*stopDatalasticRadarPolling\(\)/);
 });
@@ -39,4 +39,17 @@ test('switchTab performs UI navigation without network, polling, calculation, or
   assert.doesNotMatch(switchSource, /fetch\s*\(|updateDatalasticRadar|startDataBridgeHttpPolling|syncDataBridgeRadarTransport|calculateAndDisplayAisFreight|runDensityMapPreflightChecklist|autoCalculateDistances|runEngine|clearRadarSnapshot|resetAisDensityResults|setMatchingFleet/);
   assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*Array\.isArray\(window\.GlobalStore\?\.matchingVessels\)[\s\S]*window\.GlobalStore\.matchingVessels/);
   assert.match(source, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*const count = matchingVessels\.length[\s\S]*densityCount\.textContent = String\(count\)/);
+});
+
+test('Data Bridge secure state requires a persisted confirmed connection', () => {
+  const restoreSource = sliceSource('async function restorePersistentDataBridgeConnection()', 'window.restorePersistentDataBridgeConnection = restorePersistentDataBridgeConnection;');
+  const openWebSource = sliceSource('function openWebDataBridge()', 'function hideWebDataBridge()');
+  const buttonStateSource = sliceSource('function updateDataBridgeButtonState(isVisible)', 'window.toggleDataBridge = toggleDataBridge;');
+
+  assert.match(restoreSource, /const isConnected = response\.ok && connection\.connected === true/);
+  assert.match(restoreSource, /updateDataBridgeTransportStatus\(isConnected \? 'connected' : 'disconnected'\)/);
+  assert.match(restoreSource, /if \(isConnected\) \{[\s\S]*verifyDataBridgeConnection\(null, \{ silent: true, restoring: true \}\)/);
+  assert.doesNotMatch(restoreSource, /if \(response\.ok\) updateDataBridgeTransportStatus\('connected'\)/);
+  assert.doesNotMatch(openWebSource, /updateConnectionStatusBar\('secure'\)/);
+  assert.doesNotMatch(buttonStateSource, /updateConnectionStatusBar\('secure'\)/);
 });

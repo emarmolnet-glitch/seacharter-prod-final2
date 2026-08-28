@@ -53,17 +53,16 @@ test('update_fields preserves the server payload and awaits the map workflow', (
   assert.match(frontendSource, /typeof rawAction === "string"[\s\S]*\{ action: rawAction, payload: actionPayload \|\| \{\} \}/);
   assert.match(frontendSource, /async function executeActionableAiUpdateFields\(actionObj\)/);
   assert.match(frontendSource, /let p = actionObj\.payload \|\| actionObj/);
-  assert.match(frontendSource, /await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
+  assert.match(frontendSource, /window\.injectVoyageScenario\(validatedScenario, \{ deferFinalActions: true \}\)/);
+  assert.match(frontendSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult, \{ forceRouteCalculation: true \}\)/);
   assert.match(frontendSource, /window\.runEngine\?\.\(\)/);
 });
 
-test('update_fields clicks VALIDAR ESPECIFICACIONES as its final action', () => {
-  assert.match(frontendSource, /function clickActionableAiFinalValidationButton\(\)/);
-  assert.match(frontendSource, /document\.querySelectorAll\("button"\)/);
-  assert.match(frontendSource, /normalizeButtonText\(button\)\.includes\("VALIDAR ESPECIFICACIONES"\)/);
-  assert.doesNotMatch(frontendSource, /findByText\("CALCULAR"\)/);
-  assert.match(frontendSource, /validationButton\.click\(\)/);
-  assert.match(frontendSource, /console\.log\("✅ \[Cerebro\.ia\/update_fields\] Inyección completada", p\);\s*if \(!isMapView\) clickActionableAiFinalValidationButton\(\);\s*return true;/);
+test('update_fields finalizes validated Datalastic ports without delayed DOM clicks', () => {
+  assert.match(frontendSource, /selectedRoutePorts = await selectActionableAiWpiRoute\(polQuery, podQuery\)/);
+  assert.match(frontendSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult, \{ forceRouteCalculation: true \}\)/);
+  assert.doesNotMatch(frontendSource, /const datalasticOptions =/);
+  assert.doesNotMatch(frontendSource, /datalasticOptions\[[01]\]\.click\(\)/);
 });
 
 test('update_fields is processed once per completed assistant response', () => {
@@ -83,24 +82,18 @@ test('update_fields selects POL and POD through Datalastic before calculating th
   assert.match(frontendSource, /pol: selectedRoutePorts\.pol\.officialLabel/);
   assert.match(frontendSource, /pod: selectedRoutePorts\.pod\.officialLabel/);
   assert.match(frontendSource, /source: "assistant-update-fields"/);
-  assert.match(frontendSource, /if \(selectedRoutePorts\) \{[\s\S]*await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
+  assert.match(frontendSource, /if \(selectedRoutePorts\) \{[\s\S]*window\.injectVoyageScenario\(validatedScenario, \{ deferFinalActions: true \}\)[\s\S]*await window\.finalizeAssistantVoyageInjection/);
 });
 
 test('Core PRO executes hidden calculate_route actions through the existing map workflow', () => {
   assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(action\?\.action\)/);
   assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(parsed\?\.action\)/);
   assert.match(frontendSource, /function executeActionableAiRoute\(action\)/);
-  assert.match(frontendSource, /document\.getElementById\("map-port-pol"\)/);
-  assert.match(frontendSource, /document\.getElementById\("map-port-pod"\)/);
-  assert.match(frontendSource, /document\.getElementById\("cargo-qty"\)/);
-  assert.match(frontendSource, /document\.getElementById\("btn-map-locate-route"\)/);
   assert.match(frontendSource, /async function selectActionableAiWpiRoute\(pol, pod\)/);
-  assert.match(frontendSource, /await window\.selectFirstWpiAutocompleteMatch\(inputId, value\)/);
+  assert.match(frontendSource, /await window\.selectFirstWpiAutocompleteMatch\(inputId, query\)/);
   assert.match(frontendSource, /const selectedPorts = await selectActionableAiWpiRoute\(pol, pod\)/);
-  assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pol\)\)/);
-  assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pod\)\)/);
-  assert.match(frontendSource, /if \(hasTonnage && cargoInput\) setActionableAiInputValue\(cargoInput, tonnage\)/);
-  assert.match(frontendSource, /await window\.runOnDemandMapRouteWorkflow\(routeButton\)/);
+  assert.match(frontendSource, /window\.injectVoyageScenario\(validatedScenario, \{ deferFinalActions: true \}\)/);
+  assert.match(frontendSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult, \{ forceRouteCalculation: true \}\)/);
   assert.match(frontendSource, /if \(action\) await executeActionableAiAction\(action\)/);
 });
 

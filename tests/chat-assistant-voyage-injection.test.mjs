@@ -96,9 +96,8 @@ test('assistant finalization replaces methods and runs route before master calcu
 test('assistant route cards select WPI dropdown options before injecting the voyage', () => {
   assert.match(assistantSource, /button\.addEventListener\("click", async \(\) => \{/);
   assert.match(assistantSource, /const selectedPorts = await selectActionableAiWpiRoute\(scenario\.pol, scenario\.pod\)/);
-  assert.match(assistantSource, /const result = window\.injectVoyageScenario\(validatedScenario\)/);
-  assert.match(assistantSource, /const nlpEngine = await waitForHeadlessNlpEngine\(\)/);
-  assert.match(assistantSource, /await nlpEngine\.execute\(checklistResult\.payload\)/);
+  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedScenario, \{ deferFinalActions: true \}\)/);
+  assert.match(assistantSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult, \{ forceRouteCalculation: true \}\)/);
 });
 
 test('complete-form action maps every field and forces route plus cost calculation', () => {

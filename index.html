@@ -42155,20 +42155,30 @@ function scheduleReactiveEngine() {
             // Todas las credenciales se resuelven exclusivamente en la Function de Netlify.
             for (let i = 0; i <= delays.length; i++) {
                 try {
-                    const response = await fetch('/.netlify/functions/ai-legal-audit', {
+                    const response = await fetch('/api/ai-legal-audit', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    
-                    if (response.ok) {
-                        return await response.json();
-                    } else {
-                        const errData = await response.json().catch(() => ({}));
-                        const requestError = new Error(errData.error?.message || `Error HTTP ${response.status}`);
-                        requestError.code = errData.error?.code || '';
+
+                    const rawBody = await response.text();
+                    let responseBody = {};
+                    try {
+                        responseBody = rawBody ? JSON.parse(rawBody) : {};
+                    } catch (parseError) {
+                        responseBody = {};
+                    }
+
+                    if (!response.ok) {
+                        const rawPreview = rawBody.slice(0, 160).replace(/\s+/g, ' ').trim();
+                        const requestError = new Error(
+                            responseBody.error?.message || `Error HTTP ${response.status}${rawPreview ? `: ${rawPreview}` : ''}`
+                        );
+                        requestError.code = responseBody.error?.code || '';
                         throw requestError;
                     }
+
+                    return responseBody;
                 } catch (error) {
                     lastError = error;
                     if (error?.code === 'AUDIT_GATE_BLOCKED') throw error;
@@ -62436,17 +62446,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const payload = await response.json().catch(() => ({}));
                 const connection = payload?.connection || {};
+                const isConnected = response.ok && connection.connected === true;
                 window.dataBridgePersistentConnectionState = {
-                    connected: response.ok && connection.connected === true,
+                    connected: isConnected,
                     verifiedAt: connection.verifiedAt || null,
                     lastCheckedAt: connection.lastCheckedAt || null
                 };
-	            if (response.ok) updateDataBridgeTransportStatus('connected');
+                updateDataBridgeTransportStatus(isConnected ? 'connected' : 'disconnected');
                 updateDataBridgeConnectionIndicator();
-                if (window.dataBridgePersistentConnectionState.connected) {
+                if (isConnected) {
                     await verifyDataBridgeConnection(null, { silent: true, restoring: true });
                 }
-                return window.dataBridgePersistentConnectionState.connected;
+                return isConnected;
             } catch (error) {
                 updateDataBridgeConnectionIndicator();
                 return false;
@@ -62603,10 +62614,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.add('hidden');
             if (launcher) launcher.classList.remove('flex');
             updateDataBridgeButtonState(true);
-            updateConnectionStatusBar('secure');
-            setTimeout(() => {
-                if (webDataBridgeVisible) updateConnectionStatusBar('secure');
-            }, 1200);
         }
 
         function hideWebDataBridge() {
@@ -62672,10 +62679,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             updateDataBridgeConnectionIndicator();
-            if (isVisible) {
-                updateConnectionStatusBar('secure');
-                setTimeout(() => updateConnectionStatusBar('secure'), 900);
-            }
             updatePendingFrozenReportButton();
         }
 

@@ -9,5 +9,8 @@ test("AI reports keep credentials and inference behind Netlify Functions", () =>
   assert.doesNotMatch(frontendSource, /rodahmar_gemini_api_key/i);
   assert.doesNotMatch(frontendSource, /generativelanguage\.googleapis\.com/i);
   assert.doesNotMatch(frontendSource, /(?:localStorage|sessionStorage)[\s\S]{0,120}(?:gemini|google.*key)/i);
-  assert.match(frontendSource, /fetch\('\/.netlify\/functions\/ai-legal-audit'/);
+  assert.match(frontendSource, /fetch\('\/api\/ai-legal-audit'/);
+  assert.match(frontendSource, /const rawBody = await response\.text\(\)/);
+  assert.match(frontendSource, /JSON\.parse\(rawBody\)/);
+  assert.match(frontendSource, /Error HTTP \$\{response\.status\}/);
 });
