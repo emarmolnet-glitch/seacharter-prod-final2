@@ -1931,7 +1931,6 @@ const fileInput = root.querySelector("#sca-file-input");
     const filesLabel = pendingFiles.length > 0 ? ` [${pendingFiles.length} archivo(s) adjunto(s)]` : "";
     appendMessage(createMessage("user", `${userText}${filesLabel}`, { meta: formatTime() }));
     
-    // 📎 Capturamos los ficheros y vaciamos la bandeja visual:
     const filesToSend = [...pendingFiles];
     input.value = "";
     pendingFiles = [];
@@ -1948,13 +1947,9 @@ const fileInput = root.querySelector("#sca-file-input");
     try {
       const response = await requestAssistantResponse(userText, history, controller.signal, filesToSend);
       
-      // --- CAPTURA ROBUSTA DE LA ACCIÓN Y EL PAYLOAD ---
-      // Verificamos si la respuesta trae la acción de forma nativa o en el objeto action
       let actionToExecute = null;
-      
       if (response.action) {
         if (typeof response.action === "string") {
-          // Si viene como string simple (ej: "update_fields"), construimos el objeto con el payload de la respuesta
           actionToExecute = {
             action: response.action,
             payload: response.payload || response.data?.payload || {}
@@ -1964,26 +1959,36 @@ const fileInput = root.querySelector("#sca-file-input");
         }
       }
 
-      // Si no venía en response.action, probamos a extraerlo del texto con la función existente
       if (!actionToExecute) {
         const actionableResponse = extractActionableAiResponse(response.respuesta);
         actionToExecute = actionableResponse.action;
       }
 
-      // Ejecutamos la acción si existe
       if (actionToExecute) {
-        console.log("⚡ [FRONTEND] Ejecutando acción automática:", actionToExecute);
         await executeActionableAiAction(actionToExecute);
       }
 
-      // Mostramos el texto limpio de la respuesta en el chat
       const textoVisible = response.respuesta || "Acción completada.";
       replaceWithAssistantMessage(
         thinkingMessage,
         textoVisible,
         { meta: formatTime() },
       );
+    } catch (error) {
+      const errorText = error?.name === "AbortError"
+        ? (stoppedByUser ? "Respuesta detenida." : "La solicitud tardó demasiado. Inténtalo de nuevo.")
+        : (error?.message || "No se pudo consultar al asistente en este momento.");
+      thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (activeRequestController === controller) activeRequestController = null;
+      stoppedByUser = false;
+      setPending(false);
+      input.focus();
+      scrollToLatest();
     }
+  });
+}
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", mountSeaAssistant, { once: true });
