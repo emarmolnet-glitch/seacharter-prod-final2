@@ -571,21 +571,15 @@ function clickActionableAiFinalValidationButton() {
 }
 
 async function executeActionableAiUpdateFields(actionObj) {
-    console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple");
+    console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple universal");
     console.log("Objeto de acción recibido:", actionObj);
     try {
-        if (!actionObj) {
-            console.error("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
-            return false;
-        }
+        if (!actionObj) return false;
 
         let p = actionObj.payload || actionObj; 
         console.log("Payload efectivo que se va a aplicar:", p);
         
-        if (!p || typeof p !== 'object' || Object.keys(p).length === 0) {
-            console.error("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
-            return false;
-        }
+        if (!p || typeof p !== 'object' || Object.keys(p).length === 0) return false;
 
         const updateInputs = (ids, value, dispatchEvents = true) => {
             if (value === undefined || value === null || value === "") return;
@@ -660,16 +654,12 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         }
 
-        // Inyección de datos básicos
+        // 1. INYECCIÓN DE DATOS BÁSICOS
         updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
         updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
         updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
-        updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
-        updateInputs(["cargo-product", "nlp-cargo-product", "input-producto", "producto-especifico", "product-select", "input-product"], p.product);
         updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
         updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
-        updateInputs(["metodo_carga"], p.loadingMethod);
-        updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
 
         // Forzar modo MANUAL en ritmos
         document.querySelectorAll('button, span, label, div').forEach(el => {
@@ -683,78 +673,80 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
         // ============================================================================
-        // 🚀 NUEVA LÓGICA DE MAPEADO: MADERA/PALETIZADO vs CEMENTO/BIG BAGS
+        // 🚀 2. MOTOR LÉXICO UNIVERSAL (5 FAMILIAS DE FLETAMENTO)
         // ============================================================================
         const cargoTypeLower = (p.cargo_type || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
+        const methodLower = (p.loadingMethod || p.dischargeMethod || p.metodo_carga || "").toLowerCase();
 
-        if (cargoTypeLower.includes('madera') || cargoTypeLower.includes('paletiz') || cargoTypeLower.includes('pallet')) {
+        if (methodLower || cargoTypeLower) {
+            // A. ACTIVAR BOTONES PÍLDORA DINÁMICAMENTE (Mapeo de Familias)
+            const pillButtons = Array.from(document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]'));
+            const matchedBtns = pillButtons.filter(el => {
+                const txt = el.textContent.trim().toLowerCase();
+                
+                // 1. Familia Paletizado
+                if ((methodLower.includes('paletiz') || methodLower.includes('pallet') || cargoTypeLower.includes('madera') || cargoTypeLower.includes('papel')) && (txt.includes('palletizado') || txt.includes('paletizado'))) return true;
+                
+                // 2. Familia Big Bags
+                if ((methodLower.includes('big bag') || cargoTypeLower.includes('cemento') || cargoTypeLower.includes('fertilizante')) && txt.includes('big bags')) return true;
+                
+                // 3. Familia Granel / Bulk
+                if ((methodLower.includes('granel') || methodLower.includes('bulk') || cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal|carbon|mineral|bauxita/)) && txt.includes('granel')) return true;
+                
+                // 4. Familia Carga General / Breakbulk
+                if ((methodLower.includes('general') || methodLower.includes('breakbulk') || cargoTypeLower.match(/acero|bobina|tubo/)) && (txt.includes('carga general') || txt.includes('breakbulk'))) return true;
+                
+                // 5. Familia Project Cargo / Maquinaria / Heavy Lift / Voluminoso
+                if ((methodLower.includes('proyecto') || methodLower.includes('heavy') || cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|vehiculo|project|heavy/)) && (txt.includes('carga general') || txt.includes('breakbulk') || txt.includes('proyecto') || txt.includes('heavy'))) return true;
+                
+                return false;
+            });
             
-            // 1. Forzar clic en botones Píldora "Palletizado"
-            const pillButtons = Array.from(document.querySelectorAll('button, div, span'));
-            const palletBtns = pillButtons.filter(el => {
-                const txt = el.textContent.trim().toUpperCase();
-                return txt.includes('PALLETIZADO - GRÚA BARCO') || txt.includes('PALETIZADO - GRÚA BARCO');
-            });
-            palletBtns.forEach(btn => {
+            matchedBtns.forEach(btn => {
                 btn.click();
-                console.log("✅ [Core PRO] Píldora de Palletizado activada.");
+                console.log(`✅ [Core PRO] Botón activado: ${btn.textContent.trim()}`);
             });
 
-            // 2. Forzar desplegables (React compat)
+            // B. AJUSTAR DESPLEGABLES (SECTOR / PRODUCTO) EN REACT
             const selects = document.querySelectorAll('select');
             selects.forEach(sel => {
                 const options = Array.from(sel.options);
-                const targetOption = options.find(opt => 
-                    opt.text.toUpperCase().includes('MADERA') || 
-                    opt.text.toUpperCase().includes('FORESTAL') || 
-                    opt.text.toUpperCase().includes('GENERAL')
-                );
+                
+                let targetOption = options.find(opt => {
+                    const optText = opt.text.toLowerCase();
+                    
+                    // Match directo
+                    if (optText.includes(cargoTypeLower) || cargoTypeLower.includes(optText)) return true;
+                    
+                    // Match semántico por familias de mercado marítimo
+                    if (cargoTypeLower.match(/madera|forestal/)) return optText.match(/madera|forestal/);
+                    if (cargoTypeLower.match(/cemento|clinker|yeso/)) return optText.match(/cemento/);
+                    if (cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal/)) return optText.match(/agrícola|grano|cereal/);
+                    if (cargoTypeLower.match(/acero|bobina|tubo/)) return optText.match(/acero|metal|siderúrgico/);
+                    if (cargoTypeLower.match(/carbon|mineral|bauxita|hierro/)) return optText.match(/mineral|carbón/);
+                    if (cargoTypeLower.match(/fertilizante|urea/)) return optText.match(/fertilizante/);
+                    
+                    // 5. Match Project Cargo / Maquinaria
+                    if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) return optText.match(/proyecto|heavy|maquinaria|carga general/);
+                    
+                    return false;
+                });
 
                 if (targetOption) {
                     const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-                    if (nativeSetter) nativeSetter.call(sel, targetOption.value);
-                    else sel.value = targetOption.value;
-                    
+                    if (nativeSetter) {
+                        nativeSetter.call(sel, targetOption.value);
+                    } else {
+                        sel.value = targetOption.value;
+                    }
                     sel.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log(`✅ [Core PRO] Selector cambiado a Madera: ${targetOption.text}`);
-                }
-            });
-
-        } else {
-            // COMPORTAMIENTO POR DEFECTO: CEMENTO Y BIG BAGS
-            document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]').forEach(btn => {
-                const text = btn.textContent.toLowerCase();
-                if (text.includes('big bags') && text.includes('grúa barco')) btn.click();
-            });
-
-            document.querySelectorAll('select').forEach(sel => {
-                let matched = false;
-                for (let opt of sel.options) {
-                    if (opt.text.toLowerCase().includes('cemento') && !opt.text.toLowerCase().includes('granel')) {
-                        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-                        if (nativeSetter) nativeSetter.call(sel, opt.value);
-                        else sel.value = opt.value;
-                        sel.dispatchEvent(new Event('change', { bubbles: true }));
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    for (let opt of sel.options) {
-                        if (opt.text.toLowerCase().includes('cemento') || opt.value === '10') {
-                            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-                            if (nativeSetter) nativeSetter.call(sel, opt.value);
-                            else sel.value = opt.value;
-                            sel.dispatchEvent(new Event('change', { bubbles: true }));
-                            break;
-                        }
-                    }
+                    console.log(`✅ [Core PRO] Sector ajustado dinámicamente a: ${targetOption.text}`);
                 }
             });
         }
         // ============================================================================
 
-        // Autocompletado del estado global
+        // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
         const routeState = {
             ...(p.pol ? { pol: p.pol } : {}),
             ...(p.pod ? { pod: p.pod } : {}),
@@ -793,189 +785,12 @@ async function executeActionableAiUpdateFields(actionObj) {
         
         console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
         
-        // 🚀 Clic automático final en calcular
+        // 4. DISPARADOR FINAL AUTOMÁTICO
         if (!isMapView) clickActionableAiFinalValidationButton();
         
         return true;
     } catch (error) {
         console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
-        throw error;
-    } finally {
-        console.groupEnd();
-    }
-}
-async function executeActionableAiSearchVessel(action) {
-  if (action?.action !== "search_vessel") return false;
-  document.getElementById("btn-sync-neon-matching")?.click();
-  return true;
-}
-
-function setActionableAiInputValue(input, value) {
-  input.value = String(value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-function normalizeSelectedWpiPort(result) {
-  if (!result) return null;
-  const latitude = Number(result.lat);
-  const longitude = Number(result.lon);
-  const officialLabel = String(result.label || "").trim();
-  const name = String(result.placeName || officialLabel.replace(/\s*\([A-Za-z]{2,3}\)\s*$/, "")).trim();
-  const countryCode = String(result.countryCode || "").trim().toUpperCase();
-  if (!officialLabel || !name || !countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return {
-    ...(result.port || {}),
-    uuid: String(result.uuid || result.port?.uuid || '').trim(),
-    unlocode: String(result.unlocode || result.port?.unlocode || '').trim().toUpperCase(),
-    maxOperationalDraftMeters: Number(result.maxOperationalDraftMeters ?? result.port?.maxOperationalDraftMeters) || null,
-    name,
-    officialLabel,
-    countryCode,
-    latitude,
-    longitude,
-    source: "DATALASTIC",
-  };
-}
-
-async function selectActionableAiWpiRoute(pol, pod) {
-  if (typeof window.selectFirstWpiAutocompleteMatch !== "function") {
-    throw new Error("La búsqueda de Datalastic todavía no está disponible.");
-  }
-
-  const selections = {};
-  for (const [role, value, inputIds] of [
-    ["pol", pol, ["map-port-pol", "port-pol"]],
-    ["pod", pod, ["map-port-pod", "port-pod"]],
-  ]) {
-    let primaryResult = null;
-    for (const inputId of inputIds) {
-      const result = await window.selectFirstWpiAutocompleteMatch(inputId, value);
-      if (!result) throw new Error(`No hay coincidencias WPI para ${role.toUpperCase()}: ${value}`);
-      primaryResult ||= result;
-    }
-    selections[role] = normalizeSelectedWpiPort(primaryResult);
-    if (!selections[role]) throw new Error(`La selección WPI de ${role.toUpperCase()} no contiene coordenadas válidas.`);
-  }
-  return selections;
-}
-
-async function executeActionableAiRoute(action) {
-  if (action?.action !== "calculate_route") return false;
-  const pol = String(action.pol || "").trim().slice(0, 200);
-  const pod = String(action.pod || "").trim().slice(0, 200);
-  const tonnage = Number(action.tonnage);
-  const hasTonnage = Number.isFinite(tonnage) && tonnage > 0;
-  if (!pol || !pod) return false;
-
-  const mapPolInput = document.getElementById("map-port-pol");
-  const mapPodInput = document.getElementById("map-port-pod");
-  const cargoInput = document.getElementById("cargo-qty");
-  const routeButton = document.getElementById("btn-map-locate-route");
-  if (!mapPolInput || !mapPodInput || !routeButton) return false;
-
-  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
-  const selectedPol = selectedPorts.pol.officialLabel;
-  const selectedPod = selectedPorts.pod.officialLabel;
-
-  const routeState = {
-    pol: selectedPol,
-    pod: selectedPod,
-  };
-  if (hasTonnage) {
-    Object.assign(routeState, {
-      cargoQty: tonnage,
-      cargoQuantity: tonnage,
-      quantity: tonnage,
-    });
-  }
-  if (!window.State) window.State = {};
-  Object.assign(window.State, routeState);
-  window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
-  window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
-
-  if (hasTonnage && cargoInput) setActionableAiInputValue(cargoInput, tonnage);
-
-  if (typeof window.runOnDemandMapRouteWorkflow === "function") {
-    await window.runOnDemandMapRouteWorkflow(routeButton);
-  } else {
-    routeButton.click();
-  }
-  window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
-    detail: { pol: selectedPol, pod: selectedPod, tonnage: hasTonnage ? tonnage : null },
-  }));
-  return true;
-}
-
-async function executeActionableAiCompleteForm(action) {
-  if (action?.action === "fill_complete_form") {
-    console.log("🧾 [Cerebro.ia/fill_complete_form] Acción reconocida", action);
-  } else {
-    return false;
-  }
-  const pol = String(action.pol || "").trim();
-  const pod = String(action.pod || "").trim();
-  const tonnage = Number(action.tonnage);
-  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
-  if (typeof window.applyAssistantCompleteForm !== "function") return false;
-
-  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
-  const validatedAction = {
-    ...action,
-    pol: selectedPorts.pol.officialLabel,
-    pod: selectedPorts.pod.officialLabel,
-    pol_port: selectedPorts.pol,
-    pod_port: selectedPorts.pod,
-  };
-  await window.applyAssistantCompleteForm(validatedAction);
-  window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-requested", {
-    detail: { pol: validatedAction.pol, pod: validatedAction.pod, tonnage },
-  }));
-  return true;
-}
-
-async function executeActionableAiAction(actionObj) {
-    console.group("🤖 [Cerebro.ia/Motor] Evaluando acción");
-    console.log("Datos crudos recibidos del servidor:", actionObj);
-    try {
-        if (!actionObj) {
-            console.error("No existe un objeto de acción ejecutable.");
-            return false;
-        }
-
-        const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
-        console.log("Nombre de acción resuelto:", actionName);
-        console.log("Payload disponible:", actionObj.payload ?? actionObj);
-
-        if (actionName === "update_fields") {
-            if (updateFieldsActionInProgress || processedUpdateFieldsActions.has(actionObj)) {
-                console.error("La acción update_fields se descartó por estar duplicada o en curso.", {
-                    updateFieldsActionInProgress,
-                    alreadyProcessed: processedUpdateFieldsActions.has(actionObj),
-                });
-                return false;
-            }
-            processedUpdateFieldsActions.add(actionObj);
-            updateFieldsActionInProgress = true;
-            console.log("Acción update_fields reconocida; iniciando inyección.");
-            try {
-                return await executeActionableAiUpdateFields(actionObj);
-            } catch (error) {
-                console.error("Falló la ejecución de update_fields.", { actionObj, error });
-                throw error;
-            } finally {
-                updateFieldsActionInProgress = false;
-            }
-        }
-
-        if (actionName === "search_vessel") return executeActionableAiSearchVessel(actionObj);
-        if (actionObj?.action === "fill_complete_form") return executeActionableAiCompleteForm(actionObj);
-        if (actionName === "calculate_route") return executeActionableAiRoute(actionObj);
-
-        console.warn("Acción descartada o redirigida al motor antiguo:", actionName);
-        return executeActionableAiUpdate(actionObj);
-    } catch (error) {
-        console.error("❌ [Cerebro.ia/Motor] Error ejecutando la acción", { actionObj, error });
         throw error;
     } finally {
         console.groupEnd();
