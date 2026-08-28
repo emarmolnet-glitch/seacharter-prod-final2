@@ -1990,3 +1990,22 @@ if (document.readyState === "loading") {
 } else {
   mountSeaAssistant();
 }
+// --- MOTOR GLOBAL DE EJECUCIÓN ASEGURADO ---
+window.executeActionableAiAction = async function executeActionableAiAction(actionObj) {
+    if (!actionObj) return false;
+    const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
+    
+    if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {
+        return await executeActionableAiUpdateFields(actionObj);
+    }
+    if (actionName === "search_vessel" && typeof executeActionableAiSearchVessel === 'function') {
+        return executeActionableAiSearchVessel(actionObj);
+    }
+    if (actionObj?.action === "fill_complete_form" && typeof executeActionableAiCompleteForm === 'function') {
+        return executeActionableAiCompleteForm(actionObj);
+    }
+    if (actionName === "calculate_route" && typeof executeActionableAiRoute === 'function') {
+        return executeActionableAiRoute(actionObj);
+    }
+    return false;
+};
