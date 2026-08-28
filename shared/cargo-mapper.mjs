@@ -102,6 +102,21 @@ const CARGO_FAMILIES = Object.freeze([
     especificacionCargaId: "30",
   }),
   Object.freeze({
+    aliases: ["aluminio", "aluminum", "aluminium", "bauxita"],
+    categoriaCarga: "Carga Siderúrgica y Metales",
+    especificacionCargaId: "40",
+  }),
+  Object.freeze({
+    aliases: ["carbon mineral", "coal", "combustible", "fuel", "petroleo", "oil", "diesel", "gasoleo"],
+    categoriaCarga: "Biomasa y Combustibles Sólidos",
+    especificacionCargaId: "70",
+  }),
+  Object.freeze({
+    aliases: ["producto quimico", "productos quimicos", "chemical", "chemicals", "plastico", "plastic", "polimero", "polymer"],
+    categoriaCarga: "",
+    especificacionCargaId: "80",
+  }),
+  Object.freeze({
     aliases: ["maquinaria", "machinery", "vehiculos", "piezas", "piezas de proyecto", "aerogeneradores"],
     categoriaCarga: "Carga de Proyecto (Breakbulk)",
     especificacionCargaId: "90",
@@ -166,8 +181,17 @@ function selectCargoProduct(normalizedCargo, specificationId, hasBigBags) {
     return "Bobinas de Acero (Steel Coils)";
   }
   if (specificationId === "50") return "Biomasa (Grignon, Astillas, Pellets)";
+  if (specificationId === "70" && (includesAlias(normalizedCargo, "carbon mineral") || includesAlias(normalizedCargo, "coal"))) return "Carbón mineral";
   if (specificationId === "90") return "Piezas Especiales / Maquinaria";
   return "";
+}
+
+function readCargoSpecificationId(value) {
+  const text = readCargoSelectionValue(value);
+  const exactId = CARGO_SPECIFICATION_IDS.find((id) => id === text);
+  if (exactId) return exactId;
+  const leadingId = text.match(/^\s*(10|20|30|40|50|60|70|80|90|100)\b/);
+  return leadingId?.[1] || "";
 }
 
 export function mapCargoDescription(value) {
@@ -192,13 +216,33 @@ export function normalizeCargoMethod(value) {
   if (!normalized) return "";
   const direct = CARGO_METHODS.find((method) => normalizeLookupText(method) === normalized);
   if (direct !== undefined) return direct;
-  if (normalized.includes("big bags") && (normalized.includes("barco") || normalized.includes("ship"))) return "big_bags_barco";
-  if (normalized.includes("big bags") && (normalized.includes("portuaria") || normalized.includes("port crane"))) return "big_bags_portuaria";
+  if (normalized.includes("big bags") && (normalized.includes("portuaria") || normalized.includes("port crane") || normalized.includes("shore crane"))) return "big_bags_portuaria";
+  if (normalized.includes("big bags")) return "big_bags_barco";
+  if ((normalized.includes("palet") || normalized.includes("pallet")) && (normalized.includes("portuaria") || normalized.includes("port crane") || normalized.includes("shore crane"))) return "paletizado_portuaria";
+  if (normalized.includes("palet") || normalized.includes("pallet")) return "paletizado_barco";
   if (normalized.includes("cinta transportadora")) return "cinta_transportadora";
-  if (normalized.includes("bombas neumaticas")) return "bombas_neumaticas";
-  if (normalized.includes("camion tolva")) return "camion_tolva";
+  if (normalized.includes("bomba") || normalized.includes("neumatica")) return "bombas_neumaticas";
+  if (normalized.includes("camion") || normalized.includes("tolva")) return "camion_tolva";
+  if (normalized.includes("grua portuaria 30") || normalized.includes("30mt")) return "grua_portuaria_30mt";
   if (normalized.includes("hierro acero") && normalized.includes("portuaria")) return "hierro_acero_portuaria";
   if (normalized.includes("hierro acero")) return "hierro_acero_barco";
+  if ((normalized.includes("cuchara") || normalized.includes("grab")) && (normalized.includes("portuaria") || normalized.includes("port crane") || normalized.includes("shore crane"))) return "cuchara_portuaria";
+  if (normalized.includes("cuchara") || normalized.includes("grab")) return "cuchara_grab";
+  return "";
+}
+
+export function inferCargoMethod(cargoDescription, category = "", product = "", specificationId = "") {
+  const normalizedCargo = normalizeLookupText([cargoDescription, category, product].filter(Boolean).join(" "));
+  const normalizedSpecification = readCargoSpecificationId(specificationId);
+  if (/\bbig\s*bags?\b/.test(normalizedCargo)) return "big_bags_barco";
+  if (normalizedCargo.includes("palet") || normalizedCargo.includes("pallet")) return "paletizado_barco";
+  if (normalizedCargo.includes("cemento a granel") || normalizedCargo.includes("bulk cement")) return "bombas_neumaticas";
+  if (["20", "40", "90"].includes(normalizedSpecification)
+    || normalizeLookupText(category) === normalizeLookupText("Carga Siderúrgica y Metales")
+    || normalizeLookupText(category) === normalizeLookupText("Carga de Proyecto (Breakbulk)")) {
+    return "hierro_acero_barco";
+  }
+  if (["10", "30", "50", "60", "70", "80"].includes(normalizedSpecification)) return "cuchara_grab";
   return "";
 }
 
@@ -217,22 +261,31 @@ export function normalizeLaytimeTerm(value) {
 
 export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
   const source = payload && typeof payload === "object" ? payload : {};
+  const cargoDescription = readCargoSelectionValue(
+    source.cargo_type
+      ?? source.cargoType
+      ?? source.mercancia
+      ?? source["mercancía"]
+      ?? source.commodity
+      ?? source.cargo_product
+      ?? source.cargoProduct
+      ?? source.productoEspecifico
+  );
   const cargoSource = [
-    source.cargo_type,
-    source.cargoType,
-    source.commodity,
-    source.cargo_product,
-    source.cargoProduct,
-    source.productoEspecifico,
+    cargoDescription,
     sourceText,
   ].filter(Boolean).join(" ");
   const mappedCargo = mapCargoDescription(cargoSource);
   const explicitCategory = readCargoSelectionValue(source.cargo_category ?? source.cargoCategory ?? source.categoriaCarga);
   const explicitProduct = readCargoSelectionValue(source.cargo_product ?? source.cargoProduct ?? source.productoEspecifico);
-  const explicitSpecification = String(source.cargo_specification ?? source.cargoSpecification ?? source.especificacionCargaId ?? "").trim();
+  const explicitSpecification = readCargoSpecificationId(
+    source.cargo_specification
+      ?? source.cargoSpecification
+      ?? source.especificacionCargaId
+      ?? source.cargo_type
+      ?? source.cargoType
+  );
   const explicitMethodPOL = normalizeCargoMethod(source.methodPOL ?? source.loading_method ?? source.loadingMethod ?? source.loadMethod);
-  const methodPOL = explicitMethodPOL || (mappedCargo.hasBigBags ? "big_bags_barco" : "");
-  const methodPOD = normalizeCargoMethod(source.methodPOD ?? source.discharge_method ?? source.dischargeMethod ?? source.unloadingMethod) || methodPOL;
   const generalLaytime = normalizeLaytimeTerm(source.laytime ?? source.laytime_terms ?? sourceText);
   const explicitLaytimePOL = normalizeLaytimeTerm(source.laytimePOL);
   const explicitLaytimePOD = normalizeLaytimeTerm(source.laytimePOD);
@@ -251,9 +304,17 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
     ? mappedCargo.productoEspecifico
     : explicitProduct || mappedCargo.productoEspecifico;
   const validatedCargo = validateCargoHierarchy(cargoCategory, cargoProduct, cargoSource);
+  const methodPOL = explicitMethodPOL || inferCargoMethod(
+    cargoDescription,
+    validatedCargo.categoriaCarga,
+    validatedCargo.productoEspecifico,
+    specificationId,
+  );
+  const methodPOD = normalizeCargoMethod(source.methodPOD ?? source.discharge_method ?? source.dischargeMethod ?? source.unloadingMethod) || methodPOL;
 
   return {
     ...source,
+    ...(cargoDescription ? { cargo_type: cargoDescription } : {}),
     cargo_category: validatedCargo.categoriaCarga,
     cargo_product: validatedCargo.productoEspecifico,
     cargo_specification: specificationId,
