@@ -503,6 +503,45 @@ function findActionableAiField(fieldName) {
   )) || null;
 }
 
+async function selectActionableAiWpiRoute(pol, pod) {
+  if (typeof window.selectFirstWpiAutocompleteMatch !== 'function') {
+    throw new Error('El selector validado de puertos todavía no está disponible.');
+  }
+
+  const selectPort = async (inputId, query) => {
+    const result = await window.selectFirstWpiAutocompleteMatch(inputId, query);
+    if (!result) throw new Error(`No se encontró un puerto validado para "${query}".`);
+
+    const latitude = Number(result.lat);
+    const longitude = Number(result.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new Error(`El puerto "${query}" no devolvió coordenadas válidas.`);
+    }
+
+    return {
+      source: 'DATALASTIC',
+      officialLabel: result.label,
+      name: result.placeName,
+      countryCode: result.countryCode,
+      latitude,
+      longitude,
+      uuid: result.uuid || result.port?.uuid || '',
+      unlocode: result.unlocode || result.port?.unlocode || '',
+      indexNo: result.indexNo || result.port?.indexNo || null,
+      maxOperationalDraftMeters: Number(result.maxOperationalDraftMeters) || 0,
+      maxVesselLengthLabel: result.maxVesselLengthLabel || 'N/A',
+      engineeringSource: result.engineeringSource || 'N/A',
+      depthCode: result.depthCode || '',
+      cargoDepth: result.cargoDepth || '',
+      channelDepth: result.channelDepth || '',
+    };
+  };
+
+  const selectedPol = await selectPort('port-pol', String(pol || '').trim());
+  const selectedPod = await selectPort('port-pod', String(pod || '').trim());
+  return { pol: selectedPol, pod: selectedPod };
+}
+
 function executeActionableAiUpdate(action) {
   if (action?.action !== "update_field") return false;
   const numericValue = Number(action.value);
@@ -620,24 +659,15 @@ async function executeActionableAiUpdateFields(actionObj) {
         const podQuery = String(p.pod || "").trim();
         let selectedRoutePorts = null;
 
-        updateInputs(["map-port-pol", "port-pol"], p.pol);
-        updateInputs(["map-port-pod", "port-pod"], p.pod);
-
         if (polQuery && podQuery) {
-            try {
-                selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
-                p = {
-                    ...p,
-                    pol: selectedRoutePorts.pol.officialLabel,
-                    pod: selectedRoutePorts.pod.officialLabel,
-                    pol_port: selectedRoutePorts.pol,
-                    pod_port: selectedRoutePorts.pod,
-                };
-                updateInputs(["map-port-pol", "port-pol"], p.pol);
-                updateInputs(["map-port-pod", "port-pod"], p.pod);
-            } catch (error) {
-                console.error("Falló la validación WPI", error);
-            }
+            selectedRoutePorts = await selectActionableAiWpiRoute(polQuery, podQuery);
+            p = {
+                ...p,
+                pol: selectedRoutePorts.pol.officialLabel,
+                pod: selectedRoutePorts.pod.officialLabel,
+                pol_port: selectedRoutePorts.pol,
+                pod_port: selectedRoutePorts.pod,
+            };
         }
 
         // 1. INYECCIÓN DE DATOS BÁSICOS
@@ -763,12 +793,24 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
 
         if (selectedRoutePorts) {
-            const routeButton = document.getElementById("btn-map-locate-route");
-            if (typeof window.runOnDemandMapRouteWorkflow === "function") {
-                await window.runOnDemandMapRouteWorkflow(routeButton);
-            } else {
-                routeButton?.click();
+            if (typeof window.injectVoyageScenario !== 'function' || typeof window.finalizeAssistantVoyageInjection !== 'function') {
+                throw new Error('El motor de inyección de viaje todavía no está disponible.');
             }
+
+            const validatedScenario = {
+                ...p,
+                pol: selectedRoutePorts.pol.officialLabel,
+                pod: selectedRoutePorts.pod.officialLabel,
+                pol_port: selectedRoutePorts.pol,
+                pod_port: selectedRoutePorts.pod,
+                cargo_qty: Number(p.tonnage ?? p.cargo_qty ?? p.cargoQty) || 0,
+                laydays: p.laydayStart ?? p.laydays,
+                cancelling: p.cancelling,
+                loading_rate: Number(p.loadingRate ?? p.loading_rate) || 0,
+                discharge_rate: Number(p.dischargeRate ?? p.discharge_rate) || 0,
+            };
+            const injectionResult = window.injectVoyageScenario(validatedScenario, { deferFinalActions: true });
+            await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
         }
 
         if (!isMapView) {
@@ -777,50 +819,6 @@ async function executeActionableAiUpdateFields(actionObj) {
         
         console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
         
-        // =========================================================
-        // 4. DISPARADOR FINAL Y RESOLUCIÓN DATALASTIC
-        // =========================================================
-        if (!isMapView) {
-            // Retraso de 1.5s para permitir que Datalastic busque los puertos
-            setTimeout(() => {
-                // A. Forzar selección en los menús de Datalastic
-                const datalasticOptions = Array.from(document.querySelectorAll('li, div, [role="option"]'))
-                    .filter(el => el.textContent.includes('DATALASTIC') && el.offsetParent !== null);
-                
-                if (datalasticOptions.length > 0) datalasticOptions[0].click();
-                if (datalasticOptions.length > 1) datalasticOptions[1].click();
-
-                ['port-pol', 'port-pod'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                });
-
-                // B. Escudo Anti-Prompts (Inyectar consumos por defecto)
-                if (!window.State) window.State = {};
-                Object.assign(window.State, {
-                    consFondeo: window.State.consFondeo || 2.0,
-                    consPuerto: window.State.consPuerto || 1.5,
-                    reportMasterType: window.State.reportMasterType || 1
-                });
-
-                const originalPrompt = window.prompt;
-                window.prompt = function(msg, defaultVal) {
-                    console.log("🛡️ [Cerebro.ia] Prompt auto-respondido:", msg);
-                    const m = String(msg).toLowerCase();
-                    if (m.includes("informe") || m.includes("master")) return "1";
-                    if (m.includes("fondeo") || m.includes("consumo")) return "2.0";
-                    return defaultVal || "0";
-                };
-
-                // C. Auto-Clic definitivo en Calcular
-                clickActionableAiFinalValidationButton();
-
-                // D. Restaurar el sistema de alertas al terminar
-                setTimeout(() => { window.prompt = originalPrompt; }, 1000);
-
-            }, 1500); // 1.5 segundos de magia de espera
-        }
-        
         return true;
     } catch (error) {
         console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
@@ -828,6 +826,57 @@ async function executeActionableAiUpdateFields(actionObj) {
     } finally {
         console.groupEnd();
     }
+}
+
+async function executeActionableAiRoute(action) {
+  const payload = action?.payload || action || {};
+  const pol = String(payload.pol || '').trim();
+  const pod = String(payload.pod || '').trim();
+  if (!pol || !pod) throw new Error('La acción de ruta requiere POL y POD.');
+  if (typeof window.injectVoyageScenario !== 'function' || typeof window.finalizeAssistantVoyageInjection !== 'function') {
+    throw new Error('El motor de inyección de viaje todavía no está disponible.');
+  }
+
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const tonnage = Number(payload.tonnage ?? payload.cargo_qty ?? payload.cargoQty);
+  const validatedScenario = {
+    ...payload,
+    pol: selectedPorts.pol.officialLabel,
+    pod: selectedPorts.pod.officialLabel,
+    pol_port: selectedPorts.pol,
+    pod_port: selectedPorts.pod,
+    ...(Number.isFinite(tonnage) && tonnage > 0 ? { cargo_qty: tonnage } : {}),
+  };
+  const injectionResult = window.injectVoyageScenario(validatedScenario, { deferFinalActions: true });
+  await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
+  return true;
+}
+
+async function executeActionableAiCompleteForm(action) {
+  const payload = action?.payload || action || {};
+  const pol = String(payload.pol || '').trim();
+  const pod = String(payload.pod || '').trim();
+  if (!pol || !pod) throw new Error('El formulario completo requiere POL y POD.');
+
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const validatedAction = {
+    ...payload,
+    pol: selectedPorts.pol.officialLabel,
+    pod: selectedPorts.pod.officialLabel,
+    pol_port: selectedPorts.pol,
+    pod_port: selectedPorts.pod,
+  };
+
+  if (typeof window.applyAssistantCompleteForm === 'function') {
+    return await window.applyAssistantCompleteForm(validatedAction);
+  }
+  if (typeof window.injectVoyageScenario !== 'function' || typeof window.finalizeAssistantVoyageInjection !== 'function') {
+    throw new Error('El motor de inyección de viaje todavía no está disponible.');
+  }
+
+  const injectionResult = window.injectVoyageScenario(validatedAction, { deferFinalActions: true });
+  await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
+  return injectionResult;
 }
 
 function createVoyageActionCard(scenario) {
@@ -852,7 +901,7 @@ function createVoyageActionCard(scenario) {
   const button = card.querySelector(".sca-voyage-action__button");
   const status = card.querySelector(".sca-voyage-action__status");
   button.addEventListener("click", async () => {
-    if (typeof window.injectVoyageScenario !== "function") {
+    if (typeof window.injectVoyageScenario !== "function" || typeof window.finalizeAssistantVoyageInjection !== "function") {
       status.textContent = "El motor de viaje todavía no está disponible.";
       card.classList.add("is-error");
       return;
@@ -867,7 +916,9 @@ function createVoyageActionCard(scenario) {
         pol_port: selectedPorts.pol,
         pod_port: selectedPorts.pod,
       };
-      const result = window.injectVoyageScenario(validatedScenario);
+      const injectionResult = window.injectVoyageScenario(validatedScenario, { deferFinalActions: true });
+      await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
+      const result = injectionResult;
       card.classList.add("is-injected");
       button.textContent = result?.requiresPortSelection
         ? "Datos inyectados · selección pendiente"
