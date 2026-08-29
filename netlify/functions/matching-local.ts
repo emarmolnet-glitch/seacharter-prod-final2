@@ -228,10 +228,10 @@ export default async (req: Request) => {
                         const vesselType = String(ship.type || ship.vesselType || 'UNKNOWN').trim().toUpperCase();
                         const dwt = Number(ship.dwt) || null;
 
-                        // Insertamos el barco y lo mandamos a la cola de "Pendiente de Revisión"
+                        // Insertamos el barco y lo mandamos directo a la cartera (Blindados)
                         await pool.query(`
-                            INSERT INTO vessels_master (imo_number, vessel_name, vessel_type, dwt, process_status)
-                            VALUES ($1, $2, $3, $4, 'PENDING_REVIEW')
+                            INSERT INTO vessels_master (imo_number, vessel_name, vessel_type, dwt, process_status, audit_status, validation_status)
+                            VALUES ($1, $2, $3, $4, 'COMPLETED', 'VALIDATED', 'VALIDATED')
                             ON CONFLICT (imo_number) DO NOTHING
                         `, [imoClean, vesselName, vesselType, dwt]);
                     }
