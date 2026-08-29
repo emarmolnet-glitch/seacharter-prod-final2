@@ -352,3 +352,12 @@ export const pipelineInbox = pgTable("pipeline_inbox", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export const clientApiUsage = pgTable("client_api_usage", {
+  id: serial("id").primaryKey(),
+  tenantId: varchar("tenant_id", { length: 255 }).notNull(),
+  serviceUsed: varchar("service_used", { length: 100 }).notNull(),
+  creditsConsumed: integer("credits_consumed").notNull(),
+  voyageReference: varchar("voyage_reference", { length: 255 }),
+  createdAt: createdAt(),
+});
