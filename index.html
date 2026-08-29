@@ -47890,26 +47890,33 @@ Example:
             return true;
         }
 
-        async function generarInformeMasterOnClick() {
-            const btn = document.getElementById('btn-master-executive-report') || document.getElementById('btn-generar-informe');
-            const reportMode = chooseMasterReportMode();
-            if (!reportMode) return false;
-            masterReportWorkflowState.selectedReportMode = reportMode;
+        async function generarInformeMasterOnClick(event) {
+        if (!event || !event.isTrusted) {
+            console.warn("Llamada en background bloqueada: El informe solo se genera por clic manual.");
+            return false; 
+        }
 
-            if (reportMode === 'assistant') {
-                renderMasterReportPreview(gatherMasterAuditData());
-                showToast?.('Informe del Asistente / IA generado. Ya puedes revisarlo o descargarlo.');
-                return true;
-            }
+        const btn = document.getElementById('btn-master-executive-report') || document.getElementById('btn-generar-informe');
+        const reportMode = chooseMasterReportMode();
+        
+        if (!reportMode) return false;
+        masterReportWorkflowState.selectedReportMode = reportMode;
 
-            if (!validarInformeMaster(reportMode)) return false;
+        if (reportMode === 'assistant') {
+            renderMasterReportPreview(gatherMasterAuditData());
+            showToast?.('Informe del Asistente / IA generado. Ya puedes revisarlo o descargarlo.');
+            return true;
+        }
 
-            const contenidoOriginal = btn?.innerHTML;
-            const tituloOriginal = btn?.getAttribute('title');
-            const ariaLabelOriginal = btn?.getAttribute('aria-label');
-            if (btn) {
-                const loadingLabel = `Generando Informe Master ${reportMode === 'strict' ? 'Estricto' : 'Standard'}`;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>';
+        if (!validarInformeMaster(reportMode)) return false;
+
+        const contenidoOriginal = btn?.innerHTML;
+        const tituloOriginal = btn?.getAttribute('title');
+        const ariaLabelOriginal = btn?.getAttribute('aria-label');
+        
+        if (btn) {
+            const loadingLabel = `Generando Informe Master ${reportMode === 'strict' ? 'Estricto' : 'Standard'}`;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>';
                 btn.setAttribute('title', loadingLabel);
                 btn.setAttribute('aria-label', loadingLabel);
                 btn.classList.add('btn-thinking');
