@@ -1290,3 +1290,63 @@
         window.getActivePolInfo = getActivePolInfo;
     }
 })();
+
+// 1. Función para cargar y dibujar la flota activa en el mapa Leaflet
+async function loadActiveFleet(mapInstance) {
+    try {
+        // Reemplaza esto con la URL real de tu Data Bridge
+        const response = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/get-active-fleet');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            const fleet = result.data;
+
+            fleet.forEach(vessel => {
+                // Solo dibujar si el barco tiene coordenadas válidas
+                if (vessel.current_lat && vessel.current_lon) {
+                    
+                    // Creamos un icono HTML personalizado para poder rotarlo según su rumbo (heading)
+                    const shipIcon = L.divIcon({
+                        className: 'active-vessel-marker',
+                        html: `<div style="
+                                transform: rotate(${vessel.heading || 0}deg); 
+                                font-size: 24px; 
+                                line-height: 24px; 
+                                text-align: center;
+                                filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3));
+                               ">⛴️</div>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12], // Centrar el icono sobre las coordenadas exactas
+                        popupAnchor: [0, -12]
+                    });
+
+                    // Añadimos el marcador al mapa y le ponemos un popup (bocadillo) con info
+                    L.marker([vessel.current_lat, vessel.current_lon], { icon: shipIcon })
+                        .addTo(mapInstance)
+                        .bindPopup(`
+                            <div style="font-family: sans-serif;">
+                                <strong>Viaje:</strong> ${vessel.voyage_reference}<br>
+                                <strong>IMO:</strong> ${vessel.imo_number}<br>
+                                <strong>Velocidad:</strong> ${vessel.speed || 0} nudos<br>
+                                <strong>Rumbo:</strong> ${vessel.heading || 0}º<br>
+                                <span style="font-size: 0.8em; color: gray;">
+                                    Último AIS: ${new Date(vessel.last_ais_update).toLocaleString()}
+                                </span>
+                            </div>
+                        `);
+                }
+            });
+            console.log(`[Flota Activa] ${fleet.length} buques inyectados en el mapa.`);
+        }
+    } catch (error) {
+        console.error("[Flota Activa] Error cargando los buques desde Data Bridge:", error);
+    }
+}
+
+// 2. Ejecutar la función (Asegúrate de pasarle tu variable del mapa)
+// Si estás en ais.html, tu mapa se llama AISmap. Si estás en index.html, mira cómo se llama tu variable.
+// loadActiveFleet(map); // <-- Descomenta y ajusta esta línea cuando el mapa esté listo
+
+// 3. (Opcional) Hacer que se actualice solo cada 5 minutos en el frontend
+// setInterval(() => loadActiveFleet(map), 5 * 60 * 1000);
+window.loadActiveFleet = loadActiveFleet;
