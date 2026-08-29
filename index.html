@@ -22769,7 +22769,7 @@
                     return !Number.isFinite(Number(value)) || Number(value) <= 0;
                 }).length;
                 const engineInputCount = Number(data.snapshot?.vesselCount) || 0;
-                const excludedBeforeScoring = Math.max(0, unifiedVesselCount - engineInputCount);
+                const excludedBeforeScoring = Math.max(0, rawMatches.length - engineInputCount);
                 const excludedAfterScoring = Math.max(0, engineInputCount - evaluatedResponseCount);
                 const hasRealSourceData = rawMatches.length > 0 || liveRadarVesselCount > 0;
                 if (sourceIntegrity && hasRealSourceData) {
