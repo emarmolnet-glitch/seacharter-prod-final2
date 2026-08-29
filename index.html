@@ -34619,46 +34619,86 @@ function scheduleReactiveEngine() {
             document.getElementById('risk-view-sof')?.setAttribute('aria-pressed', String(showSof));
         }
 
-        async function consultLiveRadarForVoyageTime() {
-            const button = document.getElementById('btn-live-radar-risk');
-            const originalHtml = button?.innerHTML || '';
-            if (button) {
-                button.disabled = true;
-                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Consultando';
-            }
-            try {
-                const vessels = typeof window.updateDatalasticRadar === 'function'
-                    ? await window.updateDatalasticRadar({ refreshGlobe: false, radarContext: 'core-pro-voyage-time' })
-                    : [];
-                const etaCandidates = (Array.isArray(vessels) ? vessels : [])
-                    .flatMap((vessel) => [
-                        vessel?.eta_puerto_carga,
-                        vessel?.etaPol,
-                        vessel?.routing?.eta,
-                        vessel?.estimatedArrivalAtPol
-                    ])
-                    .map(normalizeEtaDateValue)
-                    .filter(Boolean)
-                    .sort();
-                if (etaCandidates[0]) setEtaRadarFromSystem(etaCandidates[0], 'live-radar');
-                else calculateAdjustedEtaAndDays();
-                const source = document.getElementById('historical-risk-source');
-                if (source) {
-                    source.innerText = etaCandidates[0]
-                        ? `Radar en vivo sincronizado: ETA POL ${etaCandidates[0]}.`
-                        : `Radar en vivo sincronizado (${Array.isArray(vessels) ? vessels.length : 0} contactos); sin ETA POL explícita, se conserva la ETA actual.`;
-                }
-            } catch (error) {
-                console.warn('No se pudo consultar el radar en vivo para ETA:', error);
-                const source = document.getElementById('historical-risk-source');
-                if (source) source.innerText = 'No se pudo consultar el radar en vivo. Revisa POL y conexión con Data Bridge.';
-            } finally {
-                if (button) {
-                    button.disabled = false;
-                    button.innerHTML = originalHtml;
-                }
+        function interceptarRadarHaciaCoincidencias(vesselsArray) {
+        if (!Array.isArray(vesselsArray) || vesselsArray.length === 0) return;
+        
+        const currentState = window.SeaCharterStore?.getState?.() || window.State || {};
+        const polName = currentState.pol || 'Puerto de Carga (POL)';
+        const targetDwt = Number(currentState.dwt || currentState.cargoQty || 10000);
+
+        const candidatosRadar = vesselsArray.filter(vessel => {
+            const isAnchoredOrMoored = vessel.navigation_status === 1 || vessel.navigation_status === 5 || vessel.speed < 1.0;
+            const hasValidImo = vessel.imo > 0;
+            const dwtValid = !vessel.dwt || (vessel.dwt >= (targetDwt * 0.8) && vessel.dwt <= (targetDwt * 3));
+            
+            return isAnchoredOrMoored && hasValidImo && dwtValid;
+        }).map(vessel => ({
+            imo: vessel.imo,
+            name: vessel.name,
+            dwt: vessel.dwt || 'N/A',
+            vesselClass: vessel.type_name || 'Desconocido',
+            location: polName,
+            source: 'datalastic_live',
+            sourceTag: `Radar en Vivo: ${polName}`,
+            distance: vessel.distance_to_port || 'N/A'
+        }));
+
+        if (candidatosRadar.length > 0) {
+            window.dispatchEvent(new CustomEvent("seacharter:matching-inject-candidates", {
+                detail: { candidates: candidatosRadar, portContext: polName }
+            }));
+            
+            console.log(`📡 [Radar] ${candidatosRadar.length} barcos extraídos y enviados a Coincidencia.`);
+            if (typeof showToast === 'function') {
+                showToast(`Radar: ${candidatosRadar.length} candidatos viables detectados en ${polName} enviados a Coincidencia.`);
             }
         }
+    }
+
+    async function consultLiveRadarForVoyageTime() {
+        const button = document.getElementById('btn-live-radar-risk');
+        const originalHtml = button?.innerHTML || '';
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Consultando';
+        }
+        try {
+            const vessels = typeof window.updateDatalasticRadar === 'function'
+                ? await window.updateDatalasticRadar({ refreshGlobe: false, radarContext: 'core-pro-voyage-time' })
+                : [];
+                
+            // LÍNEA DE INYECCIÓN DE DATOS AL MATCHING
+            interceptarRadarHaciaCoincidencias(vessels);
+
+            const etaCandidates = (Array.isArray(vessels) ? vessels : [])
+                .flatMap((vessel) => [
+                    vessel?.eta_puerto_carga,
+                    vessel?.etapol,
+                    vessel?.routing?.eta,
+                    vessel?.estimatedArrivalAtPol
+                ])
+                .map(normalizeEtaDateValue)
+                .filter(Boolean)
+                .sort();
+            
+            if (etaCandidates[0]) setEtaRadarFromSystem(etaCandidates[0], 'live-radar');
+            else calculateAdjustedEtaAndDays();
+            
+            const source = document.getElementById('historical-risk-source');
+            if (source) {
+                source.innerText = etaCandidates[0] 
+                    ? `Radar en vivo sincronizado: ETA POL ${etaCandidates[0]}.`
+                    : 'Radar en vivo completado: Sin ETA disponible.';
+            }
+        } catch (error) {
+            console.error('[Radar] Error:', error);
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
+        }
+    }
 
         async function loadHistoricalRiskOnDemand() {
             const ports = getSelectedRiskPorts();
