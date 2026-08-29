@@ -53484,6 +53484,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         if (typeof createNauticalBaseLayer === 'function') {
                             try { createNauticalBaseLayer().addTo(aisMap); } catch (_) {}
                         }
+// --- INYECTAR LA FLOTA EN TRÁNSITO DESDE EL BACKEND ---
+if (typeof window.loadActiveFleet === 'function') {
+    window.loadActiveFleet(aisMap);
+}
+// ------------------------------------------------------
+
                         if (window.MapController?.attachDensityMap) {
                             try { window.MapController.attachDensityMap(aisMap); } catch (_) {}
                         }
