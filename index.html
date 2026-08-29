@@ -35365,23 +35365,40 @@ function scheduleReactiveEngine() {
         }
 
         function configureAnchorageFuelRate(kind) {
-            const targetId = kind === 'aux' ? 'cons-anchorage-aux' : 'cons-anchorage';
-            const target = document.getElementById(targetId);
-            if (!target) return;
-            const label = kind === 'aux' ? 'Consumo auxiliar diario fondeo (MT/d)' : 'Consumo diario fondeo (MT/d)';
-            const current = parseFloat(target.value) || 0;
-            const next = window.prompt(label, current.toFixed(2));
+        const targetId = kind === 'aux' ? 'cons-anchorage-aux' : 'cons-anchorage';
+        const target = document.getElementById(targetId);
+        if (!target) return;
+
+        const label = kind === 'aux' ? 'Consumo auxiliar diario fondeo (MT/d)' : 'Consumo diario fondeo (MT/d)';
+        const current = parseFloat(target.value) || 0;
+
+        let next;
+        // Escudo protector: detectamos si hay un clic físico real del usuario
+        const isHuman = window.event && window.event.isTrusted;
+
+        if (isHuman) {
+            // Si es un humano, mostramos el cuadro de diálogo normal
+            next = window.prompt(label, current.toFixed(2));
             if (next === null) return;
-            const parsed = Math.max(0, parseFloat(String(next).replace(',', '.')) || 0);
-            target.value = parsed.toString();
-            const displayId = kind === 'aux' ? 'bunker-fondeo-display' : 'res-fuel-anchorage';
-            const display = document.getElementById(displayId);
-            if (display) {
-                display.dataset.manualOverride = 'false';
-                display.classList.remove('text-amber-600');
-            }
-            runEngine();
+        } else {
+            // Si es la IA o simulación en background, saltamos el cuadro de texto.
+            // Si estaba vacío (0), asume 2.5 MT para principal y 1.5 MT para auxiliar.
+            next = current > 0 ? current : (kind === 'aux' ? 1.5 : 2.5);
+            console.log(`[Auto-Simulación] Fondeo (${kind}) seteado a ${next} MT.`);
         }
+
+        const parsed = Math.max(0, parseFloat(String(next).replace(',', '.')) || 0);
+        target.value = parsed.toString();
+        
+        const displayId = kind === 'aux' ? 'bunker-fondeo-display' : 'res-fuel-anchorage';
+        const display = document.getElementById(displayId);
+        if (display) {
+            display.dataset.manualOverride = 'false';
+            display.classList.remove('text-amber-600');
+        }
+        
+        if (typeof runEngine === 'function') runEngine();
+    }
 
         if (typeof window !== 'undefined') {
             window.handleFuelBreakdownManualOverride = handleFuelBreakdownManualOverride;
