@@ -20951,12 +20951,14 @@
             const imo = String(candidate.imo ?? candidate.IMO ?? candidate.imoNumber ?? candidate.imo_number ?? '').replace(/\D/g, '');
             if (!/^\d{7}$/.test(imo)) return null;
             return compactMatchingRecord({
-                imo,
-                lat: candidate.lat ?? candidate.latitude,
-                lon: candidate.lon ?? candidate.lng ?? candidate.longitude,
-                dwt: candidate.dwt ?? candidate.DWT,
-                speed: candidate.speed ?? candidate.sog ?? candidate.speed_over_ground
-            }, ['imo', 'lat', 'lon', 'speed', 'dwt']);
+            imo,
+        vesselKey: imo,
+        vessel_key: imo,
+        lat: candidate.lat ?? candidate.latitude,
+        lon: candidate.lon ?? candidate.lng ?? candidate.longitude,
+        dwt: candidate.dwt ?? candidate.DWT,
+        speed: candidate.speed ?? candidate.sog ?? candidate.speed_over_ground
+    }, ['imo', 'vesselKey', 'vessel_key', 'lat', 'lon', 'speed', 'dwt']);
         }
 
         function showMatchingTransportAlert(message) {
