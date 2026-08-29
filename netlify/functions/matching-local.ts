@@ -210,14 +210,47 @@ export default async (req: Request) => {
     const sourceCounts = enrichment.counts;
     const validated = enrichment.vessels.filter((vessel) => vessel.technicalMatch === true);
     const unknown = enrichment.vessels.filter((vessel) => vessel.technicalMatch !== true);
+
+    // --- MODO RECOLECTOR AUTOMÁTICO ---
+    if (unknown.length > 0) {
+        try {
+            console.log(`[Modo Recolector] Detectados ${unknown.length} buques nuevos en radar. Procesando inserción...`);
+            
+            const databaseUrl = connectionString();
+            if (databaseUrl) {
+                const database = getDatabase({ connectionString: databaseUrl });
+                const pool = database.pool as unknown as { query: (query: string, values?: unknown[]) => Promise<{ rows: AnyRecord[] }> };
+
+                await Promise.all(unknown.map(async (ship) => {
+                    const imoClean = String(ship.imo || '').replace(/\D/g, '');
+                    if (imoClean.length === 7) {
+                        const vesselName = String(ship.name || ship.vesselName || 'UNKNOWN').trim().toUpperCase();
+                        const vesselType = String(ship.type || ship.vesselType || 'UNKNOWN').trim().toUpperCase();
+                        const dwt = Number(ship.dwt) || null;
+
+                        // Insertamos el barco y lo mandamos a la cola de "Pendiente de Revisión"
+                        await pool.query(`
+                            INSERT INTO vessels_master (imo_number, vessel_name, vessel_type, dwt, process_status)
+                            VALUES ($1, $2, $3, $4, 'PENDING_REVIEW')
+                            ON CONFLICT (imo_number) DO NOTHING
+                        `, [imoClean, vesselName, vesselType, dwt]);
+                    }
+                }));
+            }
+        } catch (dbErr) {
+            console.error("[Modo Recolector] Error al guardar buques automáticos:", dbErr);
+        }
+    }
+    // ----------------------------------
+
     return Response.json({
-      success: true,
-      operation: "validate",
-      source: "datalastic_radar",
-      sourceCounts,
-      count: enrichment.vessels.length,
-      validated,
-      unknown,
+        success: true,
+        operation: "validate",
+        source: "datalastic_radar",
+        sourceCounts,
+        count: enrichment.vessels.length,
+        validated,
+        unknown,
     }, { headers });
   } catch (error) {
     console.error("[matching-local] Radar snapshot processing failed.", error instanceof Error ? error.message : String(error));
