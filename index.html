@@ -16754,7 +16754,6 @@
        async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRateUsd, distanceNm, nominalSpeedKnots }) {
     await new Promise(resolve => setTimeout(resolve, 150));
     
-    // Simulación inteligente para POL, POD y Nodos de Ruta (ej. Estrecho de Gibraltar)
     const polName = String(window.State?.pol || document.getElementById('map-port-pol')?.value || 'POL').trim();
     const podName = String(portUnlocode || 'POD').trim();
     
@@ -16764,16 +16763,11 @@
             delayDays: 0.5,
             status: "Fluido"
         },
-        node: {
-            name: "Estrecho de Gibraltar",
-            status: "Tráfico Normal",
-            advisory: "Sin restricciones de corriente o viento"
-        },
         pod: {
             name: podName,
             delayDays: 1.8,
-            demurrageRiskUsd: 27000,
-            recommendedSpeed: 10.5,
+            demurrageRiskUsd: demurrageRateUsd || 27000,
+            recommendedSpeed: Number(nominalSpeedKnots ? nominalSpeedKnots - 1.2 : 10.5),
             adjustedTce: 18450,
             status: "Congestionado"
         }
@@ -16789,24 +16783,25 @@ function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
         shieldCard.id = 'congestion-shield-sidebar-card';
         shieldCard.className = 'w-full bg-slate-900/95 border border-slate-700 rounded-xl p-4 mt-4 text-white shadow-xl backdrop-blur-md text-xs';
         
-        // Buscar el contenedor de INPUT GEOGRÁFICO en la barra lateral izquierda para insertarlo justo debajo
-        const inputGeograficoBox = document.querySelector('.bg-white, .bg-slate-900, form, .card') || document.querySelector('aside');
-        const targetContainer = document.querySelector('#map-port-pol')?.closest('div.bg-white, div.bg-slate-800, div.rounded-xl') || inputGeograficoBox?.parentElement;
+        // Buscar el formulario de input geográfico o su tarjeta contenedora exacta
+        const inputGeograficoBox = document.getElementById('map-port-pol')?.closest('.bg-white, .bg-slate-800, .bg-slate-900, form') || document.querySelector('form');
         
-        if (targetContainer) {
-            targetContainer.parentNode.insertBefore(shieldCard, targetContainer.nextSibling);
+        if (inputGeograficoBox && inputGeograficoBox.parentNode) {
+            inputGeograficoBox.parentNode.insertBefore(shieldCard, inputGeograficoBox.nextSibling);
         } else {
-            document.body.appendChild(shieldCard);
+            // Fallback seguro al primer contenedor lateral disponible
+            const sidebar = document.querySelector('aside') || document.body.firstChild;
+            sidebar.appendChild(shieldCard);
         }
     }
     
     shieldCard.innerHTML = `
         <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
             <span class="font-bold text-teal-400 flex items-center gap-1.5">
-                <i class="fa-solid fa-shield-halved text-teal-300"></i> Análisis de Ruta & Congestión
+                <i class="fa-solid fa-shield-halved text-teal-300"></i> Análisis POL & POD
             </span>
             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                RADAR AIS ACTIVO
+                AIS ACTIVO
             </span>
         </div>
         
@@ -16817,15 +16812,6 @@ function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
                 <span class="text-emerald-400 font-medium">${congestionData.pol.status}</span>
             </div>
             <div class="text-slate-400">Espera estimada: <strong class="text-white">${congestionData.pol.delayDays} días</strong></div>
-        </div>
-
-        <!-- Nodal / Cuello de Botella (ej. Gibraltar) -->
-        <div class="mb-3 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
-            <div class="flex justify-between items-center mb-1">
-                <span class="font-semibold text-slate-300">Nodo: <span class="text-amber-300">${congestionData.node.name}</span></span>
-                <span class="text-teal-300 font-medium">${congestionData.node.status}</span>
-            </div>
-            <div class="text-slate-400 italic">${congestionData.node.advisory}</div>
         </div>
 
         <!-- Puerto de Descarga (POD) -->
@@ -16846,16 +16832,6 @@ function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
             <strong class="text-sm text-emerald-400">$${congestionData.pod.adjustedTce.toLocaleString()} / día</strong>
         </div>
     `;
-}
-async function refreshDataBridgeMasterStatsOnDemand() {
-    try {
-        const dataBridgeFrame = document.getElementById('web-databridge-iframe');
-        const refreshMasterCount = dataBridgeFrame?.contentWindow?.refreshDataBridgeMasterCountOnDemand;
-        return typeof refreshMasterCount === 'function' ? await refreshMasterCount() : null;
-    } catch (error) {
-        console.warn('[Core PRO] Las estadísticas de Data Bridge no están disponibles bajo demanda.', error);
-        return null;
-    }
 }
        async function runOnDemandMapRouteWorkflow(button) {
     if (!validateGeographicLaycanDates() || button?.disabled) return;
