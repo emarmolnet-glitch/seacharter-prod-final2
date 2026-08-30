@@ -16768,7 +16768,16 @@ function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
         console.log("[Congestion Shield] Datos aplicados correctamente:", congestionData);
     }
 }
-
+async function refreshDataBridgeMasterStatsOnDemand() {
+    try {
+        const dataBridgeFrame = document.getElementById('web-databridge-iframe');
+        const refreshMasterCount = dataBridgeFrame?.contentWindow?.refreshDataBridgeMasterCountOnDemand;
+        return typeof refreshMasterCount === 'function' ? await refreshMasterCount() : null;
+    } catch (error) {
+        console.warn('[Core PRO] Las estadísticas de Data Bridge no están disponibles bajo demanda.', error);
+        return null;
+    }
+}
        async function runOnDemandMapRouteWorkflow(button) {
     if (!validateGeographicLaycanDates() || button?.disabled) return;
 
