@@ -268,12 +268,128 @@
         return firstDefined(ship && ship.name, ship && ship.ShipName, ship && ship.vessel_name, meta.ShipName, meta.shipName, meta.name) || "Sin nombre";
     }
 
+    const STRICT_EXCLUSION_PATTERN = /\b(fishing|pesquero|pesca|trawler|trawl|drifter|seiner|longliner|fish factory|pesquero de arrastre|tug|tugboat|remolcador|remolque|towing|towage|pusher|pushboat|empujador|escort tug|support vessel|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure craft|pleasure|recreational|recreo|yacht|superyacht|megayacht|yate|sailing|sailing vessel|sailboat|velero|sport fishing|dredger|dredging|draga|dragado|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|special mark - sea farm|reference point|isolated danger|navigation mark|buoy|boya|baliza|military ops|military|warship|navy|patrol|patrullera|search and rescue|search & rescue|sar|rescue vessel|rescue|salvage|salvamento|guardacostas|coast guard|port service|servicio portuario|workboat|barco de trabajo|crew boat|pilot|pilot boat|prácticos|tender|port tender|diving|buceo|pontoon|ponton|anti-pollution|oil recovery|cable layer|pipe layer|research vessel|investigación|drillship|drilling|offshore supply|platform supply|platform|psv|ahts|other|unknown|desconocido|otros)\b/i;
+
+    const STRICT_COMMERCIAL_WHITELIST_PATTERN = /\b(bulk carrier|bulker|dry bulk|dry cargo|granelero|graneles|capesize|post-panamax|kamsarmax|panamax|ultramax|supramax|handymax|handysize|mini bulker|minibulker|mini-bulker|ore carrier|grain carrier|collier|wood chips carrier|self-unloading bulker|self unloader|general cargo|general cargo vessel|carguero|buque de carga|cargo ship|cargo|coaster|coastal cargo|cabotage|cabotaje|costero|freighter|merchant|motor vessel|mv|multipurpose|multi purpose|multi-purpose|mpp|mpv|mmpp|open hatch|box hold|multipropósito|container ship|container|containership|feeder|boxship|portacontenedores|tanker|oil tanker|chemical tanker|product tanker|crude oil tanker|petrolero|quimiquero|heavy load carrier|heavy lift|heavy load|heavy carrier|project cargo|carga pesada|break bulk|breakbulk|break-bulk|ro-ro cargo|roro cargo|ro-ro|roro|vehicle carrier|car carrier|cement carrier|cementero|cement|cemento|clinker carrier|clinker)\b/i;
+
+    function extractVesselClassificationStrings(ship) {
+        if (!ship || typeof ship !== 'object') return [];
+        const meta = ship.MetaData || ship.metadata || {};
+        const msg = ship.Message || ship.message || {};
+        const staticData = msg.ShipStaticData || ship.ShipStaticData || ship.shipStaticData || {};
+        const raw = ship.rawData || ship.raw_data || ship.sourcePayload || ship.source_payload || {};
+        const rawMeta = raw.MetaData || raw.metadata || {};
+        const rawStatic = raw.ShipStaticData || (raw.Message && raw.Message.ShipStaticData) || {};
+        const nestedAis = ship.ais || ship.AIS || {};
+
+        return [
+            ship.type,
+            ship.vesselType,
+            ship.vessel_type,
+            ship.vesselClass,
+            ship.vessel_class,
+            ship.clase,
+            ship.tipo,
+            ship.Tipo,
+            ship.tipo_buque,
+            ship.cargoType,
+            ship.tipo_carga,
+            ship.categoryLabel,
+            ship.radarCategory,
+            ship.category,
+            ship.shipType,
+            ship.ship_type,
+            ship.ShipType,
+            ship.type_specific,
+            meta.ShipType,
+            meta.shipType,
+            meta.type,
+            meta.vesselType,
+            meta.vesselClass,
+            staticData.Type,
+            staticData.type,
+            nestedAis.vesselType,
+            nestedAis.vessel_type,
+            nestedAis.ShipType,
+            raw.vessel_type,
+            raw.vesselType,
+            raw.ShipType,
+            rawMeta.ShipType,
+            rawStatic.Type
+        ].filter(v => v !== undefined && v !== null && v !== '');
+    }
+
+    function extractNumericAisTypeCode(ship) {
+        if (!ship || typeof ship !== 'object') return null;
+        const candidates = extractVesselClassificationStrings(ship);
+        for (const candidate of candidates) {
+            if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+                return candidate;
+            }
+            if (typeof candidate === 'string') {
+                const trimmed = candidate.trim();
+                if (/^\d{1,3}$/.test(trimmed)) {
+                    const num = Number(trimmed);
+                    if (Number.isFinite(num)) return num;
+                }
+            }
+        }
+        return null;
+    }
+
     function isCommercialVessel(ship) {
-        return Boolean(ship);
+        if (!ship || typeof ship !== 'object') return false;
+
+        const classificationStrings = extractVesselClassificationStrings(ship);
+        const combinedText = classificationStrings.map(String).join(' ').trim().toLowerCase();
+
+        // 1. Categorical exclusion of noise, aids to navigation, minor crafts, tugs, fishing, yachts, SAR, VTS
+        if (STRICT_EXCLUSION_PATTERN.test(combinedText)) {
+            // Only allow if text explicitly contains a whitelisted commercial cargo type and does NOT contain navigational marks/fishing/tugs/pleasure/VTS
+            const isHardNoise = /\b(fishing|trawler|tug|tugboat|pleasure craft|sailing|yacht|dredger|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|reference point|isolated danger|buoy|boya|baliza|military ops|search and rescue|sar|pilot|workboat|other|unknown)\b/i.test(combinedText);
+            if (isHardNoise) {
+                return false;
+            }
+        }
+
+        // 2. Numeric AIS type code check
+        const numericCode = extractNumericAisTypeCode(ship);
+        if (numericCode !== null) {
+            // Strictly non-merchant / non-commercial codes:
+            // 20-29: Wing-in-ground, 30: Fishing, 31-32: Towing/Tug, 33: Dredging, 34: Diving, 35: Military,
+            // 36: Sailing, 37: Pleasure/Yacht, 40-49: HSC, 50: Pilot, 51: SAR, 52: Tug, 53: Port tender,
+            // 54: Anti-pollution, 55: Law enforcement, 58: Medical, 60-69: Passenger
+            if (
+                (numericCode >= 20 && numericCode < 70) ||
+                numericCode === 0 ||
+                numericCode >= 90
+            ) {
+                return false;
+            }
+            // Codes 70-79: Cargo (Bulk, General, Container, Break Bulk, Heavy Lift, Ro-Ro)
+            // Codes 80-89: Tankers
+            if ((numericCode >= 70 && numericCode <= 79) || (numericCode >= 80 && numericCode <= 89)) {
+                return true;
+            }
+        }
+
+        // 3. Strict Whitelist Check: 'Bulk Carrier', 'General Cargo', 'Container Ship', 'Tanker', 'Heavy Load Carrier', 'Break Bulk', 'Ro-Ro Cargo'
+        if (STRICT_COMMERCIAL_WHITELIST_PATTERN.test(combinedText)) {
+            return true;
+        }
+
+        // 4. Deadweight-based commercial verification fallback
+        const dwt = Number(ship.dwt || ship.DWT || ship.deadweight || 0);
+        const hasCargoIndicator = /\b(cargo|freighter|bulker|merchant|coaster)\b/i.test(combinedText);
+        if (dwt >= 500 && hasCargoIndicator) {
+            return true;
+        }
+
+        return false;
     }
 
     function filterCommercialVessels(vessels) {
-        return (Array.isArray(vessels) ? vessels : []).filter(Boolean);
+        return (Array.isArray(vessels) ? vessels : []).filter(isCommercialVessel);
     }
 
     function parseAisSourcePayload(value) {

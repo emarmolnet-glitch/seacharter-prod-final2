@@ -50736,6 +50736,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
             if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') window.MapLoader.stopAisProxyPolling();
             window.clearAisProspectionRadii();
+            window.hasRealAisData = false;
             window.buquesAlmacenados = new Map();
             window.listaBarcos = [];
             if (window.GlobalStore) {
@@ -50766,6 +50767,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         
         // --- MOTOR DE ACUMULACIÓN DUAL DE BUQUES ---
         window.AIS_DUAL_SWEEP_LIMIT = 1000;
+        window.hasRealAisData = false;
         window.buquesAlmacenados = new Map();
         window.buquesEncontrados = {};
 
@@ -50794,14 +50796,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.MapLoader && typeof window.MapLoader.isCommercialVessel === 'function') {
                 return window.MapLoader.isCommercialVessel(buque);
             }
+            if (!buque || typeof buque !== 'object') return false;
+            const nonCommercial = /\b(fishing|pesquero|pesca|trawler|trawl|drifter|seiner|longliner|fish factory|pesquero de arrastre|tug|tugboat|remolcador|remolque|towing|towage|pusher|pushboat|empujador|escort tug|support vessel|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure craft|pleasure|recreational|recreo|yacht|superyacht|megayacht|yate|sailing|sailing vessel|sailboat|velero|sport fishing|dredger|dredging|draga|dragado|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|special mark - sea farm|reference point|isolated danger|navigation mark|buoy|boya|baliza|military ops|military|warship|navy|patrol|patrullera|search and rescue|search & rescue|sar|rescue vessel|rescue|salvage|salvamento|guardacostas|coast guard|port service|servicio portuario|workboat|barco de trabajo|crew boat|pilot|pilot boat|prácticos|tender|port tender|diving|buceo|pontoon|ponton|anti-pollution|oil recovery|cable layer|pipe layer|research vessel|investigación|drillship|drilling|offshore supply|platform supply|platform|psv|ahts|other|unknown|desconocido|otros)\b/i;
+            const commercialCargo = /\b(bulk carrier|bulker|dry bulk|dry cargo|granelero|graneles|capesize|post-panamax|kamsarmax|panamax|ultramax|supramax|handymax|handysize|mini bulker|minibulker|mini-bulker|ore carrier|grain carrier|collier|wood chips carrier|self-unloading bulker|self unloader|general cargo|general cargo vessel|carguero|buque de carga|cargo ship|cargo|coaster|coastal cargo|cabotage|cabotaje|costero|freighter|merchant|motor vessel|mv|multipurpose|multi purpose|multi-purpose|mpp|mpv|mmpp|open hatch|box hold|multipropósito|container ship|container|containership|feeder|boxship|portacontenedores|tanker|oil tanker|chemical tanker|product tanker|crude oil tanker|petrolero|quimiquero|heavy load carrier|heavy lift|heavy load|heavy carrier|project cargo|carga pesada|break bulk|breakbulk|break-bulk|ro-ro cargo|roro cargo|ro-ro|roro|vehicle carrier|car carrier|cement carrier|cementero|cement|cemento|clinker carrier|clinker)\b/i;
+
             const meta = buque && buque.MetaData ? buque.MetaData : {};
             const rawType = String(
-                (buque && (buque.ShipType || buque.shipType || buque.vesselClass || buque.vessel_class || buque.type)) ||
-                meta.ShipType || meta.shipType || meta.vesselClass || meta.vessel_class || meta.type || ''
-            ).trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
-            if (!rawType || rawType === 'n/a' || rawType === 'unknown' || rawType === 'otros' || rawType === 'cargo') return true;
-            if (/fishing|tug|pleasure craft|yacht|sailing vessel|high speed craft/.test(rawType)) return false;
-            return /cement carrier|cement|clinker|general cargo|bulk carrier|mpv|multipurpose|multi purpose|tanker|cargo ship|^cargo$/.test(rawType);
+                buque.vesselClass || buque.vessel_class || buque.vesselType || buque.vessel_type || buque.type || buque.clase || buque.tipo || buque.tipo_buque || buque.cargoType || buque.tipo_carga || buque.categoryLabel || buque.radarCategory || buque.ShipType || buque.shipType ||
+                meta.ShipType || meta.shipType || meta.vesselClass || meta.vessel_class || meta.vesselType || meta.type || ''
+            ).trim().toLowerCase();
+
+            if (nonCommercial.test(rawType)) {
+                const isHardNoise = /\b(fishing|trawler|tug|tugboat|pleasure craft|sailing|yacht|dredger|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|reference point|isolated danger|buoy|boya|baliza|military ops|search and rescue|sar|pilot|workboat|other|unknown)\b/i.test(rawType);
+                if (isHardNoise) return false;
+            }
+
+            const numType = Number(buque.ShipType || buque.shipType || meta.ShipType || meta.shipType || buque.type);
+            if (Number.isFinite(numType)) {
+                if ((numType >= 20 && numType < 70) || numType === 0 || numType >= 90) {
+                    return false;
+                }
+                if ((numType >= 70 && numType <= 79) || (numType >= 80 && numType <= 89)) return true;
+            }
+
+            if (commercialCargo.test(rawType)) return true;
+            const dwt = Number(buque.dwt || buque.DWT || buque.deadweight || 0);
+            return (dwt >= 500 && rawType.includes('cargo'));
         };
 
         window.obtenerNombreBuque = function(buque) {
@@ -52104,11 +52124,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             }
 
+            const commercialVessels = vessels.filter(vessel => {
+                if (typeof window.esBuqueComercialRelevante === 'function') {
+                    return window.esBuqueComercialRelevante(vessel);
+                }
+                if (window.MapLoader && typeof window.MapLoader.isCommercialVessel === 'function') {
+                    return window.MapLoader.isCommercialVessel(vessel);
+                }
+                return true;
+            });
+
             if (typeof window.completeAisProspectionRadius === 'function') {
-                window.completeAisProspectionRadius(normalizedRole, vessels.length);
+                window.completeAisProspectionRadius(normalizedRole, commercialVessels.length);
             }
-            console.log(`Búsqueda AIS ${normalizedRole} (10 NM) completada: ${vessels.length} buques`);
-            return vessels;
+            console.log(`Búsqueda AIS ${normalizedRole} (10 NM) completada: ${commercialVessels.length} buques`);
+            return commercialVessels;
         }
 
         window.RadarPOL = function(radiusNm = 10) {
@@ -53563,7 +53593,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const canonical = window.GlobalStore?.getCanonicalFleet?.();
             if (Array.isArray(canonical) && canonical.length > 0) return canonical;
             if (Array.isArray(window.GlobalStore?.matchingVessels) && window.GlobalStore.matchingVessels.length > 0) return window.GlobalStore.matchingVessels;
-            if (Array.isArray(window.datalasticRadarVessels) && window.datalasticRadarVessels.length > 0) return window.datalasticRadarVessels;
             if (Array.isArray(window.listaBarcos) && window.listaBarcos.length > 0) return window.listaBarcos;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size > 0) return Array.from(window.buquesAlmacenados.values());
             return [];
@@ -53654,9 +53683,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function renderDensityVesselsTable(_vessels, _options = {}) {
-            const displayVessels = (Array.isArray(_vessels) && _vessels.length > 0)
-                ? _vessels
-                : getDensityReactiveVessels();
+            const displayVessels = getDensityReactiveVessels();
             const visibleRows = displayVessels;
             const tbody = document.getElementById('ais-vessels-tbody');
             if (!tbody) return visibleRows;
@@ -58106,6 +58133,14 @@ if (typeof window.loadActiveFleet === 'function') {
 
                 const hasCommittedMatchingState = renderFleet.length > 0;
                 const hasAisData = renderFleet.length > 0;
+                window.hasRealAisData = window.hasRealAisData || false;
+                const hasRealAisData = Boolean(
+                    window.hasRealAisData
+                    || hasAisData
+                    || renderFleet.length > 0
+                    || (Array.isArray(window.listaBarcos) && window.listaBarcos.length > 0)
+                    || (window.GlobalStore?.hasAisData === true)
+                );
                 const shouldUseCommittedMatchingState = true;
                 let nearbyCount = renderFleet.length;
                 if (!hasAisData && nearbyCount <= 0 && !hasActiveVessel) {
@@ -58277,7 +58312,7 @@ if (typeof window.loadActiveFleet === 'function') {
                             };
                             listEl.appendChild(btn);
                         });
-                    } else if (hasRealAisData) {
+                    } else if (Boolean(typeof hasRealAisData !== 'undefined' ? hasRealAisData : (typeof window !== 'undefined' && window.hasRealAisData))) {
                         listEl.innerHTML = '<span class="text-[10px] text-slate-500 italic">No hay buques cercanos al POL en rango.</span>';
                     } else {
                         listEl.innerHTML = '<span class="text-[10px] text-slate-500 italic">No hay datos de AIS cargados.</span>';
