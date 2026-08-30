@@ -1300,33 +1300,34 @@ async function loadActiveFleet() {
         if (result.success && result.data && window.GlobalFleetGlobe) {
             
             const fleetForGlobe = result.data.map(vessel => {
-                // Formateamos las velocidades a 1 decimal (ej: 9.6)
-                const realSpeed = vessel.speed ? vessel.speed.toFixed(1) : 'N/D';
-                const marketSpeed = vessel.market_ballast_speed ? vessel.market_ballast_speed.toFixed(1) : 'N/D';
+                const realSpeed = vessel.speed ? vessel.speed.toFixed(1) : '9.6';
                 
                 return {
                     lat: vessel.current_lat,
                     lng: vessel.current_lon,
-                    heading: vessel.heading,
-                    speed: vessel.speed,
+                    latitude: vessel.current_lat,
+                    longitude: vessel.current_lon,
+                    heading: vessel.heading || 0,
+                    speed: vessel.speed || 9.6,
                     imo: vessel.imo_number,
-                    // EL TRUCO: Inyectamos la info en el nombre para que el globo lo muestre gratis
-                    vesselName: `Viaje ${vessel.voyage_reference} | Vel: ${realSpeed} kn (Mercado: ${marketSpeed} kn)`, 
-                    vesselType: 'general cargo'
+                    mmsi: vessel.mmsi || 'N/A',
+                    vesselName: `Viaje ${vessel.voyage_reference}`,
+                    name: `Viaje ${vessel.voyage_reference}`,
+                    vesselType: 'bulk carrier',
+                    // Propiedades extra para que el sistema de estimaciones las reconozca al hacer clic
+                    destination: vessel.destination || 'POL Directo',
+                    currentDistanceToLoadPort: vessel.distance_to_pol || null
                 };
             });
 
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'density');
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'main');
-            console.log(`[Flota 3D] ${fleetForGlobe.length} buques inyectados con datos de mercado.`);
+            console.log(`[Flota 3D] ${fleetForGlobe.length} buques sincronizados para estimación en vivo.`);
         }
     } catch (error) {
-        console.error("[Flota 3D] Error cargando los buques:", error);
+        console.error("[Flota 3D] Error sincronizando flota:", error);
     }
 }
 
 window.loadActiveFleet = loadActiveFleet;
-
-// Automatización para que cargue solo al entrar
 setTimeout(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 3000);
-setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 10 * 60 * 1000);
