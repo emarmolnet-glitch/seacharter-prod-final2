@@ -15,8 +15,38 @@ function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
 }
 
+function parseRecord(value: unknown): AnyRecord {
+  if (!value) return {};
+  if (typeof value === "object") return asRecord(value);
+  try {
+    return asRecord(JSON.parse(String(value)));
+  } catch (_) {
+    return {};
+  }
+}
+
+export function serializeNestedAisRecord(row: AnyRecord) {
+  const sourcePayload = parseRecord(row.source_payload);
+  const message = asRecord(sourcePayload.Message);
+  const positionReport = asRecord(message.PositionReport);
+  const staticData = asRecord(message.ShipStaticData);
+  const latitude = numberValue(positionReport.Latitude, row.latitude);
+  const longitude = numberValue(positionReport.Longitude, row.longitude);
+  const imo = textValue(staticData.ImoNumber, row.imo_number);
+  const cargoType = textValue(row.vessel_type, "Bulk Carrier");
+  const dwt = numberValue(row.dwt, 0);
+  return {
+    latitude,
+    longitude,
+    dwt,
+    imo,
+    cargoType,
+    tipo_carga: cargoType,
+  };
+}
+
 function firstValue(...values: unknown[]) {
-  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
+  return values.find((value) => value !== undefined && value !== null && value !== "" && String(value).trim() !== "");
 }
 
 function textValue(...values: unknown[]) {
@@ -26,7 +56,7 @@ function textValue(...values: unknown[]) {
 
 function numberValue(...values: unknown[]) {
   for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
+    if (value === undefined || value === null || value === "") continue;
     const number = Number(value);
     if (Number.isFinite(number)) return number;
   }

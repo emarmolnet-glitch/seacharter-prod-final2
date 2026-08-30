@@ -1331,5 +1331,7 @@ async function loadActiveFleet() {
     }
 }
 
-window.loadActiveFleet = loadActiveFleet;
-setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 15000);
+if (typeof window !== 'undefined') {
+    window.loadActiveFleet = loadActiveFleet;
+    setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 15000);
+}

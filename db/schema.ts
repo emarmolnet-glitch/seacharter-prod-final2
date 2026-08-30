@@ -158,9 +158,7 @@ export const dataBridgeVesselIngestions = pgTable("data_bridge_vessel_ingestions
   createdAt: createdAt(),
 });
 
-export const vesselsMaster = pgTable(
-  "vessels_master",
-  {
+export const vesselsMaster = pgTable("vessels_master", {
     id: serial("id").primaryKey(),
     imoNumber: integer("imo_number").unique(),
     vesselName: text("vessel_name"),
