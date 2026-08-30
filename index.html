@@ -16752,62 +16752,98 @@
         }
 
        async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRateUsd, distanceNm, nominalSpeedKnots }) {
-    // Simulación inteligente basada en el puerto y parámetros reales para cualquier puerto del mundo
     await new Promise(resolve => setTimeout(resolve, 150));
     
-    const cleanPort = String(portUnlocode || 'GLOBAL PORT').trim();
-    const isMajorHub = /bja|alg|vlc|bcn|TNG/i.test(cleanPort);
+    // Simulación inteligente para POL, POD y Nodos de Ruta (ej. Estrecho de Gibraltar)
+    const polName = String(window.State?.pol || document.getElementById('map-port-pol')?.value || 'POL').trim();
+    const podName = String(portUnlocode || 'POD').trim();
     
     return {
-        port: cleanPort,
-        congestionDelayDays: isMajorHub ? 2.4 : 1.2,
-        demurrageRiskUsd: demurrageRateUsd ? Math.round(demurrageRateUsd * (isMajorHub ? 1.8 : 1.1)) : 22500,
-        recommendedSpeed: Number(nominalSpeedKnots ? nominalSpeedKnots - 1.5 : 10.5),
-        adjustedTce: 18950,
-        status: isMajorHub ? "Congestionado" : "Fluido"
+        pol: {
+            name: polName,
+            delayDays: 0.5,
+            status: "Fluido"
+        },
+        node: {
+            name: "Estrecho de Gibraltar",
+            status: "Tráfico Normal",
+            advisory: "Sin restricciones de corriente o viento"
+        },
+        pod: {
+            name: podName,
+            delayDays: 1.8,
+            demurrageRiskUsd: 27000,
+            recommendedSpeed: 10.5,
+            adjustedTce: 18450,
+            status: "Congestionado"
+        }
     };
 }
 
 function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
     if (!congestionData) return;
     
-    let shieldCard = document.getElementById('congestion-shield-ui-card');
+    let shieldCard = document.getElementById('congestion-shield-sidebar-card');
     if (!shieldCard) {
         shieldCard = document.createElement('div');
-        shieldCard.id = 'congestion-shield-ui-card';
-        shieldCard.className = 'absolute bottom-24 left-6 right-6 z-30 bg-slate-900/95 border border-teal-500/60 rounded-xl p-4 text-white shadow-2xl backdrop-blur-md';
+        shieldCard.id = 'congestion-shield-sidebar-card';
+        shieldCard.className = 'w-full bg-slate-900/95 border border-slate-700 rounded-xl p-4 mt-4 text-white shadow-xl backdrop-blur-md text-xs';
         
-        // Se inyecta directamente sobre el contenedor principal del mapa/interfaz para visibilidad total
-        const mapContainer = document.querySelector('.relative.h-screen') || document.body;
-        mapContainer.appendChild(shieldCard);
+        // Buscar el contenedor de INPUT GEOGRÁFICO en la barra lateral izquierda para insertarlo justo debajo
+        const inputGeograficoBox = document.querySelector('.bg-white, .bg-slate-900, form, .card') || document.querySelector('aside');
+        const targetContainer = document.querySelector('#map-port-pol')?.closest('div.bg-white, div.bg-slate-800, div.rounded-xl') || inputGeograficoBox?.parentElement;
+        
+        if (targetContainer) {
+            targetContainer.parentNode.insertBefore(shieldCard, targetContainer.nextSibling);
+        } else {
+            document.body.appendChild(shieldCard);
+        }
     }
     
     shieldCard.innerHTML = `
-        <div class="flex items-center justify-between border-b border-slate-700/80 pb-2 mb-3">
-            <span class="font-bold text-teal-400 flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-radar animate-pulse text-teal-300"></i> Predictive Congestion Shield &mdash; ${congestionData.port}
+        <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
+            <span class="font-bold text-teal-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-shield-halved text-teal-300"></i> Análisis de Ruta & Congestión
             </span>
-            <span class="px-2.5 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                ${congestionData.status}
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                RADAR AIS ACTIVO
             </span>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-            <div class="bg-slate-800/60 p-2 rounded border border-slate-700/50">
-                <span class="text-slate-400 block mb-0.5">Demora Radar AIS</span>
-                <strong class="text-base text-white">${congestionData.congestionDelayDays} días</strong>
+        
+        <!-- Puerto de Carga (POL) -->
+        <div class="mb-3 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-semibold text-slate-300">POL: <span class="text-white">${congestionData.pol.name}</span></span>
+                <span class="text-emerald-400 font-medium">${congestionData.pol.status}</span>
             </div>
-            <div class="bg-slate-800/60 p-2 rounded border border-slate-700/50">
-                <span class="text-slate-400 block mb-0.5">Riesgo Demurrage</span>
-                <strong class="text-base text-amber-400">$${congestionData.demurrageRiskUsd.toLocaleString()}</strong>
+            <div class="text-slate-400">Espera estimada: <strong class="text-white">${congestionData.pol.delayDays} días</strong></div>
+        </div>
+
+        <!-- Nodal / Cuello de Botella (ej. Gibraltar) -->
+        <div class="mb-3 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-semibold text-slate-300">Nodo: <span class="text-amber-300">${congestionData.node.name}</span></span>
+                <span class="text-teal-300 font-medium">${congestionData.node.status}</span>
             </div>
-            <div class="bg-slate-800/60 p-2 rounded border border-slate-700/50">
-                <span class="text-slate-400 block mb-0.5">Velocidad Óptima</span>
-                <strong class="text-base text-teal-300">${congestionData.recommendedSpeed} kn</strong>
+            <div class="text-slate-400 italic">${congestionData.node.advisory}</div>
+        </div>
+
+        <!-- Puerto de Descarga (POD) -->
+        <div class="mb-3 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-semibold text-slate-300">POD: <span class="text-white">${congestionData.pod.name}</span></span>
+                <span class="text-amber-400 font-medium">${congestionData.pod.status}</span>
             </div>
-            <div class="bg-slate-800/60 p-2 rounded border border-slate-700/50">
-                <span class="text-slate-400 block mb-0.5">TCE Ajustado</span>
-                <strong class="text-base text-emerald-400">$${congestionData.adjustedTce.toLocaleString()} / día</strong>
+            <div class="grid grid-cols-2 gap-2 mt-2">
+                <div>Demora: <strong class="text-white">${congestionData.pod.delayDays} d</strong></div>
+                <div>Demurrage: <strong class="text-amber-400">$${congestionData.pod.demurrageRiskUsd.toLocaleString()}</strong></div>
             </div>
+        </div>
+
+        <!-- Resumen Financiero / TCE -->
+        <div class="pt-2 border-t border-slate-700 flex justify-between items-center">
+            <span class="text-slate-300">TCE Ajustado:</span>
+            <strong class="text-sm text-emerald-400">$${congestionData.pod.adjustedTce.toLocaleString()} / día</strong>
         </div>
     `;
 }
