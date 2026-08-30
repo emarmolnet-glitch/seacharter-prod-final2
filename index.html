@@ -16762,218 +16762,243 @@
             }
         }
 
-        async function runOnDemandMapRouteWorkflow(button) {
-            if (!validateGeographicLaycanDates() || button?.disabled) return;
+       async function runOnDemandMapRouteWorkflow(button) {
+    if (!validateGeographicLaycanDates() || button?.disabled) return;
 
-            const originalContent = button?.innerHTML || '';
-            let routeTimeoutId = null;
-            if (button) {
-                button.disabled = true;
-                button.dataset.calculating = 'true';
-                button.setAttribute('aria-busy', 'true');
-                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Calculando y actualizando...';
-            }
+    const originalContent = button?.innerHTML || '';
+    let routeTimeoutId = null;
+    if (button) {
+        button.disabled = true;
+        button.dataset.calculating = 'true';
+        button.setAttribute('aria-busy', 'true');
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Calculando y actualizando...';
+    }
 
+    try {
+        if (!captureRouteStateFromMapInputs()) return;
+
+        const portBallast = String(document.getElementById('map-port-ballast')?.value || State.portBallast || '').trim();
+        const pol = String(document.getElementById('map-port-pol')?.value || State.pol || '').trim();
+        const pod = String(document.getElementById('map-port-pod')?.value || State.pod || '').trim();
+        if (!pol || !pod) {
+            throw new Error('POL y POD son obligatorios para calcular la ruta marítima.');
+        }
+
+        stopRouteGlobeRotation();
+        window.CoreNetworkGuard?.close?.('routing');
+        const routeTimeout = new Promise((_, reject) => {
+            routeTimeoutId = window.setTimeout(() => reject(new Error('La API de rutas excedió el tiempo máximo de respuesta.')), 45_000);
+        });
+        const routeResult = await Promise.race([
+            calculateVoyageRouteService({ portBallast, pol, pod, geocode: true }),
+            routeTimeout
+        ]);
+
+        const ladenCoordinates = normalizeMaritimeRouteCoordinates(routeResult?.routes?.laden?.coordinates);
+        if (!routeResult?.coordinates?.pol || !routeResult?.coordinates?.pod || ladenCoordinates.length < 2) {
+            throw new Error('La API de rutas no devolvió una geometría marítima válida para POL y POD.');
+        }
+
+        applyRouteServiceResult(routeResult);
+        renderMasterRouteMap(routeResult);
+        updateRouteSummary();
+        syncGlobalStateToForms();
+        if (typeof applyPortIntelligenceToSmartCalculations === 'function') applyPortIntelligenceToSmartCalculations();
+        if (typeof runEngine === 'function') runEngine();
+        if (typeof syncGencon === 'function') syncGencon();
+        if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+        if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+        stopRouteGlobeRotation();
+        window.SeaAssistantAlerts?.evaluateCurrentContext?.();
+
+        window.updateDataBridgeTransportStatus?.('connected');
+
+        // --- PREDICTIVE CONGESTION SHIELD INTEGRATION ---
+        if (pod) {
             try {
-                if (!captureRouteStateFromMapInputs()) return;
-
-                const portBallast = String(document.getElementById('map-port-ballast')?.value || State.portBallast || '').trim();
-                const pol = String(document.getElementById('map-port-pol')?.value || State.pol || '').trim();
-                const pod = String(document.getElementById('map-port-pod')?.value || State.pod || '').trim();
-                if (!pol || !pod) {
-                    throw new Error('POL y POD son obligatorios para calcular la ruta marítima.');
-                }
-
-                stopRouteGlobeRotation();
-                window.CoreNetworkGuard?.close?.('routing');
-                const routeTimeout = new Promise((_, reject) => {
-                    routeTimeoutId = window.setTimeout(() => reject(new Error('La API de rutas excedió el tiempo máximo de respuesta.')), 45_000);
+                const congestionData = await fetchPortCongestionShield({
+                    portUnlocode: pod,
+                    vesselImo: window.currentSelectedVesselImo || 9876543,
+                    demurrageRateUsd: 15000,
+                    distanceNm: window.currentCalculatedDistance || 1200,
+                    nominalSpeedKnots: 12.0
                 });
-                const routeResult = await Promise.race([
-                    calculateVoyageRouteService({ portBallast, pol, pod, geocode: true }),
-                    routeTimeout
-                ]);
-
-                const ladenCoordinates = normalizeMaritimeRouteCoordinates(routeResult?.routes?.laden?.coordinates);
-                if (!routeResult?.coordinates?.pol || !routeResult?.coordinates?.pod || ladenCoordinates.length < 2) {
-                    throw new Error('La API de rutas no devolvió una geometría marítima válida para POL y POD.');
+                
+                if (congestionData) {
+                    renderTceWithCongestionShield(
+                        window.currentCalculatedTce || 20000, 
+                        window.currentCalculatedDays || 10, 
+                        congestionData
+                    );
                 }
-
-                applyRouteServiceResult(routeResult);
-                renderMasterRouteMap(routeResult);
-                updateRouteSummary();
-                syncGlobalStateToForms();
-                if (typeof applyPortIntelligenceToSmartCalculations === 'function') applyPortIntelligenceToSmartCalculations();
-                if (typeof runEngine === 'function') runEngine();
-                if (typeof syncGencon === 'function') syncGencon();
-                if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
-                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-                stopRouteGlobeRotation();
-                window.SeaAssistantAlerts?.evaluateCurrentContext?.();
-
-                window.updateDataBridgeTransportStatus?.('connected');
-                void Promise.allSettled([
-                    window.restorePersistentDataBridgeConnection?.() ?? Promise.resolve(false),
-                    refreshDataBridgeMasterStatsOnDemand()
-                ]).then(([connectionResult, masterStatsResult]) => {
-                    if (connectionResult.status === 'rejected') {
-                        console.warn('[Core PRO] No se pudo actualizar el estado de Data Bridge bajo demanda.', connectionResult.reason);
-                    }
-                    if (masterStatsResult.status === 'rejected') {
-                        console.warn('[Core PRO] No se pudo actualizar el histórico maestro bajo demanda.', masterStatsResult.reason);
-                    }
-                });
-            } catch (error) {
-                console.error('[Core PRO] Falló la actualización manual de ruta y ecosistema.', error);
-                if (typeof showToast === 'function') showToast(error?.message || 'No se pudo completar la actualización manual.', false, 'error');
-            } finally {
-                if (routeTimeoutId) window.clearTimeout(routeTimeoutId);
-                if (button) {
-                    button.disabled = false;
-                    delete button.dataset.calculating;
-                    button.removeAttribute('aria-busy');
-                    button.innerHTML = originalContent;
-                }
+            } catch (err) {
+                console.warn("No se pudo cargar el Predictive Congestion Shield:", err);
             }
         }
-        window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;
+        // ------------------------------------------------
 
-        async function applyMapRouteToCalculator(forceGeocode = false) {
-            if (!validateGeographicLaycanDates()) {
-                return;
+        void Promise.allSettled([
+            window.restorePersistentDataBridgeConnection?.() ?? Promise.resolve(false),
+            refreshDataBridgeMasterStatsOnDemand()
+        ]).then(([connectionResult, masterStatsResult]) => {
+            if (connectionResult.status === 'rejected') {
+                console.warn('[Core PRO] No se pudo actualizar el estado de Data Bridge bajo demanda.', connectionResult.reason);
             }
-            stopRouteGlobeRotation();
-            captureRouteStateFromMapInputs();
-            if (forceGeocode && typeof geocodeAllPorts === 'function') {
-                await geocodeAllPorts();
-            } else if (typeof autoCalculateDistances === 'function') {
-                await autoCalculateDistances();
+            if (masterStatsResult.status === 'rejected') {
+                console.warn('[Core PRO] No se pudo actualizar el histórico maestro bajo demanda.', masterStatsResult.reason);
             }
-            if (typeof applyPortIntelligenceToSmartCalculations === 'function') {
-                applyPortIntelligenceToSmartCalculations();
-            }
-            SeaCharterStore.set(readRouteStateFromCalculator());
-            syncGlobalStateToForms();
-            if (typeof runEngine === 'function') runEngine();
-            if (typeof syncGencon === 'function') syncGencon();
-            if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
-            if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-            stopRouteGlobeRotation();
-        }
-        window.applyMapRouteToCalculator = applyMapRouteToCalculator;
-
-        window.objetoCalculadoraPrincipal = Object.freeze({
-            vessel: "",
-            mmsi: "",
-            imo: "",
-            lat: null,
-            lon: null,
-            destination: ""
         });
-
-        const SEA_MAP_STYLE_CONFIG = window.styleConfig || window.SEA_MAP_STYLE_CONFIG || (
-            window.MapLoader && typeof window.MapLoader.getMapStyleConfig === 'function'
-                ? window.MapLoader.getMapStyleConfig()
-                : null
-        );
-        const NAUTICAL_BASE_TILE_URL = SEA_MAP_STYLE_CONFIG?.fallback?.tileUrl || 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-        const NAUTICAL_TILE_OPTIONS = SEA_MAP_STYLE_CONFIG?.fallback?.tileOptions || {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20,
-            zIndex: 1
-        };
-        const ROUTE_FIT_BOUNDS_OPTIONS = { padding: [50, 50], maxZoom: 18 };
-        const ROUTE_LADEN_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
-        const ROUTE_BALLAST_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
-        const MARITIME_ROUTING_API_ENDPOINT = '/api/route';
-        const MARITIME_ICON_PATHS = SEA_MAP_STYLE_CONFIG?.icons || {
-            load: '/Ancla Load.svg',
-            discharge: '/Ancla Discharge.svg'
-        };
-        const ROUTE_MARKER_ICON_CONFIG = Object.freeze({
-            // Legacy selector contract retained for static tests: pol: { className: 'route-port-marker' / pod: { className: 'route-port-marker' / iconSize: [30, 30], iconAnchor: [15, 15]
-            pol: {
-                className: 'route-port-marker',
-                html: `<div class="route-node"><img class="route-port-anchor" src="${MARITIME_ICON_PATHS.load}" alt=""><span class="route-port-badge">POL</span></div>`,
-                iconSize: [86, 30],
-                iconAnchor: [43, 30]
-            },
-            pod: {
-                className: 'route-port-marker',
-                html: `<div class="route-node"><img class="route-port-anchor" src="${MARITIME_ICON_PATHS.discharge}" alt=""><span class="route-port-badge">POD</span></div>`,
-                iconSize: [86, 30],
-                iconAnchor: [43, 30]
-            },
-            ballast: { className: 'route-ballast-marker', html: '<div class="route-node"><i class="fa-solid fa-anchor"></i><span class="route-port-badge">BALLAST</span></div>', iconSize: [96, 30], iconAnchor: [48, 30] }
-        });
-
-        function createNauticalBaseLayer() {
-            return L.tileLayer(NAUTICAL_BASE_TILE_URL, {
-                ...NAUTICAL_TILE_OPTIONS,
-                className: 'nautical-map-base'
-            });
+    } catch (error) {
+        console.error('[Core PRO] Falló la actualización manual de ruta y ecosistema.', error);
+        if (typeof showToast === 'function') showToast(error?.message || 'No se pudo completar la actualización manual.', false, 'error');
+    } finally {
+        if (routeTimeoutId) window.clearTimeout(routeTimeoutId);
+        if (button) {
+            button.disabled = false;
+            delete button.dataset.calculating;
+            button.removeAttribute('aria-busy');
+            button.innerHTML = originalContent;
         }
+    }
+}
+window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;
 
-        function createRouteDivIcon(type, coord) {
-            const config = ROUTE_MARKER_ICON_CONFIG[type] || ROUTE_MARKER_ICON_CONFIG.ballast;
-            const label = type === 'ballast' ? 'BALLAST' : (type === 'pod' ? 'POD' : 'POL');
-            const iconPath = type === 'pod' ? MARITIME_ICON_PATHS.discharge : MARITIME_ICON_PATHS.load;
-            const iconHtml = type === 'ballast'
-                ? '<i class="fa-solid fa-anchor"></i>'
-                : `<img class="route-port-anchor" src="${iconPath}" alt="">`;
-            return L.divIcon(Object.assign({}, config, {
-                html: `<div class="route-node">${iconHtml}<span class="route-port-badge">${label}</span><span class="route-port-name" title="${coord?.name || ''}">${getShortPortName(coord)}</span></div>`
-            }));
-        }
+async function applyMapRouteToCalculator(forceGeocode = false) {
+    if (!validateGeographicLaycanDates()) {
+        return;
+    }
+    stopRouteGlobeRotation();
+    captureRouteStateFromMapInputs();
+    if (forceGeocode && typeof geocodeAllPorts === 'function') {
+        await geocodeAllPorts();
+    } else if (typeof autoCalculateDistances === 'function') {
+        await autoCalculateDistances();
+    }
+    if (typeof applyPortIntelligenceToSmartCalculations === 'function') {
+        applyPortIntelligenceToSmartCalculations();
+    }
+    SeaCharterStore.set(readRouteStateFromCalculator());
+    syncGlobalStateToForms();
+    if (typeof runEngine === 'function') runEngine();
+    if (typeof syncGencon === 'function') syncGencon();
+    if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+    if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+    stopRouteGlobeRotation();
+}
+window.applyMapRouteToCalculator = applyMapRouteToCalculator;
 
-        function getShortPortName(coord) {
-            return String(coord?.name || '').split(',')[0].trim() || 'Port';
-        }
+window.objetoCalculadoraPrincipal = Object.freeze({
+    vessel: "",
+    mmsi: "",
+    imo: "",
+    lat: null,
+    lon: null,
+    destination: ""
+});
 
-        function createRouteMarkerElement(type, coord) {
-            const el = document.createElement('div');
-            el.className = `route-node route-node-${type}`;
-            const icon = document.createElement('i');
-            icon.className = 'fa-solid fa-anchor';
-            const role = document.createElement('span');
-            role.className = 'route-port-badge';
-            role.textContent = type === 'ballast' ? 'BALLAST' : (type === 'pod' ? 'POD' : 'POL');
-            const name = document.createElement('span');
-            name.className = 'route-port-name';
-            name.textContent = getShortPortName(coord);
-            name.title = coord?.name || getShortPortName(coord);
-            el.append(icon, role, name);
-            return el;
-        }
+const SEA_MAP_STYLE_CONFIG = window.styleConfig || window.SEA_MAP_STYLE_CONFIG || (
+    window.MapLoader && typeof window.MapLoader.getMapStyleConfig === 'function'
+        ? window.MapLoader.getMapStyleConfig()
+        : null
+);
+const NAUTICAL_BASE_TILE_URL = SEA_MAP_STYLE_CONFIG?.fallback?.tileUrl || 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const NAUTICAL_TILE_OPTIONS = SEA_MAP_STYLE_CONFIG?.fallback?.tileOptions || {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    zIndex: 1
+};
+const ROUTE_FIT_BOUNDS_OPTIONS = { padding: [50, 50], maxZoom: 18 };
+const ROUTE_LADEN_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
+const ROUTE_BALLAST_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
+const MARITIME_ROUTING_API_ENDPOINT = '/api/route';
+const MARITIME_ICON_PATHS = SEA_MAP_STYLE_CONFIG?.icons || {
+    load: '/Ancla Load.svg',
+    discharge: '/Ancla Discharge.svg'
+};
+const ROUTE_MARKER_ICON_CONFIG = Object.freeze({
+    // Legacy selector contract retained for static tests: pol: { className: 'route-port-marker' / pod: { className: 'route-port-marker' / iconSize: [30, 30], iconAnchor: [15, 15]
+    pol: {
+        className: 'route-port-marker',
+        html: `<div class="route-node"><img class="route-port-anchor" src="${MARITIME_ICON_PATHS.load}" alt=""><span class="route-port-badge">POL</span></div>`,
+        iconSize: [86, 30],
+        iconAnchor: [43, 30]
+    },
+    pod: {
+        className: 'route-port-marker',
+        html: `<div class="route-node"><img class="route-port-anchor" src="${MARITIME_ICON_PATHS.discharge}" alt=""><span class="route-port-badge">POD</span></div>`,
+        iconSize: [86, 30],
+        iconAnchor: [43, 30]
+    },
+    ballast: { className: 'route-ballast-marker', html: '<div class="route-node"><i class="fa-solid fa-anchor"></i><span class="route-port-badge">BALLAST</span></div>', iconSize: [96, 30], iconAnchor: [48, 30] }
+});
 
-        function isMapboxRouteMap(routeMap = map) {
-            return Boolean(routeMap && routeMap.seaCharterEngine === 'mapbox-gl-js' && typeof mapboxgl !== 'undefined');
-        }
+function createNauticalBaseLayer() {
+    return L.tileLayer(NAUTICAL_BASE_TILE_URL, {
+        ...NAUTICAL_TILE_OPTIONS,
+        className: 'nautical-map-base'
+    });
+}
 
-        function resizeRouteMap(routeMap = map) {
-            if (!routeMap) return;
-            if (window.GlobalFleetGlobe && routeMap === window.GlobalFleetGlobe.getInstance()) {
-                window.GlobalFleetGlobe.resize();
-            } else if (typeof routeMap.resize === 'function') {
-                routeMap.resize();
-            } else if (typeof routeMap.invalidateSize === 'function') {
-                routeMap.invalidateSize();
-            }
-        }
+function createRouteDivIcon(type, coord) {
+    const config = ROUTE_MARKER_ICON_CONFIG[type] || ROUTE_MARKER_ICON_CONFIG.ballast;
+    const label = type === 'ballast' ? 'BALLAST' : (type === 'pod' ? 'POD' : 'POL');
+    const iconPath = type === 'pod' ? MARITIME_ICON_PATHS.discharge : MARITIME_ICON_PATHS.load;
+    const iconHtml = type === 'ballast'
+        ? '<i class="fa-solid fa-anchor"></i>'
+        : `<img class="route-port-anchor" src="${iconPath}" alt="">`;
+    return L.divIcon(Object.assign({}, config, {
+        html: `<div class="route-node">${iconHtml}<span class="route-port-badge">${label}</span><span class="route-port-name" title="${coord?.name || ''}">${getShortPortName(coord)}</span></div>`
+    }));
+}
 
-        function forceVisibleRouteMapResize(routeMap = map) {
-            resizeRouteMap(routeMap);
-            requestAnimationFrame(() => resizeRouteMap(routeMap));
-        }
+function getShortPortName(coord) {
+    return String(coord?.name || '').split(',')[0].trim() || 'Port';
+}
 
-        function createRouteAnchorElement(type) {
-            const img = document.createElement('img');
-            img.className = 'route-anchor-svg-marker';
-            img.alt = type === 'pod' ? 'Discharge port' : 'Load port';
-            img.src = type === 'pod' ? MARITIME_ICON_PATHS.discharge : MARITIME_ICON_PATHS.load;
-            return img;
-        }
+function createRouteMarkerElement(type, coord) {
+    const el = document.createElement('div');
+    el.className = `route-node route-node-${type}`;
+    const icon = document.createElement('i');
+    icon.className = 'fa-solid fa-anchor';
+    const role = document.createElement('span');
+    role.className = 'route-port-badge';
+    role.textContent = type === 'ballast' ? 'BALLAST' : (type === 'pod' ? 'POD' : 'POL');
+    const name = document.createElement('span');
+    name.className = 'route-port-name';
+    name.textContent = getShortPortName(coord);
+    name.title = coord?.name || getShortPortName(coord);
+    el.append(icon, role, name);
+    return el;
+}
+
+function isMapboxRouteMap(routeMap = map) {
+    return Boolean(routeMap && routeMap.seaCharterEngine === 'mapbox-gl-js' && typeof mapboxgl !== 'undefined');
+}
+
+function resizeRouteMap(routeMap = map) {
+    if (!routeMap) return;
+    if (window.GlobalFleetGlobe && routeMap === window.GlobalFleetGlobe.getInstance()) {
+        window.GlobalFleetGlobe.resize();
+    } else if (typeof routeMap.resize === 'function') {
+        routeMap.resize();
+    } else if (typeof routeMap.invalidateSize === 'function') {
+        routeMap.invalidateSize();
+    }
+}
+
+function forceVisibleRouteMapResize(routeMap = map) {
+    resizeRouteMap(routeMap);
+    requestAnimationFrame(() => resizeRouteMap(routeMap));
+}
+
+function createRouteAnchorElement(type) {
+    const img = document.createElement('img');
+    img.className = 'route-anchor-svg-marker';
+    img.alt = type === 'pod' ? 'Discharge port' : 'Load port';
+    img.src = type === 'pod' ? MARITIME_ICON_PATHS.discharge : MARITIME_ICON_PATHS.load;
+    return img;
+}
 
         function createRoutePopupHtml(coord, status) {
             return `<div class="route-popup-card"><strong>${coord.name || status}</strong><span>Estado: ${status}</span><span>Lat/Lon: ${Number(coord.lat).toFixed(4)}, ${Number(coord.lon).toFixed(4)}</span></div>`;
