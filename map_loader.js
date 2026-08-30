@@ -1299,34 +1299,34 @@ async function loadActiveFleet() {
 
         if (result.success && result.data && window.GlobalFleetGlobe) {
             
-            // Adaptamos las variables de tu DB al formato exacto que pide tu globo
-            const fleetForGlobe = result.data.map(vessel => ({
-                lat: vessel.current_lat,
-                lng: vessel.current_lon,
-                heading: vessel.heading,
-                speed: vessel.speed,
-                imo: vessel.imo_number,
-                vesselName: `Viaje: ${vessel.voyage_reference}`, 
-                vesselType: 'general cargo' // Fuerza a usar la variable COMMERCIAL_VESSEL_COLOR (verde)
-            }));
+            const fleetForGlobe = result.data.map(vessel => {
+                // Formateamos las velocidades a 1 decimal (ej: 9.6)
+                const realSpeed = vessel.speed ? vessel.speed.toFixed(1) : 'N/D';
+                const marketSpeed = vessel.market_ballast_speed ? vessel.market_ballast_speed.toFixed(1) : 'N/D';
+                
+                return {
+                    lat: vessel.current_lat,
+                    lng: vessel.current_lon,
+                    heading: vessel.heading,
+                    speed: vessel.speed,
+                    imo: vessel.imo_number,
+                    // EL TRUCO: Inyectamos la info en el nombre para que el globo lo muestre gratis
+                    vesselName: `Viaje ${vessel.voyage_reference} | Vel: ${realSpeed} kn (Mercado: ${marketSpeed} kn)`, 
+                    vesselType: 'general cargo'
+                };
+            });
 
-            // Inyectamos los datos en tu vista de radar (que en tu captura vimos que se llama 'density')
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'density');
-            
-            // Por seguridad, los inyectamos también en la vista principal 'main'
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'main');
-
-            console.log(`[Flota 3D] ${fleetForGlobe.length} buques inyectados en GlobalFleetGlobe.`);
+            console.log(`[Flota 3D] ${fleetForGlobe.length} buques inyectados con datos de mercado.`);
         }
     } catch (error) {
-        console.error("[Flota 3D] Error cargando los buques desde Data Bridge:", error);
+        console.error("[Flota 3D] Error cargando los buques:", error);
     }
 }
 
 window.loadActiveFleet = loadActiveFleet;
 
-// Esperar 3 segundos para asegurar que el globo 3D está montado, y cargar los barcos
+// Automatización para que cargue solo al entrar
 setTimeout(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 3000);
-
-// Configurar un radar silencioso que actualice las posiciones cada 10 minutos automáticamente
 setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 10 * 60 * 1000);
