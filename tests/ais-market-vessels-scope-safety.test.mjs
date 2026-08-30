@@ -10,6 +10,12 @@ test('marketVessels is safely declared and initialized in calculateAndDisplayAis
   assert.match(indexHtml, /marketCount: marketVessels\.length,/, 'consumes marketVessels.length safely in aisMarketFreightRates payload');
 });
 
+test('hasRealAisData is safely declared and defensively checked in calculateAndDisplayAisFreight scope', () => {
+  assert.match(indexHtml, /window\.hasRealAisData\s*=\s*(?:window\.hasRealAisData\s*\|\|\s*)?false;/, 'safely initializes window.hasRealAisData');
+  assert.match(indexHtml, /const hasRealAisData\s*=\s*Boolean\(/, 'safely declares local hasRealAisData constant');
+  assert.match(indexHtml, /typeof hasRealAisData !== 'undefined' \? hasRealAisData : \(typeof window !== 'undefined' && window\.hasRealAisData\)/, 'defensively checks hasRealAisData to prevent ReferenceError');
+});
+
 test('calculateAndDisplayAisFreight has top-level try/catch error boundary for uninterrupted execution', () => {
   assert.match(indexHtml, /function calculateAndDisplayAisFreight\(\)\s*\{\s*try\s*\{/, 'wraps function body in try block');
   assert.match(indexHtml, /catch\s*\(err\)\s*\{\s*console\.warn\('\[calculateAndDisplayAisFreight\] Advertencia en cálculo de flete AIS:', err\);\s*\}/, 'catches potential runtime errors gracefully');

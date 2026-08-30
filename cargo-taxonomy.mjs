@@ -141,7 +141,7 @@ function classifyVesselDesign(shipType, vessel) {
     || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
   const isMultipurpose = /\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType)
     || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
-  const isNonCargo = /\b(passenger|cruise|tug|fishing|pleasure|yacht|offshore supply|naval|warship)\b/.test(declaredType)
+  const isNonCargo = /\b(passenger|cruise|tug|tugboat|towing|towage|pusher|fishing|trawler|pleasure|yacht|sailing|search and rescue|search & rescue|sar|rescue|salvage|dredger|dredging|pilot|pilot boat|patrol|military|warship|navy|offshore supply|platform supply|naval)\b/.test(declaredType)
     && !(isCoaster || isMinibulker);
 
   return {
@@ -158,6 +158,47 @@ function classifyVesselDesign(shipType, vessel) {
     roro: isRoro,
     nonCargo: isNonCargo,
   };
+}
+
+const NON_COMMERCIAL_TEXT_PATTERN = /\b(fishing|pesquero|pesca|trawler|trawl|drifter|seiner|longliner|fish factory|pesquero de arrastre|tug|tugboat|remolcador|remolque|towing|towage|pusher|pushboat|empujador|escort tug|support vessel|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure craft|pleasure|recreational|recreo|yacht|superyacht|megayacht|yate|sailing|sailing vessel|sailboat|velero|sport fishing|dredger|dredging|draga|dragado|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|special mark - sea farm|reference point|isolated danger|navigation mark|buoy|boya|baliza|military ops|military|warship|navy|patrol|patrullera|search and rescue|search & rescue|sar|rescue vessel|rescue|salvage|salvamento|guardacostas|coast guard|port service|servicio portuario|workboat|barco de trabajo|crew boat|pilot|pilot boat|prácticos|tender|port tender|diving|buceo|pontoon|ponton|anti-pollution|oil recovery|cable layer|pipe layer|research vessel|investigación|drillship|drilling|offshore supply|platform supply|platform|psv|ahts|other|unknown|desconocido|otros)\b/i;
+
+const COMMERCIAL_CARGO_TEXT_PATTERN = /\b(bulk carrier|bulker|dry bulk|dry cargo|granelero|graneles|capesize|post-panamax|kamsarmax|panamax|ultramax|supramax|handymax|handysize|mini bulker|minibulker|mini-bulker|ore carrier|grain carrier|collier|wood chips carrier|self-unloading bulker|self unloader|general cargo|general cargo vessel|carguero|buque de carga|cargo ship|cargo|coaster|coastal cargo|cabotage|cabotaje|costero|freighter|merchant|motor vessel|mv|multipurpose|multi purpose|multi-purpose|mpp|mpv|mmpp|open hatch|box hold|multipropósito|container ship|container|containership|feeder|boxship|portacontenedores|tanker|oil tanker|chemical tanker|product tanker|crude oil tanker|petrolero|quimiquero|heavy load carrier|heavy lift|heavy load|heavy carrier|project cargo|carga pesada|break bulk|breakbulk|break-bulk|ro-ro cargo|roro cargo|ro-ro|roro|vehicle carrier|car carrier|cement carrier|cementero|cement|cemento|clinker carrier|clinker)\b/i;
+
+export function isCommercialCargoVessel(vessel) {
+  if (!vessel || typeof vessel !== "object") return false;
+  const textParts = [];
+  collectText(vessel, textParts);
+  const text = normalizeText(textParts.join(" "));
+
+  if (NON_COMMERCIAL_TEXT_PATTERN.test(text)) {
+    const isHardNoise = /\b(fishing|trawler|tug|tugboat|pleasure craft|sailing|yacht|dredger|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|reference point|isolated danger|buoy|boya|baliza|military ops|search and rescue|sar|pilot|workboat|other|unknown)\b/i.test(text);
+    if (isHardNoise) {
+      return false;
+    }
+  }
+
+  const rawType = findNestedValue(vessel, ["ShipType", "shipType", "Type", "type", "vesselType", "vessel_type"]);
+  const numericType = Number(rawType);
+  if (Number.isFinite(numericType)) {
+    if ((numericType >= 20 && numericType < 70) || numericType === 0 || numericType >= 90) {
+      return false;
+    }
+    if ((numericType >= 70 && numericType <= 79) || (numericType >= 80 && numericType <= 89)) {
+      return true;
+    }
+  }
+
+  if (COMMERCIAL_CARGO_TEXT_PATTERN.test(text)) return true;
+
+  const dwt = optionalNumber(findNestedValue(vessel, ["dwt", "DWT", "deadweight", "dwt_ajustado"]));
+  const isCargoClass = /\b(cargo|bulker|freighter|merchant|coaster)\b/i.test(text);
+  return (dwt !== null && dwt >= 500 && isCargoClass);
+}
+
+export const isCommercialVessel = isCommercialCargoVessel;
+
+export function filterCommercialVessels(vessels) {
+  return (Array.isArray(vessels) ? vessels : []).filter(isCommercialCargoVessel);
 }
 
 function cargoAllowsDesign(cargoTypeId, design) {

@@ -47,8 +47,8 @@ test('renderDensityVesselsTable populates the main AIS Live table with all detec
   );
   assert.match(
     indexHtml,
-    /const displayVessels = \(Array\.isArray\(_vessels\) && _vessels\.length > 0\)\s*\?\s*_vessels\s*:\s*getDensityReactiveVessels\(\)/,
-    'uses passed vessels or reactive fallback'
+    /const displayVessels = getDensityReactiveVessels\(\)/,
+    'uses reactive canonical fleet'
   );
   assert.match(indexHtml, /document\.getElementById\('ais-vessels-tbody'\)/, 'targets ais-vessels-tbody');
 });

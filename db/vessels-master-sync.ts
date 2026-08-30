@@ -57,7 +57,46 @@ function validIsoDate(value: string | null) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
+const STRICT_MASTER_EXCLUSION_PATTERN = /\b(fishing|pesquero|pesca|trawler|trawl|drifter|seiner|longliner|fish factory|pesquero de arrastre|tug|tugboat|remolcador|remolque|towing|towage|pusher|pushboat|empujador|escort tug|support vessel|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure craft|pleasure|recreational|recreo|yacht|superyacht|megayacht|yate|sailing|sailing vessel|sailboat|velero|sport fishing|dredger|dredging|draga|dragado|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|special mark - sea farm|reference point|isolated danger|navigation mark|buoy|boya|baliza|military ops|military|warship|navy|patrol|patrullera|search and rescue|search & rescue|sar|rescue vessel|rescue|salvage|salvamento|guardacostas|coast guard|port service|servicio portuario|workboat|barco de trabajo|crew boat|pilot|pilot boat|prácticos|tender|port tender|diving|buceo|pontoon|ponton|anti-pollution|oil recovery|cable layer|pipe layer|research vessel|investigación|drillship|drilling|offshore supply|platform supply|platform|psv|ahts|other|unknown|desconocido|otros)\b/i;
+
+const STRICT_MASTER_CARGO_PATTERN = /\b(bulk carrier|bulker|dry bulk|dry cargo|granelero|graneles|capesize|post-panamax|kamsarmax|panamax|ultramax|supramax|handymax|handysize|mini bulker|minibulker|mini-bulker|ore carrier|grain carrier|collier|wood chips carrier|self-unloading bulker|self unloader|general cargo|general cargo vessel|carguero|buque de carga|cargo ship|cargo|coaster|coastal cargo|cabotage|cabotaje|costero|freighter|merchant|motor vessel|mv|multipurpose|multi purpose|multi-purpose|mpp|mpv|mmpp|open hatch|box hold|multipropósito|container ship|container|containership|feeder|boxship|portacontenedores|tanker|oil tanker|chemical tanker|product tanker|crude oil tanker|petrolero|quimiquero|heavy load carrier|heavy lift|heavy load|heavy carrier|project cargo|carga pesada|break bulk|breakbulk|break-bulk|ro-ro cargo|roro cargo|ro-ro|roro|vehicle carrier|car carrier|cement carrier|cementero|cement|cemento|clinker carrier|clinker)\b/i;
+
+function isCommercialMasterCandidate(vessel: RadarVesselMasterInput): boolean {
+  const typeText = String(vessel.shipType || "").trim().toLowerCase();
+  const rawData = (vessel.rawData && typeof vessel.rawData === "object") ? vessel.rawData as Record<string, unknown> : {};
+  const meta = (rawData.MetaData || rawData.metadata || {}) as Record<string, unknown>;
+  const rawShipType = String(meta.ShipType || meta.shipType || rawData.vessel_type || rawData.type || "").trim().toLowerCase();
+  const combined = `${typeText} ${rawShipType}`.trim();
+
+  if (STRICT_MASTER_EXCLUSION_PATTERN.test(combined)) {
+    const isHardNoise = /\b(fishing|trawler|tug|tugboat|pleasure craft|sailing|yacht|dredger|manned vts|vts|port hand mark|starboard hand mark|special mark|sea farm|reference point|isolated danger|buoy|boya|baliza|military ops|search and rescue|sar|pilot|workboat|other|unknown)\b/i.test(combined);
+    if (isHardNoise) return false;
+  }
+
+  const numCode = Number(vessel.shipType) || Number(meta.ShipType) || Number(rawData.type);
+  if (Number.isFinite(numCode) && numCode > 0) {
+    if ((numCode >= 20 && numCode < 70) || numCode >= 90) return false;
+    if ((numCode >= 70 && numCode <= 79) || (numCode >= 80 && numCode <= 89)) return true;
+  }
+
+  if (STRICT_MASTER_CARGO_PATTERN.test(combined)) return true;
+
+  const dwt = Number(vessel.dwt);
+  if (Number.isFinite(dwt) && dwt >= 500 && /\b(cargo|bulker|freighter|merchant|coaster)\b/i.test(combined)) {
+    return true;
+  }
+
+  // If no type specified but valid IMO and non-zero DWT or cargo name
+  if (vessel.imoNumber && Number.isFinite(dwt) && dwt >= 500 && !STRICT_MASTER_EXCLUSION_PATTERN.test(combined)) {
+    return true;
+  }
+
+  return false;
+}
+
 function normalizeMasterVessel(row: RadarVesselMasterInput): NormalizedMasterVessel | null {
+  if (!isCommercialMasterCandidate(row)) return null;
+
   const imoValue = validRadarImo(row.imoNumber);
   const mmsiValue = validRadarMmsi(row.mmsi);
   const suppliedSystemIdentity = String(row.systemIdentity || "").trim();
