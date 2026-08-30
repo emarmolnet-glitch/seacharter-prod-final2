@@ -16770,10 +16770,50 @@
 }
 
 function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
-    const tceCard = document.getElementById('sync-miles-card');
-    if (tceCard && congestionData) {
-        console.log("[Congestion Shield] Datos aplicados correctamente:", congestionData);
+    if (!congestionData) return;
+    
+    let shieldCard = document.getElementById('congestion-shield-ui-card');
+    if (!shieldCard) {
+        shieldCard = document.createElement('div');
+        shieldCard.id = 'congestion-shield-ui-card';
+        shieldCard.className = 'w-full bg-slate-900 border border-teal-500/50 rounded-lg p-4 mb-4 text-white shadow-xl';
+        
+        const bottomGrid = document.querySelector('.grid.grid-cols-5') || document.getElementById('sync-miles-card')?.parentElement;
+        if (bottomGrid && bottomGrid.parentNode) {
+            bottomGrid.parentNode.insertBefore(shieldCard, bottomGrid);
+        } else {
+            document.body.appendChild(shieldCard);
+        }
     }
+    
+    shieldCard.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-2">
+            <span class="font-bold text-teal-400 flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved"></i> Predictive Congestion Shield &mdash; ${congestionData.port}
+            </span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                ${congestionData.status}
+            </span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            <div>
+                <span class="text-slate-400 block">Demora Estimada</span>
+                <strong class="text-base text-white">${congestionData.congestionDelayDays} días</strong>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Riesgo Demurrage</span>
+                <strong class="text-base text-amber-400">$${congestionData.demurrageRiskUsd.toLocaleString()}</strong>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Velocidad Óptima</span>
+                <strong class="text-base text-teal-300">${congestionData.recommendedSpeed} kn</strong>
+            </div>
+            <div>
+                <span class="text-slate-400 block">TCE Ajustado</span>
+                <strong class="text-base text-emerald-400">$${congestionData.adjustedTce.toLocaleString()} / día</strong>
+            </div>
+        </div>
+    `;
 }
 async function refreshDataBridgeMasterStatsOnDemand() {
     try {
