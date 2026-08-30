@@ -1294,40 +1294,42 @@
 // 1. Función para cargar y dibujar la flota activa en el globo 3D
 async function loadActiveFleet() {
     try {
-        const response = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/get-active-fleet');
+        const headerText = document.body.innerText;
+        const match = headerText.match(/RDM\/\d{4}-\d+/);
+        const currentRef = match ? match[0] : null;
+
+        if (!currentRef) {
+            if (window.GlobalFleetGlobe) {
+                window.GlobalFleetGlobe.updateVessels([], 'density');
+                window.GlobalFleetGlobe.updateVessels([], 'main');
+            }
+            return;
+        }
+
+        const response = await fetch(`https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/get-active-fleet?ref=${encodeURIComponent(currentRef)}`);
         const result = await response.json();
 
         if (result.success && result.data && window.GlobalFleetGlobe) {
-            
-            const fleetForGlobe = result.data.map(vessel => {
-                const realSpeed = vessel.speed ? vessel.speed.toFixed(1) : '9.6';
-                
-                return {
-                    lat: vessel.current_lat,
-                    lng: vessel.current_lon,
-                    latitude: vessel.current_lat,
-                    longitude: vessel.current_lon,
-                    heading: vessel.heading || 0,
-                    speed: vessel.speed || 9.6,
-                    imo: vessel.imo_number,
-                    mmsi: vessel.mmsi || 'N/A',
-                    vesselName: `Viaje ${vessel.voyage_reference}`,
-                    name: `Viaje ${vessel.voyage_reference}`,
-                    vesselType: 'bulk carrier',
-                    // Propiedades extra para que el sistema de estimaciones las reconozca al hacer clic
-                    destination: vessel.destination || 'POL Directo',
-                    currentDistanceToLoadPort: vessel.distance_to_pol || null
-                };
-            });
+            const fleetForGlobe = result.data.map(vessel => ({
+                lat: vessel.current_lat,
+                lng: vessel.current_lon,
+                latitude: vessel.current_lat,
+                longitude: vessel.current_lon,
+                heading: vessel.heading || 0,
+                speed: vessel.speed || 0,
+                imo: vessel.imo_number,
+                vesselName: `Expediente: ${vessel.voyage_reference}`,
+                name: `Expediente: ${vessel.voyage_reference}`,
+                vesselType: 'bulk carrier'
+            }));
 
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'density');
             window.GlobalFleetGlobe.updateVessels(fleetForGlobe, 'main');
-            console.log(`[Flota 3D] ${fleetForGlobe.length} buques sincronizados para estimación en vivo.`);
         }
     } catch (error) {
-        console.error("[Flota 3D] Error sincronizando flota:", error);
+        console.error("[Flota 3D] Error al sincronizar el buque del expediente:", error);
     }
 }
 
 window.loadActiveFleet = loadActiveFleet;
-setTimeout(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 3000);
+setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 15000);
