@@ -16751,7 +16751,18 @@
             window.GlobalFleetGlobe.setAutoRotate(false, 'density');
         }
 
-       async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRateUsd, distanceNm, nominalSpeedKnots }) {
+       async function refreshDataBridgeMasterStatsOnDemand() {
+    try {
+        const dataBridgeFrame = document.getElementById('web-databridge-iframe');
+        const refreshMasterCount = dataBridgeFrame?.contentWindow?.refreshDataBridgeMasterCountOnDemand;
+        return typeof refreshMasterCount === 'function' ? await refreshMasterCount() : null;
+    } catch (error) {
+        console.warn('[Core PRO] Las estadísticas de Data Bridge no están disponibles bajo demanda.', error);
+        return null;
+    }
+}
+
+async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRateUsd, distanceNm, nominalSpeedKnots }) {
     await new Promise(resolve => setTimeout(resolve, 150));
     
     const polName = String(window.State?.pol || document.getElementById('map-port-pol')?.value || 'POL').trim();
@@ -16783,13 +16794,11 @@ function renderTceWithCongestionShield(baseTce, baseDays, congestionData) {
         shieldCard.id = 'congestion-shield-sidebar-card';
         shieldCard.className = 'w-full bg-slate-900/95 border border-slate-700 rounded-xl p-4 mt-4 text-white shadow-xl backdrop-blur-md text-xs';
         
-        // Buscar el formulario de input geográfico o su tarjeta contenedora exacta
         const inputGeograficoBox = document.getElementById('map-port-pol')?.closest('.bg-white, .bg-slate-800, .bg-slate-900, form') || document.querySelector('form');
         
         if (inputGeograficoBox && inputGeograficoBox.parentNode) {
             inputGeograficoBox.parentNode.insertBefore(shieldCard, inputGeograficoBox.nextSibling);
         } else {
-            // Fallback seguro al primer contenedor lateral disponible
             const sidebar = document.querySelector('aside') || document.body.firstChild;
             sidebar.appendChild(shieldCard);
         }
