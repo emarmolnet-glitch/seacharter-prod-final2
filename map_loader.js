@@ -1324,3 +1324,9 @@ async function loadActiveFleet() {
 }
 
 window.loadActiveFleet = loadActiveFleet;
+
+// Esperar 3 segundos para asegurar que el globo 3D está montado, y cargar los barcos
+setTimeout(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 3000);
+
+// Configurar un radar silencioso que actualice las posiciones cada 10 minutos automáticamente
+setInterval(() => { if (window.loadActiveFleet) window.loadActiveFleet(); }, 10 * 60 * 1000);
