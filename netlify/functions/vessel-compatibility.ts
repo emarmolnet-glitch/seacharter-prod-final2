@@ -353,12 +353,6 @@ function evaluateMathematicalMatch(
 
   let compositeScore = Math.min(100, Math.max(10, Math.round(rawComposite)));
 
-  // Preserve canonical high scores for verified reference candidates
-  if (candidate.imo === 9218765) compositeScore = 98;
-  else if (candidate.imo === 9198744) compositeScore = 94;
-  else if (candidate.imo === 9345128) compositeScore = 91;
-  else if (candidate.imo === 9481233) compositeScore = 84;
-
   const marginPct = Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10;
   const marginText = marginPct >= 0 ? `+${marginPct}%` : `${marginPct}%`;
   const stowageFactorStr = `${op.stowageFactorM3Mt.toFixed(2)} m³/MT (30.0 cuft/lt)`;
