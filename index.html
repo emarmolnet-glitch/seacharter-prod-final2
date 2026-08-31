@@ -16816,8 +16816,40 @@ async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRat
 
     try {
         // Barrido de radar AIS en radio estricto de 10 NM para POL y POD
-        const polPortData = window.State?.polCoordinates || window.GlobalStore?.polCoordinates || (typeof findPortData === 'function' ? findPortData(polName) : null) || (typeof PORT_DB !== 'undefined' ? PORT_DB[polName] : null);
-        const podPortData = window.State?.podCoordinates || window.GlobalStore?.podCoordinates || (typeof findPortData === 'function' ? findPortData(podName) : null) || (typeof PORT_DB !== 'undefined' ? PORT_DB[podName] : null);
+        const extractPortCoords = (rawPort) => {
+            if (!rawPort) return null;
+            if (Array.isArray(rawPort) && rawPort.length >= 2) {
+                const lat = Number(rawPort[0]);
+                const lon = Number(rawPort[1]);
+                if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+                    return { lat, lon };
+                }
+            }
+            if (typeof rawPort === 'object') {
+                const lat = Number(rawPort.lat ?? rawPort.latitude ?? rawPort.Latitude);
+                const lon = Number(rawPort.lon ?? rawPort.lng ?? rawPort.longitude ?? rawPort.Longitude);
+                if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+                    return { lat, lon };
+                }
+            }
+            return null;
+        };
+
+        const polPortData = extractPortCoords(window.State?.polCoordinates)
+            || extractPortCoords(window.GlobalStore?.polCoordinates)
+            || extractPortCoords(window.SeaCharterStore?.getState?.()?.polCoordinates)
+            || extractPortCoords(window.SeaCharterStore?.getState?.()?.geopoliticalRoute?.pol_coordinates)
+            || (typeof getAisOperationalPort === 'function' ? extractPortCoords(getAisOperationalPort('POL')) : null)
+            || (polName && typeof findPortData === 'function' ? extractPortCoords(findPortData(polName)) : null)
+            || (polName && typeof PORT_DB !== 'undefined' ? extractPortCoords(PORT_DB[polName]) : null);
+
+        const podPortData = extractPortCoords(window.State?.podCoordinates)
+            || extractPortCoords(window.GlobalStore?.podCoordinates)
+            || extractPortCoords(window.SeaCharterStore?.getState?.()?.podCoordinates)
+            || extractPortCoords(window.SeaCharterStore?.getState?.()?.geopoliticalRoute?.pod_coordinates)
+            || (typeof getAisOperationalPort === 'function' ? extractPortCoords(getAisOperationalPort('POD')) : null)
+            || (podName && typeof findPortData === 'function' ? extractPortCoords(findPortData(podName)) : null)
+            || (podName && typeof PORT_DB !== 'undefined' ? extractPortCoords(PORT_DB[podName]) : null);
 
         if (polPortData) polTelemetry.coordinates = polPortData;
         if (podPortData) podTelemetry.coordinates = podPortData;
@@ -16825,74 +16857,61 @@ async function fetchPortCongestionShield({ portUnlocode, vesselImo, demurrageRat
         let polVessels = [];
         let podVessels = [];
 
-        if (typeof window.RadarPOL === 'function' && typeof window.RadarPOD === 'function') {
-            try {
-                const results = await Promise.all([
-                    window.RadarPOL(10),
-                    window.RadarPOD(10)
-                ]);
-                polVessels = Array.isArray(results[0]) ? results[0] : [];
-                podVessels = Array.isArray(results[1]) ? results[1] : [];
-            } catch (_) {}
-        }
-
-        if (polVessels.length === 0 && podVessels.length === 0) {
-            const sweepPromises = [];
-            if (polPortData && Number.isFinite(Number(polPortData.lat)) && Number.isFinite(Number(polPortData.lon))) {
-                const pLat = Number(polPortData.lat);
-                const pLon = Number(polPortData.lon);
-                sweepPromises.push(
-                    fetch(`/api/radar/live?lat=${pLat}&lon=${pLon}&radius=10`, { headers: { Accept: 'application/json' } })
-                        .then(r => r.json())
-                        .then(j => Array.isArray(j?.data) ? j.data.map(v => ({
-                            ...v,
+        const sweepPromises = [];
+        if (polPortData && Number.isFinite(Number(polPortData.lat)) && Number.isFinite(Number(polPortData.lon))) {
+            const pLat = Number(polPortData.lat);
+            const pLon = Number(polPortData.lon);
+            sweepPromises.push(
+                fetch(`/api/radar/live?lat=${pLat}&lon=${pLon}&radius=10`, { headers: { Accept: 'application/json' } })
+                    .then(r => r.json())
+                    .then(j => Array.isArray(j?.data) ? j.data.map(v => ({
+                        ...v,
+                        aisRadarZone: 'POL',
+                        zone: 'POL',
+                        latitude: Number(v.lat ?? v.latitude),
+                        longitude: Number(v.lon ?? v.lng ?? v.longitude),
+                        isBackhaul: false,
+                        MetaData: {
+                            ...(v.MetaData || {}),
                             aisRadarZone: 'POL',
-                            zone: 'POL',
-                            latitude: Number(v.lat ?? v.latitude),
-                            longitude: Number(v.lon ?? v.lng ?? v.longitude),
-                            isBackhaul: false,
-                            MetaData: {
-                                ...(v.MetaData || {}),
-                                aisRadarZone: 'POL',
-                                isBackhaul: false
-                            }
-                        })) : [])
-                        .catch(() => [])
-                );
-            } else {
-                sweepPromises.push(Promise.resolve([]));
-            }
-
-            if (podPortData && Number.isFinite(Number(podPortData.lat)) && Number.isFinite(Number(podPortData.lon))) {
-                const dLat = Number(podPortData.lat);
-                const dLon = Number(podPortData.lon);
-                sweepPromises.push(
-                    fetch(`/api/radar/live?lat=${dLat}&lon=${dLon}&radius=10`, { headers: { Accept: 'application/json' } })
-                        .then(r => r.json())
-                        .then(j => Array.isArray(j?.data) ? j.data.map(v => ({
-                            ...v,
-                            aisRadarZone: 'POD',
-                            zone: 'POD',
-                            latitude: Number(v.lat ?? v.latitude),
-                            longitude: Number(v.lon ?? v.lng ?? v.longitude),
-                            isBackhaul: true,
-                            backhaulTonnageDwt: Number(v.dwt || v.DWT || v.grossTonnage || 0),
-                            MetaData: {
-                                ...(v.MetaData || {}),
-                                aisRadarZone: 'POD',
-                                isBackhaul: true
-                            }
-                        })) : [])
-                        .catch(() => [])
-                );
-            } else {
-                sweepPromises.push(Promise.resolve([]));
-            }
-
-            const [pRes, dRes] = await Promise.all(sweepPromises);
-            polVessels = Array.isArray(pRes) ? pRes : [];
-            podVessels = Array.isArray(dRes) ? dRes : [];
+                            isBackhaul: false
+                        }
+                    })) : [])
+                    .catch(() => [])
+            );
+        } else {
+            sweepPromises.push(Promise.resolve([]));
         }
+
+        if (podPortData && Number.isFinite(Number(podPortData.lat)) && Number.isFinite(Number(podPortData.lon))) {
+            const dLat = Number(podPortData.lat);
+            const dLon = Number(podPortData.lon);
+            sweepPromises.push(
+                fetch(`/api/radar/live?lat=${dLat}&lon=${dLon}&radius=10`, { headers: { Accept: 'application/json' } })
+                    .then(r => r.json())
+                    .then(j => Array.isArray(j?.data) ? j.data.map(v => ({
+                        ...v,
+                        aisRadarZone: 'POD',
+                        zone: 'POD',
+                        latitude: Number(v.lat ?? v.latitude),
+                        longitude: Number(v.lon ?? v.lng ?? v.longitude),
+                        isBackhaul: true,
+                        backhaulTonnageDwt: Number(v.dwt || v.DWT || v.grossTonnage || 0),
+                        MetaData: {
+                            ...(v.MetaData || {}),
+                            aisRadarZone: 'POD',
+                            isBackhaul: true
+                        }
+                    })) : [])
+                    .catch(() => [])
+            );
+        } else {
+            sweepPromises.push(Promise.resolve([]));
+        }
+
+        const [pRes, dRes] = await Promise.all(sweepPromises);
+        polVessels = Array.isArray(pRes) ? pRes : [];
+        podVessels = Array.isArray(dRes) ? dRes : [];
 
         const combinedVessels = [...polVessels, ...podVessels];
 
@@ -52067,14 +52086,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         async function runAisZoneSearch(role, radiusNm = 10, color) {
+            const normalizedRole = String(role || 'POL').toUpperCase();
             if (window.datalasticRadarInitialReadCompleted !== true && typeof window.updateDatalasticRadar === 'function') {
                 await window.updateDatalasticRadar({ refreshGlobe: false });
             }
-            if (window.hasAuthoritativeLiveAisSnapshot?.()) {
+            if (window.hasAuthoritativeLiveAisSnapshot?.() && normalizedRole === 'POL') {
                 window.stopSecondaryFleetPolling?.('datalastic-blocked-zone-search');
                 return window.datalasticRadarVessels;
             }
-            const normalizedRole = String(role || 'POL').toUpperCase();
             if (typeof window.activateAisProspectionRadius === 'function') {
                 window.activateAisProspectionRadius(normalizedRole);
             }
