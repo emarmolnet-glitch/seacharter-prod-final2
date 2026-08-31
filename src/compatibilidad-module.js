@@ -11,17 +11,19 @@
 import { toIsoAlpha2Flag } from '../db/flag-country-codes.mjs';
 
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
-    cargoName: "",
-    cargoVolumeMt: 0,
+    cargoName: "Cement in Bulk (Clinker)",
+    cargoVolumeMt: 10000,
     stowageFactorM3Mt: 0.85,
-    polName: "",
-    polFlag: "🌍",
-    polCountry: "",
-    podName: "",
-    podFlag: "🌍",
-    podCountry: "",
-    laycan: "",
-    loadingRate: "",
+    polName: "Bejaia",
+    polFlag: "🇩🇿",
+    polCountry: "DZ",
+    polCoords: { lat: 36.75, lon: 5.08 },
+    podName: "Almería",
+    podFlag: "🇪🇸",
+    podCountry: "ES",
+    podCoords: { lat: 36.83, lon: -2.46 },
+    laycan: "10/15 Sep",
+    loadingRate: "3,000 MT/WW",
 });
 
 const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|remolcador|remolque|pusher|passenger|cruise|ferry|pleasure|yacht|sailing|dredger|vts|mark|point|danger|buoy|boya|military|sar|rescue|pilot|workboat|other|unknown)\b/i;
@@ -133,6 +135,13 @@ class CompatibilityModuleManager {
         const polFlag = polName ? getCountryFlagEmoji(polCountry || polPortData?.countryCode || polName) : "🌍";
         const podFlag = podName ? getCountryFlagEmoji(podCountry || podPortData?.countryCode || podName) : "🌍";
 
+        const polCoords = polPortData && Number.isFinite(Number(polPortData.lat)) && Number.isFinite(Number(polPortData.lon))
+            ? { lat: Number(polPortData.lat), lon: Number(polPortData.lon) }
+            : (routeState.polCoords || DEFAULT_ACTIVE_OPERATION.polCoords);
+        const podCoords = podPortData && Number.isFinite(Number(podPortData.lat)) && Number.isFinite(Number(podPortData.lon))
+            ? { lat: Number(podPortData.lat), lon: Number(podPortData.lon) }
+            : (routeState.podCoords || DEFAULT_ACTIVE_OPERATION.podCoords);
+
         return {
             cargoName: cargoName,
             cargoVolumeMt: cargoVolumeMt,
@@ -140,9 +149,11 @@ class CompatibilityModuleManager {
             polName: polName,
             polFlag,
             polCountry,
+            polCoords,
             podName: podName,
             podFlag,
             podCountry,
+            podCoords,
             laycan: laycan,
             loadingRate: loadingRate,
         };
@@ -393,9 +404,10 @@ class CompatibilityModuleManager {
         const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
 
         if (!hasAvailability || compatibleMatches.length === 0) {
+            const fallbackVessel = alternativeDbVessel || (matches && matches[0]) || null;
             return `
             <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Sin Datos) -->
-            <div class="compatibility-panel" id="panel-radar-densidad">
+            <div class="compatibility-panel radar-blocked-view-container" id="panel-radar-densidad">
                 <div class="compatibility-panel-header">
                     <div class="flex items-center gap-2.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
@@ -407,14 +419,34 @@ class CompatibilityModuleManager {
                         </div>
                     </div>
                     <span class="compatibility-badge-pill" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
-                        <i class="fa-solid fa-info-circle"></i> Sin datos activos
+                        <i class="fa-solid fa-info-circle"></i> Sin datos en radar
                     </span>
                 </div>
 
-                <div class="p-8 text-center text-slate-500">
-                    <i class="fa-solid fa-radar text-3xl mb-2 text-slate-300"></i>
-                    <p class="text-xs font-bold">El radar está a la espera de una ruta y carga activas.</p>
-                    <p class="text-[11px] text-slate-400 mt-1">Introduce los datos de la operación en el mapa o calculadora para comenzar el escaneo en tiempo real.</p>
+                <div class="radar-map-blocked-overlay p-6 text-center text-slate-700">
+                    <div class="compatibility-fallback-card p-4 rounded-lg bg-amber-50 border border-amber-200 text-left mb-4 shadow-sm">
+                        <div class="flex items-start gap-3">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg mt-0.5"></i>
+                            <div>
+                                <p class="text-xs font-bold text-slate-900 leading-relaxed">
+                                    No hay actualmente barcos disponibles en el radar. Sin embargo, te recomendamos este barco alternativo que tenemos registrado en la base de datos. ¿Quieres contactar con su propietario/armador?
+                                </p>
+                                ${fallbackVessel ? `
+                                <div class="mt-3 p-3 bg-white rounded border border-amber-100 flex items-center justify-between">
+                                    <div>
+                                        <span class="font-black text-xs text-slate-900">${fallbackVessel.name}</span>
+                                        <span class="text-[10px] text-slate-500 block">IMO ${fallbackVessel.imo} · ${fallbackVessel.neonDbMaster?.vesselType || fallbackVessel.tipo_buque || 'General Cargo'} · DWT ${Number(fallbackVessel.neonDbMaster?.dwt || fallbackVessel.dwt || 0).toLocaleString()} MT</span>
+                                    </div>
+                                    <button class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-md shadow transition-colors"
+                                            onclick="window.CompatibilityModule.handleContactOwner(${fallbackVessel.imo})">
+                                        <i class="fa-solid fa-paper-plane mr-1"></i> Contactar Armador
+                                    </button>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Introduce o ajusta los parámetros de ruta en el mapa para ampliar el radio de detección AIS.</p>
                 </div>
             </div>
             `;

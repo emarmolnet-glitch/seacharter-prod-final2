@@ -2,6 +2,7 @@ import type { Config, Context } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { createCorsHeaders } from "./_shared/cors.js";
+import { resolveWpiPort } from "./_shared/wpi-port-resolver.mjs";
 
 interface VesselMasterRecord extends QueryResultRow {
   imo_number: number | string | null;
@@ -63,8 +64,9 @@ const DEFAULT_ACTIVE_OPERATION = Object.freeze({
   loadingRateMtWw: 0,
 });
 
-function haversineDistanceNm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+export function haversineDistanceNm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) return 0;
+  if ((lat1 === 0 && lon1 === 0) || (lat2 === 0 && lon2 === 0)) return 0;
   const radiusNm = 3440.065;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -74,11 +76,71 @@ function haversineDistanceNm(lat1: number, lon1: number, lat2: number, lon2: num
   return radiusNm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-interface CandidateEvaluationInput {
+export type LocationContext = "POL" | "POD" | "TRANSIT";
+
+export function determineLocationContext(
+  distancePolNm: number,
+  distancePodNm: number,
+  hasPolCoords: boolean,
+  hasPodCoords: boolean,
+): LocationContext {
+  const hasPol = hasPolCoords && distancePolNm > 0;
+  const hasPod = hasPodCoords && distancePodNm > 0;
+
+  if (hasPol && hasPod) {
+    if (distancePodNm <= 30 && (distancePolNm > 30 || distancePodNm < distancePolNm)) {
+      return "POD";
+    }
+    if (distancePolNm <= 30 && (distancePodNm > 30 || distancePolNm <= distancePodNm)) {
+      return "POL";
+    }
+    if (distancePodNm < distancePolNm && distancePodNm <= 50) {
+      return "POD";
+    }
+    if (distancePolNm <= distancePodNm && distancePolNm <= 50) {
+      return "POL";
+    }
+    return "TRANSIT";
+  }
+
+  if (hasPod && !hasPol) {
+    return distancePodNm <= 30 ? "POD" : "TRANSIT";
+  }
+
+  if (hasPol && !hasPod) {
+    return distancePolNm <= 30 ? "POL" : "TRANSIT";
+  }
+
+  return "TRANSIT";
+}
+
+function parseCoordinate(value: unknown): number {
+  if (value === undefined || value === null || value === "") return 0;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function extractCoordinates(obj: unknown, prefix = ""): { lat: number; lon: number } {
+  if (!obj || typeof obj !== "object") return { lat: 0, lon: 0 };
+  const rec = obj as Record<string, unknown>;
+  const lat = parseCoordinate(
+    rec.lat ?? rec.latitude ?? rec.Latitude ??
+    (prefix ? rec[`${prefix}Lat`] ?? rec[`${prefix}Latitude`] ?? rec[`${prefix}_lat`] ?? rec[`${prefix}_latitude`] : undefined)
+  );
+  const lon = parseCoordinate(
+    rec.lon ?? rec.lng ?? rec.longitude ?? rec.Longitude ??
+    (prefix ? rec[`${prefix}Lon`] ?? rec[`${prefix}Lng`] ?? rec[`${prefix}Longitude`] ?? rec[`${prefix}_lon`] ?? rec[`${prefix}_lng`] : undefined)
+  );
+  return { lat, lon };
+}
+
+export interface CandidateEvaluationInput {
   imo: number;
   name: string;
   mmsi: string;
   vesselType: string;
+  tipo_buque?: string;
+  categoria_buque?: string;
   dwt: number;
   draftMeters: number;
   loaMeters: number;
@@ -92,9 +154,12 @@ interface CandidateEvaluationInput {
   navStatus: string;
   operationalStatus: string;
   distancePolNm: number;
+  distancePodNm: number;
+  locationContext: LocationContext;
+  isLiveRadar?: boolean;
 }
 
-function evaluateMathematicalMatch(
+export function evaluateMathematicalMatch(
   candidate: CandidateEvaluationInput,
   op: {
     cargoName: string;
@@ -109,7 +174,7 @@ function evaluateMathematicalMatch(
   },
 ) {
   const { cargoVolumeMt, polMaxDraftMeters, podMaxDraftMeters, polName, podName, laycan, loadingRate, cargoName } = op;
-  const { dwt, draftMeters, distancePolNm, yearBuilt, vesselType } = candidate;
+  const { dwt, draftMeters, distancePolNm, distancePodNm, locationContext, yearBuilt, vesselType } = candidate;
 
   const isDryBulk = DRY_BULK_CARGO_RE.test(cargoName);
   const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType);
@@ -168,17 +233,21 @@ function evaluateMathematicalMatch(
     draftScore = Math.max(0, 50 - maxExceed * 30);
   }
 
+  const effectiveDistance = locationContext === "POD" && distancePodNm > 0
+    ? distancePodNm
+    : (distancePolNm > 0 ? distancePolNm : (distancePodNm > 0 ? distancePodNm : 0));
+
   let proximityScore = 100;
-  if (distancePolNm <= 1.5) {
+  if (effectiveDistance <= 1.5) {
     proximityScore = 100;
-  } else if (distancePolNm <= 5.0) {
+  } else if (effectiveDistance <= 5.0) {
     proximityScore = 95;
-  } else if (distancePolNm <= 15.0) {
+  } else if (effectiveDistance <= 15.0) {
     proximityScore = 88;
-  } else if (distancePolNm <= 40.0) {
+  } else if (effectiveDistance <= 40.0) {
     proximityScore = 78;
   } else {
-    proximityScore = Math.max(40, 75 - (distancePolNm - 40) * 0.5);
+    proximityScore = Math.max(40, 75 - (effectiveDistance - 40) * 0.5);
   }
 
   const isSpecializedCement = /cement|clinker|self-discharger/i.test(vesselType);
@@ -208,7 +277,16 @@ function evaluateMathematicalMatch(
   const marginPct = cargoVolumeMt > 0 ? Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10 : 0;
   const stowageFactorStr = `${op.stowageFactorM3Mt.toFixed(2)} m³/MT (30.0 cuft/lt)`;
 
-  let justification = `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; posición a ${distancePolNm.toFixed(1)} NM de POL.`;
+  let locationLabel = "";
+  if (locationContext === "POD") {
+    locationLabel = `posición a ${distancePodNm.toFixed(1)} NM de POD (Oportunidad Backhaul / Retorno en Destino)`;
+  } else if (locationContext === "POL") {
+    locationLabel = `posición a ${distancePolNm.toFixed(1)} NM de POL`;
+  } else {
+    locationLabel = `en tránsito (${distancePolNm.toFixed(1)} NM a POL / ${distancePodNm.toFixed(1)} NM a POD)`;
+  }
+
+  let justification = `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; ${locationLabel}.`;
 
   return {
     compatibilityScore: compositeScore,
@@ -250,7 +328,48 @@ export default async function handler(req: Request, _context: Context) {
     const cargoVolumeMt = Number(bodyData.cargoVolumeMt || bodyData.cargoQuantity || bodyData.cargoQty || url.searchParams.get("cargoVolumeMt") || url.searchParams.get("qty") || 0) || 0;
     const laycan = String(bodyData.laycan || bodyData.laycanWindow || url.searchParams.get("laycan") || "").trim();
     const loadingRate = String(bodyData.loadingRate || url.searchParams.get("loadingRate") || "").trim();
-    const polCoords = (bodyData.polCoords as { lat: number; lon: number }) || DEFAULT_ACTIVE_OPERATION.polCoords;
+
+    let polCoords = extractCoordinates(bodyData.polCoords);
+    if (!polCoords.lat && !polCoords.lon) {
+      polCoords = extractCoordinates(bodyData, "pol");
+    }
+    if (!polCoords.lat && !polCoords.lon) {
+      const urlPolLat = parseCoordinate(url.searchParams.get("polLat") || url.searchParams.get("polLatitude") || url.searchParams.get("lat"));
+      const urlPolLon = parseCoordinate(url.searchParams.get("polLon") || url.searchParams.get("polLongitude") || url.searchParams.get("lon") || url.searchParams.get("lng"));
+      if (urlPolLat || urlPolLon) {
+        polCoords = { lat: urlPolLat, lon: urlPolLon };
+      }
+    }
+
+    let podCoords = extractCoordinates(bodyData.podCoords);
+    if (!podCoords.lat && !podCoords.lon) {
+      podCoords = extractCoordinates(bodyData, "pod");
+    }
+    if (!podCoords.lat && !podCoords.lon) {
+      const urlPodLat = parseCoordinate(url.searchParams.get("podLat") || url.searchParams.get("podLatitude"));
+      const urlPodLon = parseCoordinate(url.searchParams.get("podLon") || url.searchParams.get("podLongitude"));
+      if (urlPodLat || urlPodLon) {
+        podCoords = { lat: urlPodLat, lon: urlPodLon };
+      }
+    }
+
+    if (!polCoords.lat && !polCoords.lon && polName) {
+      try {
+        const res = await resolveWpiPort(polName);
+        if (res && res.status === "resolved" && res.match) {
+          polCoords = { lat: res.match.latitude, lon: res.match.longitude };
+        }
+      } catch {}
+    }
+
+    if (!podCoords.lat && !podCoords.lon && podName) {
+      try {
+        const res = await resolveWpiPort(podName);
+        if (res && res.status === "resolved" && res.match) {
+          podCoords = { lat: res.match.latitude, lon: res.match.longitude };
+        }
+      } catch {}
+    }
 
     const activeOperation = Object.freeze({
       cargoName,
@@ -264,7 +383,7 @@ export default async function handler(req: Request, _context: Context) {
       podName,
       podCountry,
       podFlag,
-      podCoords: { lat: 0, lon: 0 },
+      podCoords,
       podMaxDraftMeters: 11.00,
       laycan,
       laycanWindow: laycan,
@@ -311,15 +430,22 @@ export default async function handler(req: Request, _context: Context) {
     const rawIncomingVessels = Array.isArray(bodyData.liveRadarVessels) ? (bodyData.liveRadarVessels as any[]) : [];
     const candidateMap = new Map<number, CandidateEvaluationInput & { isLiveRadar?: boolean; tipo_buque?: string; categoria_buque?: string }>();
 
+    const hasPolCoords = Boolean(polCoords.lat || polCoords.lon);
+    const hasPodCoords = Boolean(podCoords.lat || podCoords.lon);
+
     for (const r of dbRows) {
       const imo = Number(r.imo_number);
       if (!imo || imo <= 1000000) continue;
-      const distNm = haversineDistanceNm(
-        polCoords.lat,
-        polCoords.lon,
-        Number(r.latitude ?? 0),
-        Number(r.longitude ?? 0),
-      );
+      const vLat = Number(r.latitude ?? 0);
+      const vLon = Number(r.longitude ?? 0);
+
+      const distPolNm = hasPolCoords && (vLat || vLon)
+        ? Math.round(haversineDistanceNm(polCoords.lat, polCoords.lon, vLat, vLon) * 10) / 10
+        : 0;
+      const distPodNm = hasPodCoords && (vLat || vLon)
+        ? Math.round(haversineDistanceNm(podCoords.lat, podCoords.lon, vLat, vLon) * 10) / 10
+        : 0;
+      const locationContext = determineLocationContext(distPolNm, distPodNm, hasPolCoords, hasPodCoords);
 
       candidateMap.set(imo, {
         imo,
@@ -334,13 +460,15 @@ export default async function handler(req: Request, _context: Context) {
         beamMeters: Number(r.beam_meters || 0),
         yearBuilt: Number(r.year_built || 2010),
         flag: String(r.flag || "🌍"),
-        latitude: Number(r.latitude || 0),
-        longitude: Number(r.longitude || 0),
+        latitude: vLat,
+        longitude: vLon,
         speedKnots: 0,
         headingDeg: 0,
         navStatus: "Disponible",
         operationalStatus: "EN REGISTRO",
-        distancePolNm: Math.round(distNm * 10) / 10,
+        distancePolNm: distPolNm,
+        distancePodNm: distPodNm,
+        locationContext,
         isLiveRadar: false,
       });
     }
@@ -372,7 +500,15 @@ export default async function handler(req: Request, _context: Context) {
       const effectiveImo = isValidImo ? imoNum : (Number(dbRow?.imo_number) || (mmsiClean ? Number(mmsiClean) : 9200000 + liveRadarCandidatesCount));
       const lat = Number(ship.latitude || ship.lat || dbRow?.latitude || polCoords.lat || 0);
       const lon = Number(ship.longitude || ship.lon || dbRow?.longitude || polCoords.lon || 0);
-      const distNm = polCoords.lat && polCoords.lon ? haversineDistanceNm(polCoords.lat, polCoords.lon, lat, lon) : 0;
+
+      const distPolNm = hasPolCoords && (lat || lon)
+        ? Math.round(haversineDistanceNm(polCoords.lat, polCoords.lon, lat, lon) * 10) / 10
+        : 0;
+      const distPodNm = hasPodCoords && (lat || lon)
+        ? Math.round(haversineDistanceNm(podCoords.lat, podCoords.lon, lat, lon) * 10) / 10
+        : 0;
+      const locationContext = determineLocationContext(distPolNm, distPodNm, hasPolCoords, hasPodCoords);
+
       const resolvedType = String(dbRow?.vessel_type || rawType || "General Cargo");
 
       candidateMap.set(effectiveImo, {
@@ -392,9 +528,11 @@ export default async function handler(req: Request, _context: Context) {
         longitude: lon,
         speedKnots: Number(ship.speed || ship.speedKnots || 0),
         headingDeg: Number(ship.heading || ship.headingDeg || 0),
-        navStatus: ship.navStatus || "En aproximación POL",
-        operationalStatus: "EN APROXIMACIÓN / DISPONIBLE",
-        distancePolNm: Math.round(distNm * 10) / 10,
+        navStatus: ship.navStatus || (locationContext === "POD" ? "En rada/aproximación POD" : "En aproximación POL"),
+        operationalStatus: locationContext === "POD" ? "EN DESTINO / OPORTUNIDAD BACKHAUL" : "EN APROXIMACIÓN / DISPONIBLE",
+        distancePolNm: distPolNm,
+        distancePodNm: distPodNm,
+        locationContext,
         isLiveRadar: true,
       });
       liveRadarCandidatesCount++;
@@ -412,15 +550,21 @@ export default async function handler(req: Request, _context: Context) {
         categoria_buque: cand.categoria_buque,
         dynamicLabel,
         isLiveRadar: cand.isLiveRadar ?? false,
+        distancePolNm: cand.distancePolNm,
+        distancePodNm: cand.distancePodNm,
+        locationContext: cand.locationContext,
         radarLive: {
           latitude: cand.latitude,
           longitude: cand.longitude,
           distancePolNm: cand.distancePolNm,
+          distancePodNm: cand.distancePodNm,
+          locationContext: cand.locationContext,
           speedKnots: cand.speedKnots,
           headingDeg: cand.headingDeg,
           navStatus: cand.navStatus,
           operationalStatus: cand.operationalStatus,
           polZone: activeOperation.polName,
+          podZone: activeOperation.podName,
           verifiedImo: true,
           excludedNoiseCategory: null,
           lastSeen: "En Vivo · Transmisión AIS Activa",
