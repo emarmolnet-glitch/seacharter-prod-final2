@@ -386,3 +386,156 @@
     font-weight: 900 !important;
 }
 
+/* =============================================================================
+   Etiqueta Dinámica Visible de Compatibilidad e Inyección en UI
+   ============================================================================= */
+
+.compatibility-dynamic-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+    margin-bottom: 0.35rem;
+}
+
+.compat-tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 900;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.02em;
+    background: linear-gradient(135deg, #022c22 0%, #064e3b 100%);
+    color: #34d399;
+    border: 1px solid #059669;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+}
+
+.compat-tag-badge.alt-candidate {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    color: #a5b4fc;
+    border: 1px solid #4f46e5;
+}
+
+/* =============================================================================
+   Componente de Contingencia (Fallback Card) & Bloqueo de Vista de Radar/Mapa
+   ============================================================================= */
+
+.radar-blocked-view-container {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+}
+
+.radar-map-blocked-overlay {
+    position: relative;
+    height: 120px;
+    background: repeating-linear-gradient(
+        45deg,
+        #f1f5f9,
+        #f1f5f9 10px,
+        #e2e8f0 10px,
+        #e2e8f0 20px
+    );
+    border-bottom: 1.5px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.radar-blocked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 9999px;
+    background: #0f172a;
+    color: #f8fafc;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    border: 1px solid #334155;
+}
+
+.radar-blocked-badge i {
+    color: #fbbf24;
+}
+
+.compatibility-fallback-card {
+    background: #ffffff;
+    border-radius: 0 0 14px 14px;
+    overflow: hidden;
+}
+
+.fallback-card-header {
+    padding: 1rem 1.25rem;
+    background: #fffbeb;
+    border-bottom: 1px solid #fef3c7;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.fallback-card-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    background: #fde68a;
+    color: #b45309;
+    display: grid;
+    place-items: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.fallback-card-message {
+    padding: 1.1rem 1.35rem;
+    background: #fffdf5;
+    border-bottom: 1px solid #fef3c7;
+    color: #92400e;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.55;
+}
+
+.fallback-card-vessel {
+    padding: 1.25rem;
+    background: #ffffff;
+}
+
+.btn-fallback-contact {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 0.75rem 1.35rem;
+    border-radius: 10px;
+    border: 1px solid #0284c7;
+    box-shadow: 0 3px 12px -2px rgba(2, 132, 199, 0.4);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-fallback-contact:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 16px -2px rgba(2, 132, 199, 0.5);
+}
+
+.btn-fallback-contact:active {
+    transform: translateY(1px);
+}
+
+

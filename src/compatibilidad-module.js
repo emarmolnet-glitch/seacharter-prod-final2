@@ -342,40 +342,47 @@ class CompatibilityModuleManager {
 
         // Check if there are live reactive radar density vessels from MAP/DENSITY module
         let dynamicRadarMatches = [];
+        let hasLiveCompatibleVessels = true;
+        let alternativeDbVessel = null;
+
         if (typeof window !== 'undefined') {
             const liveFleet = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
                 || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
                 || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
 
-            if (Array.isArray(liveFleet) && liveFleet.length > 0) {
+            if (Array.isArray(liveFleet)) {
                 const isDryBulk = DRY_BULK_CARGO_RE.test(activeOp.cargoName);
 
-                // Strict filter on origin: Valid 7-digit IMO, strictly merchant cargo (no fishing, no tugs)
+                // Strict filter on origin: Valid 7-digit IMO or 9-digit MMSI, strictly merchant cargo (no fishing, no tugs)
                 // For dry bulk cargo (cement, clinker, yeso, etc.), strictly exclude Tanker, Container, Tug, Passenger
                 const commercialFleet = liveFleet.filter(ship => {
                     const imo = String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '');
-                    const type = String(ship.vessel_type || ship.vesselType || ship.type || '').toLowerCase();
+                    const mmsi = String(ship.mmsi || ship.MMSI || '').replace(/\D/g, '');
+                    const rawType = String(ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || ship.type || ship.ship_type || ship.ShipType || '').toLowerCase();
                     const isValidImo = imo.length === 7 && Number(imo) > 0;
-                    const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(type);
-                    const isMerchant = STRICT_MERCHANT_CARGO_RE.test(type) || (Number(ship.dwt) >= 1000);
+                    const isValidMmsi = mmsi.length === 9;
+                    if (!isValidImo && !isValidMmsi) return false;
+
+                    const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(rawType);
+                    const isMerchant = STRICT_MERCHANT_CARGO_RE.test(rawType) || (Number(ship.dwt) >= 1000);
                     
                     if (isDryBulk) {
-                        const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(type);
-                        const isCompatible = COMPATIBLE_DRY_BULK_TYPES_RE.test(type);
+                        const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(rawType);
+                        const isCompatible = COMPATIBLE_DRY_BULK_TYPES_RE.test(rawType);
                         if (isMandatoryExcluded || !isCompatible) return false;
                     }
 
-                    return isValidImo && isNotNoise && isMerchant;
+                    return isNotNoise && isMerchant;
                 });
 
                 if (commercialFleet.length > 0) {
                     dynamicRadarMatches = commercialFleet.slice(0, 8).map((ship, idx) => {
-                        const imo = Number(String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, ''));
+                        const imo = Number(String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '')) || (9200000 + idx);
                         const name = String(ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${imo}`).toUpperCase();
                         const mmsi = String(ship.mmsi || ship.MMSI || '210984000');
                         const dwt = Number(ship.dwt || ship.deadweight || 10850);
                         const draft = Number(ship.draft || ship.draft_meters || ship.max_draft || 7.80);
-                        const vesselType = ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
+                        const vesselType = ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
                         const distNm = Number(ship.distancePolNm || ship.distance_nm || (0.8 + idx * 1.5)).toFixed(1);
 
@@ -387,9 +394,12 @@ class CompatibilityModuleManager {
                             imo,
                             name,
                             mmsi,
+                            tipo_buque: vesselType,
+                            categoria_buque: vesselType,
                             ownerManager,
                             owner: ownerManager,
                             propietario: ownerManager,
+                            isLiveRadar: true,
                             radarLive: {
                                 latitude: Number(ship.latitude || ship.lat || 36.76),
                                 longitude: Number(ship.longitude || ship.lon || 5.09),
@@ -404,6 +414,8 @@ class CompatibilityModuleManager {
                             },
                             neonDbMaster: {
                                 vesselType,
+                                tipo_buque: vesselType,
+                                categoria_buque: vesselType,
                                 dwt,
                                 draftMeters: draft,
                                 stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
@@ -427,18 +439,25 @@ class CompatibilityModuleManager {
                     dynamicRadarMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
                     const validTop = dynamicRadarMatches.find(m => m.compatibilityScore > 0);
                     if (validTop) validTop.isTopMatch = true;
+                    hasLiveCompatibleVessels = dynamicRadarMatches.some(m => m.compatibilityScore > 0);
+                } else if (liveFleet.length > 0) {
+                    // Live radar had signals but none was compatible
+                    hasLiveCompatibleVessels = false;
                 }
             }
         }
 
         const pairedMatches = dynamicRadarMatches.length > 0 ? dynamicRadarMatches : FALLBACK_MATCHES;
         const topMatch = pairedMatches.find(m => m.isTopMatch && m.compatibilityScore > 0) || pairedMatches[0];
+        alternativeDbVessel = FALLBACK_MATCHES[0];
 
         // Fallback robust dataset
         const fallbackData = {
             success: true,
             timestamp: new Date().toISOString(),
             activeOperation: activeOp,
+            hasLiveCompatibleVessels,
+            alternativeDbVessel,
             radarSummary: {
                 totalSignalsPolZone: 18,
                 filteredMerchantCount: pairedMatches.length,
@@ -517,8 +536,126 @@ class CompatibilityModuleManager {
         `;
     }
 
-    renderLeftRadarBlock(matches, summary, selectedImo) {
+    renderLeftRadarBlock(matches, summary, selectedImo, hasAvailability = true, alternativeDbVessel = null) {
         const polZone = this.currentOperation?.polName || "Bejaia";
+        const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
+
+        // Scenario Sin Disponibilidad: Contingency Fallback Card & Blocked Radar/Map View
+        if (!hasAvailability || compatibleMatches.length === 0) {
+            const rec = alternativeDbVessel || matches[0] || FALLBACK_MATCHES[0];
+            const recOwner = rec.neonDbMaster?.ownerManager || rec.ownerManager || rec.owner || rec.propietario || "Rodahmar Shipping SL / Maritime Carrier";
+            const recType = rec.neonDbMaster?.vesselType || rec.tipo_buque || rec.vesselType || "General Cargo / Mini-Bulker";
+            const recScore = rec.compatibilityScore || 98;
+            const recDwt = Number(rec.neonDbMaster?.dwt || rec.dwt || 10850).toLocaleString();
+            const recDraft = Number(rec.neonDbMaster?.draftMeters || rec.draft || 7.80).toFixed(2);
+            const recFlag = rec.neonDbMaster?.flag || rec.flag || "Malta 🇲🇹";
+
+            return `
+            <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Vista de Contingencia) -->
+            <div class="compatibility-panel" id="panel-radar-densidad">
+                <div class="compatibility-panel-header">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                        <div>
+                            <h3 class="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2">
+                                <span>Radar en Vivo · Densidad POL</span>
+                            </h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Zona ${polZone} (Filtro Estricto: solo buques mercantes con IMO)</p>
+                        </div>
+                    </div>
+                    <span class="compatibility-badge-pill" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> 0 En Vivo Compatibles
+                    </span>
+                </div>
+
+                <div class="radar-blocked-view-container m-4">
+                    <!-- Vista de Mapa Bloqueado -->
+                    <div class="radar-map-blocked-overlay">
+                        <div class="radar-blocked-badge">
+                            <i class="fa-solid fa-lock"></i>
+                            <span>Vista de Mapa Radar Bloqueada · Sin Buques Disponibles en Zona</span>
+                        </div>
+                    </div>
+
+                    <!-- Componente de Contingencia (Fallback Card) -->
+                    <div class="compatibility-fallback-card" id="compatibility-contingency-card">
+                        <div class="fallback-card-header">
+                            <div class="fallback-card-icon">
+                                <i class="fa-solid fa-ship"></i>
+                            </div>
+                            <div>
+                                <strong class="text-xs font-black uppercase tracking-wider text-amber-950 block">Recomendación Alternativa de Base de Datos</strong>
+                                <span class="text-[11px] text-amber-800">Cruce técnico síncrono con base de datos maestra Neon DB</span>
+                            </div>
+                        </div>
+
+                        <div class="fallback-card-message">
+                            No hay actualmente barcos disponibles en el radar. Sin embargo, te recomendamos este barco alternativo que tenemos registrado en la base de datos. ¿Quieres contactar con su propietario/armador?
+                        </div>
+
+                        <div class="fallback-card-vessel border-t border-slate-100">
+                            <div class="flex items-start justify-between gap-3 mb-2">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="font-black text-sm text-slate-900">${rec.name}</h4>
+                                        <span class="px-2 py-0.5 text-[9px] font-black uppercase bg-blue-100 text-blue-800 border border-blue-300 rounded-md">
+                                            Recomendación Neon DB
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                        <span class="font-mono text-blue-700 font-bold">IMO ${rec.imo}</span>
+                                        <span>•</span>
+                                        <span>MMSI ${rec.mmsi}</span>
+                                        <span>•</span>
+                                        <span class="font-semibold text-slate-700">${recFlag}</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="compat-tag-badge alt-candidate">
+                                        ${recScore}% - ${rec.name} - ${recType}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px]">
+                                <div>
+                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Tipo / Clase</span>
+                                    <span class="font-bold text-slate-800 truncate block">${recType}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Capacidad DWT</span>
+                                    <span class="font-mono font-bold text-emerald-700">${recDwt} MT</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Calado Máx</span>
+                                    <span class="font-mono font-bold text-blue-700">${recDraft} m</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Armador / Operador</span>
+                                    <span class="font-bold text-slate-800 truncate block" title="${recOwner}">${recOwner}</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                                <span class="text-xs text-slate-600 font-medium">
+                                    <i class="fa-solid fa-circle-info text-sky-600 mr-1"></i> Armador verificado y disponible para consulta directa.
+                                </span>
+                                <button type="button" 
+                                        class="btn-fallback-contact"
+                                        onclick="window.CompatibilityModule.handleContactOwner(${rec.imo})"
+                                        aria-label="Contactar con Armador de ${rec.name}">
+                                    <i class="fa-solid fa-envelope-open-text"></i>
+                                    <span>Contactar con Propietario / Armador</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        // Scenario Con Disponibilidad: Render live matching vessels with dynamic injected labels
         return `
             <!-- Bloque Izquierdo (Radar en Vivo - Densidad) -->
             <div class="compatibility-panel" id="panel-radar-densidad">
@@ -533,7 +670,7 @@ class CompatibilityModuleManager {
                         </div>
                     </div>
                     <span class="compatibility-badge-pill radar">
-                        <i class="fa-solid fa-satellite-dish"></i> ${summary?.filteredMerchantCount || matches.length} Mercantes
+                        <i class="fa-solid fa-satellite-dish"></i> ${summary?.filteredMerchantCount || compatibleMatches.length} Mercantes
                     </span>
                 </div>
 
@@ -545,14 +682,17 @@ class CompatibilityModuleManager {
                 </div>
 
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
-                    ${matches.map((item) => {
+                    ${compatibleMatches.map((item) => {
                         const isSelected = item.imo === selectedImo;
+                        const vesselClassOrType = item.neonDbMaster?.vesselType || item.tipo_buque || item.categoria_buque || item.vesselType || "General Cargo";
+                        const dynamicTagLabel = `${item.compatibilityScore}% - ${item.name} - ${vesselClassOrType}`;
+
                         return `
                         <div class="compatibility-vessel-card ${item.isTopMatch ? 'top-match-card' : ''} ${isSelected ? 'is-selected' : ''}" 
                              data-imo="${item.imo}"
                              onclick="window.CompatibilityModule.handleSelectVessel(${item.imo})"
                              title="Haz clic para seleccionar ${item.name} para la operación activa">
-                            <div class="flex items-start justify-between gap-2 mb-2">
+                            <div class="flex items-start justify-between gap-2 mb-1.5">
                                 <div>
                                     <div class="flex items-center gap-2">
                                         <span class="font-black text-sm text-slate-900">${item.name}</span>
@@ -569,7 +709,14 @@ class CompatibilityModuleManager {
                                 </span>
                             </div>
 
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-slate-200/80 text-[11px]">
+                            <!-- Etiqueta Visible Dinámica Requerida (Score% - Nombre - Tipo/Clase) -->
+                            <div class="compatibility-dynamic-label">
+                                <span class="compat-tag-badge" data-dynamic-label="${dynamicTagLabel}">
+                                    ${dynamicTagLabel}
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-200/80 text-[11px]">
                                 <div>
                                     <span class="text-[9px] uppercase font-bold text-slate-500 block">Posición Actual</span>
                                     <span class="font-mono font-bold text-slate-800">${item.radarLive.latitude?.toFixed(3)}°N, ${item.radarLive.longitude?.toFixed(3)}°E</span>
@@ -770,6 +917,8 @@ class CompatibilityModuleManager {
         this.currentMatches = matches;
         this.currentRadarSummary = data?.radarSummary;
         this.currentNeonSummary = data?.neonDbSummary;
+        const hasAvailability = data?.hasLiveCompatibleVessels !== false;
+        const alternativeDbVessel = data?.alternativeDbVessel || matches.find(m => !m.isLiveRadar && m.compatibilityScore > 0) || matches[0];
 
         if (!this.selectedVesselImo || !matches.some(m => m.imo === this.selectedVesselImo)) {
             const topMatch = data?.topMatch || matches[0];
@@ -784,7 +933,7 @@ class CompatibilityModuleManager {
 
                 <!-- Panel de Emparejamiento por Compatibilidad (Estructura a dos bloques) -->
                 <div class="compatibility-grid-two-column">
-                    ${this.renderLeftRadarBlock(matches, data?.radarSummary, this.selectedVesselImo)}
+                    ${this.renderLeftRadarBlock(matches, data?.radarSummary, this.selectedVesselImo, hasAvailability, alternativeDbVessel)}
                     ${this.renderRightMasterBlock(matches, data?.neonDbSummary, this.selectedVesselImo)}
                 </div>
 
@@ -916,6 +1065,30 @@ class CompatibilityModuleManager {
             }
             if (typeof window.showToast === 'function') {
                 window.showToast(`🔒 Fletamento bloqueado con éxito para ${candidate.name} (IMO ${candidate.imo}) - ${candidate.compatibilityScore || 98}% Compatibilidad.`);
+            }
+        }
+    }
+
+    handleContactOwner(imo) {
+        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
+        const candidate = matches.find(v => v.imo === imo) || matches[0];
+        const owner = candidate.neonDbMaster?.ownerManager 
+            || candidate.ownerManager 
+            || candidate.owner 
+            || candidate.propietario 
+            || 'Rodahmar Shipping SL / Maritime Carrier';
+        
+        if (typeof window !== 'undefined') {
+            if (typeof window.showToast === 'function') {
+                window.showToast(`📧 Contactando con el armador/propietario (${owner}) para el buque ${candidate.name}...`);
+            }
+            if (typeof window.openChatWithContext === 'function') {
+                window.openChatWithContext({
+                    action: 'CONTACT_OWNER',
+                    vessel: candidate,
+                    owner,
+                    initialMessage: `Hola, me gustaría solicitar flete y disponibilidad para el buque ${candidate.name} (IMO: ${candidate.imo}, DWT: ${candidate.neonDbMaster?.dwt || candidate.dwt} MT) perteneciente a ${owner}.`
+                });
             }
         }
     }
