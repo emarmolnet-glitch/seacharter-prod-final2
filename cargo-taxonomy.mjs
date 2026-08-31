@@ -122,10 +122,12 @@ function classifyVesselDesign(shipType, vessel) {
   const isGeneralCargoWord = /\b(cargo|vessel|freighter|ship|merchant|motor vessel|mv)\b/.test(declaredType);
 
   const dwtVal = optionalNumber(findNestedValue(vessel, ["dwt", "DWT", "dwt_ajustado", "capacity"]));
-  const isTanker = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg)\b/.test(declaredType);
-  const isContainer = /\b(container|containership|feeder)\b/.test(declaredType);
+  const isTanker = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg|petrolero|quimiquero|tanquero)\b/.test(declaredType);
+  const isContainer = /\b(container|containership|feeder|boxship|portacontenedores)\b/.test(declaredType);
   const isRoro = /\b(ro ro|roro|vehicle carrier)\b/.test(declaredType);
-  const hasExplicitNonDryDesign = isTanker || isContainer || isRoro;
+  const isTug = /\b(tug|tugboat|remolcador|remolque|pusher|pushboat|empujador)\b/.test(declaredType);
+  const isPassenger = /\b(passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero)\b/.test(declaredType);
+  const hasExplicitNonDryDesign = isTanker || isContainer || isRoro || isTug || isPassenger;
   const isCoasterKeyword = /\b(coaster|cabotage|cabotaje|costero)\b/.test(declaredType);
   const isCoasterDwt = dwtVal !== null && dwtVal >= 1000 && dwtVal <= 10000 && !hasExplicitNonDryDesign;
   const isCoaster = isCoasterKeyword || isCoasterDwt;
@@ -134,28 +136,30 @@ function classifyVesselDesign(shipType, vessel) {
   const isMinibulkerDwt = dwtVal !== null && dwtVal > 10000 && dwtVal <= 15000 && !hasExplicitNonDryDesign;
   const isMinibulker = isMinibulkerKeyword || isMinibulkerDwt;
 
-  const isBulk = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|coaster|mini bulker|minibulker|mini-bulker)\b/.test(declaredType)
-    || isAisCargoCode || isCoaster || isMinibulker;
+  const isBulk = (/\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|coaster|mini bulker|minibulker|mini-bulker)\b/.test(declaredType)
+    || isAisCargoCode || isCoaster || isMinibulker) && !hasExplicitNonDryDesign;
   const isCement = /\b(cement carrier|cementero|clinker carrier)\b/.test(declaredType);
-  const isGeneral = /\b(general cargo|coaster|mini bulker|minibulker|mini-bulker|cargo ship|cargo|freighter|ship|merchant)\b/.test(declaredType)
-    || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
-  const isMultipurpose = /\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType)
-    || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
-  const isNonCargo = /\b(passenger|cruise|tug|tugboat|towing|towage|pusher|fishing|trawler|pleasure|yacht|sailing|search and rescue|search & rescue|sar|rescue|salvage|dredger|dredging|pilot|pilot boat|patrol|military|warship|navy|offshore supply|platform supply|naval)\b/.test(declaredType)
+  const isGeneral = (/\b(general cargo|coaster|mini bulker|minibulker|mini-bulker|cargo ship|cargo|freighter|ship|merchant)\b/.test(declaredType)
+    || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB) && !hasExplicitNonDryDesign;
+  const isMultipurpose = (/\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType)
+    || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB) && !hasExplicitNonDryDesign;
+  const isNonCargo = (isTug || isPassenger || /\b(fishing|trawler|pleasure|yacht|sailing|search and rescue|search & rescue|sar|rescue|salvage|dredger|dredging|pilot|pilot boat|patrol|military|warship|navy|offshore supply|platform supply|naval)\b/.test(declaredType))
     && !(isCoaster || isMinibulker);
 
   return {
     declaredType: declaredType || "cargo",
-    bulk: (isBulk || isGeneralCargoWord) && !hasExplicitNonDryDesign,
+    bulk: isBulk,
     cement: isCement,
-    general: isGeneral && !hasExplicitNonDryDesign,
-    multipurpose: (isMultipurpose || isGeneralCargoWord) && !hasExplicitNonDryDesign,
+    general: isGeneral,
+    multipurpose: isMultipurpose,
     coaster: isCoaster,
     minibulker: isMinibulker,
     isClassB,
     tanker: isTanker,
     container: isContainer,
     roro: isRoro,
+    tug: isTug,
+    passenger: isPassenger,
     nonCargo: isNonCargo,
   };
 }
@@ -202,7 +206,8 @@ export function filterCommercialVessels(vessels) {
 }
 
 function cargoAllowsDesign(cargoTypeId, design) {
-  if (design.nonCargo) return false;
+  if (design.nonCargo || design.tug || design.passenger) return false;
+  if (["10", "20", "30", "40", "50", "60"].includes(cargoTypeId) && (design.tanker || design.container)) return false;
   if (design.declaredType === "unknown" || !design.declaredType) return true;
   if (cargoTypeId === "10") return design.bulk || design.cement || design.general || design.multipurpose;
   if (cargoTypeId === "20") return design.bulk || design.general || design.multipurpose;

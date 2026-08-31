@@ -33,6 +33,15 @@ const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|
 // Commercial merchant cargo whitelist regex
 const STRICT_MERCHANT_CARGO_RE = /\b(bulk|bulker|cargo|carguero|coaster|cabotaje|container|tanker|petrolero|quimiquero|heavy load|heavy lift|break bulk|breakbulk|ro-ro|roro|cement|cementero|clinker|mpp|mpv|mmpp|freighter|merchant|general cargo|mini bulker)\b/i;
 
+// Strict dry bulk cargo taxonomy patterns (cement, clinker, yeso/gypsum, cal/lime, aggregates/aridos, minerals, dry bulk)
+const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|lime|aridos?|aggregates?|mineral|granel\s*seco|dry\s*bulk|grain|grano|cereales?|fertilizante|abono|bauxita|carbon|carb[oó]n|slags?|cenizas?)\b/i;
+
+// Mandatory excluded vessel types for dry bulk cargoes (Tanker, Container, Tug, Passenger)
+const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|petrolero|quimiquero|tanquero|lng|lpg|container|containership|feeder|boxship|portacontenedores|tug|tugboat|remolcador|remolque|pusher|empujador|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure|yacht|yate|sailing|velero|fishing|pesquero|trawler)\b/i;
+
+// Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers)
+const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
+
 // Default commercial operation baseline
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
   cargoName: "Cement in Bulk (Clinker)",
@@ -232,8 +241,41 @@ function evaluateMathematicalMatch(
     loadingRate: string;
   },
 ) {
-  const { cargoVolumeMt, polMaxDraftMeters, podMaxDraftMeters, polName, podName, laycan, loadingRate } = op;
+  const { cargoVolumeMt, polMaxDraftMeters, podMaxDraftMeters, polName, podName, laycan, loadingRate, cargoName } = op;
   const { dwt, draftMeters, distancePolNm, yearBuilt, vesselType } = candidate;
+
+  const isDryBulk = DRY_BULK_CARGO_RE.test(cargoName);
+  const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType);
+  const isCompatibleDryBulk = COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType);
+
+  // Strict cargo taxonomy vs vessel type validation
+  // For dry bulk cargoes (cement, clinker, yeso/gypsum, etc.), mandatory exclusion of Tanker, Container, Tug, Passenger
+  if (isDryBulk && (isMandatoryExcluded || !isCompatibleDryBulk)) {
+    let exclusionTypeLabel = "Incompatible";
+    if (/tanker|petrolero|quimiquero|crude|lng|lpg/i.test(vesselType)) exclusionTypeLabel = "Tanker / Buque Tanque";
+    else if (/container|portacontenedores|feeder|boxship/i.test(vesselType)) exclusionTypeLabel = "Container / Portacontenedores";
+    else if (/tug|remolcador|pusher/i.test(vesselType)) exclusionTypeLabel = "Tug / Remolcador";
+    else if (/passenger|cruise|ferry|pasaje|crucero/i.test(vesselType)) exclusionTypeLabel = "Passenger / Pasaje";
+    else exclusionTypeLabel = vesselType;
+
+    const marginPct = Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10;
+    const stowageFactorStr = `${op.stowageFactorM3Mt.toFixed(2)} m³/MT (30.0 cuft/lt)`;
+
+    return {
+      compatibilityScore: 0,
+      technicalJustification: `Exclusión mandatoria por incompatibilidad taxonómica: El buque está clasificado como ${exclusionTypeLabel} (${vesselType}), categoría incompatible con cargas de granel seco (${cargoName}). Para este tipo de carga (cemento, clínker, yeso o áridos), el sistema excluye de forma estricta buques Tanker, Container, Tug y Passenger, restringiendo la selección exclusivamente a categorías compatibles como Bulk Carrier, Mini Bulker o General Cargo con bodegas aptas para áridos.`,
+      stowageFactor: stowageFactorStr,
+      technicalEvaluation: {
+        dwtDiffPct: marginPct,
+        dwtCompatible: false,
+        draftCompatiblePol: draftMeters <= polMaxDraftMeters,
+        draftCompatiblePod: draftMeters <= podMaxDraftMeters,
+        stowageCompatible: false,
+        taxonomyCompatible: false,
+        laycanCompatible: false,
+      },
+    };
+  }
 
   // 1. DWT Volume Fit (Weight: 35%)
   // Ideal ratio is 1.05 to 1.15 times cargo volume
@@ -281,12 +323,15 @@ function evaluateMathematicalMatch(
   }
 
   // 4. Stowage Factor & Cargo Compatibility (Weight: 10%)
-  const isSpecializedCement = /cement|clinker/i.test(vesselType);
-  const isGeneralCargoOrBulker = /general cargo|bulk|bulker|mini bulker|handysize/i.test(vesselType);
+  const isSpecializedCement = /cement|clinker|self-discharger/i.test(vesselType);
+  const isBulkOrMiniBulker = /bulk carrier|bulker|mini bulker|minibulker|mini-bulker|handysize|handymax|supramax|ultramax|panamax|capesize/i.test(vesselType);
+  const isGeneralCargoSuitable = /general cargo|coaster|costero|box-shaped|box hold|open hatch|multipurpose|multi-purpose|mpp/i.test(vesselType);
   let stowageScore = 90;
   if (isSpecializedCement) {
     stowageScore = 100;
-  } else if (isGeneralCargoOrBulker) {
+  } else if (isBulkOrMiniBulker) {
+    stowageScore = 98;
+  } else if (isGeneralCargoSuitable) {
     stowageScore = 95;
   } else {
     stowageScore = 80;
@@ -320,9 +365,9 @@ function evaluateMathematicalMatch(
 
   let justification = "";
   if (compositeScore >= 95) {
-    justification = `DWT ${dwt.toLocaleString()} MT óptimo para lote de ${cargoVolumeMt.toLocaleString()} MT con margen de seguridad del ${marginText}; calado a máxima carga ${draftMeters.toFixed(2)}m plenamente compatible con calado admisible en ${polName} (${polMaxDraftMeters.toFixed(2)}m) y ${podName} (${podMaxDraftMeters.toFixed(2)}m); factor de estiba de ${stowageFactorStr} idóneo para ${op.cargoName} en bodegas reforzadas; posición inmediata en rada de ${polName} (${distancePolNm.toFixed(1)} NM) garantizando presentación en ventana Laycan ${laycan} con ritmo de carga contratado de ${loadingRate}.`;
+    justification = `DWT ${dwt.toLocaleString()} MT óptimo para lote de ${cargoVolumeMt.toLocaleString()} MT con margen de seguridad del ${marginText}; calado a máxima carga ${draftMeters.toFixed(2)}m plenamente compatible con calado admisible en ${polName} (${polMaxDraftMeters.toFixed(2)}m) y ${podName} (${podMaxDraftMeters.toFixed(2)}m); factor de estiba de ${stowageFactorStr} idóneo para ${op.cargoName} en bodegas reforzadas aptas para áridos/graneles; posición inmediata en rada de ${polName} (${distancePolNm.toFixed(1)} NM) garantizando presentación en ventana Laycan ${laycan} con ritmo de carga contratado de ${loadingRate}.`;
   } else if (compositeScore >= 90) {
-    justification = `DWT ${dwt.toLocaleString()} MT compatible para ${cargoVolumeMt.toLocaleString()} MT (${marginText}); calado ${draftMeters.toFixed(2)}m admitido en ambos puertos; posición a ${distancePolNm.toFixed(1)} NM en aproximación al fondeadero; apto para ${op.cargoName}.`;
+    justification = `DWT ${dwt.toLocaleString()} MT compatible para ${cargoVolumeMt.toLocaleString()} MT (${marginText}); calado ${draftMeters.toFixed(2)}m admitido en ambos puertos; posición a ${distancePolNm.toFixed(1)} NM en aproximación al fondeadero; apto para ${op.cargoName} en bodegas para áridos/granel seco.`;
   } else {
     justification = `DWT ${dwt.toLocaleString()} MT (${marginText}) evaluado para ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; navegación a ${distancePolNm.toFixed(1)} NM de ${polName}; ETA estimada en ventana Laycan ${laycan}.`;
   }
@@ -337,6 +382,7 @@ function evaluateMathematicalMatch(
       draftCompatiblePol: polDraftOk,
       draftCompatiblePod: podDraftOk,
       stowageCompatible: true,
+      taxonomyCompatible: true,
       laycanCompatible: true,
     },
   };
@@ -573,13 +619,24 @@ export default async function handler(req: Request, _context: Context) {
       };
     });
 
-    // 4. Sort by score descending and automatically designate Top Match
+    // 4. Sort by score descending and automatically designate Top Match strictly from taxonomy-compatible candidates
     evaluatedList.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
-    if (evaluatedList.length > 0) {
-      evaluatedList[0].isTopMatch = true;
+    
+    // Clear all top match flags
+    for (const item of evaluatedList) {
+      item.isTopMatch = false;
     }
 
-    const topMatch = evaluatedList.find((m) => m.isTopMatch) || evaluatedList[0];
+    // Top Match must have positive score and verified taxonomy compatibility
+    const eligibleTopCandidates = evaluatedList.filter(
+      (cand) => cand.compatibilityScore > 0 && cand.technicalEvaluation?.taxonomyCompatible !== false,
+    );
+
+    if (eligibleTopCandidates.length > 0) {
+      eligibleTopCandidates[0].isTopMatch = true;
+    }
+
+    const topMatch = eligibleTopCandidates.length > 0 ? eligibleTopCandidates[0] : null;
 
     const responsePayload = {
       success: true,

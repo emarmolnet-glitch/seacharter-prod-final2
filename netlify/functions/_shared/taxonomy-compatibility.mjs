@@ -119,7 +119,8 @@ function buildRequiredVesselDescription(allowedVesselTaxonomies) {
 
 function isDryBulkOrBaggedCargo(value) {
   const cargo = normalizeTaxonomyText(value);
-  return /\b(granel|bulk|dry cargo|carga seca|saco|sacos|bag|bags|bagged|big bag|big bags|grain|grano|granos|cereal|cereales|trigo|wheat|maiz|corn|soja|soy)\b/.test(cargo);
+  if (cargo === "cemento yeso cal y clinker") return false;
+  return /\b(granel|bulk|dry cargo|carga seca|saco|sacos|bag|bags|bagged|big bag|big bags|grain|grano|granos|cereal|cereales|trigo|wheat|maiz|corn|soja|soy|yeso|gypsum|cal|lime|aridos?|aggregates?)\b/.test(cargo);
 }
 
 export function evaluateTaxonomyCompatibility(cargoDescription, vessel) {
