@@ -4585,6 +4585,39 @@
             color: #1E293B !important;
         }
 
+        #view-ais #ais-vessels-tbody [data-density-origin],
+        #view-ais #ais-vessels-tbody .density-coords-badge,
+        #view-ais #ais-vessels-tbody [data-density-origin="pod-backhaul"],
+        #view-ais #ais-vessels-tbody [data-density-origin="global-inbound"],
+        #view-ais #ais-vessels-tbody [data-density-origin="local-radius"] {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
+
+        #view-ais #ais-vessels-tbody [data-density-origin="pod-backhaul"] {
+            background-color: #0f766e !important;
+            border: 1px solid #0d9488 !important;
+            color: #ffffff !important;
+        }
+
+        #view-ais #ais-vessels-tbody [data-density-origin="global-inbound"] {
+            background-color: #0369a1 !important;
+            border: 1px solid #0284c7 !important;
+            color: #ffffff !important;
+        }
+
+        #view-ais #ais-vessels-tbody [data-density-origin="local-radius"] {
+            background-color: #047857 !important;
+            border: 1px solid #059669 !important;
+            color: #ffffff !important;
+        }
+
+        #view-ais #ais-vessels-tbody .density-coords-badge {
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #ffffff !important;
+        }
+
         #view-ais .divide-y > :not([hidden]) ~ :not([hidden]) {
             border-color: #E2E8F0 !important;
         }
@@ -53971,10 +54004,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const inboundToPol = isDensityInboundToPolVessel(vessel);
                 const isPodBackhaul = vessel.isBackhaul === true || vessel.aisRadarZone === 'POD' || vessel.zone === 'POD';
                 const positionOriginBadge = isPodBackhaul
-                    ? '<span data-density-origin="pod-backhaul" class="mt-1 inline-flex items-center gap-1 rounded-full border border-teal-400/50 bg-teal-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-teal-300"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i> POD · Backhaul</span>'
+                    ? '<span data-density-origin="pod-backhaul" class="mt-1 inline-flex items-center gap-1 rounded-full border border-teal-600 bg-teal-700 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"><i class="fa-solid fa-arrow-rotate-left text-white" aria-hidden="true"></i> POD · Backhaul</span>'
                     : (inboundToPol
-                        ? '<span data-density-origin="global-inbound" class="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-400/50 bg-sky-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-sky-300"><i class="fa-solid fa-earth-americas" aria-hidden="true"></i> Inbound to POL</span>'
-                        : '<span data-density-origin="local-radius" class="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-600/50 bg-emerald-950/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-300"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> POL (10 NM)</span>');
+                        ? '<span data-density-origin="global-inbound" class="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-600 bg-sky-700 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"><i class="fa-solid fa-earth-americas text-white" aria-hidden="true"></i> Inbound to POL</span>'
+                        : '<span data-density-origin="local-radius" class="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-700 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"><i class="fa-solid fa-location-dot text-white" aria-hidden="true"></i> POL (10 NM)</span>');
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer';
                 row.dataset.densityCommercialMatch = 'true';
@@ -53986,7 +54019,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 row.innerHTML = `
                     <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
-                    <td class="py-3 px-3 text-slate-400 mono"><span class="block">${escapeDensityTableText(position)}</span>${positionOriginBadge}</td>
+                    <td class="py-3 px-3 mono"><div class="flex flex-col gap-1 items-start"><span class="density-coords-badge inline-flex items-center px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-white font-bold text-[10px] mono shadow-sm">${escapeDensityTableText(position)}</span>${positionOriginBadge}</div></td>
                     <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}${vessel.speedInferenceSource === 'market_average_speeds' || vessel.ais?.speedInferenceSource === 'market_average_speeds' ? '<span class="mt-1 block text-[9px] font-bold uppercase tracking-wide text-cyan-400">Media mercado</span>' : ''}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
 	                    <td class="py-3 px-3"><span${hasMasterProfile ? ' data-vessel-class-source="VESSELS_MASTER"' : ''} class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>

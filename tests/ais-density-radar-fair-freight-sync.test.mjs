@@ -54,3 +54,12 @@ test('renderDensityVesselsTable renders distinct origin badges for POL and POD B
   assert.match(indexHtml, /POD · Backhaul/, 'POD Backhaul text rendered');
   assert.match(indexHtml, /POL \(10 NM\)/, 'POL 10 NM origin badge rendered');
 });
+
+test('Density table position and distance badges have high contrast bold white text on solid backgrounds', () => {
+  assert.match(indexHtml, /density-coords-badge/, 'Coordinates badge class exists');
+  assert.match(indexHtml, /data-density-origin="pod-backhaul"[^>]*text-white/, 'POD Backhaul badge has text-white');
+  assert.match(indexHtml, /data-density-origin="global-inbound"[^>]*text-white/, 'Inbound to POL badge has text-white');
+  assert.match(indexHtml, /data-density-origin="local-radius"[^>]*text-white/, 'Local radius badge has text-white');
+  assert.match(indexHtml, /#view-ais #ais-vessels-tbody \[data-density-origin\][\s\S]*color:\s*#ffffff !important;\s*font-weight:\s*700 !important;/, 'CSS guarantees #ffffff and font-weight 700 for density origin badges');
+  assert.match(indexHtml, /#view-ais #ais-vessels-tbody \.density-coords-badge[\s\S]*color:\s*#ffffff !important;\s*font-weight:\s*700 !important;/, 'CSS guarantees #ffffff and font-weight 700 for coordinates badge');
+});
