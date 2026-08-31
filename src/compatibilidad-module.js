@@ -41,6 +41,9 @@ const FALLBACK_MATCHES = Object.freeze([
         imo: 9218765,
         name: "MV ATLANTIC TRADER",
         mmsi: "210984000",
+        ownerManager: "Rodahmar Shipping SL / Maritime Carrier",
+        owner: "Rodahmar Shipping SL / Maritime Carrier",
+        propietario: "Rodahmar Shipping SL / Maritime Carrier",
         radarLive: {
             latitude: 36.7624,
             longitude: 5.0951,
@@ -62,6 +65,7 @@ const FALLBACK_MATCHES = Object.freeze([
             yearBuilt: 2008,
             loaMeters: 118.5,
             beamMeters: 17.6,
+            ownerManager: "Rodahmar Shipping SL / Maritime Carrier",
             dbSource: "Neon Postgres (vessels_master)",
             dbStatus: "Sincronizado & Verificado",
         },
@@ -73,6 +77,9 @@ const FALLBACK_MATCHES = Object.freeze([
         imo: 9345128,
         name: "MV MEDITERRANEAN STAR",
         mmsi: "229871000",
+        ownerManager: "Star Navigation Co. Ltd / Cyprus",
+        owner: "Star Navigation Co. Ltd / Cyprus",
+        propietario: "Star Navigation Co. Ltd / Cyprus",
         radarLive: {
             latitude: 36.7912,
             longitude: 5.1245,
@@ -94,6 +101,7 @@ const FALLBACK_MATCHES = Object.freeze([
             yearBuilt: 2011,
             loaMeters: 128.0,
             beamMeters: 19.2,
+            ownerManager: "Star Navigation Co. Ltd / Cyprus",
             dbSource: "Neon Postgres (vessels_master)",
             dbStatus: "Sincronizado & Verificado",
         },
@@ -105,6 +113,9 @@ const FALLBACK_MATCHES = Object.freeze([
         imo: 9198744,
         name: "MV ALBORAN CARRIER",
         mmsi: "244123000",
+        ownerManager: "Alboran Bulk Carriers SA",
+        owner: "Alboran Bulk Carriers SA",
+        propietario: "Alboran Bulk Carriers SA",
         radarLive: {
             latitude: 36.8450,
             longitude: 5.2500,
@@ -126,6 +137,7 @@ const FALLBACK_MATCHES = Object.freeze([
             yearBuilt: 2006,
             loaMeters: 122.4,
             beamMeters: 18.0,
+            ownerManager: "Alboran Bulk Carriers SA",
             dbSource: "Neon Postgres (vessels_master)",
             dbStatus: "Sincronizado & Verificado",
         },
@@ -137,6 +149,9 @@ const FALLBACK_MATCHES = Object.freeze([
         imo: 9481233,
         name: "MV ATLAS BULKER",
         mmsi: "255806000",
+        ownerManager: "Atlas Shipping Logistics Ltd",
+        owner: "Atlas Shipping Logistics Ltd",
+        propietario: "Atlas Shipping Logistics Ltd",
         radarLive: {
             latitude: 36.8140,
             longitude: 5.1850,
@@ -158,6 +173,7 @@ const FALLBACK_MATCHES = Object.freeze([
             yearBuilt: 2014,
             loaMeters: 112.0,
             beamMeters: 16.8,
+            ownerManager: "Atlas Shipping Logistics Ltd",
             dbSource: "Neon Postgres (vessels_master)",
             dbStatus: "Sincronizado & Verificado",
         },
@@ -365,11 +381,15 @@ class CompatibilityModuleManager {
 
                         const isVesselTypeExcluded = isDryBulk && (MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType) || !COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType));
                         const score = isVesselTypeExcluded ? 0 : (idx === 0 ? 98 : Math.max(75, 96 - idx * 4));
+                        const ownerManager = String(ship.owner_manager || ship.ownerManager || ship.owner || ship.propietario || ship.dispOwner || 'Rodahmar Shipping SL / Maritime Carrier');
 
                         return {
                             imo,
                             name,
                             mmsi,
+                            ownerManager,
+                            owner: ownerManager,
+                            propietario: ownerManager,
                             radarLive: {
                                 latitude: Number(ship.latitude || ship.lat || 36.76),
                                 longitude: Number(ship.longitude || ship.lon || 5.09),
@@ -391,6 +411,7 @@ class CompatibilityModuleManager {
                                 yearBuilt: Number(ship.year_built || ship.yearBuilt || 2010),
                                 loaMeters: Number(ship.loa || ship.loa_meters || 118.5),
                                 beamMeters: Number(ship.beam || ship.beam_meters || 17.6),
+                                ownerManager,
                                 dbSource: "Neon Postgres (vessels_master)",
                                 dbStatus: "Sincronizado & Verificado",
                             },
@@ -903,30 +924,105 @@ class CompatibilityModuleManager {
         const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
 
+        const owner = candidate.neonDbMaster?.ownerManager 
+            || candidate.ownerManager 
+            || candidate.owner 
+            || candidate.propietario 
+            || candidate.dispOwner 
+            || 'Rodahmar Shipping SL / Maritime Carrier';
+        const dwt = Number(candidate.neonDbMaster?.dwt || candidate.dwt || 10850);
+        const draft = Number(candidate.neonDbMaster?.draftMeters || candidate.draft || 7.80);
+        const vesselType = candidate.neonDbMaster?.vesselType || candidate.vesselType || 'General Cargo / Mini-Bulker';
+        const flag = candidate.neonDbMaster?.flag || candidate.flag || 'Malta 🇲🇹';
+        const yearBuilt = candidate.neonDbMaster?.yearBuilt || candidate.yearBuilt || 2008;
+        const loaMeters = candidate.neonDbMaster?.loaMeters || candidate.loaMeters || 118.5;
+        const beamMeters = candidate.neonDbMaster?.beamMeters || candidate.beamMeters || 17.6;
+        const stowageFactor = candidate.neonDbMaster?.stowageFactor || '0.85 m³/MT (30.0 cuft/lt)';
+        const compatibilityScore = candidate.compatibilityScore || 98;
+        const technicalJustification = candidate.technicalJustification || '';
+
+        const candidateVessel = {
+            name: candidate.name || candidate.vesselName || `MV VESSEL ${candidate.imo}`,
+            vesselName: candidate.name || candidate.vesselName || `MV VESSEL ${candidate.imo}`,
+            imo: candidate.imo,
+            imoNumber: candidate.imo,
+            mmsi: candidate.mmsi,
+            owner,
+            ownerManager: owner,
+            propietario: owner,
+            dwt,
+            draft,
+            draftMeters: draft,
+            flag,
+            vesselType,
+            yearBuilt,
+            loaMeters,
+            beamMeters,
+            stowageFactor,
+            compatibilityScore,
+            technicalJustification,
+            radarLive: candidate.radarLive || {},
+            neonDbMaster: candidate.neonDbMaster || {},
+            source: 'compatibility-module',
+        };
+
         if (typeof window !== 'undefined') {
             if (typeof window.showToast === 'function') {
-                window.showToast(`🛡️ Activando Due Diligence y Auditoría Técnica para ${candidate.name}...`);
+                window.showToast(`🛡️ Activando Due Diligence y Auditoría Técnica para ${candidateVessel.name}...`);
+            }
+
+            // Transfer vessel state to global stores
+            if (window.SeaCharterStore && typeof window.SeaCharterStore.set === 'function') {
+                window.SeaCharterStore.set({
+                    activeVessel: candidateVessel,
+                    auditVessel: candidateVessel,
+                    dueDiligenceVessel: candidateVessel,
+                    selectedVessel: candidateVessel,
+                    lockedVesselImo: candidateVessel.imo,
+                    lockedVesselName: candidateVessel.name,
+                    lockedVesselDwt: candidateVessel.dwt,
+                    lockedVesselDraft: candidateVessel.draft,
+                    lockedVesselOwner: candidateVessel.owner,
+                });
+            }
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = candidateVessel;
+                window.GlobalStore.auditVessel = candidateVessel;
+                window.GlobalStore.dueDiligenceVessel = candidateVessel;
+            }
+            window.activeVessel = candidateVessel;
+            window.activeAuditVessel = candidateVessel;
+            window.lastAuditedVessel = candidateVessel;
+
+            // Trigger global events
+            window.dispatchEvent(new CustomEvent('audit-vessel-inherited', { detail: candidateVessel }));
+            window.dispatchEvent(new CustomEvent('canonical-active-vessel-updated', { detail: candidateVessel }));
+
+            // Direct render in Auditor tab if function exists
+            if (typeof window.renderAuditorVesselDossier === 'function') {
+                window.renderAuditorVesselDossier(candidateVessel);
             }
 
             // If VesselDueDiligenceBridge is present, trigger it
             if (window.VesselDueDiligenceBridge && typeof window.VesselDueDiligenceBridge.run === 'function') {
                 const dummyButton = document.createElement('button');
                 dummyButton.dataset.dueDiligencePayload = JSON.stringify({
-                    imo: candidate.imo,
-                    mmsi: candidate.mmsi,
-                    vesselName: candidate.name,
-                    vessel_type: candidate.neonDbMaster?.vesselType,
-                    dwt: candidate.neonDbMaster?.dwt,
-                    draft: candidate.neonDbMaster?.draftMeters,
+                    imo: candidateVessel.imo,
+                    mmsi: candidateVessel.mmsi,
+                    vesselName: candidateVessel.name,
+                    vessel_type: candidateVessel.vesselType,
+                    dwt: candidateVessel.dwt,
+                    draft: candidateVessel.draft,
+                    owner: candidateVessel.owner,
                 });
                 window.VesselDueDiligenceBridge.run(dummyButton, dummyButton.dataset.dueDiligencePayload);
             }
 
-            // If switchTab is available, navigate to auditor or keep user notified
+            // If switchTab is available, navigate to auditor
             if (typeof window.switchTab === 'function') {
                 setTimeout(() => {
                     window.switchTab('auditor');
-                }, 800);
+                }, 300);
             }
         }
     }
