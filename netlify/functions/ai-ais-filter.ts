@@ -495,7 +495,7 @@ export default async (req: Request) => {
           const isLiveRadarTelemetry = vessel.isLiveRadarSource
             || vessel.sourceOrigins.some((origin) => /AIS_LIVE|DATALASTIC|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(origin))
             || /AIS_LIVE|DATALASTIC|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(vessel.sourceOrigin);
-          const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt;
+          const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt && hasVerifiedVesselType;
           const missingCriticalData = activeTaxonomyRequiresVerifiedData
             && (!hasVerifiedVesselType || (!hasVerifiedDwt && !telemetryVisibleWithoutDwt));
           const missingCriticalReasons = [
@@ -788,7 +788,7 @@ export default async (req: Request) => {
 
     return Response.json({
       success: true,
-      data: frontendEvaluatedMatches,
+      data: frontendEvaluatedMatches, /* data: evaluatedMatches (filtered for frontend presentation) */
       dataIncludesWarnings: true,
       matches,
       technicalWarnings,

@@ -279,13 +279,26 @@ class CompatibilityModuleManager {
             return this.cache;
         }
 
+        let rawLiveFleet = [];
+        if (typeof window !== 'undefined') {
+            const reactive = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
+                || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
+                || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
+            if (Array.isArray(reactive)) {
+                rawLiveFleet = reactive;
+            }
+        }
+
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
             const res = await fetch('/api/vessel-compatibility', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(activeOp),
+                body: JSON.stringify({
+                    ...activeOp,
+                    liveRadarVessels: rawLiveFleet,
+                }),
                 signal: controller.signal,
             });
             clearTimeout(timeoutId);
@@ -698,6 +711,37 @@ class CompatibilityModuleManager {
         `;
     }
 
+    renderView(data) {
+        if (!this.container) return;
+        const op = data?.activeOperation || this.resolveActiveOperation();
+        this.currentOperation = op;
+        const matches = data?.pairedMatches || FALLBACK_MATCHES;
+        this.currentMatches = matches;
+        this.currentRadarSummary = data?.radarSummary;
+        this.currentNeonSummary = data?.neonDbSummary;
+
+        if (!this.selectedVesselImo || !matches.some(m => m.imo === this.selectedVesselImo)) {
+            const topMatch = data?.topMatch || matches[0];
+            this.selectedVesselImo = topMatch ? topMatch.imo : matches[0]?.imo;
+        }
+
+        const activeCandidate = matches.find(m => m.imo === this.selectedVesselImo) || matches[0];
+
+        this.container.innerHTML = `
+            <div class="compatibility-shell">
+                ${this.renderHeader(op)}
+
+                <!-- Panel de Emparejamiento por Compatibilidad (Estructura a dos bloques) -->
+                <div class="compatibility-grid-two-column">
+                    ${this.renderLeftRadarBlock(matches, data?.radarSummary, this.selectedVesselImo)}
+                    ${this.renderRightMasterBlock(matches, data?.neonDbSummary, this.selectedVesselImo)}
+                </div>
+
+                ${this.renderBottomTopMatchHero(activeCandidate)}
+            </div>
+        `;
+    }
+
     async mount(container) {
         if (!container) return;
         this.mounted = true;
@@ -720,39 +764,24 @@ class CompatibilityModuleManager {
         `;
 
         const data = await this.fetchData(true);
-        const op = data.activeOperation || initialOp;
-        this.currentOperation = op;
-        const matches = data.pairedMatches || FALLBACK_MATCHES;
-        this.currentMatches = matches;
-        this.currentRadarSummary = data.radarSummary;
-        this.currentNeonSummary = data.neonDbSummary;
-
-        if (!this.selectedVesselImo || !matches.some(m => m.imo === this.selectedVesselImo)) {
-            const topMatch = data.topMatch || matches[0];
-            this.selectedVesselImo = topMatch ? topMatch.imo : matches[0]?.imo;
-        }
-
-        const activeCandidate = matches.find(m => m.imo === this.selectedVesselImo) || matches[0];
-
-        container.innerHTML = `
-            <div class="compatibility-shell">
-                ${this.renderHeader(op)}
-
-                <!-- Panel de Emparejamiento por Compatibilidad (Estructura a dos bloques) -->
-                <div class="compatibility-grid-two-column">
-                    ${this.renderLeftRadarBlock(matches, data.radarSummary, this.selectedVesselImo)}
-                    ${this.renderRightMasterBlock(matches, data.neonDbSummary, this.selectedVesselImo)}
-                </div>
-
-                ${this.renderBottomTopMatchHero(activeCandidate)}
-            </div>
-        `;
+        this.renderView(data);
 
         // Listen for store changes to keep header and candidates synchronized in real-time
         if (!this.unsubscribeStore && typeof window !== 'undefined' && window.SeaCharterStore?.subscribe) {
             this.unsubscribeStore = window.SeaCharterStore.subscribe(() => {
                 if (this.mounted && this.container) {
                     this.syncOperationFromState();
+                }
+            });
+        }
+
+        // Listen for density AIS radar updates
+        if (!this.listeningFleetUpdated && typeof window !== 'undefined') {
+            this.listeningFleetUpdated = true;
+            window.addEventListener('canonical-fleet-updated', async () => {
+                if (this.mounted && this.container) {
+                    const freshData = await this.fetchData(true);
+                    this.renderView(freshData);
                 }
             });
         }
