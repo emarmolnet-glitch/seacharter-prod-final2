@@ -51437,6 +51437,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 vesselClass: canonicalVesselClass,
                 vessel_class: canonicalVesselClass,
                 class: canonicalVesselClass,
+                tipo_buque: shipTypeVal || canonicalVesselClass || v.tipo_buque || v.categoria_buque || "General Cargo",
+                categoria_buque: canonicalVesselClass || shipTypeVal || v.categoria_buque || v.tipo_buque || "General Cargo",
                 dwt: classification.dwt !== undefined ? classification.dwt : dwt,
                 DWT: classification.dwt !== undefined ? classification.dwt : dwt,
                 yearBuilt: canonicalYearBuilt,

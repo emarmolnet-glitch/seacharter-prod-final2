@@ -504,11 +504,11 @@ export default async function handler(req: Request, _context: Context) {
     const rawIncomingVessels = Array.isArray(bodyData.liveRadarVessels) ? (bodyData.liveRadarVessels as any[]) : [];
 
     // Combine verified master records with any live radar detections
-    const candidateMap = new Map<number, CandidateEvaluationInput>();
+    const candidateMap = new Map<number, CandidateEvaluationInput & { isLiveRadar?: boolean; tipo_buque?: string; categoria_buque?: string }>();
 
-    // Seed verified candidates as initial baseline
+    // Seed verified candidates as initial baseline from Neon DB
     for (const v of VERIFIED_MASTER_FLEET) {
-      const dbRow = dbRows.find((r) => Number(r.imo_number) === v.imo);
+      const dbRow = dbRows.find((r) => Number(r.imo_number) === v.imo || (v.mmsi && String(r.mmsi) === String(v.mmsi)));
       const distNm = haversineDistanceNm(
         polCoords.lat,
         polCoords.lon,
@@ -516,11 +516,15 @@ export default async function handler(req: Request, _context: Context) {
         Number(dbRow?.longitude ?? v.longitude),
       );
 
+      const vesselType = String(dbRow?.vessel_type || v.vesselType);
+
       candidateMap.set(v.imo, {
         imo: v.imo,
         name: String(dbRow?.vessel_name || v.name).toUpperCase(),
         mmsi: String(dbRow?.mmsi || v.mmsi),
-        vesselType: String(dbRow?.vessel_type || v.vesselType),
+        vesselType,
+        tipo_buque: vesselType,
+        categoria_buque: vesselType,
         dwt: Number(dbRow?.dwt ?? v.dwt),
         draftMeters: Number(dbRow?.draft_meters ?? v.draftMeters),
         loaMeters: Number(dbRow?.loa_meters ?? v.loaMeters),
@@ -534,36 +538,55 @@ export default async function handler(req: Request, _context: Context) {
         navStatus: v.navStatus,
         operationalStatus: v.operationalStatus,
         distancePolNm: Math.round(distNm * 10) / 10,
+        isLiveRadar: false,
       });
     }
 
-    // Process incoming live AIS vessels with strict merchant & IMO filters
+    // Process incoming live AIS vessels from Densidad screen with strict merchant & IMO/MMSI filters
+    let liveRadarCandidatesCount = 0;
     for (const ship of rawIncomingVessels) {
       const imoClean = String(ship.imo || ship.imo_number || ship.IMO || "").replace(/\D/g, "");
       const imoNum = Number(imoClean);
-      const typeStr = String(ship.vessel_type || ship.vesselType || ship.type || ship.cargoType || "").toLowerCase();
+      const mmsiClean = String(ship.mmsi || ship.MMSI || "").replace(/\D/g, "");
+      
+      // Extract mandatory tipo_buque or categoria_buque from sensor payload
+      const rawType = String(
+        ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || ship.type || ship.ship_type || ship.ShipType || ship.cargoType || ""
+      ).trim();
+      const typeStr = rawType.toLowerCase();
 
-      // Strict Origin Filter: Valid 7-digit IMO, strictly commercial merchant
+      // Strict Origin Filter: Valid 7-digit IMO or valid 9-digit MMSI, strictly commercial merchant
       const isValidImo = imoClean.length === 7 && imoNum > 1000000;
-      const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(typeStr);
-      const isMerchant = STRICT_MERCHANT_CARGO_RE.test(typeStr) || Number(ship.dwt) >= 1000;
-
-      if (!isValidImo || !isNotNoise || !isMerchant) {
+      const isValidMmsi = mmsiClean.length === 9;
+      if (!isValidImo && !isValidMmsi) {
         continue;
       }
 
-      // Cross with Neon DB vessels_master
-      const dbRow = dbRows.find((r) => Number(r.imo_number) === imoNum);
+      const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(typeStr);
+      const isMerchant = STRICT_MERCHANT_CARGO_RE.test(typeStr) || Number(ship.dwt) >= 1000;
 
+      if (!isNotNoise || !isMerchant) {
+        continue;
+      }
+
+      // Step B: Query / cross MATCH against Neon DB vessels_master by IMO or MMSI
+      const dbRow = dbRows.find(
+        (r) => (isValidImo && Number(r.imo_number) === imoNum) || (isValidMmsi && String(r.mmsi) === mmsiClean)
+      );
+
+      const effectiveImo = isValidImo ? imoNum : (Number(dbRow?.imo_number) || (mmsiClean ? Number(mmsiClean) : 9218765));
       const lat = Number(ship.latitude || ship.lat || dbRow?.latitude || polCoords.lat);
       const lon = Number(ship.longitude || ship.lon || dbRow?.longitude || polCoords.lon);
       const distNm = haversineDistanceNm(polCoords.lat, polCoords.lon, lat, lon);
+      const resolvedType = String(dbRow?.vessel_type || rawType || "General Cargo / Mini-Bulker");
 
-      candidateMap.set(imoNum, {
-        imo: imoNum,
-        name: String(dbRow?.vessel_name || ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${imoNum}`).toUpperCase(),
-        mmsi: String(dbRow?.mmsi || ship.mmsi || ship.MMSI || "210984000"),
-        vesselType: String(dbRow?.vessel_type || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker"),
+      candidateMap.set(effectiveImo, {
+        imo: effectiveImo,
+        name: String(dbRow?.vessel_name || ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${effectiveImo}`).toUpperCase(),
+        mmsi: String(dbRow?.mmsi || mmsiClean || "210984000"),
+        vesselType: resolvedType,
+        tipo_buque: resolvedType,
+        categoria_buque: resolvedType,
         dwt: Number(dbRow?.dwt ?? ship.dwt ?? ship.deadweight ?? 10850),
         draftMeters: Number(dbRow?.draft_meters ?? ship.draft ?? ship.draft_meters ?? ship.max_draft ?? 7.80),
         loaMeters: Number(dbRow?.loa_meters ?? ship.loa ?? ship.loa_meters ?? 118.5),
@@ -577,16 +600,24 @@ export default async function handler(req: Request, _context: Context) {
         navStatus: ship.navStatus || "En aproximación POL",
         operationalStatus: "EN APROXIMACIÓN / DISPONIBLE",
         distancePolNm: Math.round(distNm * 10) / 10,
+        isLiveRadar: true,
       });
+      liveRadarCandidatesCount++;
     }
 
-    // 3. Execute mathematical matching engine across all candidates
+    // 3. Step C: Execute mathematical matching engine across all candidates
     const evaluatedList = Array.from(candidateMap.values()).map((cand) => {
       const math = evaluateMathematicalMatch(cand, activeOperation);
+      const dynamicLabel = `${math.compatibilityScore}% - ${cand.name} - ${cand.vesselType}`;
+
       return {
         imo: cand.imo,
         name: cand.name,
         mmsi: cand.mmsi,
+        tipo_buque: cand.tipo_buque,
+        categoria_buque: cand.categoria_buque,
+        dynamicLabel,
+        isLiveRadar: cand.isLiveRadar ?? false,
         radarLive: {
           latitude: cand.latitude,
           longitude: cand.longitude,
@@ -602,6 +633,8 @@ export default async function handler(req: Request, _context: Context) {
         },
         neonDbMaster: {
           vesselType: cand.vesselType,
+          tipo_buque: cand.tipo_buque,
+          categoria_buque: cand.categoria_buque,
           dwt: cand.dwt,
           draftMeters: cand.draftMeters,
           stowageFactor: math.stowageFactor,
@@ -619,7 +652,7 @@ export default async function handler(req: Request, _context: Context) {
       };
     });
 
-    // 4. Sort by score descending and automatically designate Top Match strictly from taxonomy-compatible candidates
+    // 4. Sort by score descending and automatically designate Top Match
     evaluatedList.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
     
     // Clear all top match flags
@@ -638,6 +671,15 @@ export default async function handler(req: Request, _context: Context) {
 
     const topMatch = eligibleTopCandidates.length > 0 ? eligibleTopCandidates[0] : null;
 
+    // Evaluate conditional availability: whether live radar produced compatible candidates
+    const liveCompatibleCandidates = evaluatedList.filter(
+      (cand) => cand.isLiveRadar && cand.compatibilityScore > 0 && cand.technicalEvaluation?.taxonomyCompatible !== false
+    );
+    const hasLiveCompatibleVessels = rawIncomingVessels.length > 0 ? liveCompatibleCandidates.length > 0 : true;
+
+    // Identify registered database fallback recommendation
+    const alternativeDbVessel = evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || evaluatedList[0];
+
     const responsePayload = {
       success: true,
       timestamp: new Date().toISOString(),
@@ -645,6 +687,7 @@ export default async function handler(req: Request, _context: Context) {
       radarSummary: {
         totalSignalsPolZone: evaluatedList.length + 14,
         filteredMerchantCount: evaluatedList.length,
+        liveRadarCandidatesCount,
         excludedNonCommercialCount: 14,
         strictImoFilterApplied: true,
         exclusionCriteria: "Pesqueros, Remolcadores (Tugs), Embarcaciones de Pasaje/Recreo y No-Mercantes excluidos tajantemente.",
@@ -655,6 +698,8 @@ export default async function handler(req: Request, _context: Context) {
         totalMasterCandidates: evaluatedList.length,
         syncedAt: new Date().toISOString(),
       },
+      hasLiveCompatibleVessels,
+      alternativeDbVessel,
       pairedMatches: evaluatedList,
       topMatch,
     };
