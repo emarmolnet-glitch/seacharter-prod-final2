@@ -11,17 +11,17 @@
 import { toIsoAlpha2Flag } from '../db/flag-country-codes.mjs';
 
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
-    cargoName: "Cement in Bulk (Clinker)",
-    cargoVolumeMt: 10000,
+    cargoName: "",
+    cargoVolumeMt: 0,
     stowageFactorM3Mt: 0.85,
-    polName: "Bejaia",
-    polFlag: "🇩🇿",
-    polCountry: "Algeria",
-    podName: "Almería",
-    podFlag: "🇪🇸",
-    podCountry: "Spain",
-    laycan: "10/15 Sep",
-    loadingRate: "3,000 MT/WW",
+    polName: "",
+    polFlag: "🌍",
+    polCountry: "",
+    podName: "",
+    podFlag: "🌍",
+    podCountry: "",
+    laycan: "",
+    loadingRate: "",
 });
 
 const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|remolcador|remolque|pusher|passenger|cruise|ferry|pleasure|yacht|sailing|dredger|vts|mark|point|danger|buoy|boya|military|sar|rescue|pilot|workboat|other|unknown)\b/i;
@@ -35,153 +35,6 @@ const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tank
 
 // Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers)
 const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
-
-const FALLBACK_MATCHES = Object.freeze([
-    {
-        imo: 9218765,
-        name: "MV ATLANTIC TRADER",
-        mmsi: "210984000",
-        ownerManager: "Rodahmar Shipping SL / Maritime Carrier",
-        owner: "Rodahmar Shipping SL / Maritime Carrier",
-        propietario: "Rodahmar Shipping SL / Maritime Carrier",
-        radarLive: {
-            latitude: 36.7624,
-            longitude: 5.0951,
-            distancePolNm: 0.8,
-            speedKnots: 0.2,
-            headingDeg: 45,
-            navStatus: "En fondeo (Rada de Bejaia)",
-            operationalStatus: "LISTO PARA CARGA / EN RADA POL",
-            polZone: "Bejaia",
-            verifiedImo: true,
-            lastSeen: "En Vivo · Transmisión AIS Activa",
-        },
-        neonDbMaster: {
-            vesselType: "General Cargo / Mini-Bulker",
-            dwt: 10850,
-            draftMeters: 7.80,
-            stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
-            flag: "Malta 🇲🇹",
-            yearBuilt: 2008,
-            loaMeters: 118.5,
-            beamMeters: 17.6,
-            ownerManager: "Rodahmar Shipping SL / Maritime Carrier",
-            dbSource: "Neon Postgres (vessels_master)",
-            dbStatus: "Sincronizado & Verificado",
-        },
-        compatibilityScore: 98,
-        isTopMatch: false,
-        technicalJustification: "DWT 10,850 MT óptimo para lote de 10,000 MT con margen de seguridad del 8.5%; calado a máxima carga 7.80m plenamente compatible con calado admisible en Bejaia (9.50m) y Almería (11.00m); factor de estiba de 0.85 m³/MT idóneo para Clínker a granel en bodegas reforzadas; posición inmediata en rada de Bejaia (0.8 NM) garantizando presentación en ventana Laycan 10/15 Sep con ritmo de carga contratado de 3,000 MT/WW.",
-    },
-    {
-        imo: 9345128,
-        name: "MV MEDITERRANEAN STAR",
-        mmsi: "229871000",
-        ownerManager: "Star Navigation Co. Ltd / Cyprus",
-        owner: "Star Navigation Co. Ltd / Cyprus",
-        propietario: "Star Navigation Co. Ltd / Cyprus",
-        radarLive: {
-            latitude: 36.7912,
-            longitude: 5.1245,
-            distancePolNm: 2.9,
-            speedKnots: 4.1,
-            headingDeg: 210,
-            navStatus: "En aproximación POL",
-            operationalStatus: "EN APROXIMACIÓN / DISPONIBLE",
-            polZone: "Bejaia",
-            verifiedImo: true,
-            lastSeen: "En Vivo · Transmisión AIS Activa",
-        },
-        neonDbMaster: {
-            vesselType: "Bulk Carrier / Handysize",
-            dwt: 12400,
-            draftMeters: 8.20,
-            stowageFactor: "0.88 m³/MT (31.1 cuft/lt)",
-            flag: "Cyprus 🇨🇾",
-            yearBuilt: 2011,
-            loaMeters: 128.0,
-            beamMeters: 19.2,
-            ownerManager: "Star Navigation Co. Ltd / Cyprus",
-            dbSource: "Neon Postgres (vessels_master)",
-            dbStatus: "Sincronizado & Verificado",
-        },
-        compatibilityScore: 91,
-        isTopMatch: false,
-        technicalJustification: "DWT 12,400 MT compatible para 10,000 MT; calado 8.20m admitido en ambos puertos; posición a 2.9 NM en aproximación al fondeadero; apto para Clínker a granel.",
-    },
-    {
-        imo: 9198744,
-        name: "MV ALBORAN CARRIER",
-        mmsi: "244123000",
-        ownerManager: "Alboran Bulk Carriers SA",
-        owner: "Alboran Bulk Carriers SA",
-        propietario: "Alboran Bulk Carriers SA",
-        radarLive: {
-            latitude: 36.8450,
-            longitude: 5.2500,
-            distancePolNm: 9.2,
-            speedKnots: 10.2,
-            headingDeg: 260,
-            navStatus: "En aproximación rada exterior",
-            operationalStatus: "EN APROXIMACIÓN / CEMENTERO",
-            polZone: "Bejaia",
-            verifiedImo: true,
-            lastSeen: "En Vivo · Transmisión AIS Activa",
-        },
-        neonDbMaster: {
-            vesselType: "Cement Carrier (Pneumatic/Bulk)",
-            dwt: 11200,
-            draftMeters: 7.95,
-            stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
-            flag: "Panama 🇵🇦",
-            yearBuilt: 2006,
-            loaMeters: 122.4,
-            beamMeters: 18.0,
-            ownerManager: "Alboran Bulk Carriers SA",
-            dbSource: "Neon Postgres (vessels_master)",
-            dbStatus: "Sincronizado & Verificado",
-        },
-        compatibilityScore: 94,
-        isTopMatch: false,
-        technicalJustification: "Buque especializado en cemento y clínker con DWT 11,200 MT; calado 7.95m compatible con Bejaia y Almería; ETA estimada dentro del laycan (11 Sep).",
-    },
-    {
-        imo: 9481233,
-        name: "MV ATLAS BULKER",
-        mmsi: "255806000",
-        ownerManager: "Atlas Shipping Logistics Ltd",
-        owner: "Atlas Shipping Logistics Ltd",
-        propietario: "Atlas Shipping Logistics Ltd",
-        radarLive: {
-            latitude: 36.8140,
-            longitude: 5.1850,
-            distancePolNm: 5.6,
-            speedKnots: 8.5,
-            headingDeg: 245,
-            navStatus: "En lastre hacia Bejaia",
-            operationalStatus: "EN TRÁNSITO / LASTRE",
-            polZone: "Bejaia",
-            verifiedImo: true,
-            lastSeen: "En Vivo · Transmisión AIS Activa",
-        },
-        neonDbMaster: {
-            vesselType: "General Cargo / Box-shaped",
-            dwt: 9800,
-            draftMeters: 7.40,
-            stowageFactor: "0.82 m³/MT (29.0 cuft/lt)",
-            flag: "Portugal (MAR) 🇵🇹",
-            yearBuilt: 2014,
-            loaMeters: 112.0,
-            beamMeters: 16.8,
-            ownerManager: "Atlas Shipping Logistics Ltd",
-            dbSource: "Neon Postgres (vessels_master)",
-            dbStatus: "Sincronizado & Verificado",
-        },
-        compatibilityScore: 84,
-        isTopMatch: false,
-        technicalJustification: "DWT 9,800 MT ligeramente ajustado para 10,000 MT (-2%); calado seguro de 7.40m; en navegación en lastre a 5.6 NM del puerto.",
-    },
-]);
 
 function getCountryFlagEmoji(countryOrIso) {
     if (!countryOrIso) return "🌍";
@@ -271,27 +124,27 @@ class CompatibilityModuleManager {
             loadingRate = `${loadRateNum.toLocaleString('en-US')} MT/WW`;
         }
 
-        const polPortData = typeof window !== 'undefined' && typeof window.findPortData === 'function' ? window.findPortData(polName) : null;
-        const podPortData = typeof window !== 'undefined' && typeof window.findPortData === 'function' ? window.findPortData(podName) : null;
+        const polPortData = typeof window !== 'undefined' && typeof window.findPortData === 'function' && polName ? window.findPortData(polName) : null;
+        const podPortData = typeof window !== 'undefined' && typeof window.findPortData === 'function' && podName ? window.findPortData(podName) : null;
 
-        const polCountry = polPortData?.country || polPortData?.countryCode || (polName.toLowerCase().includes("bejaia") ? "Algeria" : "");
-        const podCountry = podPortData?.country || podPortData?.countryCode || (podName.toLowerCase().includes("almer") ? "Spain" : "");
+        const polCountry = polPortData?.country || polPortData?.countryCode || "";
+        const podCountry = podPortData?.country || podPortData?.countryCode || "";
 
-        const polFlag = getCountryFlagEmoji(polCountry || polPortData?.countryCode || polName);
-        const podFlag = getCountryFlagEmoji(podCountry || podPortData?.countryCode || podName);
+        const polFlag = polName ? getCountryFlagEmoji(polCountry || polPortData?.countryCode || polName) : "🌍";
+        const podFlag = podName ? getCountryFlagEmoji(podCountry || podPortData?.countryCode || podName) : "🌍";
 
         return {
-            cargoName: cargoName || DEFAULT_ACTIVE_OPERATION.cargoName,
-            cargoVolumeMt: cargoVolumeMt || DEFAULT_ACTIVE_OPERATION.cargoVolumeMt,
+            cargoName: cargoName,
+            cargoVolumeMt: cargoVolumeMt,
             stowageFactorM3Mt: DEFAULT_ACTIVE_OPERATION.stowageFactorM3Mt,
-            polName: polName || DEFAULT_ACTIVE_OPERATION.polName,
+            polName: polName,
             polFlag,
             polCountry,
-            podName: podName || DEFAULT_ACTIVE_OPERATION.podName,
+            podName: podName,
             podFlag,
             podCountry,
-            laycan: laycan || DEFAULT_ACTIVE_OPERATION.laycan,
-            loadingRate: loadingRate || DEFAULT_ACTIVE_OPERATION.loadingRate,
+            laycan: laycan,
+            loadingRate: loadingRate,
         };
     }
 
@@ -330,22 +183,20 @@ class CompatibilityModuleManager {
 
             if (res.ok) {
                 const data = await res.json();
-                if (data && data.success && Array.isArray(data.pairedMatches) && data.pairedMatches.length > 0) {
+                if (data && data.success && Array.isArray(data.pairedMatches)) {
                     this.cache = data;
                     this.cacheTimestamp = now;
                     return data;
                 }
             }
         } catch (err) {
-            console.warn('[CompatibilityModule] Live endpoint unreachable, using validated client cache:', (err && err.message) || err);
+            console.warn('[CompatibilityModule] Live endpoint unreachable, processing client state:', (err && err.message) || err);
         }
 
-        // Check if there are live reactive radar density vessels from MAP/DENSITY module
         let dynamicRadarMatches = [];
         let hasLiveCompatibleVessels = true;
-        let alternativeDbVessel = null;
 
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && activeOp.polName && activeOp.cargoName) {
             const liveFleet = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
                 || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
                 || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
@@ -353,8 +204,6 @@ class CompatibilityModuleManager {
             if (Array.isArray(liveFleet)) {
                 const isDryBulk = DRY_BULK_CARGO_RE.test(activeOp.cargoName);
 
-                // Strict filter on origin: Valid 7-digit IMO or 9-digit MMSI, strictly merchant cargo (no fishing, no tugs)
-                // For dry bulk cargo (cement, clinker, yeso, etc.), strictly exclude Tanker, Container, Tug, Passenger
                 const commercialFleet = liveFleet.filter(ship => {
                     const imo = String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '');
                     const mmsi = String(ship.mmsi || ship.MMSI || '').replace(/\D/g, '');
@@ -435,19 +284,17 @@ class CompatibilityModuleManager {
                         };
                     });
 
-                    // Sort by compatibility score descending
                     dynamicRadarMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
                     const validTop = dynamicRadarMatches.find(m => m.compatibilityScore > 0);
                     if (validTop) validTop.isTopMatch = true;
                     hasLiveCompatibleVessels = dynamicRadarMatches.some(m => m.compatibilityScore > 0);
                 } else if (liveFleet.length > 0) {
-                    // Live radar had signals but none was compatible
                     hasLiveCompatibleVessels = false;
                 }
             }
         }
 
-        const pairedMatches = (dynamicRadarMatches.length > 0 ? dynamicRadarMatches : FALLBACK_MATCHES).map(v => ({ ...v }));
+        const pairedMatches = dynamicRadarMatches.map(v => ({ ...v }));
         pairedMatches.sort((a, b) => (Number(b.compatibilityScore) || 0) - (Number(a.compatibilityScore) || 0));
         for (const item of pairedMatches) {
             item.isTopMatch = false;
@@ -456,19 +303,17 @@ class CompatibilityModuleManager {
         if (topMatch) {
             topMatch.isTopMatch = true;
         }
-        alternativeDbVessel = pairedMatches.find(m => !m.isLiveRadar && (Number(m.compatibilityScore) || 0) > 0) || pairedMatches[0] || null;
 
-        // Fallback robust dataset
-        const fallbackData = {
+        const dynamicData = {
             success: true,
             timestamp: new Date().toISOString(),
             activeOperation: activeOp,
             hasLiveCompatibleVessels,
-            alternativeDbVessel,
+            alternativeDbVessel: null,
             radarSummary: {
-                totalSignalsPolZone: 18,
+                totalSignalsPolZone: pairedMatches.length,
                 filteredMerchantCount: pairedMatches.length,
-                excludedNonCommercialCount: 14,
+                excludedNonCommercialCount: 0,
                 strictImoFilterApplied: true,
                 exclusionCriteria: "Pesqueros, Remolcadores (Tugs), Embarcaciones de Pasaje/Recreo y No-Mercantes excluidos tajantemente.",
             },
@@ -482,9 +327,9 @@ class CompatibilityModuleManager {
             topMatch,
         };
 
-        this.cache = fallbackData;
+        this.cache = dynamicData;
         this.cacheTimestamp = now;
-        return fallbackData;
+        return dynamicData;
     }
 
     renderHeader(op) {
@@ -504,9 +349,9 @@ class CompatibilityModuleManager {
                                 <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cruce de Compatibilidad</span>
                             </div>
                             <h2 class="text-lg md:text-xl font-black text-slate-900 mt-1 tracking-tight flex items-center gap-2 flex-wrap">
-                                <span>Carga: <strong class="text-[#002060] font-black" id="compat-header-cargo">${op.cargoName}</strong></span>
+                                <span>Carga: <strong class="text-[#002060] font-black" id="compat-header-cargo">${op.cargoName || 'Sin definir (Definir en Mapa/Calculadora)'}</strong></span>
                                 <span class="text-slate-300">|</span>
-                                <span>Volumen: <strong class="text-emerald-700 font-black" id="compat-header-volume">${Number(op.cargoVolumeMt).toLocaleString()} MT</strong></span>
+                                <span>Volumen: <strong class="text-emerald-700 font-black" id="compat-header-volume">${op.cargoVolumeMt > 0 ? Number(op.cargoVolumeMt).toLocaleString() + ' MT' : '0 MT'}</strong></span>
                             </h2>
                         </div>
                     </div>
@@ -516,25 +361,25 @@ class CompatibilityModuleManager {
                         <div class="px-2.5">
                             <span class="block text-[10px] font-bold uppercase text-slate-500 tracking-wider">POL (Origen)</span>
                             <span class="text-xs font-black text-slate-800 flex items-center gap-1.5 mt-0.5" id="compat-header-pol">
-                                <span>${op.polName}</span> <span class="text-sm">${op.polFlag}</span>
+                                <span>${op.polName || 'Seleccionar POL'}</span> <span class="text-sm">${op.polFlag}</span>
                             </span>
                         </div>
                         <div class="px-2.5 border-l border-slate-200">
                             <span class="block text-[10px] font-bold uppercase text-slate-500 tracking-wider">POD (Destino)</span>
                             <span class="text-xs font-black text-slate-800 flex items-center gap-1.5 mt-0.5" id="compat-header-pod">
-                                <span>${op.podName}</span> <span class="text-sm">${op.podFlag}</span>
+                                <span>${op.podName || 'Seleccionar POD'}</span> <span class="text-sm">${op.podFlag}</span>
                             </span>
                         </div>
                         <div class="px-2.5 border-l border-slate-200">
                             <span class="block text-[10px] font-bold uppercase text-slate-500 tracking-wider">Laycan</span>
                             <span class="text-xs font-black text-amber-800 flex items-center gap-1.5 mt-0.5" id="compat-header-laycan">
-                                <i class="fa-regular fa-calendar text-amber-600 text-[11px]"></i> ${op.laycan}
+                                <i class="fa-regular fa-calendar text-amber-600 text-[11px]"></i> ${op.laycan || 'Sin definir'}
                             </span>
                         </div>
                         <div class="px-2.5 border-l border-slate-200">
                             <span class="block text-[10px] font-bold uppercase text-slate-500 tracking-wider">Ritmo Carga</span>
                             <span class="text-xs font-black text-indigo-900 flex items-center gap-1.5 mt-0.5" id="compat-header-loading-rate">
-                                <i class="fa-solid fa-gauge-high text-indigo-600 text-[11px]"></i> ${op.loadingRate}
+                                <i class="fa-solid fa-gauge-high text-indigo-600 text-[11px]"></i> ${op.loadingRate || 'Sin definir'}
                             </span>
                         </div>
                     </div>
@@ -544,126 +389,37 @@ class CompatibilityModuleManager {
     }
 
     renderLeftRadarBlock(matches, summary, selectedImo, hasAvailability = true, alternativeDbVessel = null) {
-        const polZone = this.currentOperation?.polName || "Bejaia";
+        const polZone = this.currentOperation?.polName || "Zona no definida";
         const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
 
-        // Scenario Sin Disponibilidad: Contingency Fallback Card & Blocked Radar/Map View
         if (!hasAvailability || compatibleMatches.length === 0) {
-            const rec = alternativeDbVessel || matches[0] || null;
-            if (!rec) return '';
-            const recOwner = rec.neonDbMaster?.ownerManager || rec.ownerManager || rec.owner || rec.propietario || "—";
-            const recType = rec.neonDbMaster?.vesselType || rec.tipo_buque || rec.vesselType || "—";
-            const recScore = rec.compatibilityScore ?? 0;
-            const recDwt = rec.neonDbMaster?.dwt || rec.dwt ? Number(rec.neonDbMaster?.dwt || rec.dwt).toLocaleString() : "—";
-            const recDraft = rec.neonDbMaster?.draftMeters || rec.draft ? Number(rec.neonDbMaster?.draftMeters || rec.draft).toFixed(2) : "—";
-            const recFlag = rec.neonDbMaster?.flag || rec.flag || "—";
-
             return `
-            <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Vista de Contingencia) -->
+            <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Sin Datos) -->
             <div class="compatibility-panel" id="panel-radar-densidad">
                 <div class="compatibility-panel-header">
                     <div class="flex items-center gap-2.5">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
                         <div>
                             <h3 class="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2">
                                 <span>Radar en Vivo · Densidad POL</span>
                             </h3>
-                            <p class="text-[11px] text-slate-500 mt-0.5">Zona ${polZone} (Filtro Estricto: solo buques mercantes con IMO)</p>
+                            <p class="text-[11px] text-slate-500 mt-0.5">${polZone ? `Zona ${polZone}` : 'Define una ruta en el mapa o calculadora'}</p>
                         </div>
                     </div>
-                    <span class="compatibility-badge-pill" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> 0 En Vivo Compatibles
+                    <span class="compatibility-badge-pill" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
+                        <i class="fa-solid fa-info-circle"></i> Sin datos activos
                     </span>
                 </div>
 
-                <div class="radar-blocked-view-container m-4">
-                    <!-- Vista de Mapa Bloqueado -->
-                    <div class="radar-map-blocked-overlay">
-                        <div class="radar-blocked-badge">
-                            <i class="fa-solid fa-lock"></i>
-                            <span>Vista de Mapa Radar Bloqueada · Sin Buques Disponibles en Zona</span>
-                        </div>
-                    </div>
-
-                    <!-- Componente de Contingencia (Fallback Card) -->
-                    <div class="compatibility-fallback-card" id="compatibility-contingency-card">
-                        <div class="fallback-card-header">
-                            <div class="fallback-card-icon">
-                                <i class="fa-solid fa-ship"></i>
-                            </div>
-                            <div>
-                                <strong class="text-xs font-black uppercase tracking-wider text-amber-950 block">Recomendación Alternativa de Base de Datos</strong>
-                                <span class="text-[11px] text-amber-800">Cruce técnico síncrono con base de datos maestra Neon DB</span>
-                            </div>
-                        </div>
-
-                        <div class="fallback-card-message">
-                            No hay actualmente barcos disponibles en el radar. Sin embargo, te recomendamos este barco alternativo que tenemos registrado en la base de datos. ¿Quieres contactar con su propietario/armador?
-                        </div>
-
-                        <div class="fallback-card-vessel border-t border-slate-100">
-                            <div class="flex items-start justify-between gap-3 mb-2">
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <h4 class="font-black text-sm text-slate-900">${rec.name}</h4>
-                                        <span class="px-2 py-0.5 text-[9px] font-black uppercase bg-blue-100 text-blue-800 border border-blue-300 rounded-md">
-                                            Recomendación Neon DB
-                                        </span>
-                                    </div>
-                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                                        <span class="font-mono text-blue-700 font-bold">IMO ${rec.imo}</span>
-                                        <span>•</span>
-                                        <span>MMSI ${rec.mmsi}</span>
-                                        <span>•</span>
-                                        <span class="font-semibold text-slate-700">${recFlag}</span>
-                                    </div>
-                                </div>
-                                <div class="text-right">
-                                    <span class="compat-tag-badge alt-candidate">
-                                        ${recScore}% - ${rec.name} - ${recType}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px]">
-                                <div>
-                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Tipo / Clase</span>
-                                    <span class="font-bold text-slate-800 truncate block">${recType}</span>
-                                </div>
-                                <div>
-                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Capacidad DWT</span>
-                                    <span class="font-mono font-bold text-emerald-700">${recDwt} MT</span>
-                                </div>
-                                <div>
-                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Calado Máx</span>
-                                    <span class="font-mono font-bold text-blue-700">${recDraft} m</span>
-                                </div>
-                                <div>
-                                    <span class="text-[9px] uppercase font-bold text-slate-500 block">Armador / Operador</span>
-                                    <span class="font-bold text-slate-800 truncate block" title="${recOwner}">${recOwner}</span>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
-                                <span class="text-xs text-slate-600 font-medium">
-                                    <i class="fa-solid fa-circle-info text-sky-600 mr-1"></i> Armador verificado y disponible para consulta directa.
-                                </span>
-                                <button type="button" 
-                                        class="btn-fallback-contact"
-                                        onclick="window.CompatibilityModule.handleContactOwner(${rec.imo})"
-                                        aria-label="Contactar con Armador de ${rec.name}">
-                                    <i class="fa-solid fa-envelope-open-text"></i>
-                                    <span>Contactar con Propietario / Armador</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="p-8 text-center text-slate-500">
+                    <i class="fa-solid fa-radar text-3xl mb-2 text-slate-300"></i>
+                    <p class="text-xs font-bold">El radar está a la espera de una ruta y carga activas.</p>
+                    <p class="text-[11px] text-slate-400 mt-1">Introduce los datos de la operación en el mapa o calculadora para comenzar el escaneo en tiempo real.</p>
                 </div>
             </div>
             `;
         }
 
-        // Scenario Con Disponibilidad: Render live matching vessels with dynamic injected labels
         return `
             <!-- Bloque Izquierdo (Radar en Vivo - Densidad) -->
             <div class="compatibility-panel" id="panel-radar-densidad">
@@ -717,7 +473,6 @@ class CompatibilityModuleManager {
                                 </span>
                             </div>
 
-                            <!-- Etiqueta Visible Dinámica Requerida (Score% - Nombre - Tipo/Clase) -->
                             <div class="compatibility-dynamic-label">
                                 <span class="compat-tag-badge" data-dynamic-label="${dynamicTagLabel}">
                                     ${dynamicTagLabel}
@@ -746,6 +501,35 @@ class CompatibilityModuleManager {
     }
 
     renderRightMasterBlock(matches, neonSummary, selectedImo) {
+        const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
+
+        if (compatibleMatches.length === 0) {
+            return `
+            <!-- Bloque Derecho (Base de Datos Maestra - Sin Datos) -->
+            <div class="compatibility-panel" id="panel-neon-db">
+                <div class="compatibility-panel-header">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs border border-slate-200">
+                            <i class="fa-solid fa-database"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2">
+                                <span>Base de Datos Maestra · Neon DB</span>
+                            </h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Cruce técnico sobre tabla <code class="text-slate-700 font-mono font-bold">vessels_master</code></p>
+                        </div>
+                    </div>
+                    <span class="compatibility-badge-pill" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
+                        <i class="fa-solid fa-circle-notch"></i> Pendiente de Datos
+                    </span>
+                </div>
+                <div class="p-8 text-center text-slate-500">
+                    <p class="text-xs font-bold">Esperando parámetros de operación para consultar registros técnicos.</p>
+                </div>
+            </div>
+            `;
+        }
+
         return `
             <!-- Bloque Derecho (Base de Datos Maestra - Neon DB) -->
             <div class="compatibility-panel" id="panel-neon-db">
@@ -774,7 +558,7 @@ class CompatibilityModuleManager {
                 </div>
 
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
-                    ${matches.map((item) => {
+                    ${compatibleMatches.map((item) => {
                         const isSelected = item.imo === selectedImo;
                         return `
                         <div class="compatibility-vessel-card ${item.isTopMatch ? 'top-match-card' : ''} ${isSelected ? 'is-selected' : ''}" 
@@ -825,7 +609,13 @@ class CompatibilityModuleManager {
     }
 
     renderBottomTopMatchHero(candidate) {
-        if (!candidate) return '';
+        if (!candidate) {
+            return `
+            <section class="compatibility-top-match-hero mt-6 p-6 text-center text-slate-500 font-bold" id="section-top-match">
+                <p>No hay ningún buque seleccionado o disponible. Introduce los datos de la operación para iniciar el análisis de compatibilidad.</p>
+            </section>
+            `;
+        }
         const isLocked = this.lockedVesselId === candidate.imo;
         const op = this.currentOperation || DEFAULT_ACTIVE_OPERATION;
 
@@ -890,7 +680,7 @@ class CompatibilityModuleManager {
                             <div class="compat-justification-icon"><i class="fa-solid fa-check"></i></div>
                             <div>
                                 <strong class="text-slate-900 block text-xs">DWT & Calado Aprobados</strong>
-                                <span class="text-slate-600 text-[11px]">DWT ${Number(candidate.neonDbMaster.dwt).toLocaleString()} MT y calado ${Number(candidate.neonDbMaster.draftMeters).toFixed(2)}m admitido en ${op.polName} y ${op.podName}.</span>
+                                <span class="text-slate-600 text-[11px]">DWT ${Number(candidate.neonDbMaster.dwt).toLocaleString()} MT y calado ${Number(candidate.neonDbMaster.draftMeters).toFixed(2)}m admitido en ${op.polName || 'POL'} y ${op.podName || 'POD'}.</span>
                             </div>
                         </div>
                     </div>
@@ -899,7 +689,7 @@ class CompatibilityModuleManager {
                             <div class="compat-justification-icon"><i class="fa-solid fa-check"></i></div>
                             <div>
                                 <strong class="text-slate-900 block text-xs">Posición & Laycan Garantizado</strong>
-                                <span class="text-slate-600 text-[11px]">En rada/aproximación a ${op.polName} (${candidate.radarLive.distancePolNm} NM) listo para ventana ${op.laycan}.</span>
+                                <span class="text-slate-600 text-[11px]">En rada/aproximación a ${op.polName || 'POL'} (${candidate.radarLive.distancePolNm} NM) listo para ventana ${op.laycan || 'Laycan'}.</span>
                             </div>
                         </div>
                     </div>
@@ -908,7 +698,7 @@ class CompatibilityModuleManager {
                             <div class="compat-justification-icon"><i class="fa-solid fa-check"></i></div>
                             <div>
                                 <strong class="text-slate-900 block text-xs">Factor de Estiba & Ritmo</strong>
-                                <span class="text-slate-600 text-[11px]">${candidate.neonDbMaster.stowageFactor} óptimo para ${op.cargoName} con ritmo ${op.loadingRate}.</span>
+                                <span class="text-slate-600 text-[11px]">${candidate.neonDbMaster.stowageFactor} óptimo para ${op.cargoName || 'carga'} con ritmo ${op.loadingRate || 'Ritmo'}.</span>
                             </div>
                         </div>
                     </div>
@@ -921,7 +711,7 @@ class CompatibilityModuleManager {
         if (!this.container) return;
         const op = data?.activeOperation || this.resolveActiveOperation();
         this.currentOperation = op;
-        const matches = data?.pairedMatches || FALLBACK_MATCHES;
+        const matches = data?.pairedMatches || [];
         this.currentMatches = matches;
         this.currentRadarSummary = data?.radarSummary;
         this.currentNeonSummary = data?.neonDbSummary;
@@ -930,10 +720,10 @@ class CompatibilityModuleManager {
 
         if (!this.selectedVesselImo || !matches.some(m => m.imo === this.selectedVesselImo)) {
             const topMatch = data?.topMatch || matches[0];
-            this.selectedVesselImo = topMatch ? topMatch.imo : matches[0]?.imo;
+            this.selectedVesselImo = topMatch ? topMatch.imo : null;
         }
 
-        const activeCandidate = matches.find(m => m.imo === this.selectedVesselImo) || matches[0];
+        const activeCandidate = matches.find(m => m.imo === this.selectedVesselImo) || matches[0] || null;
 
         this.container.innerHTML = `
             <div class="compatibility-shell">
@@ -1001,28 +791,28 @@ class CompatibilityModuleManager {
 
         // Update header fields dynamically if present
         const cargoEl = document.getElementById('compat-header-cargo');
-        if (cargoEl) cargoEl.textContent = nextOp.cargoName;
+        if (cargoEl) cargoEl.textContent = nextOp.cargoName || 'Sin definir (Definir en Mapa/Calculadora)';
 
         const volumeEl = document.getElementById('compat-header-volume');
-        if (volumeEl) volumeEl.textContent = `${Number(nextOp.cargoVolumeMt).toLocaleString()} MT`;
+        if (volumeEl) volumeEl.textContent = nextOp.cargoVolumeMt > 0 ? `${Number(nextOp.cargoVolumeMt).toLocaleString()} MT` : '0 MT';
 
         const polEl = document.getElementById('compat-header-pol');
-        if (polEl) polEl.innerHTML = `<span>${nextOp.polName}</span> <span class="text-sm">${nextOp.polFlag}</span>`;
+        if (polEl) polEl.innerHTML = `<span>${nextOp.polName || 'Seleccionar POL'}</span> <span class="text-sm">${nextOp.polFlag}</span>`;
 
         const podEl = document.getElementById('compat-header-pod');
-        if (podEl) podEl.innerHTML = `<span>${nextOp.podName}</span> <span class="text-sm">${nextOp.podFlag}</span>`;
+        if (podEl) podEl.innerHTML = `<span>${nextOp.podName || 'Seleccionar POD'}</span> <span class="text-sm">${nextOp.podFlag}</span>`;
 
         const laycanEl = document.getElementById('compat-header-laycan');
-        if (laycanEl) laycanEl.innerHTML = `<i class="fa-regular fa-calendar text-amber-600 text-[11px]"></i> ${nextOp.laycan}`;
+        if (laycanEl) laycanEl.innerHTML = `<i class="fa-regular fa-calendar text-amber-600 text-[11px]"></i> ${nextOp.laycan || 'Sin definir'}`;
 
         const rateEl = document.getElementById('compat-header-loading-rate');
-        if (rateEl) rateEl.innerHTML = `<i class="fa-solid fa-gauge-high text-indigo-600 text-[11px]"></i> ${nextOp.loadingRate}`;
+        if (rateEl) rateEl.innerHTML = `<i class="fa-solid fa-gauge-high text-indigo-600 text-[11px]"></i> ${nextOp.loadingRate || 'Sin definir'}`;
     }
 
     handleSelectVessel(imo) {
         this.selectedVesselImo = imo;
-        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
-        const candidate = matches.find(v => v.imo === imo) || matches[0];
+        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || []);
+        const candidate = matches.find(v => v.imo === imo) || matches[0] || null;
 
         // Update selection styling in candidate cards
         if (typeof document !== 'undefined') {
@@ -1042,7 +832,7 @@ class CompatibilityModuleManager {
             }
         }
 
-        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+        if (candidate && typeof window !== 'undefined' && typeof window.showToast === 'function') {
             window.showToast(`⚓ Buque ${candidate.name} (IMO ${candidate.imo}) seleccionado como candidato activo.`);
         }
     }
@@ -1058,11 +848,11 @@ class CompatibilityModuleManager {
             `;
         }
 
-        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
+        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || []);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
 
         // Hydrate active voyage / stores if available
-        if (typeof window !== 'undefined') {
+        if (candidate && typeof window !== 'undefined') {
             if (window.SeaCharterStore && typeof window.SeaCharterStore.set === 'function') {
                 window.SeaCharterStore.set({
                     lockedVesselImo: candidate.imo,
@@ -1072,13 +862,13 @@ class CompatibilityModuleManager {
                 });
             }
             if (typeof window.showToast === 'function') {
-                window.showToast(`🔒 Fletamento bloqueado con éxito para ${candidate.name} (IMO ${candidate.imo}) - ${candidate.compatibilityScore || 98}% Compatibilidad.`);
+                window.showToast(`🔒 Fletamento bloqueado con éxito para ${candidate.name} (IMO ${candidate.imo}) - ${candidate.compatibilityScore || 0}% Compatibilidad.`);
             }
         }
     }
 
     handleContactOwner(imo) {
-        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
+        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || []);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
         if (!candidate) return;
         const owner = candidate.neonDbMaster?.ownerManager 
@@ -1103,7 +893,7 @@ class CompatibilityModuleManager {
     }
 
     handleTriggerDueDiligence(imo) {
-        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
+        const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || []);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
         if (!candidate) return;
 
