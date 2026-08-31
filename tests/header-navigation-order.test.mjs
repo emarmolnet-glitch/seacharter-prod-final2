@@ -25,7 +25,6 @@ test('header modules use the required visual order and stable text identifiers',
             { id: 'compatibilidad', label: 'Compatibilidad' },
             { id: 'tracking', label: 'Tracking', presentation: 'module-overlay' },
             { id: 'ais', label: 'Densidad' },
-            { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
             { id: 'auditor', label: 'Auditoría' },
         ];`);
