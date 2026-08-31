@@ -27,6 +27,15 @@ const DEFAULT_ACTIVE_OPERATION = Object.freeze({
 const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|remolcador|remolque|pusher|passenger|cruise|ferry|pleasure|yacht|sailing|dredger|vts|mark|point|danger|buoy|boya|military|sar|rescue|pilot|workboat|other|unknown)\b/i;
 const STRICT_MERCHANT_CARGO_RE = /\b(bulk|bulker|cargo|carguero|coaster|cabotaje|container|tanker|petrolero|quimiquero|heavy load|heavy lift|break bulk|breakbulk|ro-ro|roro|cement|cementero|clinker|mpp|mpv|mmpp|freighter|merchant|general cargo|mini bulker)\b/i;
 
+// Strict dry bulk cargo taxonomy patterns (cement, clinker, yeso/gypsum, cal/lime, aggregates/aridos, minerals, dry bulk)
+const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|lime|aridos?|aggregates?|mineral|granel\s*seco|dry\s*bulk|grain|grano|cereales?|fertilizante|abono|bauxita|carbon|carb[oó]n|slags?|cenizas?)\b/i;
+
+// Mandatory excluded vessel types for dry bulk cargoes (Tanker, Container, Tug, Passenger)
+const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|petrolero|quimiquero|tanquero|lng|lpg|container|containership|feeder|boxship|portacontenedores|tug|tugboat|remolcador|remolque|pusher|empujador|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure|yacht|yate|sailing|velero|fishing|pesquero|trawler)\b/i;
+
+// Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers)
+const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
+
 const FALLBACK_MATCHES = Object.freeze([
     {
         imo: 9218765,
@@ -323,13 +332,23 @@ class CompatibilityModuleManager {
                 || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
 
             if (Array.isArray(liveFleet) && liveFleet.length > 0) {
+                const isDryBulk = DRY_BULK_CARGO_RE.test(activeOp.cargoName);
+
                 // Strict filter on origin: Valid 7-digit IMO, strictly merchant cargo (no fishing, no tugs)
+                // For dry bulk cargo (cement, clinker, yeso, etc.), strictly exclude Tanker, Container, Tug, Passenger
                 const commercialFleet = liveFleet.filter(ship => {
                     const imo = String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '');
                     const type = String(ship.vessel_type || ship.vesselType || ship.type || '').toLowerCase();
                     const isValidImo = imo.length === 7 && Number(imo) > 0;
                     const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(type);
                     const isMerchant = STRICT_MERCHANT_CARGO_RE.test(type) || (Number(ship.dwt) >= 1000);
+                    
+                    if (isDryBulk) {
+                        const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(type);
+                        const isCompatible = COMPATIBLE_DRY_BULK_TYPES_RE.test(type);
+                        if (isMandatoryExcluded || !isCompatible) return false;
+                    }
+
                     return isValidImo && isNotNoise && isMerchant;
                 });
 
@@ -343,6 +362,9 @@ class CompatibilityModuleManager {
                         const vesselType = ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
                         const distNm = Number(ship.distancePolNm || ship.distance_nm || (0.8 + idx * 1.5)).toFixed(1);
+
+                        const isVesselTypeExcluded = isDryBulk && (MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType) || !COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType));
+                        const score = isVesselTypeExcluded ? 0 : (idx === 0 ? 98 : Math.max(75, 96 - idx * 4));
 
                         return {
                             imo,
@@ -372,16 +394,24 @@ class CompatibilityModuleManager {
                                 dbSource: "Neon Postgres (vessels_master)",
                                 dbStatus: "Sincronizado & Verificado",
                             },
-                            compatibilityScore: idx === 0 ? 98 : Math.max(75, 96 - idx * 4),
-                            isTopMatch: idx === 0,
-                            technicalJustification: `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${activeOp.cargoVolumeMt.toLocaleString()} MT; calado ${draft.toFixed(2)}m compatible con ${activeOp.polName} y ${activeOp.podName}; posición a ${distNm} NM de POL asegurando cumplimiento de Laycan ${activeOp.laycan}.`,
+                            compatibilityScore: score,
+                            isTopMatch: false,
+                            technicalJustification: isVesselTypeExcluded
+                                ? `Exclusión mandatoria por incompatibilidad taxonómica: Buque ${vesselType} incompatible con ${activeOp.cargoName}. Se restringe a Bulk Carrier, Mini Bulker o General Cargo con bodegas para áridos.`
+                                : `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${activeOp.cargoVolumeMt.toLocaleString()} MT; calado ${draft.toFixed(2)}m compatible con ${activeOp.polName} y ${activeOp.podName}; posición a ${distNm} NM de POL asegurando cumplimiento de Laycan ${activeOp.laycan}.`,
                         };
                     });
+
+                    // Sort by compatibility score descending
+                    dynamicRadarMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+                    const validTop = dynamicRadarMatches.find(m => m.compatibilityScore > 0);
+                    if (validTop) validTop.isTopMatch = true;
                 }
             }
         }
 
         const pairedMatches = dynamicRadarMatches.length > 0 ? dynamicRadarMatches : FALLBACK_MATCHES;
+        const topMatch = pairedMatches.find(m => m.isTopMatch && m.compatibilityScore > 0) || pairedMatches[0];
 
         // Fallback robust dataset
         const fallbackData = {
@@ -402,7 +432,7 @@ class CompatibilityModuleManager {
                 syncedAt: new Date().toISOString(),
             },
             pairedMatches,
-            topMatch: pairedMatches[0],
+            topMatch,
         };
 
         this.cache = fallbackData;
