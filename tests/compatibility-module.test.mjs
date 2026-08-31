@@ -68,9 +68,9 @@ test('Bloque Derecho implements Neon DB vessels_master technical spec cross-refe
   assert.match(netlifyFn, /draft_meters|dwt|vessel_type|stowageFactor/, 'Backend function must select technical specs');
 });
 
-test('Bloque Inferior highlights optimal candidate with 98% score and quick action buttons', () => {
-  assert.match(moduleJs, /MV ATLANTIC TRADER/, 'Must highlight MV ATLANTIC TRADER');
-  assert.match(moduleJs, /98%|98/, 'Must display 98% compatibility percentage');
+test('Bloque Inferior highlights optimal candidate with dynamic score and quick action buttons', () => {
+  assert.match(moduleJs, /renderBottomTopMatchHero/, 'Must implement hero renderer for optimal candidate');
+  assert.match(moduleJs, /hero-compatibility-score|compatibility-score-number/, 'Must display dynamic compatibility score');
   assert.match(moduleJs, /Justificación Técnica|technicalJustification/i, 'Must include technical justification');
   assert.match(moduleJs, /id="btn-bloquear-fletamento"/, 'Must include [ Bloquear Fletamento ] button');
   assert.match(moduleJs, /id="btn-activar-due-diligence"/, 'Must include [ Activar Due Diligence (Auditoría) ] button');

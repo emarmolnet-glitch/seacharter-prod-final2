@@ -70,7 +70,7 @@ const FALLBACK_MATCHES = Object.freeze([
             dbStatus: "Sincronizado & Verificado",
         },
         compatibilityScore: 98,
-        isTopMatch: true,
+        isTopMatch: false,
         technicalJustification: "DWT 10,850 MT óptimo para lote de 10,000 MT con margen de seguridad del 8.5%; calado a máxima carga 7.80m plenamente compatible con calado admisible en Bejaia (9.50m) y Almería (11.00m); factor de estiba de 0.85 m³/MT idóneo para Clínker a granel en bodegas reforzadas; posición inmediata en rada de Bejaia (0.8 NM) garantizando presentación en ventana Laycan 10/15 Sep con ritmo de carga contratado de 3,000 MT/WW.",
     },
     {
@@ -447,9 +447,16 @@ class CompatibilityModuleManager {
             }
         }
 
-        const pairedMatches = dynamicRadarMatches.length > 0 ? dynamicRadarMatches : FALLBACK_MATCHES;
-        const topMatch = pairedMatches.find(m => m.isTopMatch && m.compatibilityScore > 0) || pairedMatches[0];
-        alternativeDbVessel = FALLBACK_MATCHES[0];
+        const pairedMatches = (dynamicRadarMatches.length > 0 ? dynamicRadarMatches : FALLBACK_MATCHES).map(v => ({ ...v }));
+        pairedMatches.sort((a, b) => (Number(b.compatibilityScore) || 0) - (Number(a.compatibilityScore) || 0));
+        for (const item of pairedMatches) {
+            item.isTopMatch = false;
+        }
+        const topMatch = pairedMatches.find(m => (Number(m.compatibilityScore) || 0) > 0) || pairedMatches[0] || null;
+        if (topMatch) {
+            topMatch.isTopMatch = true;
+        }
+        alternativeDbVessel = pairedMatches.find(m => !m.isLiveRadar && (Number(m.compatibilityScore) || 0) > 0) || pairedMatches[0] || null;
 
         // Fallback robust dataset
         const fallbackData = {
@@ -542,13 +549,14 @@ class CompatibilityModuleManager {
 
         // Scenario Sin Disponibilidad: Contingency Fallback Card & Blocked Radar/Map View
         if (!hasAvailability || compatibleMatches.length === 0) {
-            const rec = alternativeDbVessel || matches[0] || FALLBACK_MATCHES[0];
-            const recOwner = rec.neonDbMaster?.ownerManager || rec.ownerManager || rec.owner || rec.propietario || "Rodahmar Shipping SL / Maritime Carrier";
-            const recType = rec.neonDbMaster?.vesselType || rec.tipo_buque || rec.vesselType || "General Cargo / Mini-Bulker";
-            const recScore = rec.compatibilityScore || 98;
-            const recDwt = Number(rec.neonDbMaster?.dwt || rec.dwt || 10850).toLocaleString();
-            const recDraft = Number(rec.neonDbMaster?.draftMeters || rec.draft || 7.80).toFixed(2);
-            const recFlag = rec.neonDbMaster?.flag || rec.flag || "Malta 🇲🇹";
+            const rec = alternativeDbVessel || matches[0] || null;
+            if (!rec) return '';
+            const recOwner = rec.neonDbMaster?.ownerManager || rec.ownerManager || rec.owner || rec.propietario || "—";
+            const recType = rec.neonDbMaster?.vesselType || rec.tipo_buque || rec.vesselType || "—";
+            const recScore = rec.compatibilityScore ?? 0;
+            const recDwt = rec.neonDbMaster?.dwt || rec.dwt ? Number(rec.neonDbMaster?.dwt || rec.dwt).toLocaleString() : "—";
+            const recDraft = rec.neonDbMaster?.draftMeters || rec.draft ? Number(rec.neonDbMaster?.draftMeters || rec.draft).toFixed(2) : "—";
+            const recFlag = rec.neonDbMaster?.flag || rec.flag || "—";
 
             return `
             <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Vista de Contingencia) -->
@@ -1072,11 +1080,12 @@ class CompatibilityModuleManager {
     handleContactOwner(imo) {
         const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
+        if (!candidate) return;
         const owner = candidate.neonDbMaster?.ownerManager 
             || candidate.ownerManager 
             || candidate.owner 
             || candidate.propietario 
-            || 'Rodahmar Shipping SL / Maritime Carrier';
+            || '—';
         
         if (typeof window !== 'undefined') {
             if (typeof window.showToast === 'function') {
@@ -1087,7 +1096,7 @@ class CompatibilityModuleManager {
                     action: 'CONTACT_OWNER',
                     vessel: candidate,
                     owner,
-                    initialMessage: `Hola, me gustaría solicitar flete y disponibilidad para el buque ${candidate.name} (IMO: ${candidate.imo}, DWT: ${candidate.neonDbMaster?.dwt || candidate.dwt} MT) perteneciente a ${owner}.`
+                    initialMessage: `Hola, me gustaría solicitar flete y disponibilidad para el buque ${candidate.name} (IMO: ${candidate.imo}, DWT: ${candidate.neonDbMaster?.dwt || candidate.dwt || 'N/A'} MT) perteneciente a ${owner}.`
                 });
             }
         }
@@ -1096,22 +1105,23 @@ class CompatibilityModuleManager {
     handleTriggerDueDiligence(imo) {
         const matches = this.currentMatches.length > 0 ? this.currentMatches : (this.cache?.pairedMatches || FALLBACK_MATCHES);
         const candidate = matches.find(v => v.imo === imo) || matches[0];
+        if (!candidate) return;
 
         const owner = candidate.neonDbMaster?.ownerManager 
             || candidate.ownerManager 
             || candidate.owner 
             || candidate.propietario 
             || candidate.dispOwner 
-            || 'Rodahmar Shipping SL / Maritime Carrier';
-        const dwt = Number(candidate.neonDbMaster?.dwt || candidate.dwt || 10850);
-        const draft = Number(candidate.neonDbMaster?.draftMeters || candidate.draft || 7.80);
-        const vesselType = candidate.neonDbMaster?.vesselType || candidate.vesselType || 'General Cargo / Mini-Bulker';
-        const flag = candidate.neonDbMaster?.flag || candidate.flag || 'Malta 🇲🇹';
-        const yearBuilt = candidate.neonDbMaster?.yearBuilt || candidate.yearBuilt || 2008;
-        const loaMeters = candidate.neonDbMaster?.loaMeters || candidate.loaMeters || 118.5;
-        const beamMeters = candidate.neonDbMaster?.beamMeters || candidate.beamMeters || 17.6;
-        const stowageFactor = candidate.neonDbMaster?.stowageFactor || '0.85 m³/MT (30.0 cuft/lt)';
-        const compatibilityScore = candidate.compatibilityScore || 98;
+            || '—';
+        const dwt = Number(candidate.neonDbMaster?.dwt || candidate.dwt || 0);
+        const draft = Number(candidate.neonDbMaster?.draftMeters || candidate.draft || 0);
+        const vesselType = candidate.neonDbMaster?.vesselType || candidate.vesselType || '—';
+        const flag = candidate.neonDbMaster?.flag || candidate.flag || '—';
+        const yearBuilt = candidate.neonDbMaster?.yearBuilt || candidate.yearBuilt || '';
+        const loaMeters = candidate.neonDbMaster?.loaMeters || candidate.loaMeters || '';
+        const beamMeters = candidate.neonDbMaster?.beamMeters || candidate.beamMeters || '';
+        const stowageFactor = candidate.neonDbMaster?.stowageFactor || candidate.stowageFactor || '';
+        const compatibilityScore = candidate.compatibilityScore || 0;
         const technicalJustification = candidate.technicalJustification || '';
 
         const candidateVessel = {
