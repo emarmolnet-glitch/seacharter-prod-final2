@@ -129,10 +129,12 @@
     padding: 1.1rem;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
+    cursor: pointer;
+    user-select: none;
 }
 
 .compatibility-vessel-card:hover {
-    border-color: #93c5fd;
+    border-color: #3b82f6;
     background: #ffffff;
     transform: translateY(-2px);
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
@@ -142,6 +144,29 @@
     border: 1.5px solid #6ee7b7;
     background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
     box-shadow: 0 6px 20px -4px rgba(16, 185, 129, 0.12);
+}
+
+.compatibility-vessel-card.is-selected {
+    border: 2px solid #2563eb !important;
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 8px 24px -4px rgba(37, 99, 235, 0.2) !important;
+    transform: translateY(-1px);
+}
+
+.compatibility-vessel-card.is-selected::after {
+    content: 'Seleccionado';
+    position: absolute;
+    top: -9px;
+    right: 14px;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 0.62rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
 }
 
 /* Grid de Especificaciones Técnicas */
