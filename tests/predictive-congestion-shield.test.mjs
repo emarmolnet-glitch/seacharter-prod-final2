@@ -140,6 +140,94 @@ test('Predictive Congestion Shield DOM insertion and operational rendering execu
   assert.doesNotMatch(renderedCard.innerHTML, /Ajustado/);
 });
 
+test('Predictive Congestion Shield queries POL and POD independently and calculates distinct metrics', async () => {
+  const queriedUrls = [];
+  const mockFetch = async (url) => {
+    queriedUrls.push(url);
+    if (url.includes('lat=-23.96') && url.includes('lon=-46.33')) {
+      // Return 8 vessels for POL (Congestionado)
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: Array.from({ length: 8 }, (_, i) => ({
+            imo: `900000${i}`,
+            vesselName: `POL Vessel ${i}`,
+            lat: -23.96 + (i * 0.01),
+            lon: -46.33 + (i * 0.01)
+          }))
+        })
+      };
+    }
+    if (url.includes('lat=51.92') && url.includes('lon=4.47')) {
+      // Return 2 vessels for POD (Fluido)
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: [
+            { imo: '9100001', vesselName: 'POD Vessel 1', lat: 51.92, lon: 4.47, dwt: 50000 },
+            { imo: '9100002', vesselName: 'POD Vessel 2', lat: 51.93, lon: 4.48, dwt: 35000 }
+          ]
+        })
+      };
+    }
+    return { ok: false, json: async () => ({ success: false }) };
+  };
+
+  const mockWindow = {
+    State: { pol: 'Santos', pod: 'Rotterdam', polCoordinates: [-23.96, -46.33], podCoordinates: [51.92, 4.47] },
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      createElement: () => ({ setAttribute: () => {}, classList: { contains: () => false }, style: {} }),
+      body: { appendChild: () => {} }
+    }
+  };
+
+  const fnCode = `
+    const window = mockWindow;
+    const document = mockWindow.document;
+    const fetch = mockFetch;
+    ${indexSource.slice(indexSource.indexOf('async function fetchPortCongestionShield'), indexSource.indexOf('async function runOnDemandMapRouteWorkflow'))}
+    return { fetchPortCongestionShield, renderPortCongestionShield };
+  `;
+
+  const factory = new Function('mockWindow', 'mockFetch', fnCode);
+  const { fetchPortCongestionShield, renderPortCongestionShield } = factory(mockWindow, mockFetch);
+
+  const result = await fetchPortCongestionShield({
+    portUnlocode: 'Rotterdam',
+    vesselImo: 9123456,
+    demurrageRateUsd: 20000,
+    distanceNm: 5400,
+    nominalSpeedKnots: 12.0
+  });
+
+  // Verify independent URL calls with respective coordinates
+  assert.equal(queriedUrls.length, 2);
+  assert.ok(queriedUrls.some(url => url.includes('lat=-23.96') && url.includes('lon=-46.33') && url.includes('radius=10')));
+  assert.ok(queriedUrls.some(url => url.includes('lat=51.92') && url.includes('lon=4.47') && url.includes('radius=10')));
+
+  // Verify distinct vessel counts and metrics
+  assert.equal(result.pol.activeVesselsInZone, 8);
+  assert.equal(result.pol.status, 'Congestionado');
+  assert.equal(result.pol.operationalStatus, 'Demora Significativa');
+  assert.equal(result.pol.delayDays, 1.6);
+  assert.equal(result.pol.demurrageRiskUsd, 10000);
+
+  assert.equal(result.pod.activeVesselsInZone, 2);
+  assert.equal(result.pod.status, 'Fluido');
+  assert.equal(result.pod.operationalStatus, 'Operativo');
+  assert.equal(result.pod.delayDays, 0.6);
+  assert.equal(result.pod.demurrageRiskUsd, 0);
+
+  // Verify rendered output has separated traffic counts
+  const rendered = renderPortCongestionShield(result);
+  assert.match(rendered.innerHTML, /Tráfico en zona: <strong class="text-slate-900 font-semibold">8 buques<\/strong>/);
+  assert.match(rendered.innerHTML, /Tráfico en zona: <strong class="text-slate-900 font-semibold">2 buques<\/strong>/);
+});
+
 test('Map integrity and routing logic are strictly preserved', () => {
   assert.match(indexSource, /calculateVoyageRouteService\(\{ portBallast, pol, pod, geocode: true \}\)/);
   assert.match(indexSource, /stopRouteGlobeRotation/);
