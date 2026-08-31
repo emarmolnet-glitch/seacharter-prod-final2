@@ -33,125 +33,38 @@ const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|
 // Commercial merchant cargo whitelist regex
 const STRICT_MERCHANT_CARGO_RE = /\b(bulk|bulker|cargo|carguero|coaster|cabotaje|container|tanker|petrolero|quimiquero|heavy load|heavy lift|break bulk|breakbulk|ro-ro|roro|cement|cementero|clinker|mpp|mpv|mmpp|freighter|merchant|general cargo|mini bulker)\b/i;
 
-// Strict dry bulk cargo taxonomy patterns (cement, clinker, yeso/gypsum, cal/lime, aggregates/aridos, minerals, dry bulk)
+// Strict dry bulk cargo taxonomy patterns
 const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|lime|aridos?|aggregates?|mineral|granel\s*seco|dry\s*bulk|grain|grano|cereales?|fertilizante|abono|bauxita|carbon|carb[oó]n|slags?|cenizas?)\b/i;
 
-// Mandatory excluded vessel types for dry bulk cargoes (Tanker, Container, Tug, Passenger)
+// Mandatory excluded vessel types for dry bulk cargoes
 const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|petrolero|quimiquero|tanquero|lng|lpg|container|containership|feeder|boxship|portacontenedores|tug|tugboat|remolcador|remolque|pusher|empujador|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure|yacht|yate|sailing|velero|fishing|pesquero|trawler)\b/i;
 
-// Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers)
+// Compatible vessel types for dry bulk cargoes
 const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
 
-// Default commercial operation baseline
+// Default commercial operation baseline initialized to zero / blank
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
-  cargoName: "Cement in Bulk (Clinker)",
-  cargoVolumeMt: 10000,
-  stowageFactorM3Mt: 0.85, // 30.0 cuft/lt typical for clinker/cement in bulk
-  polName: "Bejaia",
-  polCountry: "Algeria",
-  polFlag: "🇩🇿",
-  polCoords: { lat: 36.7558, lon: 5.0843 },
-  polMaxDraftMeters: 9.50,
-  podName: "Almería",
-  podCountry: "Spain",
-  podFlag: "🇪🇸",
-  podCoords: { lat: 36.8381, lon: -2.4597 },
-  podMaxDraftMeters: 11.00,
-  laycan: "10/15 Sep",
-  laycanWindow: "10/15 Sep",
-  loadingRate: "3,000 MT/WW",
-  loadingRateMtWw: 3000,
+  cargoName: "",
+  cargoVolumeMt: 0,
+  stowageFactorM3Mt: 0.85,
+  polName: "",
+  polCountry: "",
+  polFlag: "🌍",
+  polCoords: { lat: 0, lon: 0 },
+  polMaxDraftMeters: 0,
+  podName: "",
+  podCountry: "",
+  podFlag: "🌍",
+  podCoords: { lat: 0, lon: 0 },
+  podMaxDraftMeters: 0,
+  laycan: "",
+  laycanWindow: "",
+  loadingRate: "",
+  loadingRateMtWw: 0,
 });
 
-// Verified commercial baseline fleet with exact technical specs for Neon DB & AIS sync
-const VERIFIED_MASTER_FLEET = [
-  {
-    imo: 9218765,
-    name: "MV ATLANTIC TRADER",
-    mmsi: "210984000",
-    vesselType: "General Cargo / Mini-Bulker",
-    dwt: 10850,
-    draftMeters: 7.80,
-    stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
-    stowageFactorNum: 0.85,
-    flag: "Malta 🇲🇹",
-    yearBuilt: 2008,
-    loaMeters: 118.5,
-    beamMeters: 17.6,
-    latitude: 36.7624,
-    longitude: 5.0951,
-    speedKnots: 0.2,
-    headingDeg: 45,
-    navStatus: "En fondeo (Rada de Bejaia)",
-    operationalStatus: "LISTO PARA CARGA / EN RADA POL",
-    baseScore: 98,
-  },
-  {
-    imo: 9198744,
-    name: "MV ALBORAN CARRIER",
-    mmsi: "244123000",
-    vesselType: "Cement Carrier (Pneumatic/Bulk)",
-    dwt: 11200,
-    draftMeters: 7.95,
-    stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
-    stowageFactorNum: 0.85,
-    flag: "Panama 🇵🇦",
-    yearBuilt: 2006,
-    loaMeters: 122.4,
-    beamMeters: 18.0,
-    latitude: 36.8450,
-    longitude: 5.2500,
-    speedKnots: 10.2,
-    headingDeg: 260,
-    navStatus: "En aproximación rada exterior",
-    operationalStatus: "EN APROXIMACIÓN / CEMENTERO",
-    baseScore: 94,
-  },
-  {
-    imo: 9345128,
-    name: "MV MEDITERRANEAN STAR",
-    mmsi: "229871000",
-    vesselType: "Bulk Carrier / Handysize",
-    dwt: 12400,
-    draftMeters: 8.20,
-    stowageFactor: "0.88 m³/MT (31.1 cuft/lt)",
-    stowageFactorNum: 0.88,
-    flag: "Cyprus 🇨🇾",
-    yearBuilt: 2011,
-    loaMeters: 128.0,
-    beamMeters: 19.2,
-    latitude: 36.7912,
-    longitude: 5.1245,
-    speedKnots: 4.1,
-    headingDeg: 210,
-    navStatus: "En aproximación POL",
-    operationalStatus: "EN APROXIMACIÓN / DISPONIBLE",
-    baseScore: 91,
-  },
-  {
-    imo: 9481233,
-    name: "MV ATLAS BULKER",
-    mmsi: "255806000",
-    vesselType: "General Cargo / Box-shaped",
-    dwt: 9800,
-    draftMeters: 7.40,
-    stowageFactor: "0.82 m³/MT (29.0 cuft/lt)",
-    stowageFactorNum: 0.82,
-    flag: "Portugal (MAR) 🇵🇹",
-    yearBuilt: 2014,
-    loaMeters: 112.0,
-    beamMeters: 16.8,
-    latitude: 36.8140,
-    longitude: 5.1850,
-    speedKnots: 8.5,
-    headingDeg: 245,
-    navStatus: "En lastre hacia Bejaia",
-    operationalStatus: "EN TRÁNSITO / LASTRE",
-    baseScore: 84,
-  },
-];
-
 function haversineDistanceNm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
   const radiusNm = 3440.065;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -159,52 +72,6 @@ function haversineDistanceNm(lat1: number, lon1: number, lat2: number, lon2: num
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   return radiusNm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
-async function syncVerifiedMasterFleetToDb(pool: any) {
-  try {
-    for (const ship of VERIFIED_MASTER_FLEET) {
-      await pool.query(
-        `
-        INSERT INTO vessels_master (
-          imo_number, vessel_name, vessel_type, dwt, draft_meters, mmsi,
-          latitude, longitude, flag, year_built, loa_meters, beam_meters,
-          process_status, audit_status, validation_status, fecha_ultima_actualizacion
-        )
-        VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'COMPLETED', 'VALIDATED', 'VALIDATED', NOW())
-        ON CONFLICT (imo_number) DO UPDATE SET
-          vessel_name = EXCLUDED.vessel_name,
-          vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
-          dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
-          draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
-          mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
-          latitude = COALESCE(EXCLUDED.latitude, vessels_master.latitude),
-          longitude = COALESCE(EXCLUDED.longitude, vessels_master.longitude),
-          flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
-          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
-          loa_meters = COALESCE(EXCLUDED.loa_meters, vessels_master.loa_meters),
-          beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
-          fecha_ultima_actualizacion = NOW()
-      `,
-        [
-          ship.imo,
-          ship.name,
-          ship.vesselType,
-          ship.dwt,
-          ship.draftMeters,
-          ship.mmsi,
-          ship.latitude,
-          ship.longitude,
-          ship.flag,
-          ship.yearBuilt,
-          ship.loaMeters,
-          ship.beamMeters,
-        ],
-      );
-    }
-  } catch (err) {
-    console.warn("[vessel-compatibility] Note: Database sync fallback:", (err as Error)?.message);
-  }
 }
 
 interface CandidateEvaluationInput {
@@ -248,8 +115,6 @@ function evaluateMathematicalMatch(
   const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType);
   const isCompatibleDryBulk = COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType);
 
-  // Strict cargo taxonomy vs vessel type validation
-  // For dry bulk cargoes (cement, clinker, yeso/gypsum, etc.), mandatory exclusion of Tanker, Container, Tug, Passenger
   if (isDryBulk && (isMandatoryExcluded || !isCompatibleDryBulk)) {
     let exclusionTypeLabel = "Incompatible";
     if (/tanker|petrolero|quimiquero|crude|lng|lpg/i.test(vesselType)) exclusionTypeLabel = "Tanker / Buque Tanque";
@@ -258,18 +123,18 @@ function evaluateMathematicalMatch(
     else if (/passenger|cruise|ferry|pasaje|crucero/i.test(vesselType)) exclusionTypeLabel = "Passenger / Pasaje";
     else exclusionTypeLabel = vesselType;
 
-    const marginPct = Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10;
+    const marginPct = cargoVolumeMt > 0 ? Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10 : 0;
     const stowageFactorStr = `${op.stowageFactorM3Mt.toFixed(2)} m³/MT (30.0 cuft/lt)`;
 
     return {
       compatibilityScore: 0,
-      technicalJustification: `Exclusión mandatoria por incompatibilidad taxonómica: El buque está clasificado como ${exclusionTypeLabel} (${vesselType}), categoría incompatible con cargas de granel seco (${cargoName}). Para este tipo de carga (cemento, clínker, yeso o áridos), el sistema excluye de forma estricta buques Tanker, Container, Tug y Passenger, restringiendo la selección exclusivamente a categorías compatibles como Bulk Carrier, Mini Bulker o General Cargo con bodegas aptas para áridos.`,
+      technicalJustification: `Exclusión mandatoria por incompatibilidad taxonómica: El buque está clasificado como ${exclusionTypeLabel} (${vesselType}), categoría incompatible con cargas de granel seco (${cargoName}).`,
       stowageFactor: stowageFactorStr,
       technicalEvaluation: {
         dwtDiffPct: marginPct,
         dwtCompatible: false,
-        draftCompatiblePol: draftMeters <= polMaxDraftMeters,
-        draftCompatiblePod: draftMeters <= podMaxDraftMeters,
+        draftCompatiblePol: polMaxDraftMeters === 0 || draftMeters <= polMaxDraftMeters,
+        draftCompatiblePod: podMaxDraftMeters === 0 || draftMeters <= podMaxDraftMeters,
         stowageCompatible: false,
         taxonomyCompatible: false,
         laycanCompatible: false,
@@ -277,24 +142,23 @@ function evaluateMathematicalMatch(
     };
   }
 
-  // 1. DWT Volume Fit (Weight: 35%)
-  // Ideal ratio is 1.05 to 1.15 times cargo volume
-  const dwtRatio = dwt / Math.max(1, cargoVolumeMt);
+  const baseVol = Math.max(1, cargoVolumeMt);
+  const dwtRatio = dwt / baseVol;
   let dwtScore = 100;
-  if (dwtRatio < 1.0) {
-    // Insufficient capacity
-    dwtScore = Math.max(0, 60 - (1.0 - dwtRatio) * 200);
-  } else if (dwtRatio >= 1.05 && dwtRatio <= 1.15) {
-    dwtScore = 100;
-  } else if (dwtRatio > 1.15 && dwtRatio <= 1.30) {
-    dwtScore = Math.max(80, 100 - (dwtRatio - 1.15) * 100);
-  } else {
-    dwtScore = Math.max(50, 85 - (dwtRatio - 1.30) * 80);
+  if (cargoVolumeMt > 0) {
+    if (dwtRatio < 1.0) {
+      dwtScore = Math.max(0, 60 - (1.0 - dwtRatio) * 200);
+    } else if (dwtRatio >= 1.05 && dwtRatio <= 1.15) {
+      dwtScore = 100;
+    } else if (dwtRatio > 1.15 && dwtRatio <= 1.30) {
+      dwtScore = Math.max(80, 100 - (dwtRatio - 1.15) * 100);
+    } else {
+      dwtScore = Math.max(50, 85 - (dwtRatio - 1.30) * 80);
+    }
   }
 
-  // 2. Draft Compatibility POL & POD (Weight: 25%)
-  const polDraftOk = draftMeters <= polMaxDraftMeters;
-  const podDraftOk = draftMeters <= podMaxDraftMeters;
+  const polDraftOk = polMaxDraftMeters === 0 || draftMeters <= polMaxDraftMeters;
+  const podDraftOk = podMaxDraftMeters === 0 || draftMeters <= podMaxDraftMeters;
   let draftScore = 100;
   if (!polDraftOk || !podDraftOk) {
     const maxExceed = Math.max(
@@ -302,13 +166,8 @@ function evaluateMathematicalMatch(
       podDraftOk ? 0 : draftMeters - podMaxDraftMeters,
     );
     draftScore = Math.max(0, 50 - maxExceed * 30);
-  } else {
-    // Bonus for comfortable under-keel clearance
-    const minUkc = Math.min(polMaxDraftMeters - draftMeters, podMaxDraftMeters - draftMeters);
-    draftScore = minUkc >= 1.0 ? 100 : 92;
   }
 
-  // 3. Proximity / Laycan Presentation (Weight: 20%)
   let proximityScore = 100;
   if (distancePolNm <= 1.5) {
     proximityScore = 100;
@@ -322,22 +181,15 @@ function evaluateMathematicalMatch(
     proximityScore = Math.max(40, 75 - (distancePolNm - 40) * 0.5);
   }
 
-  // 4. Stowage Factor & Cargo Compatibility (Weight: 10%)
   const isSpecializedCement = /cement|clinker|self-discharger/i.test(vesselType);
   const isBulkOrMiniBulker = /bulk carrier|bulker|mini bulker|minibulker|mini-bulker|handysize|handymax|supramax|ultramax|panamax|capesize/i.test(vesselType);
   const isGeneralCargoSuitable = /general cargo|coaster|costero|box-shaped|box hold|open hatch|multipurpose|multi-purpose|mpp/i.test(vesselType);
   let stowageScore = 90;
-  if (isSpecializedCement) {
-    stowageScore = 100;
-  } else if (isBulkOrMiniBulker) {
-    stowageScore = 98;
-  } else if (isGeneralCargoSuitable) {
-    stowageScore = 95;
-  } else {
-    stowageScore = 80;
-  }
+  if (isSpecializedCement) stowageScore = 100;
+  else if (isBulkOrMiniBulker) stowageScore = 98;
+  else if (isGeneralCargoSuitable) stowageScore = 95;
+  else stowageScore = 80;
 
-  // 5. Vessel Age & Efficiency (Weight: 10%)
   let ageScore = 90;
   if (yearBuilt >= 2012) ageScore = 100;
   else if (yearBuilt >= 2006) ageScore = 95;
@@ -351,20 +203,12 @@ function evaluateMathematicalMatch(
     stowageScore * 0.10 +
     ageScore * 0.10;
 
-  let compositeScore = Math.min(100, Math.max(10, Math.round(rawComposite)));
+  const compositeScore = Math.min(100, Math.max(10, Math.round(rawComposite)));
 
-  const marginPct = Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10;
-  const marginText = marginPct >= 0 ? `+${marginPct}%` : `${marginPct}%`;
+  const marginPct = cargoVolumeMt > 0 ? Math.round(((dwt - cargoVolumeMt) / cargoVolumeMt) * 1000) / 10 : 0;
   const stowageFactorStr = `${op.stowageFactorM3Mt.toFixed(2)} m³/MT (30.0 cuft/lt)`;
 
-  let justification = "";
-  if (compositeScore >= 95) {
-    justification = `DWT ${dwt.toLocaleString()} MT óptimo para lote de ${cargoVolumeMt.toLocaleString()} MT con margen de seguridad del ${marginText}; calado a máxima carga ${draftMeters.toFixed(2)}m plenamente compatible con calado admisible en ${polName} (${polMaxDraftMeters.toFixed(2)}m) y ${podName} (${podMaxDraftMeters.toFixed(2)}m); factor de estiba de ${stowageFactorStr} idóneo para ${op.cargoName} en bodegas reforzadas aptas para áridos/graneles; posición inmediata en rada de ${polName} (${distancePolNm.toFixed(1)} NM) garantizando presentación en ventana Laycan ${laycan} con ritmo de carga contratado de ${loadingRate}.`;
-  } else if (compositeScore >= 90) {
-    justification = `DWT ${dwt.toLocaleString()} MT compatible para ${cargoVolumeMt.toLocaleString()} MT (${marginText}); calado ${draftMeters.toFixed(2)}m admitido en ambos puertos; posición a ${distancePolNm.toFixed(1)} NM en aproximación al fondeadero; apto para ${op.cargoName} en bodegas para áridos/granel seco.`;
-  } else {
-    justification = `DWT ${dwt.toLocaleString()} MT (${marginText}) evaluado para ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; navegación a ${distancePolNm.toFixed(1)} NM de ${polName}; ETA estimada en ventana Laycan ${laycan}.`;
-  }
+  let justification = `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; posición a ${distancePolNm.toFixed(1)} NM de POL.`;
 
   return {
     compatibilityScore: compositeScore,
@@ -372,7 +216,7 @@ function evaluateMathematicalMatch(
     stowageFactor: stowageFactorStr,
     technicalEvaluation: {
       dwtDiffPct: marginPct,
-      dwtCompatible: polDraftOk && podDraftOk && dwt >= cargoVolumeMt * 0.95,
+      dwtCompatible: polDraftOk && podDraftOk,
       draftCompatiblePol: polDraftOk,
       draftCompatiblePod: podDraftOk,
       stowageCompatible: true,
@@ -388,8 +232,6 @@ export default async function handler(req: Request, _context: Context) {
 
   try {
     const pool = getPool();
-    await syncVerifiedMasterFleetToDb(pool);
-
     const url = new URL(req.url);
     let bodyData: Record<string, unknown> = {};
     if (req.method === "POST") {
@@ -398,43 +240,16 @@ export default async function handler(req: Request, _context: Context) {
       } catch {}
     }
 
-    const polName = String(
-      bodyData.polName || bodyData.pol || url.searchParams.get("pol") || DEFAULT_ACTIVE_OPERATION.polName,
-    ).trim();
-    const podName = String(
-      bodyData.podName || bodyData.pod || url.searchParams.get("pod") || DEFAULT_ACTIVE_OPERATION.podName,
-    ).trim();
-    const polFlag = String(
-      bodyData.polFlag || url.searchParams.get("polFlag") || (polName.toLowerCase().includes("bejaia") ? "🇩🇿" : "🌍"),
-    ).trim();
-    const polCountry = String(
-      bodyData.polCountry || url.searchParams.get("polCountry") || (polName.toLowerCase().includes("bejaia") ? "Algeria" : ""),
-    ).trim();
-    const podFlag = String(
-      bodyData.podFlag || url.searchParams.get("podFlag") || (podName.toLowerCase().includes("almer") ? "🇪🇸" : "🌍"),
-    ).trim();
-    const podCountry = String(
-      bodyData.podCountry || url.searchParams.get("podCountry") || (podName.toLowerCase().includes("almer") ? "Spain" : ""),
-    ).trim();
-    const cargoName = String(
-      bodyData.cargoName || bodyData.cargoType || url.searchParams.get("cargoName") || url.searchParams.get("cargo") || DEFAULT_ACTIVE_OPERATION.cargoName,
-    ).trim();
-    const cargoVolumeMt =
-      Number(
-        bodyData.cargoVolumeMt ||
-          bodyData.cargoQuantity ||
-          bodyData.cargoQty ||
-          url.searchParams.get("cargoVolumeMt") ||
-          url.searchParams.get("qty") ||
-          DEFAULT_ACTIVE_OPERATION.cargoVolumeMt,
-      ) || DEFAULT_ACTIVE_OPERATION.cargoVolumeMt;
-    const laycan = String(
-      bodyData.laycan || bodyData.laycanWindow || url.searchParams.get("laycan") || DEFAULT_ACTIVE_OPERATION.laycan,
-    ).trim();
-    const loadingRate = String(
-      bodyData.loadingRate || url.searchParams.get("loadingRate") || DEFAULT_ACTIVE_OPERATION.loadingRate,
-    ).trim();
-
+    const polName = String(bodyData.polName || bodyData.pol || url.searchParams.get("pol") || "").trim();
+    const podName = String(bodyData.podName || bodyData.pod || url.searchParams.get("pod") || "").trim();
+    const polFlag = String(bodyData.polFlag || url.searchParams.get("polFlag") || (polName ? "🇩🇿" : "🌍")).trim();
+    const polCountry = String(bodyData.polCountry || url.searchParams.get("polCountry") || "").trim();
+    const podFlag = String(bodyData.podFlag || url.searchParams.get("podFlag") || (podName ? "🇪🇸" : "🌍")).trim();
+    const podCountry = String(bodyData.podCountry || url.searchParams.get("podCountry") || "").trim();
+    const cargoName = String(bodyData.cargoName || bodyData.cargoType || url.searchParams.get("cargoName") || url.searchParams.get("cargo") || "").trim();
+    const cargoVolumeMt = Number(bodyData.cargoVolumeMt || bodyData.cargoQuantity || bodyData.cargoQty || url.searchParams.get("cargoVolumeMt") || url.searchParams.get("qty") || 0) || 0;
+    const laycan = String(bodyData.laycan || bodyData.laycanWindow || url.searchParams.get("laycan") || "").trim();
+    const loadingRate = String(bodyData.loadingRate || url.searchParams.get("loadingRate") || "").trim();
     const polCoords = (bodyData.polCoords as { lat: number; lon: number }) || DEFAULT_ACTIVE_OPERATION.polCoords;
 
     const activeOperation = Object.freeze({
@@ -445,19 +260,18 @@ export default async function handler(req: Request, _context: Context) {
       polCountry,
       polFlag,
       polCoords,
-      polMaxDraftMeters: DEFAULT_ACTIVE_OPERATION.polMaxDraftMeters,
+      polMaxDraftMeters: 9.50,
       podName,
       podCountry,
       podFlag,
-      podCoords: DEFAULT_ACTIVE_OPERATION.podCoords,
-      podMaxDraftMeters: DEFAULT_ACTIVE_OPERATION.podMaxDraftMeters,
+      podCoords: { lat: 0, lon: 0 },
+      podMaxDraftMeters: 11.00,
       laycan,
       laycanWindow: laycan,
       loadingRate,
-      loadingRateMtWw: DEFAULT_ACTIVE_OPERATION.loadingRateMtWw,
+      loadingRateMtWw: 3000,
     });
 
-    // 1. Query real master records from Neon DB Postgres
     let dbRows: VesselMasterRecord[] = [];
     try {
       const result = await pool.query<VesselMasterRecord>(`
@@ -494,103 +308,90 @@ export default async function handler(req: Request, _context: Context) {
       console.warn("[vessel-compatibility] Error querying Neon DB vessels_master:", (dbErr as Error)?.message);
     }
 
-    // 2. Check for live reactive AIS vessels passed from frontend radar/density module
     const rawIncomingVessels = Array.isArray(bodyData.liveRadarVessels) ? (bodyData.liveRadarVessels as any[]) : [];
-
-    // Combine verified master records with any live radar detections
     const candidateMap = new Map<number, CandidateEvaluationInput & { isLiveRadar?: boolean; tipo_buque?: string; categoria_buque?: string }>();
 
-    // Seed verified candidates as initial baseline from Neon DB
-    for (const v of VERIFIED_MASTER_FLEET) {
-      const dbRow = dbRows.find((r) => Number(r.imo_number) === v.imo || (v.mmsi && String(r.mmsi) === String(v.mmsi)));
+    for (const r of dbRows) {
+      const imo = Number(r.imo_number);
+      if (!imo || imo <= 1000000) continue;
       const distNm = haversineDistanceNm(
         polCoords.lat,
         polCoords.lon,
-        Number(dbRow?.latitude ?? v.latitude),
-        Number(dbRow?.longitude ?? v.longitude),
+        Number(r.latitude ?? 0),
+        Number(r.longitude ?? 0),
       );
 
-      const vesselType = String(dbRow?.vessel_type || v.vesselType);
-
-      candidateMap.set(v.imo, {
-        imo: v.imo,
-        name: String(dbRow?.vessel_name || v.name).toUpperCase(),
-        mmsi: String(dbRow?.mmsi || v.mmsi),
-        vesselType,
-        tipo_buque: vesselType,
-        categoria_buque: vesselType,
-        dwt: Number(dbRow?.dwt ?? v.dwt),
-        draftMeters: Number(dbRow?.draft_meters ?? v.draftMeters),
-        loaMeters: Number(dbRow?.loa_meters ?? v.loaMeters),
-        beamMeters: Number(dbRow?.beam_meters ?? v.beamMeters),
-        yearBuilt: Number(dbRow?.year_built ?? v.yearBuilt),
-        flag: String(dbRow?.flag || v.flag),
-        latitude: Number(dbRow?.latitude ?? v.latitude),
-        longitude: Number(dbRow?.longitude ?? v.longitude),
-        speedKnots: v.speedKnots,
-        headingDeg: v.headingDeg,
-        navStatus: v.navStatus,
-        operationalStatus: v.operationalStatus,
+      candidateMap.set(imo, {
+        imo,
+        name: String(r.vessel_name || `MV VESSEL ${imo}`).toUpperCase(),
+        mmsi: String(r.mmsi || ""),
+        vesselType: String(r.vessel_type || "General Cargo"),
+        tipo_buque: String(r.vessel_type || "General Cargo"),
+        categoria_buque: String(r.vessel_type || "General Cargo"),
+        dwt: Number(r.dwt || 0),
+        draftMeters: Number(r.draft_meters || 0),
+        loaMeters: Number(r.loa_meters || 0),
+        beamMeters: Number(r.beam_meters || 0),
+        yearBuilt: Number(r.year_built || 2010),
+        flag: String(r.flag || "🌍"),
+        latitude: Number(r.latitude || 0),
+        longitude: Number(r.longitude || 0),
+        speedKnots: 0,
+        headingDeg: 0,
+        navStatus: "Disponible",
+        operationalStatus: "EN REGISTRO",
         distancePolNm: Math.round(distNm * 10) / 10,
         isLiveRadar: false,
       });
     }
 
-    // Process incoming live AIS vessels from Densidad screen with strict merchant & IMO/MMSI filters
     let liveRadarCandidatesCount = 0;
     for (const ship of rawIncomingVessels) {
       const imoClean = String(ship.imo || ship.imo_number || ship.IMO || "").replace(/\D/g, "");
       const imoNum = Number(imoClean);
       const mmsiClean = String(ship.mmsi || ship.MMSI || "").replace(/\D/g, "");
       
-      // Extract mandatory tipo_buque or categoria_buque from sensor payload
       const rawType = String(
         ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || ship.type || ship.ship_type || ship.ShipType || ship.cargoType || ""
       ).trim();
       const typeStr = rawType.toLowerCase();
 
-      // Strict Origin Filter: Valid 7-digit IMO or valid 9-digit MMSI, strictly commercial merchant
       const isValidImo = imoClean.length === 7 && imoNum > 1000000;
       const isValidMmsi = mmsiClean.length === 9;
-      if (!isValidImo && !isValidMmsi) {
-        continue;
-      }
+      if (!isValidImo && !isValidMmsi) continue;
 
       const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(typeStr);
       const isMerchant = STRICT_MERCHANT_CARGO_RE.test(typeStr) || Number(ship.dwt) >= 1000;
 
-      if (!isNotNoise || !isMerchant) {
-        continue;
-      }
+      if (!isNotNoise || !isMerchant) continue;
 
-      // Step B: Query / cross MATCH against Neon DB vessels_master by IMO or MMSI
       const dbRow = dbRows.find(
         (r) => (isValidImo && Number(r.imo_number) === imoNum) || (isValidMmsi && String(r.mmsi) === mmsiClean)
       );
 
-      const effectiveImo = isValidImo ? imoNum : (Number(dbRow?.imo_number) || (mmsiClean ? Number(mmsiClean) : 9218765));
-      const lat = Number(ship.latitude || ship.lat || dbRow?.latitude || polCoords.lat);
-      const lon = Number(ship.longitude || ship.lon || dbRow?.longitude || polCoords.lon);
-      const distNm = haversineDistanceNm(polCoords.lat, polCoords.lon, lat, lon);
-      const resolvedType = String(dbRow?.vessel_type || rawType || "General Cargo / Mini-Bulker");
+      const effectiveImo = isValidImo ? imoNum : (Number(dbRow?.imo_number) || (mmsiClean ? Number(mmsiClean) : 9200000 + liveRadarCandidatesCount));
+      const lat = Number(ship.latitude || ship.lat || dbRow?.latitude || polCoords.lat || 0);
+      const lon = Number(ship.longitude || ship.lon || dbRow?.longitude || polCoords.lon || 0);
+      const distNm = polCoords.lat && polCoords.lon ? haversineDistanceNm(polCoords.lat, polCoords.lon, lat, lon) : 0;
+      const resolvedType = String(dbRow?.vessel_type || rawType || "General Cargo");
 
       candidateMap.set(effectiveImo, {
         imo: effectiveImo,
         name: String(dbRow?.vessel_name || ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${effectiveImo}`).toUpperCase(),
-        mmsi: String(dbRow?.mmsi || mmsiClean || "210984000"),
+        mmsi: String(dbRow?.mmsi || mmsiClean || ""),
         vesselType: resolvedType,
         tipo_buque: resolvedType,
         categoria_buque: resolvedType,
-        dwt: Number(dbRow?.dwt ?? ship.dwt ?? ship.deadweight ?? 10850),
-        draftMeters: Number(dbRow?.draft_meters ?? ship.draft ?? ship.draft_meters ?? ship.max_draft ?? 7.80),
-        loaMeters: Number(dbRow?.loa_meters ?? ship.loa ?? ship.loa_meters ?? 118.5),
-        beamMeters: Number(dbRow?.beam_meters ?? ship.beam ?? ship.beam_meters ?? 17.6),
+        dwt: Number(dbRow?.dwt ?? ship.dwt ?? ship.deadweight ?? 0),
+        draftMeters: Number(dbRow?.draft_meters ?? ship.draft ?? ship.draft_meters ?? ship.max_draft ?? 0),
+        loaMeters: Number(dbRow?.loa_meters ?? ship.loa ?? ship.loa_meters ?? 0),
+        beamMeters: Number(dbRow?.beam_meters ?? ship.beam ?? ship.beam_meters ?? 0),
         yearBuilt: Number(dbRow?.year_built ?? ship.year_built ?? ship.yearBuilt ?? 2010),
-        flag: String(dbRow?.flag || ship.flag || "Malta 🇲🇹"),
+        flag: String(dbRow?.flag || ship.flag || "🌍"),
         latitude: lat,
         longitude: lon,
-        speedKnots: Number(ship.speed || ship.speedKnots || 0.2),
-        headingDeg: Number(ship.heading || ship.headingDeg || 45),
+        speedKnots: Number(ship.speed || ship.speedKnots || 0),
+        headingDeg: Number(ship.heading || ship.headingDeg || 0),
         navStatus: ship.navStatus || "En aproximación POL",
         operationalStatus: "EN APROXIMACIÓN / DISPONIBLE",
         distancePolNm: Math.round(distNm * 10) / 10,
@@ -599,7 +400,6 @@ export default async function handler(req: Request, _context: Context) {
       liveRadarCandidatesCount++;
     }
 
-    // 3. Step C: Execute mathematical matching engine across all candidates
     const evaluatedList = Array.from(candidateMap.values()).map((cand) => {
       const math = evaluateMathematicalMatch(cand, activeOperation);
       const dynamicLabel = `${math.compatibilityScore}% - ${cand.name} - ${cand.vesselType}`;
@@ -646,15 +446,12 @@ export default async function handler(req: Request, _context: Context) {
       };
     });
 
-    // 4. Sort by score descending and automatically designate Top Match
     evaluatedList.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
     
-    // Clear all top match flags
     for (const item of evaluatedList) {
       item.isTopMatch = false;
     }
 
-    // Top Match must have positive score and verified taxonomy compatibility
     const eligibleTopCandidates = evaluatedList.filter(
       (cand) => cand.compatibilityScore > 0 && cand.technicalEvaluation?.taxonomyCompatible !== false,
     );
@@ -664,25 +461,21 @@ export default async function handler(req: Request, _context: Context) {
     }
 
     const topMatch = eligibleTopCandidates.length > 0 ? eligibleTopCandidates[0] : null;
-
-    // Evaluate conditional availability: whether live radar produced compatible candidates
     const liveCompatibleCandidates = evaluatedList.filter(
       (cand) => cand.isLiveRadar && cand.compatibilityScore > 0 && cand.technicalEvaluation?.taxonomyCompatible !== false
     );
     const hasLiveCompatibleVessels = rawIncomingVessels.length > 0 ? liveCompatibleCandidates.length > 0 : true;
-
-    // Identify registered database fallback recommendation
-    const alternativeDbVessel = evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || evaluatedList[0];
+    const alternativeDbVessel = evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || evaluatedList[0] || null;
 
     const responsePayload = {
       success: true,
       timestamp: new Date().toISOString(),
       activeOperation,
       radarSummary: {
-        totalSignalsPolZone: evaluatedList.length + 14,
+        totalSignalsPolZone: evaluatedList.length,
         filteredMerchantCount: evaluatedList.length,
         liveRadarCandidatesCount,
-        excludedNonCommercialCount: 14,
+        excludedNonCommercialCount: 0,
         strictImoFilterApplied: true,
         exclusionCriteria: "Pesqueros, Remolcadores (Tugs), Embarcaciones de Pasaje/Recreo y No-Mercantes excluidos tajantemente.",
       },
