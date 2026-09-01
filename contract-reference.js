@@ -6,6 +6,9 @@
     const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
     const URL_KEYS = ['ref', 'contract_ref'];
 
+    let activeCachedReference = '';
+    let isInitializedOnMount = false;
+
     function normalizeReference(value) {
         return String(value || '').trim().toUpperCase();
     }
@@ -19,14 +22,31 @@
     }
 
     function writeSessionReference(reference) {
+        const normalized = normalizeReference(reference);
+        if (!normalized) return;
         try {
-            globalObject.sessionStorage?.setItem(SESSION_KEY, reference);
+            const current = readSessionReference();
+            if (current === normalized) return;
+            globalObject.sessionStorage?.setItem(SESSION_KEY, normalized);
         } catch (_error) {}
     }
 
     function writeSharedActiveSession(reference) {
-        if (!reference) return;
-        const payload = { reference, timestamp: Date.now() };
+        const normalized = normalizeReference(reference);
+        if (!normalized) return;
+
+        let existingSharedRef = '';
+        try {
+            const raw = globalObject.localStorage?.getItem(SHARED_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                existingSharedRef = normalizeReference(parsed?.reference);
+            }
+        } catch (_error) {}
+
+        if (existingSharedRef === normalized) return;
+
+        const payload = { reference: normalized, timestamp: Date.now() };
         try {
             globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
         } catch (_error) {}
@@ -40,6 +60,7 @@
     }
 
     function clearSharedActiveSession() {
+        activeCachedReference = '';
         try {
             globalObject.localStorage?.removeItem(SHARED_STORAGE_KEY);
         } catch (_error) {}
@@ -63,10 +84,29 @@
 
     function writeUrlReference(reference) {
         if (!globalObject.location || !globalObject.history?.replaceState) return;
-        const url = new URL(globalObject.location.href);
-        url.searchParams.set('ref', reference);
+        const normalized = normalizeReference(reference);
+        if (!normalized) return;
+
+        let url;
+        try {
+            url = new URL(globalObject.location.href);
+        } catch (_error) {
+            return;
+        }
+
+        const rawRef = url.searchParams.get('ref');
+        const hasLegacyRef = url.searchParams.has('contract_ref');
+        if (rawRef === normalized && !hasLegacyRef) {
+            return;
+        }
+
+        url.searchParams.set('ref', normalized);
         url.searchParams.delete('contract_ref');
-        globalObject.history.replaceState(globalObject.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        const currentUrl = `${globalObject.location.pathname || ''}${globalObject.location.search || ''}${globalObject.location.hash || ''}`;
+        if (currentUrl !== nextUrl) {
+            globalObject.history.replaceState(globalObject.history.state, '', nextUrl);
+        }
     }
 
     function generateVoyageRef() {
@@ -90,39 +130,79 @@
         return `RDM/${year}-${String(nextSequence).padStart(4, '0')}`;
     }
 
+    function getCurrentReference() {
+        return activeCachedReference || readUrlReference() || readSessionReference() || '';
+    }
+
     function persistReference(reference, notify = false) {
         const normalized = normalizeReference(reference);
         if (!normalized) return '';
+
+        const currentRef = getCurrentReference();
+        const isChanged = currentRef !== normalized;
+
+        activeCachedReference = normalized;
         writeSessionReference(normalized);
         writeUrlReference(normalized);
         writeSharedActiveSession(normalized);
-        if (notify && typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
+
+        if (notify && isChanged && typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
             globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:changed', { detail: { reference: normalized } }));
         }
         return normalized;
     }
 
     function getActiveContractRef() {
-        return persistReference(readUrlReference() || readSessionReference() || generateVoyageRef());
+        const fromUrl = readUrlReference();
+        if (fromUrl) {
+            activeCachedReference = fromUrl;
+            writeSessionReference(fromUrl);
+            writeUrlReference(fromUrl);
+            writeSharedActiveSession(fromUrl);
+            return fromUrl;
+        }
+        const fromSession = readSessionReference();
+        if (fromSession) {
+            activeCachedReference = fromSession;
+            writeUrlReference(fromSession);
+            writeSharedActiveSession(fromSession);
+            return fromSession;
+        }
+        if (activeCachedReference) return activeCachedReference;
+        const generated = generateVoyageRef();
+        activeCachedReference = generated;
+        return persistReference(generated, false);
     }
 
     function setActiveContractRef(reference) {
         const normalized = normalizeReference(reference);
-        return normalized ? persistReference(normalized, true) : getActiveContractRef();
+        if (!normalized) return getActiveContractRef();
+        const currentRef = getCurrentReference();
+        if (currentRef === normalized) {
+            activeCachedReference = normalized;
+            return normalized;
+        }
+        return persistReference(normalized, true);
     }
 
     function clearActiveSession() {
+        const previousRef = activeCachedReference || readSessionReference();
+        activeCachedReference = '';
         try {
             globalObject.sessionStorage?.removeItem(SESSION_KEY);
         } catch (_error) {}
         clearSharedActiveSession();
-        if (typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
+        if (previousRef && typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
             globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:cleared', { detail: { reference: '' } }));
         }
     }
 
     function ensureUrlReference() {
-        return persistReference(getActiveContractRef());
+        const ref = getActiveContractRef();
+        if (ref) {
+            writeUrlReference(ref);
+        }
+        return ref;
     }
 
     let isInjectionLocked = false;
@@ -169,9 +249,15 @@
     globalObject.clearActiveCoreProSession = clearActiveSession;
     globalObject.generateVoyageRef = generateVoyageRef;
 
+    function initializeOnMount() {
+        if (isInitializedOnMount) return;
+        isInitializedOnMount = true;
+        getActiveContractRef();
+    }
+
     try {
         if (globalObject.location || globalObject.document) {
-            getActiveContractRef();
+            initializeOnMount();
         }
     } catch (_error) {}
 

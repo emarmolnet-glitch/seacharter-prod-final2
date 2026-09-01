@@ -2592,10 +2592,8 @@ export default function TceCalculatorWorkspace({
       }
 
       try {
-        if (explicitRef && contractRefMgr?.setActiveContractRef) {
+        if (explicitRef && explicitRef !== activeRef && contractRefMgr?.setActiveContractRef) {
           contractRefMgr.setActiveContractRef(explicitRef);
-        } else if (activeRef && contractRefMgr?.setActiveContractRef) {
-          contractRefMgr.setActiveContractRef(activeRef);
         }
 
         // Actualización parcial que modifica ÚNICAMENTE los campos de la Sección 2
