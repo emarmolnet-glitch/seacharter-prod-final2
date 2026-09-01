@@ -225,6 +225,7 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             dwt: normalizedVessel.dwt || existingVessel.dwt || cleanNumber(raw.dwt || raw.vesselDwt),
             loa: cleanNonNegativeNumber(raw.loa || raw.loaMeters || raw.loa_meters) ?? (existingVessel.loa ?? null),
             beam: cleanNonNegativeNumber(raw.beam || raw.beamMeters || raw.beam_meters) ?? (existingVessel.beam ?? null),
+            draft: cleanNonNegativeNumber(raw.draft || raw.draftMeters || raw.draft_meters) ?? (existingVessel.draft ?? null),
             speedKnots: normalizedVessel.speedKnots ?? existingVessel.speedKnots ?? cleanNonNegativeNumber(raw.speedKnots ?? raw.speed ?? raw.speedBallast ?? raw.spd_ballast ?? raw.sog),
             gt: normalizedVessel.gt || existingVessel.gt || cleanNumber(raw.gt ?? raw.grossTonnage ?? raw.gross_tonnage),
             flag: normalizedVessel.flag || existingVessel.flag || cleanText(raw.flag),

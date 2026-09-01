@@ -2624,6 +2624,49 @@ export default function TceCalculatorWorkspace({
     window.addEventListener('databridge:vessel-injected', handleCustomEvent);
     window.addEventListener('databridge:data-loaded', handleCustomEvent);
 
+    // Check URL parameters on mount for silent vessel injection
+    if (typeof window !== 'undefined' && window.location?.search) {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const imo = searchParams.get('imo')?.trim() || '';
+        const dwt = parseFloat(searchParams.get('dwt') || '') || 0;
+        const name = (searchParams.get('vessel') || searchParams.get('vesselName') || searchParams.get('vessel_name') || searchParams.get('name') || searchParams.get('ship') || '').trim();
+        const targetRef = (searchParams.get('reference') || searchParams.get('target_session_id') || searchParams.get('targetSessionId') || searchParams.get('ref') || searchParams.get('contract_ref') || searchParams.get('session_id') || searchParams.get('sessionId') || '').trim();
+
+        if (imo || dwt > 0 || name) {
+          const vesselUrlData: Record<string, unknown> = {
+            ...(imo ? { imo, imo_number: imo, imoNumber: imo } : {}),
+            ...(dwt > 0 ? { dwt, vesselDwt: dwt } : {}),
+            ...(name ? { name, vesselName: name, vessel_name: name } : {}),
+            loa: parseFloat(searchParams.get('loa') || searchParams.get('loa_meters') || '') || undefined,
+            beam: parseFloat(searchParams.get('beam') || searchParams.get('beam_meters') || '') || undefined,
+            draft: parseFloat(searchParams.get('draft') || searchParams.get('draft_meters') || '') || undefined,
+            speedKnots: parseFloat(searchParams.get('speed') || searchParams.get('speedBallast') || searchParams.get('spd_ballast') || '') || undefined,
+            flag: searchParams.get('flag') || undefined,
+            yearBuilt: parseFloat(searchParams.get('yearBuilt') || searchParams.get('year_built') || '') || undefined,
+            gt: parseFloat(searchParams.get('gt') || searchParams.get('gross_tonnage') || '') || undefined,
+          };
+          handleVesselInjection({ detail: { vessel: vesselUrlData, reference: targetRef || undefined } });
+
+          // Auto-disparo de búsqueda por IMO en la base de datos si se suministró IMO válido
+          if (imo && /^\d{7}$/.test(imo)) {
+            const fetchFn = (window as unknown as { fetchVesselByImo?: (v: string) => Promise<boolean> }).fetchVesselByImo;
+            if (typeof fetchFn === 'function') {
+              void fetchFn(imo);
+            }
+            // Limpieza del parámetro IMO en la URL para no repetir en recarga
+            if (window.history?.replaceState && window.location?.href) {
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('imo');
+              const nextSearch = cleanUrl.searchParams.toString();
+              const nextUrl = `${cleanUrl.pathname}${nextSearch ? `?${nextSearch}` : ''}${cleanUrl.hash}`;
+              window.history.replaceState(window.history.state, '', nextUrl);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     let channel: BroadcastChannel | null = null;
     if (typeof BroadcastChannel === 'function') {
       try {

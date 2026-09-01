@@ -139,10 +139,55 @@ export function useSeaCharterSync() {
 }
 
 /**
+ * Hook for URL IMO parameter injection and automatic database vessel lookup.
+ */
+export function useUrlImoAutoLookup() {
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.location?.search) return;
+
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const imoValue = searchParams.get('imo')?.trim() || '';
+
+      if (imoValue && /^\d{7}$/.test(imoValue)) {
+        // 2. INYECCIÓN DE ESTADO: Inyectar inmediatamente en Section 2
+        const imoInput = document.getElementById('vessel-identity-imo');
+        if (imoInput) {
+          imoInput.value = imoValue;
+        }
+
+        if (typeof window.handleManualVesselUpdate === 'function') {
+          window.handleManualVesselUpdate('imo', imoValue);
+        }
+
+        if (typeof window.patchSection2Vessel === 'function') {
+          window.patchSection2Vessel({ imo: imoValue });
+        }
+
+        // 3. AUTO-DISPARO DE BÚSQUEDA: Ejecutar consulta existente en base de datos
+        if (typeof window.fetchVesselByImo === 'function') {
+          void window.fetchVesselByImo(imoValue);
+        }
+
+        // 4. LIMPIEZA DE URL: Limpiar parámetro imo para evitar repetición al recargar
+        if (window.history?.replaceState && window.location?.href) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('imo');
+          const nextSearch = cleanUrl.searchParams.toString();
+          const nextUrl = `${cleanUrl.pathname}${nextSearch ? `?${nextSearch}` : ''}${cleanUrl.hash}`;
+          window.history.replaceState(window.history.state, '', nextUrl);
+        }
+      }
+    } catch (_) {}
+  }, []);
+}
+
+/**
  * Main Application / Layout wrapper component for SeaCharter Core PRO.
  */
 export default function App({ children }) {
   useSeaCharterSync();
+  useUrlImoAutoLookup();
 
   return (
     <div className="seacharter-core-pro-app">

@@ -26438,19 +26438,88 @@ function createRouteAnchorElement(type) {
         window.fetchVesselByImo = fetchVesselByImo;
 
         async function hydrateCalculatorVesselFromUrl() {
-            const imo = new URLSearchParams(window.location.search).get('imo')?.trim() || '';
-            if (!imo) return false;
-            if (!/^\d{7}$/.test(imo)) {
-                showToast('⚠️ El parámetro IMO de la URL debe contener exactamente 7 dígitos.');
-                return false;
+            const searchParams = new URLSearchParams(window.location.search);
+            const imo = (new URLSearchParams(window.location.search).get('imo') || '').trim();
+            const dwt = parseFloat(searchParams.get('dwt') || '') || 0;
+            const name = (searchParams.get('vessel') || searchParams.get('vesselName') || searchParams.get('vessel_name') || searchParams.get('name') || searchParams.get('ship') || searchParams.get('nombre') || '').trim();
+            const loa = parseFloat(searchParams.get('loa') || searchParams.get('loa_meters') || searchParams.get('loaMeters') || '') || 0;
+            const beam = parseFloat(searchParams.get('beam') || searchParams.get('beam_meters') || searchParams.get('beamMeters') || '') || 0;
+            const draft = parseFloat(searchParams.get('draft') || searchParams.get('draft_meters') || searchParams.get('draftMeters') || '') || 0;
+            const speed = parseFloat(searchParams.get('speed') || searchParams.get('spd_ballast') || searchParams.get('speedBallast') || searchParams.get('speedKnots') || '') || 0;
+            const gt = parseFloat(searchParams.get('gt') || searchParams.get('gross_tonnage') || searchParams.get('grossTonnage') || '') || 0;
+            const flag = (searchParams.get('flag') || searchParams.get('bandera') || '').trim();
+            const yearBuilt = parseFloat(searchParams.get('yearBuilt') || searchParams.get('year_built') || searchParams.get('builtYear') || '') || 0;
+            const targetRef = (searchParams.get('reference') || searchParams.get('target_session_id') || searchParams.get('targetSessionId') || searchParams.get('ref') || searchParams.get('contract_ref') || searchParams.get('session_id') || searchParams.get('sessionId') || '').trim();
+
+            const hasVesselData = Boolean(imo || dwt > 0 || name || loa > 0 || beam > 0 || draft > 0 || speed > 0 || gt > 0 || flag || yearBuilt > 0);
+            if (!hasVesselData && !targetRef) return false;
+
+            const referenceManager = window.ContractReference || window.ContractRefManager;
+
+            // Inyección silenciosa: Bloquear regeneración de ID cuando se inyectan datos de buque
+            if (hasVesselData) {
+                referenceManager?.setInjectionLock?.(true);
             }
 
-            const imoInput = document.getElementById('vessel-identity-imo');
-            if (!imoInput || imoInput.dataset.urlHydrationStarted === 'true') return false;
-            imoInput.dataset.urlHydrationStarted = 'true';
-            imoInput.value = imo;
-            handleManualVesselUpdate('imo', imo);
-            return fetchVesselByImo(imo);
+            try {
+                if (targetRef && referenceManager?.setActiveContractRef) {
+                    referenceManager.setActiveContractRef(targetRef);
+                }
+
+                // Inyección silenciosa de datos técnicos de buque (Sección 2) preservando puertos y carga intactos
+                const vesselData = {
+                    ...(imo ? { imo, imo_number: imo, imoNumber: imo } : {}),
+                    ...(dwt > 0 ? { dwt, vesselDwt: dwt } : {}),
+                    ...(name ? { name, vesselName: name, vessel_name: name } : {}),
+                    ...(loa > 0 ? { loa, loa_meters: loa, loaMeters: loa } : {}),
+                    ...(beam > 0 ? { beam, beam_meters: beam, beamMeters: beam } : {}),
+                    ...(draft > 0 ? { draft, draft_meters: draft, draftMeters: draft } : {}),
+                    ...(speed > 0 ? { speed, spd_ballast: speed, speedBallast: speed, speedKnots: speed } : {}),
+                    ...(gt > 0 ? { gt, gross_tonnage: gt, grossTonnage: gt } : {}),
+                    ...(flag ? { flag, bandera: flag } : {}),
+                    ...(yearBuilt > 0 ? { year_built: yearBuilt, yearBuilt, builtYear: yearBuilt } : {}),
+                };
+
+                if (hasVesselData) {
+                    window.patchSection2Vessel?.(vesselData);
+                    try {
+                        const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                        vStore?.patchSection2Vessel?.(vesselData);
+                    } catch (_) {}
+                }
+
+                if (imo) {
+                    if (!/^\d{7}$/.test(imo)) {
+                        showToast('⚠️ El parámetro IMO de la URL debe contener exactamente 7 dígitos.');
+                        return false;
+                    }
+
+                    const imoInput = document.getElementById('vessel-identity-imo');
+                    if (!imoInput || imoInput.dataset.urlHydrationStarted === 'true') return false;
+                    imoInput.dataset.urlHydrationStarted = 'true';
+                    imoInput.value = imo;
+                    handleManualVesselUpdate('imo', imo);
+
+                    // Limpieza de URL: Limpiar parámetro imo de la URL para no volver a disparar al recargar
+                    try {
+                        if (window.history?.replaceState && window.location?.href) {
+                            const cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('imo');
+                            const nextSearch = cleanUrl.searchParams.toString();
+                            const nextUrl = `${cleanUrl.pathname}${nextSearch ? `?${nextSearch}` : ''}${cleanUrl.hash}`;
+                            window.history.replaceState(window.history.state, '', nextUrl);
+                        }
+                    } catch (_) {}
+
+                    return fetchVesselByImo(imo);
+                }
+
+                return true;
+            } finally {
+                if (hasVesselData) {
+                    setTimeout(() => referenceManager?.setInjectionLock?.(false), 300);
+                }
+            }
         }
         window.hydrateCalculatorVesselFromUrl = hydrateCalculatorVesselFromUrl;
 
@@ -33665,6 +33734,7 @@ function createRouteAnchorElement(type) {
             const name = String(raw.name || raw.vesselName || raw.vessel_name || raw.vessel || raw.nombre || '').trim();
             const imo = String(raw.imo || raw.imo_number || raw.imoNumber || raw.numero_imo || '').replace(/\D/g, '');
             const dwt = parseFloat(raw.dwt || raw.vesselDwt || raw.deadweight) || 0;
+            const draft = parseFloat(raw.draft || raw.draft_meters || raw.draftMeters) || 0;
             const loa = parseFloat(raw.loa || raw.loa_meters || raw.loaMeters || raw.lengthOverall) || 0;
             const beam = parseFloat(raw.beam || raw.beam_meters || raw.beamMeters || raw.manga) || 0;
             const speedBallast = parseFloat(raw.spd_ballast || raw.speedBallast || raw.spdBallast || raw.speed || raw.speedKnots || raw.sog) || 0;
@@ -33685,6 +33755,11 @@ function createRouteAnchorElement(type) {
                 setInputValue('vessel-dwt', dwt);
                 setInputValue('vessel-identity-dwt', dwt);
                 updateSection2LocalState('vessel-dwt', String(dwt));
+            }
+            if (draft > 0) {
+                setInputValue('vessel-draft', draft);
+                setInputValue('vessel-identity-draft', draft);
+                updateSection2LocalState('vessel-draft', String(draft));
             }
             if (loa > 0) {
                 setInputValue('vessel-loa', loa);
@@ -33722,6 +33797,7 @@ function createRouteAnchorElement(type) {
                 State.dwt = dwt;
                 State.vesselDwtFixed = true;
             }
+            if (draft > 0) State.draft = draft;
             if (loa > 0) State.loa = loa;
             if (beam > 0) State.beam = beam;
             if (speedBallast > 0) {
@@ -33740,6 +33816,7 @@ function createRouteAnchorElement(type) {
                 partial.dwt = dwt;
                 partial.vesselDwtFixed = true;
             }
+            if (draft > 0) partial.draft = draft;
             if (loa > 0) partial.loa = loa;
             if (beam > 0) partial.beam = beam;
             if (speedBallast > 0) partial.speedBallast = speedBallast;

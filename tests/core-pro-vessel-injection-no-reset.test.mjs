@@ -183,3 +183,70 @@ test('index.html defines patchSection2Vessel, SeaCharterStore.patchSection2Vesse
   assert.match(indexSource, /patchSection2Vessel\(vesselData = \{\}\)/);
   assert.match(indexSource, /referenceManager\?\.setInjectionLock\?\.\(true\)/);
 });
+
+test('ContractRefManager reads target_session_id and reference from URL params without generating new ID', () => {
+  const session = new Map([['active_contract_ref', 'RDM/2026-0080']]);
+  const local = new Map();
+  const location = new URL('https://app.test/?imo=9433947&dwt=57000&target_session_id=RDM/2026-0080');
+
+  const windowMock = {
+    BroadcastChannel: class { postMessage() {} close() {} },
+    CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+    crypto: { getRandomValues(v) { v.fill(1); return v; } },
+    addEventListener() {},
+    dispatchEvent() {},
+    history: { state: null, replaceState() {} },
+    location,
+    sessionStorage: {
+      getItem: (k) => session.get(k) || null,
+      setItem: (k, v) => session.set(k, String(v)),
+      removeItem: (k) => session.delete(k),
+    },
+    localStorage: {
+      getItem: (k) => local.get(k) || null,
+      setItem: (k, v) => local.set(k, String(v)),
+      removeItem: (k) => local.delete(k),
+    },
+  };
+
+  vm.runInNewContext(contractRefSource, {
+    window: windowMock,
+    URL,
+    URLSearchParams,
+    Uint32Array,
+    Date,
+    Math,
+    CustomEvent: windowMock.CustomEvent,
+  });
+
+  const api = windowMock.ContractRefManager;
+  assert.equal(api.getActiveContractRef(), 'RDM/2026-0080');
+});
+
+test('hydrateCalculatorVesselFromUrl injects Section 2 vessel data preserving POL, POD, Lastre, and Cargo without reset', () => {
+  const hydrationStart = indexSource.indexOf('async function hydrateCalculatorVesselFromUrl()');
+  const hydrationEnd = indexSource.indexOf('function applyMatchingVesselToCalculator(', hydrationStart);
+  const hydrationSource = indexSource.slice(hydrationStart, hydrationEnd);
+
+  assert.ok(hydrationStart >= 0);
+  assert.match(hydrationSource, /target_session_id/);
+  assert.match(hydrationSource, /referenceManager\?\.setInjectionLock\?\.\(true\)/);
+  assert.match(hydrationSource, /window\.patchSection2Vessel\?\.\(vesselData\)/);
+  assert.match(hydrationSource, /fetchVesselByImo\(imo\)/);
+  assert.match(hydrationSource, /window\.history\.replaceState/);
+  assert.doesNotMatch(hydrationSource, /resetGlobalState/);
+  assert.doesNotMatch(hydrationSource, /clearCalculatorLocalStorage/);
+});
+
+test('App.jsx and TceCalculatorWorkspace define URL IMO listener, Section 2 injection, auto-lookup, and URL cleanup', async () => {
+  const appSource = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(appSource, /useUrlImoAutoLookup/);
+  assert.match(appSource, /new URLSearchParams\(window\.location\.search\)/);
+  assert.match(appSource, /fetchVesselByImo\(imoValue\)/);
+  assert.match(appSource, /window\.history\.replaceState/);
+
+  assert.match(tceWorkspaceSource, /fetchVesselByImo/);
+  assert.match(tceWorkspaceSource, /window\.history\?\.replaceState/);
+});
+
+
