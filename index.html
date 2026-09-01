@@ -139,11 +139,80 @@
             const SESSION_KEY = 'active_contract_ref';
             const SHARED_STORAGE_KEY = 'active_core_pro_session';
             const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
+            const URL_KEYS = ['ref', 'contract_ref'];
+            let activeCachedReference = '';
+
             const normalizeReference = (value) => String(value || '').trim().toUpperCase();
 
+            const readSessionReference = function() {
+                try {
+                    return normalizeReference(globalObject.sessionStorage?.getItem(SESSION_KEY));
+                } catch (_error) {
+                    return '';
+                }
+            };
+
+            const writeSessionReference = function(reference) {
+                const normalized = normalizeReference(reference);
+                if (!normalized) return;
+                try {
+                    const current = readSessionReference();
+                    if (current === normalized) return;
+                    globalObject.sessionStorage?.setItem(SESSION_KEY, normalized);
+                } catch (_error) {}
+            };
+
+            const readUrlReference = function() {
+                try {
+                    const params = new URLSearchParams(globalObject.location?.search || '');
+                    for (const key of URL_KEYS) {
+                        const reference = normalizeReference(params.get(key));
+                        if (reference) return reference;
+                    }
+                } catch (_error) {}
+                return '';
+            };
+
+            const writeUrlReference = function(reference) {
+                if (!globalObject.location || !globalObject.history?.replaceState) return;
+                const normalized = normalizeReference(reference);
+                if (!normalized) return;
+
+                const currentUrlRef = readUrlReference();
+                if (currentUrlRef === normalized) return;
+
+                try {
+                    const url = new URL(globalObject.location.href);
+                    const existingRef = normalizeReference(url.searchParams.get('ref'));
+                    const hasLegacyRef = url.searchParams.has('contract_ref');
+                    if (existingRef === normalized && !hasLegacyRef) return;
+
+                    url.searchParams.set('ref', normalized);
+                    url.searchParams.delete('contract_ref');
+                    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+                    const currentUrl = `${globalObject.location.pathname || ''}${globalObject.location.search || ''}${globalObject.location.hash || ''}`;
+                    if (currentUrl !== nextUrl) {
+                        globalObject.history.replaceState(globalObject.history.state, '', nextUrl);
+                    }
+                } catch (_error) {}
+            };
+
             const writeSharedActiveSession = function(reference) {
-                if (!reference) return;
-                const payload = { reference, timestamp: Date.now() };
+                const normalized = normalizeReference(reference);
+                if (!normalized) return;
+
+                let existingSharedRef = '';
+                try {
+                    const raw = globalObject.localStorage?.getItem(SHARED_STORAGE_KEY);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        existingSharedRef = normalizeReference(parsed?.reference);
+                    }
+                } catch (_error) {}
+
+                if (existingSharedRef === normalized) return;
+
+                const payload = { reference: normalized, timestamp: Date.now() };
                 try {
                     globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
                 } catch (_error) {}
@@ -157,6 +226,7 @@
             };
 
             const clearSharedActiveSession = function() {
+                activeCachedReference = '';
                 try {
                     globalObject.localStorage?.removeItem(SHARED_STORAGE_KEY);
                 } catch (_error) {}
@@ -181,42 +251,48 @@
                 if (!match || Number(match[1]) !== year) return generateVoyageRef();
                 return `RDM/${year}-${String((Number(match[2]) + 1) % 10000).padStart(4, '0')}`;
             };
+            const getCurrentReference = function() {
+                return activeCachedReference || readUrlReference() || readSessionReference() || '';
+            };
             const getActiveContractRef = function() {
-                try {
-                    const params = new URLSearchParams(globalObject.location?.search || '');
-                    const ref = normalizeReference(
-                        params.get('ref')
-                        || params.get('contract_ref')
-                        || globalObject.sessionStorage?.getItem(SESSION_KEY)
-                        || generateVoyageRef()
-                    );
-                    if (ref) {
-                        try {
-                            globalObject.sessionStorage?.setItem(SESSION_KEY, ref);
-                        } catch (_e) {}
-                        writeSharedActiveSession(ref);
-                    }
-                    return ref;
-                } catch (_error) {
-                    return generateVoyageRef();
+                if (activeCachedReference) return activeCachedReference;
+                const fromUrl = readUrlReference();
+                if (fromUrl) {
+                    activeCachedReference = fromUrl;
+                    writeSessionReference(fromUrl);
+                    writeSharedActiveSession(fromUrl);
+                    return fromUrl;
                 }
+                const fromSession = readSessionReference();
+                if (fromSession) {
+                    activeCachedReference = fromSession;
+                    writeUrlReference(fromSession);
+                    writeSharedActiveSession(fromSession);
+                    return fromSession;
+                }
+                const newRef = generateVoyageRef();
+                activeCachedReference = newRef;
+                writeSessionReference(newRef);
+                writeUrlReference(newRef);
+                writeSharedActiveSession(newRef);
+                return newRef;
             };
             const setActiveContractRef = function(reference) {
                 const normalized = normalizeReference(reference);
                 if (!normalized) return getActiveContractRef();
-                try {
-                    globalObject.sessionStorage?.setItem(SESSION_KEY, normalized);
-                } catch (_error) {}
-                try {
-                    const url = new URL(globalObject.location.href);
-                    url.searchParams.set('ref', normalized);
-                    url.searchParams.delete('contract_ref');
-                    globalObject.history?.replaceState?.(globalObject.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-                } catch (_error) {}
+                const currentRef = getCurrentReference();
+                if (currentRef === normalized) {
+                    activeCachedReference = normalized;
+                    return normalized;
+                }
+                activeCachedReference = normalized;
+                writeSessionReference(normalized);
+                writeUrlReference(normalized);
                 writeSharedActiveSession(normalized);
                 return normalized;
             };
             const clearActiveSession = function() {
+                activeCachedReference = '';
                 try {
                     globalObject.sessionStorage?.removeItem(SESSION_KEY);
                 } catch (_error) {}
@@ -42673,6 +42749,10 @@ function scheduleReactiveEngine() {
 
         function syncActiveContractReference(value) {
             let activeReference = String(value || '').trim().toUpperCase();
+            const currentActive = String(State.activeReference || '').trim().toUpperCase();
+            if (activeReference && currentActive === activeReference) {
+                return activeReference;
+            }
             try {
                 const referenceManager = window.ContractReference || window.ContractRefManager;
                 activeReference = referenceManager?.setActiveContractRef?.(activeReference)
@@ -42682,7 +42762,9 @@ function scheduleReactiveEngine() {
             } catch (error) {
                 console.warn('[Contract Reference] Reference update continued in safe mode.', error);
             }
-            State.activeReference = activeReference;
+            if (State.activeReference !== activeReference) {
+                State.activeReference = activeReference;
+            }
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== activeReference) input.value = activeReference;
@@ -42694,7 +42776,7 @@ function scheduleReactiveEngine() {
 
         window.addEventListener('contract-reference:changed', (event) => {
             const reference = event.detail?.reference;
-            if (!reference) return;
+            if (!reference || State.activeReference === reference) return;
             State.activeReference = reference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);

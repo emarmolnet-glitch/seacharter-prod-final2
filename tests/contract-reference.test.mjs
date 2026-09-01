@@ -15,6 +15,8 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
   const location = new URL(href);
   let randomValue = 7;
   const listeners = new Map();
+  const dispatchedEvents = [];
+  let replaceStateCalls = 0;
 
   class MockBroadcastChannel {
     constructor(channelName) {
@@ -44,10 +46,13 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
     addEventListener(event, handler) {
       listeners.set(event, handler);
     },
-    dispatchEvent() {},
+    dispatchEvent(event) {
+      dispatchedEvents.push(event);
+    },
     history: {
       state: null,
       replaceState(_state, _title, nextUrl) {
+        replaceStateCalls += 1;
         const updated = new URL(nextUrl, location.href);
         location.href = updated.href;
       },
@@ -73,7 +78,17 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
     Math,
     CustomEvent: window.CustomEvent,
   });
-  return { api: window.ContractReference, location, session, local, window, broadcastMessages, listeners };
+  return {
+    api: window.ContractReference,
+    location,
+    session,
+    local,
+    window,
+    broadcastMessages,
+    listeners,
+    dispatchedEvents,
+    getReplaceStateCalls: () => replaceStateCalls,
+  };
 }
 
 test('URL ref has precedence and synchronizes session storage', () => {
@@ -205,3 +220,36 @@ test('tracking preserves the entered reference when the API fails', () => {
   assert.match(trackingSource, /inputMessage\.dataset\.state = 'warning'/);
   assert.doesNotMatch(trackingSource, /clearTrackingContract\(`\$\{error\?\.message/);
 });
+
+test('breaks infinite loop: calling setActiveContractRef with identical reference does not replaceState or re-dispatch events', () => {
+  const { api, getReplaceStateCalls, dispatchedEvents, broadcastMessages } = loadUtility({
+    href: 'https://example.test/app?ref=RDM%2F2026-1000',
+  });
+
+  const initialCalls = getReplaceStateCalls();
+  const initialEventCount = dispatchedEvents.length;
+  const initialBroadcastCount = broadcastMessages.length;
+
+  // Setting the same reference repeatedly
+  for (let i = 0; i < 10; i++) {
+    const result = api.setActiveContractRef('RDM/2026-1000');
+    assert.equal(result, 'RDM/2026-1000');
+  }
+
+  // No additional replaceState calls, no additional event dispatches, no extra broadcast spam
+  assert.equal(getReplaceStateCalls(), initialCalls);
+  assert.equal(dispatchedEvents.length, initialEventCount);
+  assert.equal(broadcastMessages.length, initialBroadcastCount);
+
+  // Changing reference once triggers exactly one update
+  const updatedResult = api.setActiveContractRef('RDM/2026-2000');
+  assert.equal(updatedResult, 'RDM/2026-2000');
+  assert.equal(getReplaceStateCalls(), initialCalls + 1);
+  assert.equal(dispatchedEvents.length, initialEventCount + 1);
+
+  // Setting the new reference again does nothing
+  api.setActiveContractRef('RDM/2026-2000');
+  assert.equal(getReplaceStateCalls(), initialCalls + 1);
+  assert.equal(dispatchedEvents.length, initialEventCount + 1);
+});
+
