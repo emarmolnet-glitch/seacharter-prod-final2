@@ -152,6 +152,16 @@
         </div>
         <div class="flex items-center gap-2">
             <div id="databridge-datalastic-credit" data-credit-variant="toolbar" aria-live="polite"></div>
+            <!-- Session Indicator Badge -->
+            <div id="databridge-session-badge" class="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 shadow-sm transition duration-150" title="Sesión activa vinculada a Core PRO" data-session-active="false">
+                <span id="databridge-session-dot" class="w-2.5 h-2.5 bg-slate-300 rounded-full"></span>
+                <span id="databridge-session-text" class="console-font">Sin sesión activa</span>
+            </div>
+            <!-- Action Button: CARGAR DATOS -->
+            <button type="button" id="btn-databridge-load-data" onclick="loadDataBridgeSessionPayload()" class="bg-[#1E3A8A] hover:bg-blue-900 text-white shadow-sm px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Cargar y enviar datos de la sesión activa a Core PRO">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+                <span>CARGAR DATOS</span>
+            </button>
             <!-- Status Indicator -->
             <div class="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg">
                 <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full pulse-light"></span>
@@ -1523,21 +1533,256 @@
             window.coreProLiveSyncChannel = coreProLiveSyncChannel;
         }
 
+        // =========================================================================
+        // AGGRESSIVE CORE PRO SESSION DETECTION, HEADER SYNC & PAYLOAD INJECTION
+        // =========================================================================
         let activeCoreProSession = null;
-        function updateActiveCoreProSession(sessionData) {
-            activeCoreProSession = sessionData;
-            if (sessionData && sessionData.reference) {
-                addLog(`[CORE PRO] Sesión activa sincronizada: ${sessionData.reference}`);
+
+        function extractReferenceFromValue(val) {
+            if (!val) return '';
+            if (typeof val === 'string') {
+                const trimmed = val.trim();
+                if (!trimmed) return '';
+                const match = trimmed.match(/\b(RDM\/[A-Za-z0-9/_-]+)\b/i) || trimmed.match(/\b(RDM\/\d{4}-[\w-]+)\b/i);
+                if (match) return match[1].toUpperCase();
+                if (/^RDM\b/i.test(trimmed)) return trimmed.toUpperCase();
+                return '';
+            }
+            if (typeof val === 'object') {
+                return (
+                    extractReferenceFromValue(val.reference) ||
+                    extractReferenceFromValue(val.contractRef) ||
+                    extractReferenceFromValue(val.ref) ||
+                    extractReferenceFromValue(val.id) ||
+                    extractReferenceFromValue(val.sessionId) ||
+                    extractReferenceFromValue(val.session) ||
+                    extractReferenceFromValue(val.sessionReference) ||
+                    extractReferenceFromValue(val.operation?.id) ||
+                    extractReferenceFromValue(val.operation?.reference) ||
+                    extractReferenceFromValue(val.dossier?.reference) ||
+                    extractReferenceFromValue(val.voyage_reference) ||
+                    ''
+                );
+            }
+            return '';
+        }
+
+        function detectActiveSessionReference() {
+            // 1. Check URL query parameters and hash aggressively
+            try {
+                const searchParams = new URLSearchParams(window.location.search || '');
+                const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#\/?/, ''));
+                
+                const priorityKeys = [
+                    'ref', 'reference', 'session', 'sessionId', 'session_id',
+                    'contract_ref', 'contractRef', 'expediente', 'dossier', 'dossier_id',
+                    'id', 'q', 'rdm'
+                ];
+
+                for (const key of priorityKeys) {
+                    const candidate = searchParams.get(key) || hashParams.get(key);
+                    const parsed = extractReferenceFromValue(candidate);
+                    if (parsed) return parsed;
+                }
+
+                for (const [key, value] of searchParams.entries()) {
+                    if (/ref|session|rdm|contract|expediente|dossier/i.test(key)) {
+                        const parsed = extractReferenceFromValue(value);
+                        if (parsed) return parsed;
+                    }
+                    const parsedVal = extractReferenceFromValue(value);
+                    if (parsedVal) return parsedVal;
+                }
+
+                for (const [key, value] of hashParams.entries()) {
+                    if (/ref|session|rdm|contract|expediente|dossier/i.test(key)) {
+                        const parsed = extractReferenceFromValue(value);
+                        if (parsed) return parsed;
+                    }
+                    const parsedVal = extractReferenceFromValue(value);
+                    if (parsedVal) return parsedVal;
+                }
+
+                const fullUrl = decodeURIComponent(window.location.href || '');
+                const urlMatch = extractReferenceFromValue(fullUrl);
+                if (urlMatch) return urlMatch;
+            } catch (_) {}
+
+            // 2. Check parent or opener window (if same-origin context)
+            try {
+                const parentWin = window.parent !== window ? window.parent : (window.opener && !window.opener.closed ? window.opener : null);
+                if (parentWin) {
+                    const parentRef = parentWin.ContractRefManager?.getActiveContractRef?.() ||
+                                      parentWin.ContractReference?.getActiveContractRef?.() ||
+                                      parentWin.getActiveContractRef?.();
+                    const parsed = extractReferenceFromValue(parentRef);
+                    if (parsed) return parsed;
+
+                    const parentUrl = decodeURIComponent(parentWin.location?.href || '');
+                    const parentUrlMatch = extractReferenceFromValue(parentUrl);
+                    if (parentUrlMatch) return parentUrlMatch;
+                }
+            } catch (_) {}
+
+            // 3. Check well-known localStorage and sessionStorage keys
+            const storageKeys = [
+                'active_core_pro_session',
+                'active_contract_ref',
+                'corepro_active_session',
+                'active_session',
+                'session_reference',
+                'last_active_session',
+                'seacharter_active_session',
+                'core_pro_session'
+            ];
+
+            for (const key of storageKeys) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (raw) {
+                        try {
+                            const parsed = JSON.parse(raw);
+                            const ref = extractReferenceFromValue(parsed);
+                            if (ref) return ref;
+                        } catch (_) {
+                            const ref = extractReferenceFromValue(raw);
+                            if (ref) return ref;
+                        }
+                    }
+                } catch (_) {}
+                try {
+                    const raw = sessionStorage.getItem(key);
+                    if (raw) {
+                        try {
+                            const parsed = JSON.parse(raw);
+                            const ref = extractReferenceFromValue(parsed);
+                            if (ref) return ref;
+                        } catch (_) {
+                            const ref = extractReferenceFromValue(raw);
+                            if (ref) return ref;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // 4. Aggressive scan over ALL localStorage and sessionStorage keys
+            try {
+                const localLen = localStorage.length;
+                for (let i = 0; i < localLen; i++) {
+                    const key = localStorage.key(i);
+                    if (!key) continue;
+                    const val = localStorage.getItem(key);
+                    if (!val) continue;
+                    if (/ref|session|rdm|contract|expediente|dossier/i.test(key) || val.includes('RDM/')) {
+                        try {
+                            const parsedJson = JSON.parse(val);
+                            const ref = extractReferenceFromValue(parsedJson);
+                            if (ref) return ref;
+                        } catch (_) {
+                            const ref = extractReferenceFromValue(val);
+                            if (ref) return ref;
+                        }
+                    }
+                }
+            } catch (_) {}
+
+            try {
+                const sessionLen = sessionStorage.length;
+                for (let i = 0; i < sessionLen; i++) {
+                    const key = sessionStorage.key(i);
+                    if (!key) continue;
+                    const val = sessionStorage.getItem(key);
+                    if (!val) continue;
+                    if (/ref|session|rdm|contract|expediente|dossier/i.test(key) || val.includes('RDM/')) {
+                        try {
+                            const parsedJson = JSON.parse(val);
+                            const ref = extractReferenceFromValue(parsedJson);
+                            if (ref) return ref;
+                        } catch (_) {
+                            const ref = extractReferenceFromValue(val);
+                            if (ref) return ref;
+                        }
+                    }
+                }
+            } catch (_) {}
+
+            // 5. In-memory fallback
+            if (activeCoreProSession) {
+                const ref = extractReferenceFromValue(activeCoreProSession);
+                if (ref) return ref;
+            }
+
+            return '';
+        }
+
+        function updateSessionBadge(reference) {
+            const badgeEl = document.getElementById('databridge-session-badge');
+            const dotEl = document.getElementById('databridge-session-dot');
+            const textEl = document.getElementById('databridge-session-text');
+            if (!badgeEl || !dotEl || !textEl) return;
+
+            const normalized = extractReferenceFromValue(reference);
+            if (normalized) {
+                badgeEl.dataset.sessionActive = 'true';
+                badgeEl.dataset.reference = normalized;
+                badgeEl.className = 'flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-800 shadow-sm transition duration-150';
+                badgeEl.title = `Sesión activa vinculada: ${normalized}`;
+                dotEl.className = 'w-2.5 h-2.5 bg-emerald-500 rounded-full pulse-light';
+                textEl.textContent = `🟢 ${normalized}`;
             } else {
-                addLog(`[CORE PRO] Sesión activa limpiada o desconectada.`);
+                badgeEl.dataset.sessionActive = 'false';
+                delete badgeEl.dataset.reference;
+                badgeEl.className = 'flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 shadow-sm transition duration-150';
+                badgeEl.title = 'Sin sesión activa en Core PRO';
+                dotEl.className = 'w-2.5 h-2.5 bg-slate-300 rounded-full';
+                textEl.textContent = 'Sin sesión activa';
             }
         }
-        try {
-            const rawActiveSession = localStorage.getItem('active_core_pro_session');
-            if (rawActiveSession) {
-                updateActiveCoreProSession(JSON.parse(rawActiveSession));
+
+        function updateActiveCoreProSession(sessionData, silent = false) {
+            const previousRef = extractReferenceFromValue(activeCoreProSession);
+            const nextRef = extractReferenceFromValue(sessionData);
+
+            if (nextRef) {
+                activeCoreProSession = typeof sessionData === 'object' && sessionData !== null
+                    ? { ...sessionData, reference: nextRef }
+                    : { reference: nextRef, timestamp: Date.now() };
+                updateSessionBadge(nextRef);
+                if (!silent && previousRef !== nextRef) {
+                    addLog(`[CORE PRO] Sesión activa sincronizada: ${nextRef}`);
+                }
+            } else {
+                activeCoreProSession = null;
+                updateSessionBadge('');
+                if (!silent && previousRef) {
+                    addLog(`[CORE PRO] Sesión activa limpiada o desconectada.`);
+                }
             }
-        } catch (_) {}
+        }
+
+        function refreshActiveSessionState() {
+            const detectedRef = detectActiveSessionReference();
+            if (detectedRef) {
+                const currentRef = extractReferenceFromValue(activeCoreProSession);
+                if (currentRef !== detectedRef) {
+                    updateActiveCoreProSession({ reference: detectedRef, timestamp: Date.now() });
+                } else {
+                    updateSessionBadge(detectedRef);
+                }
+            } else if (activeCoreProSession) {
+                try {
+                    const raw = localStorage.getItem('active_core_pro_session');
+                    if (!raw) {
+                        updateActiveCoreProSession(null);
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // Initial session discovery
+        refreshActiveSessionState();
+
+        // BroadcastChannel for instant cross-tab/frame synchronization
         if (typeof BroadcastChannel === 'function') {
             const coreBridgeSyncChannel = new BroadcastChannel('core_bridge_sync');
             coreBridgeSyncChannel.addEventListener('message', (event) => {
@@ -1546,17 +1791,139 @@
                     updateActiveCoreProSession(data);
                 } else if (data?.type === 'active_core_pro_session_cleared' || data?.reference === null) {
                     updateActiveCoreProSession(null);
+                } else {
+                    refreshActiveSessionState();
                 }
             });
             window.coreBridgeSyncChannel = coreBridgeSyncChannel;
         }
+
+        // Storage Event Listener (instant sync across browser tabs)
         window.addEventListener('storage', (event) => {
             if (event.key === 'active_core_pro_session') {
                 try {
                     updateActiveCoreProSession(event.newValue ? JSON.parse(event.newValue) : null);
-                } catch (_) {}
+                } catch (_) {
+                    refreshActiveSessionState();
+                }
+            } else if (!event.key || /ref|session|contract|rdm/i.test(event.key)) {
+                refreshActiveSessionState();
             }
         });
+
+        // Tab focus, visibility, and navigation hooks for immediate header sync
+        window.addEventListener('focus', refreshActiveSessionState);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refreshActiveSessionState();
+        });
+        window.addEventListener('popstate', refreshActiveSessionState);
+        window.addEventListener('hashchange', refreshActiveSessionState);
+
+        // Window postMessage handler
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data) return;
+            if (data.type === 'active_core_pro_session' || data.type === 'contract-reference:changed' || data.type === 'SEACHARTER_SESSION_UPDATE') {
+                const ref = extractReferenceFromValue(data.reference || data.payload || data);
+                if (ref) updateActiveCoreProSession({ reference: ref, timestamp: Date.now() });
+            } else if (data.type === 'active_core_pro_session_cleared') {
+                updateActiveCoreProSession(null);
+            }
+        });
+
+        // Heartbeat timer (1s) to guarantee header refresh even during silent background transitions
+        setInterval(refreshActiveSessionState, 1000);
+
+        // ==========================================
+        // ACTION: CARGAR DATOS (PAYLOAD INJECTION)
+        // ==========================================
+        async function loadDataBridgeSessionPayload() {
+            refreshActiveSessionState();
+            const activeRef = detectActiveSessionReference() || extractReferenceFromValue(activeCoreProSession);
+            if (!activeRef) {
+                addLog(`[WARNING] ${getTimestamp()} - [CARGAR DATOS] No se detectó ninguna sesión activa. Abra un expediente en Core PRO (ej. RDM/2026-0080).`);
+                if (typeof window.alert === 'function') {
+                    window.alert('No se detectó ninguna sesión activa en Core PRO (ej. RDM/2026-0080).');
+                }
+                return;
+            }
+
+            addLog(`[SYNC] ${getTimestamp()} - [CARGAR DATOS] Empaquetando payload para expediente: ${activeRef}...`);
+
+            // Gather candidate vessels from pending audits, pending frozen report, or NPL
+            const vessels = pendingAudits.length > 0
+                ? pendingAudits
+                : (pending_frozen_report?.vessels || getNplVessels() || []);
+
+            const payload = {
+                type: 'fleet',
+                source: 'SeaCharter Data Bridge',
+                reference: activeRef,
+                contractRef: activeRef,
+                session: {
+                    reference: activeRef,
+                    id: activeRef,
+                    timestamp: new Date().toISOString()
+                },
+                operation: {
+                    id: activeRef,
+                    reference: activeRef,
+                    status: 'active',
+                    source: 'SeaCharter Data Bridge'
+                },
+                vessels: vessels,
+                totalVessels: vessels.length,
+                timestamp: new Date().toISOString()
+            };
+
+            // Post to parent / opener
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'SEACHARTER_DATABRIDGE_LOAD_DATA',
+                    reference: activeRef,
+                    contractRef: activeRef,
+                    payload: payload
+                }, '*');
+                window.parent.postMessage({
+                    type: 'SEACHARTER_DATABRIDGE_OPPORTUNITIES',
+                    candidates: vessels,
+                    reference: activeRef
+                }, '*');
+            }
+            if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({
+                    type: 'SEACHARTER_DATABRIDGE_LOAD_DATA',
+                    reference: activeRef,
+                    contractRef: activeRef,
+                    payload: payload
+                }, '*');
+            }
+
+            // Broadcast on channel
+            try {
+                if (typeof BroadcastChannel === 'function') {
+                    const channel = new BroadcastChannel('core_bridge_sync');
+                    channel.postMessage({
+                        type: 'active_core_pro_session',
+                        reference: activeRef,
+                        payload: payload,
+                        timestamp: Date.now()
+                    });
+                    channel.close?.();
+                }
+            } catch (_) {}
+
+            // If pending frozen report is available, load it into the audit tray
+            if (pending_frozen_report && Array.isArray(pending_frozen_report.vessels) && pending_frozen_report.vessels.length > 0) {
+                loadPendingFrozenReport();
+            }
+
+            window.dispatchEvent(new CustomEvent('databridge:data-loaded', { detail: { reference: activeRef, payload } }));
+            addLog(`[SUCCESS] ${getTimestamp()} - [CARGAR DATOS] Datos de la sesión ${activeRef} (${vessels.length} buques) empaquetados y enviados a Core PRO.`);
+        }
+        window.loadDataBridgeSessionPayload = loadDataBridgeSessionPayload;
+        window.detectActiveSessionReference = detectActiveSessionReference;
+        window.refreshActiveSessionState = refreshActiveSessionState;
 
         function loadPendingFrozenReport() {
             if (!pending_frozen_report || !Array.isArray(pending_frozen_report.vessels) || pending_frozen_report.vessels.length === 0) {

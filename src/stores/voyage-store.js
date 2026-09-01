@@ -213,6 +213,37 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             },
         };
     }),
+    patchSection2Vessel: (vesselData = {}) => set((current) => {
+        const raw = vesselData && typeof vesselData === 'object' ? vesselData : {};
+        const normalizedVessel = normalizeVessel(raw) || {};
+        const existingVessel = current.draft.vessel || {};
+        const updatedVessel = {
+            ...existingVessel,
+            name: normalizedVessel.name || existingVessel.name || cleanText(raw.vesselName || raw.vessel_name || raw.name || raw.nombre),
+            imo: normalizedVessel.imo || existingVessel.imo || cleanText(raw.imo || raw.imoNumber || raw.imo_number).replace(/\D/g, ''),
+            mmsi: normalizedVessel.mmsi || existingVessel.mmsi || cleanText(raw.mmsi).replace(/\D/g, ''),
+            dwt: normalizedVessel.dwt || existingVessel.dwt || cleanNumber(raw.dwt || raw.vesselDwt),
+            loa: cleanNonNegativeNumber(raw.loa || raw.loaMeters || raw.loa_meters) ?? (existingVessel.loa ?? null),
+            beam: cleanNonNegativeNumber(raw.beam || raw.beamMeters || raw.beam_meters) ?? (existingVessel.beam ?? null),
+            speedKnots: normalizedVessel.speedKnots ?? existingVessel.speedKnots ?? cleanNonNegativeNumber(raw.speedKnots ?? raw.speed ?? raw.speedBallast ?? raw.spd_ballast ?? raw.sog),
+            gt: normalizedVessel.gt || existingVessel.gt || cleanNumber(raw.gt ?? raw.grossTonnage ?? raw.gross_tonnage),
+            flag: normalizedVessel.flag || existingVessel.flag || cleanText(raw.flag),
+            yearBuilt: normalizedVessel.yearBuilt || existingVessel.yearBuilt || cleanNumber(raw.yearBuilt ?? raw.year_built),
+            latitude: normalizedVessel.latitude ?? existingVessel.latitude ?? null,
+            longitude: normalizedVessel.longitude ?? existingVessel.longitude ?? null,
+            positionUpdatedAt: normalizedVessel.positionUpdatedAt || existingVessel.positionUpdatedAt || new Date().toISOString(),
+        };
+        const nextDwt = updatedVessel.dwt || current.draft.dwt;
+        return {
+            draft: {
+                ...current.draft,
+                vessel: updatedVessel,
+                dwt: nextDwt,
+                updatedAt: new Date().toISOString(),
+                lastSource: 'databridge-vessel-patch',
+            },
+        };
+    }),
     setBallastDistance: ({ ballastDistanceNm, source = 'calculator-manual' } = {}) => set((current) => {
         const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
         if (normalizedDistance === null) return current;

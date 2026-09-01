@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { voyageStore } from './src/stores/voyage-store.js';
 
 type ReverseCalculatorState = {
   tceTarget: number | '';
@@ -2549,6 +2550,99 @@ export default function TceCalculatorWorkspace({
     setIsReverseMode(nextIsReverseMode);
     forceRefresh();
   };
+
+  // --- 1. INTERCEPTOR DE INYECCIÓN DE DATABRIDGE (NO RESET) ---
+  useEffect(() => {
+    const handleVesselInjection = (eventOrData: unknown) => {
+      let vessel: Record<string, unknown> | null = null;
+      let explicitRef: string | null = null;
+
+      if (eventOrData && typeof eventOrData === 'object' && 'detail' in eventOrData) {
+        const detail = (eventOrData as { detail?: Record<string, unknown> }).detail || {};
+        vessel = (detail.vessel as Record<string, unknown>)
+          || (detail.candidate as Record<string, unknown>)
+          || ((detail.payload as Record<string, unknown>)?.vessel as Record<string, unknown>)
+          || (Array.isArray((detail.payload as Record<string, unknown>)?.vessels) ? (detail.payload as { vessels: Record<string, unknown>[] }).vessels[0] : null)
+          || null;
+        explicitRef = (detail.reference as string) || (detail.contractRef as string) || ((detail.payload as Record<string, unknown>)?.reference as string) || null;
+      } else if (eventOrData && typeof eventOrData === 'object' && 'data' in eventOrData) {
+        const data = (eventOrData as { data?: Record<string, unknown> }).data || {};
+        if (data.type === 'SEACHARTER_DATABRIDGE_LOAD_DATA' || data.type === 'active_core_pro_session' || data.type === 'databridge:inject-vessel' || data.type === 'INJECT_VESSEL') {
+          const payload = (data.payload as Record<string, unknown>) || data;
+          vessel = (payload.vessel as Record<string, unknown>)
+            || (Array.isArray(payload.vessels) && payload.vessels.length === 1 ? payload.vessels[0] : null)
+            || (Array.isArray(data.candidates) && data.candidates.length === 1 ? data.candidates[0] : null)
+            || null;
+          explicitRef = (data.reference as string) || (data.contractRef as string) || (payload.reference as string) || null;
+        }
+      }
+
+      if (!vessel) return;
+
+      // --- 2. ACTUALIZACIÓN PARCIAL (PATCH DEL ESTADO): Comprobar si ya existe sesión activa ---
+      const contractRefMgr = (window as unknown as { ContractRefManager?: { getActiveContractRef?: () => string; setActiveContractRef?: (r: string) => string; setInjectionLock?: (l: boolean) => void } }).ContractRefManager;
+      const activeRef = contractRefMgr?.getActiveContractRef?.()
+        || (window as unknown as { State?: { activeReference?: string } }).State?.activeReference
+        || voyageStore.getState()?.draft?.vessel?.name
+        || '';
+
+      // --- 3. BLOQUEO DE GENERACIÓN DE ID: Guardia de seguridad para cancelar nuevos IDs ---
+      if (contractRefMgr?.setInjectionLock) {
+        contractRefMgr.setInjectionLock(true);
+      }
+
+      try {
+        if (explicitRef && contractRefMgr?.setActiveContractRef) {
+          contractRefMgr.setActiveContractRef(explicitRef);
+        } else if (activeRef && contractRefMgr?.setActiveContractRef) {
+          contractRefMgr.setActiveContractRef(activeRef);
+        }
+
+        // Actualización parcial que modifica ÚNICAMENTE los campos de la Sección 2
+        voyageStore.getState()?.patchSection2Vessel?.(vessel);
+
+        const patchFn = (window as unknown as { patchSection2Vessel?: (v: Record<string, unknown>) => void }).patchSection2Vessel;
+        if (typeof patchFn === 'function') {
+          patchFn(vessel);
+        }
+
+        // Refrescar cálculos sin desmontar componentes
+        forceRefresh();
+      } finally {
+        if (contractRefMgr?.setInjectionLock) {
+          setTimeout(() => contractRefMgr.setInjectionLock?.(false), 200);
+        }
+      }
+    };
+
+    const handleWindowMessage = (event: MessageEvent) => {
+      handleVesselInjection(event);
+    };
+    const handleCustomEvent = (event: Event) => {
+      handleVesselInjection(event);
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    window.addEventListener('databridge:vessel-injected', handleCustomEvent);
+    window.addEventListener('databridge:data-loaded', handleCustomEvent);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel === 'function') {
+      try {
+        channel = new BroadcastChannel('core_bridge_sync');
+        channel.addEventListener('message', (event) => {
+          handleVesselInjection(event);
+        });
+      } catch (_) {}
+    }
+
+    return () => {
+      window.removeEventListener('message', handleWindowMessage);
+      window.removeEventListener('databridge:vessel-injected', handleCustomEvent);
+      window.removeEventListener('databridge:data-loaded', handleCustomEvent);
+      channel?.close();
+    };
+  }, []);
 
   return (
     <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
