@@ -136,7 +136,39 @@
         (function installContractReferenceSafetyNet(globalObject) {
             if (globalObject.ContractRefManager) return;
 
+            const SESSION_KEY = 'active_contract_ref';
+            const SHARED_STORAGE_KEY = 'active_core_pro_session';
+            const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
             const normalizeReference = (value) => String(value || '').trim().toUpperCase();
+
+            const writeSharedActiveSession = function(reference) {
+                if (!reference) return;
+                const payload = { reference, timestamp: Date.now() };
+                try {
+                    globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
+                } catch (_error) {}
+                try {
+                    if (typeof globalObject.BroadcastChannel === 'function') {
+                        const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
+                        channel.postMessage({ type: 'active_core_pro_session', ...payload });
+                        channel.close?.();
+                    }
+                } catch (_error) {}
+            };
+
+            const clearSharedActiveSession = function() {
+                try {
+                    globalObject.localStorage?.removeItem(SHARED_STORAGE_KEY);
+                } catch (_error) {}
+                try {
+                    if (typeof globalObject.BroadcastChannel === 'function') {
+                        const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
+                        channel.postMessage({ type: 'active_core_pro_session_cleared', reference: null, timestamp: Date.now() });
+                        channel.close?.();
+                    }
+                } catch (_error) {}
+            };
+
             const generateVoyageRef = function() {
                 const randomValues = new Uint32Array(1);
                 if (globalObject.crypto?.getRandomValues) globalObject.crypto.getRandomValues(randomValues);
@@ -152,12 +184,19 @@
             const getActiveContractRef = function() {
                 try {
                     const params = new URLSearchParams(globalObject.location?.search || '');
-                    return normalizeReference(
+                    const ref = normalizeReference(
                         params.get('ref')
                         || params.get('contract_ref')
-                        || globalObject.sessionStorage?.getItem('active_contract_ref')
+                        || globalObject.sessionStorage?.getItem(SESSION_KEY)
                         || generateVoyageRef()
                     );
+                    if (ref) {
+                        try {
+                            globalObject.sessionStorage?.setItem(SESSION_KEY, ref);
+                        } catch (_e) {}
+                        writeSharedActiveSession(ref);
+                    }
+                    return ref;
                 } catch (_error) {
                     return generateVoyageRef();
                 }
@@ -166,7 +205,7 @@
                 const normalized = normalizeReference(reference);
                 if (!normalized) return getActiveContractRef();
                 try {
-                    globalObject.sessionStorage?.setItem('active_contract_ref', normalized);
+                    globalObject.sessionStorage?.setItem(SESSION_KEY, normalized);
                 } catch (_error) {}
                 try {
                     const url = new URL(globalObject.location.href);
@@ -174,9 +213,22 @@
                     url.searchParams.delete('contract_ref');
                     globalObject.history?.replaceState?.(globalObject.history.state, '', `${url.pathname}${url.search}${url.hash}`);
                 } catch (_error) {}
+                writeSharedActiveSession(normalized);
                 return normalized;
             };
+            const clearActiveSession = function() {
+                try {
+                    globalObject.sessionStorage?.removeItem(SESSION_KEY);
+                } catch (_error) {}
+                clearSharedActiveSession();
+            };
             const fallbackManager = {
+                SESSION_KEY,
+                SHARED_STORAGE_KEY,
+                BROADCAST_CHANNEL_NAME,
+                clearActiveReference: clearActiveSession,
+                clearActiveSession,
+                clearSharedActiveSession,
                 ensureUrlReference: function() {
                     const reference = getActiveContractRef();
                     return reference ? setActiveContractRef(reference) : '';
@@ -189,13 +241,23 @@
                     return setActiveContractRef(generateNextVoyageRef(getActiveContractRef()));
                 },
                 setActiveContractRef,
+                writeSharedActiveSession,
             };
 
             globalObject.ContractRefManager = fallbackManager;
             globalObject.ContractReference = globalObject.ContractReference || fallbackManager;
             globalObject.getActiveContractRef = globalObject.getActiveContractRef || getActiveContractRef;
             globalObject.setActiveContractRef = globalObject.setActiveContractRef || setActiveContractRef;
+            globalObject.clearActiveCoreProSession = clearActiveSession;
             globalObject.generateVoyageRef = globalObject.generateVoyageRef || generateVoyageRef;
+
+            try {
+                if (typeof globalObject.addEventListener === 'function') {
+                    globalObject.addEventListener('pagehide', () => {
+                        clearSharedActiveSession();
+                    });
+                }
+            } catch (_error) {}
         })(window);
     </script>
     <!-- Tailwind CSS -->
@@ -16236,6 +16298,9 @@
             if (window.SeaCharterSessionDraftController?.discardSession) {
                 window.SeaCharterSessionDraftController.discardSession();
             }
+            try {
+                window.ContractRefManager?.clearSharedActiveSession?.() || window.clearActiveCoreProSession?.();
+            } catch (_) {}
         }
 
         function setCalculatorWaitingState() {
@@ -28291,9 +28356,7 @@ function createRouteAnchorElement(type) {
                 const inheritedVessel = window.activeAuditVessel 
                     || window.activeVessel 
                     || window.GlobalStore?.auditVessel 
-                    || window.GlobalStore?.activeVessel 
-                    || window.SeaCharterStore?.getState?.()?.auditVessel 
-                    || window.SeaCharterStore?.getState?.()?.activeVessel;
+                    || window.GlobalStore?.activeVessel;
                 if (inheritedVessel && typeof window.renderAuditorVesselDossier === 'function') {
                     window.renderAuditorVesselDossier(inheritedVessel);
                 }
