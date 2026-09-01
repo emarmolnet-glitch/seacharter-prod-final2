@@ -5,7 +5,7 @@
     const SHARED_STORAGE_KEY = 'active_core_pro_session';
     const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
     const SYNC_BROADCAST_CHANNEL_NAME = 'seacharter_sync_channel';
-    const URL_KEYS = ['ref', 'contract_ref'];
+    const URL_KEYS = ['ref', 'contract_ref', 'reference', 'target_session_id', 'targetSessionId', 'sessionId', 'session_id'];
 
     let activeCachedReference = '';
     let lastPersistedReference = '';
