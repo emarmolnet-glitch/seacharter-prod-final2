@@ -20,6 +20,7 @@
         if (typeof globalObject.BroadcastChannel === 'function') {
             try {
                 syncBroadcastChannel = new globalObject.BroadcastChannel(SYNC_BROADCAST_CHANNEL_NAME);
+                console.log('[Core PRO] Canal de sincronización abierto');
                 if (typeof syncBroadcastChannel.addEventListener === 'function') {
                     syncBroadcastChannel.addEventListener('message', handleSyncChannelMessage);
                 } else {
@@ -37,6 +38,7 @@
         const isPing = data === 'PING_SESSION' || data?.type === 'PING_SESSION';
         if (isPing) {
             const currentRef = getCurrentReference() || getActiveContractRef();
+            console.log('[Core PRO] PING recibido, respondiendo con:', currentRef);
             if (currentRef) {
                 broadcastCoreSessionActive(currentRef);
             }

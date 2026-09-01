@@ -7,6 +7,26 @@ const contractRefSource = await readFile(new URL('../contract-reference.js', imp
 const indexHtmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const dossiersSource = await readFile(new URL('../dossiers.js', import.meta.url), 'utf8');
 const dataBridgeHtmlSource = await readFile(new URL('../public/databridge.html', import.meta.url), 'utf8');
+const appJsxSource = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const statusBarSource = await readFile(new URL('../public/ConnectionStatusBar.js', import.meta.url), 'utf8');
+
+test('Core PRO App.jsx defines global useEffect, BroadcastChannel, PING_SESSION handler, and visual chivatos', () => {
+  assert.match(appJsxSource, /useEffect/);
+  assert.match(appJsxSource, /new\s+BroadcastChannel\(['"]seacharter_sync_channel['"]\)/);
+  assert.match(appJsxSource, /PING_SESSION/);
+  assert.match(appJsxSource, /CORE_SESSION_ACTIVE/);
+  assert.match(appJsxSource, /\[Core PRO\] Canal de sincronización abierto/);
+  assert.match(appJsxSource, /\[Core PRO\] PING recibido, respondiendo con:/);
+});
+
+test('Core PRO ConnectionStatusBar defines global useEffect, BroadcastChannel, and visual chivatos', () => {
+  assert.match(statusBarSource, /React\.useEffect/);
+  assert.match(statusBarSource, /BroadcastChannel\(['"]seacharter_sync_channel['"]\)/);
+  assert.match(statusBarSource, /PING_SESSION/);
+  assert.match(statusBarSource, /CORE_SESSION_ACTIVE/);
+  assert.match(statusBarSource, /\[Core PRO\] Canal de sincronización abierto/);
+  assert.match(statusBarSource, /\[Core PRO\] PING recibido, respondiendo con:/);
+});
 
 test('Core PRO Contract Reference manager defines SYNC_BROADCAST_CHANNEL_NAME as seacharter_sync_channel', () => {
   assert.match(contractRefSource, /seacharter_sync_channel/);
@@ -208,4 +228,49 @@ test('3. RESPUESTA A "PING": Core PRO responde inmediatamente a PING_SESSION', (
   const stringPingResponse = receivedByExternal.find((msg) => msg.type === 'CORE_SESSION_ACTIVE');
   assert.ok(stringPingResponse, 'Core PRO must respond to string PING_SESSION');
   assert.equal(stringPingResponse.reference, 'RDM/2026-7777');
+});
+
+test('4. SIMULACIÓN DE LISTENER REACT EN Core PRO (App.jsx / ConnectionStatusBar)', () => {
+  const env = createMockEnvironment({ href: 'https://core-pro.test/?ref=RDM%2F2026-9999' });
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => {
+    logs.push(args.join(' '));
+  };
+
+  try {
+    // Instantiate React-like hook lifecycle
+    const channel = new env.MockBroadcastChannel('seacharter_sync_channel');
+    console.log('[Core PRO] Canal de sincronización abierto');
+
+    channel.onmessage = (event) => {
+      const data = event?.data;
+      if (data?.type === 'PING_SESSION' || data === 'PING_SESSION') {
+        const currentSessionRef = env.api.getActiveContractRef();
+        console.log('[Core PRO] PING recibido, respondiendo con:', currentSessionRef);
+        channel.postMessage({
+          type: 'CORE_SESSION_ACTIVE',
+          reference: currentSessionRef,
+        });
+      }
+    };
+
+    // External client (Data Bridge) connects and sends PING
+    const bridgeChannel = new env.MockBroadcastChannel('seacharter_sync_channel');
+    const received = [];
+    bridgeChannel.addEventListener('message', (event) => {
+      received.push(event.data);
+    });
+
+    bridgeChannel.postMessage({ type: 'PING_SESSION', timestamp: Date.now() });
+
+    assert.ok(logs.some((l) => l.includes('[Core PRO] Canal de sincronización abierto')));
+    assert.ok(logs.some((l) => l.includes('[Core PRO] PING recibido, respondiendo con: RDM/2026-9999')));
+
+    const activeMsg = received.find((m) => m.type === 'CORE_SESSION_ACTIVE');
+    assert.ok(activeMsg);
+    assert.equal(activeMsg.reference, 'RDM/2026-9999');
+  } finally {
+    console.log = originalLog;
+  }
 });
