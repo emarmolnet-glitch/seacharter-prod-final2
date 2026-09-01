@@ -222,6 +222,7 @@
                 } catch (_error) {}
                 clearSharedActiveSession();
             };
+            let isInjectionLocked = false;
             const fallbackManager = {
                 SESSION_KEY,
                 SHARED_STORAGE_KEY,
@@ -229,6 +230,12 @@
                 clearActiveReference: clearActiveSession,
                 clearActiveSession,
                 clearSharedActiveSession,
+                setInjectionLock: function(locked) {
+                    isInjectionLocked = Boolean(locked);
+                },
+                isInjectionLocked: function() {
+                    return isInjectionLocked;
+                },
                 ensureUrlReference: function() {
                     const reference = getActiveContractRef();
                     return reference ? setActiveContractRef(reference) : '';
@@ -237,13 +244,15 @@
                 generateReference: generateVoyageRef,
                 generateNextVoyageRef,
                 generateVoyageRef,
-                createNewReference: function() {
+                createNewReference: function(force = false) {
+                    if (isInjectionLocked && !force) {
+                        return getActiveContractRef();
+                    }
                     return setActiveContractRef(generateNextVoyageRef(getActiveContractRef()));
                 },
                 setActiveContractRef,
                 writeSharedActiveSession,
             };
-
             globalObject.ContractRefManager = fallbackManager;
             globalObject.ContractReference = globalObject.ContractReference || fallbackManager;
             globalObject.getActiveContractRef = globalObject.getActiveContractRef || getActiveContractRef;
@@ -16168,6 +16177,9 @@
             pendingVoyageParamsPartial: {},
             getState() {
                 return State;
+            },
+            patchSection2Vessel(vesselData = {}) {
+                return window.patchSection2Vessel?.(vesselData);
             },
             resetGlobalState(options = {}) {
                 return resetGlobalState(options);
@@ -33417,6 +33429,141 @@ function createRouteAnchorElement(type) {
             }
         }
         window.hydrateSelectedVesselFromDataBridge = hydrateSelectedVesselFromDataBridge;
+
+        function patchSection2Vessel(vesselData, options = {}) {
+            if (!vesselData || typeof vesselData !== 'object') return null;
+            const raw = vesselData;
+            const name = String(raw.name || raw.vesselName || raw.vessel_name || raw.vessel || raw.nombre || '').trim();
+            const imo = String(raw.imo || raw.imo_number || raw.imoNumber || raw.numero_imo || '').replace(/\D/g, '');
+            const dwt = parseFloat(raw.dwt || raw.vesselDwt || raw.deadweight) || 0;
+            const loa = parseFloat(raw.loa || raw.loa_meters || raw.loaMeters || raw.lengthOverall) || 0;
+            const beam = parseFloat(raw.beam || raw.beam_meters || raw.beamMeters || raw.manga) || 0;
+            const speedBallast = parseFloat(raw.spd_ballast || raw.speedBallast || raw.spdBallast || raw.speed || raw.speedKnots || raw.sog) || 0;
+            const speedLaden = parseFloat(raw.spd_laden || raw.speedLaden || raw.spdLaden || (speedBallast > 0 ? (speedBallast - 1) : 0)) || 0;
+            const gt = parseFloat(raw.gt || raw.gross_tonnage || raw.grossTonnage) || 0;
+            const flag = String(raw.flag || raw.bandera || '').trim();
+            const yearBuilt = parseFloat(raw.year_built || raw.yearBuilt || raw.builtYear) || 0;
+
+            // 1. Update DOM fields strictly for Section 2 (Vessel specs) without clearing Section 1 or Cargo
+            if (name) {
+                setInputValue('nombre-buque-calculadora', name);
+                setInputValue('vessel-name', name);
+            }
+            if (imo) {
+                setInputValue('vessel-identity-imo', imo);
+            }
+            if (dwt > 0) {
+                setInputValue('vessel-dwt', dwt);
+                setInputValue('vessel-identity-dwt', dwt);
+                updateSection2LocalState('vessel-dwt', String(dwt));
+            }
+            if (loa > 0) {
+                setInputValue('vessel-loa', loa);
+                setInputValue('vessel-identity-loa', loa);
+                updateSection2LocalState('vessel-loa', String(loa));
+            }
+            if (beam > 0) {
+                setInputValue('vessel-identity-beam', beam);
+                updateSection2LocalState('vessel-identity-beam', String(beam));
+            }
+            if (speedBallast > 0) {
+                setInputValue('spd-ballast', speedBallast);
+            }
+            if (speedLaden > 0) {
+                setInputValue('spd-laden', speedLaden);
+            }
+            if (gt > 0) {
+                setInputValue('vessel-identity-gt', gt);
+            }
+            if (flag) {
+                setInputValue('vessel-identity-flag', flag);
+                setInputValue('vessel-flag', flag);
+            }
+            if (yearBuilt > 0) {
+                setInputValue('vessel-identity-year', yearBuilt);
+            }
+
+            // 2. Patch State / SeaCharterStore without wiping activeReference or commercial terms
+            if (name) {
+                State.vessel = name;
+                State.vesselName = name;
+            }
+            if (imo) State.imo = imo;
+            if (dwt > 0) {
+                State.dwt = dwt;
+                State.vesselDwtFixed = true;
+            }
+            if (loa > 0) State.loa = loa;
+            if (beam > 0) State.beam = beam;
+            if (speedBallast > 0) {
+                State.speedBallast = speedBallast;
+                State.spdBallast = speedBallast;
+            }
+            if (speedLaden > 0) {
+                State.speedLaden = speedLaden;
+                State.spdLaden = speedLaden;
+            }
+
+            const partial = {};
+            if (name) partial.vesselName = name;
+            if (imo) partial.imo = imo;
+            if (dwt > 0) {
+                partial.dwt = dwt;
+                partial.vesselDwtFixed = true;
+            }
+            if (loa > 0) partial.loa = loa;
+            if (beam > 0) partial.beam = beam;
+            if (speedBallast > 0) partial.speedBallast = speedBallast;
+            if (speedLaden > 0) partial.speedLaden = speedLaden;
+
+            window.SeaCharterStore?.set?.(partial, { source: 'databridge-vessel-patch' });
+
+            // 3. Patch VoyageStore (Zustand) if available
+            try {
+                const voyageStoreState = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                if (typeof voyageStoreState?.patchSection2Vessel === 'function') {
+                    voyageStoreState.patchSection2Vessel(raw);
+                }
+            } catch (_) {}
+
+            // 4. Update window active vessel references
+            const merged = {
+                ...(window.objetoCalculadoraPrincipal || {}),
+                ...raw,
+                vessel: name || (window.objetoCalculadoraPrincipal?.vessel || ''),
+                vesselName: name || (window.objetoCalculadoraPrincipal?.vesselName || ''),
+                name: name || (window.objetoCalculadoraPrincipal?.name || ''),
+                imo: imo || (window.objetoCalculadoraPrincipal?.imo || null),
+                dwt: dwt || (window.objetoCalculadoraPrincipal?.dwt || 0),
+                loa: loa || (window.objetoCalculadoraPrincipal?.loa || 0),
+                beam: beam || (window.objetoCalculadoraPrincipal?.beam || 0),
+                spd_ballast: speedBallast || (window.objetoCalculadoraPrincipal?.spd_ballast || 0),
+                spd_laden: speedLaden || (window.objetoCalculadoraPrincipal?.spd_laden || 0),
+            };
+            window.objetoCalculadoraPrincipal = Object.freeze(merged);
+            window.activeVessel = window.objetoCalculadoraPrincipal;
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = window.objetoCalculadoraPrincipal;
+                window.GlobalStore.calculatorVessel = window.objetoCalculadoraPrincipal;
+            }
+
+            // 5. Trigger calculation updates without wiping other sections
+            if (typeof handleDWTChange === 'function' && dwt > 0) {
+                handleDWTChange(true, false);
+            }
+            if (typeof autoClassifySpecialtyFromInputs === 'function') {
+                autoClassifySpecialtyFromInputs();
+            }
+            if (typeof runEngine === 'function') {
+                runEngine();
+            }
+            if (typeof syncCalculatorAndMatching === 'function') {
+                syncCalculatorAndMatching('calculator');
+            }
+
+            return merged;
+        }
+        window.patchSection2Vessel = patchSection2Vessel;
 
         let pendingPdaVesselConfirmation = null;
 
@@ -63123,10 +63270,62 @@ if (typeof window.loadActiveFleet === 'function') {
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_OPPORTUNITIES') {
                 const candidates = event.data.candidates || event.data.vessels || event.data.buques || [];
                 window.receiveDataBridgeOpportunities?.(candidates);
+            } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_LOAD_DATA') {
+                const ref = event.data.reference || event.data.contractRef || event.data.payload?.reference;
+                const referenceManager = window.ContractReference || window.ContractRefManager;
+
+                // 3. BLOQUEO DE GENERACIÓN DE ID: Activar guardia contra regeneración de ID
+                referenceManager?.setInjectionLock?.(true);
+
+                try {
+                    if (ref && referenceManager?.setActiveContractRef) {
+                        referenceManager.setActiveContractRef(ref);
+                    }
+
+                    // 2. ACTUALIZACIÓN PARCIAL (PATCH DEL ESTADO): Inyección quirúrgica sin reset
+                    const payload = event.data.payload || {};
+                    const vessels = payload.vessels || event.data.candidates || [];
+                    const singleVessel = payload.vessel || (Array.isArray(vessels) && vessels.length === 1 ? vessels[0] : null) || (event.data.vessel || null);
+
+                    if (singleVessel) {
+                        window.patchSection2Vessel?.(singleVessel);
+                    }
+
+                    if (vessels.length > 0 && typeof window.receiveDataBridgeOpportunities === 'function') {
+                        window.receiveDataBridgeOpportunities(vessels);
+                    }
+                } finally {
+                    setTimeout(() => referenceManager?.setInjectionLock?.(false), 200);
+                }
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_MUTATION') {
                 updateDataBridgeConnectionIndicator();
             }
         });
+
+        if (typeof BroadcastChannel === 'function') {
+            try {
+                const coreBridgeSyncChannel = new BroadcastChannel('core_bridge_sync');
+                coreBridgeSyncChannel.addEventListener('message', (event) => {
+                    const data = event.data;
+                    if (!data) return;
+                    const referenceManager = window.ContractReference || window.ContractRefManager;
+
+                    if (data.type === 'active_core_pro_session' || data.type === 'INJECT_VESSEL' || data.type === 'SEACHARTER_DATABRIDGE_LOAD_DATA') {
+                        const ref = data.reference || data.payload?.reference;
+                        if (ref && referenceManager?.setActiveContractRef) {
+                            referenceManager.setInjectionLock?.(true);
+                            referenceManager.setActiveContractRef(ref);
+                            setTimeout(() => referenceManager.setInjectionLock?.(false), 200);
+                        }
+
+                        const vessel = data.vessel || data.payload?.vessel || (Array.isArray(data.payload?.vessels) && data.payload.vessels.length === 1 ? data.payload.vessels[0] : null);
+                        if (vessel) {
+                            window.patchSection2Vessel?.(vessel);
+                        }
+                    }
+                });
+            } catch (_) {}
+        }
 
         /**
          * Sends a toggle request to the Electron Main Process or controls the web fallback modal
@@ -63544,13 +63743,19 @@ if (typeof window.loadActiveFleet === 'function') {
             const container = document.getElementById('web-databridge-container');
             const launcher = document.getElementById('web-databridge-launcher');
             const iframe = document.getElementById('web-databridge-iframe');
+            const activeRef = window.ContractRefManager?.getActiveContractRef?.() || '';
+            const targetUrl = activeRef ? `${LOCAL_DATA_BRIDGE_URL}?ref=${encodeURIComponent(activeRef)}` : LOCAL_DATA_BRIDGE_URL;
+
             if (!modal || !container) {
-                window.open(LOCAL_DATA_BRIDGE_URL, '_blank', 'noopener');
+                window.open(targetUrl, '_blank', 'noopener');
                 return;
             }
 
-            if (iframe && !iframe.getAttribute('src')) {
-                iframe.setAttribute('src', LOCAL_DATA_BRIDGE_URL);
+            if (iframe) {
+                const currentSrc = iframe.getAttribute('src') || '';
+                if (!currentSrc || (activeRef && !currentSrc.includes(encodeURIComponent(activeRef)))) {
+                    iframe.setAttribute('src', targetUrl);
+                }
             }
 
             webDataBridgeVisible = true;

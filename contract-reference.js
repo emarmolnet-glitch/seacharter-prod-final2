@@ -125,7 +125,20 @@
         return persistReference(getActiveContractRef());
     }
 
-    function createNewReference() {
+    let isInjectionLocked = false;
+
+    function setInjectionLock(locked) {
+        isInjectionLocked = Boolean(locked);
+    }
+
+    function isLocked() {
+        return isInjectionLocked;
+    }
+
+    function createNewReference(force = false) {
+        if (isInjectionLocked && !force) {
+            return getActiveContractRef();
+        }
         return persistReference(generateNextVoyageRef(getActiveContractRef()), true);
     }
 
@@ -142,8 +155,10 @@
         generateNextVoyageRef,
         generateVoyageRef,
         getActiveContractRef,
+        isInjectionLocked: isLocked,
         normalizeReference,
         setActiveContractRef,
+        setInjectionLock,
         writeSharedActiveSession,
     });
 

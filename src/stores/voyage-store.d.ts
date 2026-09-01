@@ -66,6 +66,7 @@ export type VoyageStoreState = {
   draft: DraftVoyage;
   applyNlpScenario: (scenario?: Record<string, unknown>) => void;
   updateFromCalculator: (state?: Record<string, unknown>) => void;
+  patchSection2Vessel: (vessel?: Record<string, unknown>) => void;
   setBallastDistance: (payload?: { ballastDistanceNm?: number; source?: string }) => void;
   applyTrackingAudit: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
   applyMatchingCandidate: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
