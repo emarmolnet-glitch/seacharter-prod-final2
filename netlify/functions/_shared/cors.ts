@@ -22,12 +22,23 @@ function isSerializedOrigin(origin: string) {
   }
 }
 
+function isAllowedNetlifyOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:"
+      && !url.port
+      && (url.hostname === "netlify.app" || url.hostname.endsWith(".netlify.app"));
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedNetlifyPreview(origin: string) {
   try {
     const url = new URL(origin);
     return url.protocol === "https:"
       && !url.port
-      && /^deploy-preview-[a-z0-9-]+--calm-shortbread-55bcfc\.netlify\.app$/i.test(url.hostname);
+      && /^deploy-preview-[a-z0-9-]+--[a-z0-9-]+\.netlify\.app$/i.test(url.hostname);
   } catch {
     return false;
   }
@@ -51,7 +62,8 @@ export function isAllowedCorsOrigin(origin: string) {
     && isSerializedOrigin(requestOrigin)
     && (allowedOrigins.has(requestOrigin)
       || isAllowedLocalhost(requestOrigin)
-      || isAllowedNetlifyPreview(requestOrigin));
+      || isAllowedNetlifyPreview(requestOrigin)
+      || isAllowedNetlifyOrigin(requestOrigin));
 }
 
 export function createCorsHeaders(req: Request, methods: string) {

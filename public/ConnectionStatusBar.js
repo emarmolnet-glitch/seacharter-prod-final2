@@ -86,6 +86,81 @@ export function ConnectionStatusBar() {
     const channel = new window.BroadcastChannel("seacharter_sync_channel");
     console.log("[Core PRO] Canal de sincronización abierto");
 
+    let lastPersistedRef = "";
+    let isSaving = false;
+    let debounceTimer = null;
+
+    const persistActiveSessionToBackend = (ref, immediate = false) => {
+      const normalized = String(ref || "").trim().toUpperCase();
+      if (!normalized || typeof window.fetch !== "function") return;
+      if (normalized === lastPersistedRef) return;
+
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+
+      const executeSave = () => {
+        if (isSaving) return;
+        isSaving = true;
+
+        if (typeof window.ContractRefManager?.persistSessionToDatabase === "function") {
+          window.ContractRefManager.persistSessionToDatabase(normalized, null, true)
+            .then((data) => {
+              if (data) lastPersistedRef = normalized;
+            })
+            .catch(() => {})
+            .finally(() => { isSaving = false; });
+        } else {
+          window.fetch("/api/app-state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({
+              id: "current_session",
+              key: "current_session",
+              session_ref: normalized,
+              currentSessionRef: normalized,
+              reference: normalized,
+              timestamp: Date.now(),
+            }),
+          })
+            .then((res) => {
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+              }
+              return res.json();
+            })
+            .then((data) => {
+              lastPersistedRef = normalized;
+              console.log("[Core PRO] Sesión activa guardada en Neon:", normalized);
+            })
+            .catch((err) => {
+              console.warn("[Core PRO] No se pudo persistir la sesión activa en backend:", err?.message || err);
+            })
+            .finally(() => { isSaving = false; });
+        }
+      };
+
+      if (immediate) {
+        executeSave();
+      } else {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          executeSave();
+        }, 500);
+      }
+    };
+
+    const initialRef =
+      window.ContractRefManager?.getActiveContractRef?.() ||
+      window.ContractReference?.getActiveContractRef?.() ||
+      window.getActiveContractRef?.() ||
+      (typeof window.sessionStorage !== "undefined" ? window.sessionStorage.getItem("active_contract_ref") : null) ||
+      "";
+    if (initialRef) {
+      persistActiveSessionToBackend(initialRef);
+    }
+
     channel.onmessage = (event) => {
       const data = event?.data;
       if (data?.type === "PING_SESSION" || data === "PING_SESSION") {
@@ -101,10 +176,15 @@ export function ConnectionStatusBar() {
           type: "CORE_SESSION_ACTIVE",
           reference: currentSessionRef,
         });
+
+        if (currentSessionRef && currentSessionRef !== lastPersistedRef) {
+          persistActiveSessionToBackend(currentSessionRef);
+        }
       }
     };
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       channel.close();
     };
   }, []);
