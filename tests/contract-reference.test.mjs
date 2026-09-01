@@ -8,11 +8,26 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const trackingSource = await readFile(new URL('../tracking-live.js', import.meta.url), 'utf8');
 const viteSource = await readFile(new URL('../vite.config.js', import.meta.url), 'utf8');
 
-function loadUtility({ href = 'https://example.test/', sessionReference = '' } = {}) {
+function loadUtility({ href = 'https://example.test/', sessionReference = '', localStore = new Map() } = {}) {
   const session = new Map(sessionReference ? [['active_contract_ref', sessionReference]] : []);
+  const local = localStore;
+  const broadcastMessages = [];
   const location = new URL(href);
   let randomValue = 7;
+  const listeners = new Map();
+
+  class MockBroadcastChannel {
+    constructor(channelName) {
+      this.name = channelName;
+    }
+    postMessage(data) {
+      broadcastMessages.push({ channel: this.name, data });
+    }
+    close() {}
+  }
+
   const window = {
+    BroadcastChannel: MockBroadcastChannel,
     CustomEvent: class CustomEvent {
       constructor(type, options) {
         this.type = type;
@@ -26,6 +41,9 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '' } =
         return values;
       },
     },
+    addEventListener(event, handler) {
+      listeners.set(event, handler);
+    },
     dispatchEvent() {},
     history: {
       state: null,
@@ -36,12 +54,26 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '' } =
     },
     location,
     sessionStorage: {
-      getItem: (key) => session.get(key) || null,
+      getItem: (key) => (session.has(key) ? session.get(key) : null),
       setItem: (key, value) => session.set(key, value),
+      removeItem: (key) => session.delete(key),
+    },
+    localStorage: {
+      getItem: (key) => (local.has(key) ? local.get(key) : null),
+      setItem: (key, value) => local.set(key, value),
+      removeItem: (key) => local.delete(key),
     },
   };
-  vm.runInNewContext(utilitySource, { window, URL, URLSearchParams, Uint32Array, Date, Math, CustomEvent: window.CustomEvent });
-  return { api: window.ContractReference, location, session };
+  vm.runInNewContext(utilitySource, {
+    window,
+    URL,
+    URLSearchParams,
+    Uint32Array,
+    Date,
+    Math,
+    CustomEvent: window.CustomEvent,
+  });
+  return { api: window.ContractReference, location, session, local, window, broadcastMessages, listeners };
 }
 
 test('URL ref has precedence and synchronizes session storage', () => {
@@ -94,6 +126,49 @@ test('new estimation advances the active reference sequence', () => {
   const { api } = loadUtility({ sessionReference: 'RDM/2026-0042' });
 
   assert.equal(api.createNewReference(), 'RDM/2026-0043');
+});
+
+test('persists active session immediately to localStorage and emits via BroadcastChannel on active ref retrieval or change', () => {
+  const { api, window, broadcastMessages } = loadUtility({ href: 'https://example.test/app?ref=RDM%2F2026-3306' });
+  const activeRef = api.getActiveContractRef();
+
+  assert.equal(activeRef, 'RDM/2026-3306');
+  const stored = JSON.parse(window.localStorage.getItem('active_core_pro_session'));
+  assert.equal(stored.reference, 'RDM/2026-3306');
+  assert.ok(typeof stored.timestamp === 'number');
+
+  assert.ok(broadcastMessages.some(
+    (msg) => msg.channel === 'core_bridge_sync' && msg.data.reference === 'RDM/2026-3306',
+  ));
+
+  const updatedRef = api.setActiveContractRef('RDM/2026-4400');
+  assert.equal(updatedRef, 'RDM/2026-4400');
+  const updatedStored = JSON.parse(window.localStorage.getItem('active_core_pro_session'));
+  assert.equal(updatedStored.reference, 'RDM/2026-4400');
+
+  assert.ok(broadcastMessages.some(
+    (msg) => msg.channel === 'core_bridge_sync' && msg.data.reference === 'RDM/2026-4400',
+  ));
+});
+
+test('clears active session in localStorage and broadcasts on clear or pagehide', () => {
+  const { api, window, broadcastMessages, listeners } = loadUtility({ href: 'https://example.test/app?ref=RDM%2F2026-3306' });
+  api.getActiveContractRef();
+  assert.ok(window.localStorage.getItem('active_core_pro_session') !== null);
+
+  api.clearActiveSession();
+  assert.equal(window.localStorage.getItem('active_core_pro_session'), null);
+  assert.ok(broadcastMessages.some(
+    (msg) => msg.channel === 'core_bridge_sync' && msg.data.type === 'active_core_pro_session_cleared',
+  ));
+
+  // Re-establish session then trigger pagehide
+  api.setActiveContractRef('RDM/2026-5500');
+  assert.ok(window.localStorage.getItem('active_core_pro_session') !== null);
+  const pagehideHandler = listeners.get('pagehide');
+  assert.ok(typeof pagehideHandler === 'function');
+  pagehideHandler();
+  assert.equal(window.localStorage.getItem('active_core_pro_session'), null);
 });
 
 test('all contractual modules consume the centralized reference', () => {

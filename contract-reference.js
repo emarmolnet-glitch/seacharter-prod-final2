@@ -2,6 +2,8 @@
     'use strict';
 
     const SESSION_KEY = 'active_contract_ref';
+    const SHARED_STORAGE_KEY = 'active_core_pro_session';
+    const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
     const URL_KEYS = ['ref', 'contract_ref'];
 
     function normalizeReference(value) {
@@ -19,6 +21,34 @@
     function writeSessionReference(reference) {
         try {
             globalObject.sessionStorage?.setItem(SESSION_KEY, reference);
+        } catch (_error) {}
+    }
+
+    function writeSharedActiveSession(reference) {
+        if (!reference) return;
+        const payload = { reference, timestamp: Date.now() };
+        try {
+            globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
+        } catch (_error) {}
+        try {
+            if (typeof globalObject.BroadcastChannel === 'function') {
+                const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
+                channel.postMessage({ type: 'active_core_pro_session', ...payload });
+                channel.close?.();
+            }
+        } catch (_error) {}
+    }
+
+    function clearSharedActiveSession() {
+        try {
+            globalObject.localStorage?.removeItem(SHARED_STORAGE_KEY);
+        } catch (_error) {}
+        try {
+            if (typeof globalObject.BroadcastChannel === 'function') {
+                const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
+                channel.postMessage({ type: 'active_core_pro_session_cleared', reference: null, timestamp: Date.now() });
+                channel.close?.();
+            }
         } catch (_error) {}
     }
 
@@ -65,6 +95,7 @@
         if (!normalized) return '';
         writeSessionReference(normalized);
         writeUrlReference(normalized);
+        writeSharedActiveSession(normalized);
         if (notify && typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
             globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:changed', { detail: { reference: normalized } }));
         }
@@ -80,6 +111,16 @@
         return normalized ? persistReference(normalized, true) : getActiveContractRef();
     }
 
+    function clearActiveSession() {
+        try {
+            globalObject.sessionStorage?.removeItem(SESSION_KEY);
+        } catch (_error) {}
+        clearSharedActiveSession();
+        if (typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
+            globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:cleared', { detail: { reference: '' } }));
+        }
+    }
+
     function ensureUrlReference() {
         return persistReference(getActiveContractRef());
     }
@@ -90,6 +131,11 @@
 
     const contractReferenceManager = Object.freeze({
         SESSION_KEY,
+        SHARED_STORAGE_KEY,
+        BROADCAST_CHANNEL_NAME,
+        clearActiveReference: clearActiveSession,
+        clearActiveSession,
+        clearSharedActiveSession,
         createNewReference,
         ensureUrlReference,
         generateReference,
@@ -98,11 +144,27 @@
         getActiveContractRef,
         normalizeReference,
         setActiveContractRef,
+        writeSharedActiveSession,
     });
 
     globalObject.ContractRefManager = contractReferenceManager;
     globalObject.ContractReference = contractReferenceManager;
     globalObject.getActiveContractRef = getActiveContractRef;
     globalObject.setActiveContractRef = setActiveContractRef;
+    globalObject.clearActiveCoreProSession = clearActiveSession;
     globalObject.generateVoyageRef = generateVoyageRef;
+
+    try {
+        if (globalObject.location || globalObject.document) {
+            getActiveContractRef();
+        }
+    } catch (_error) {}
+
+    try {
+        if (typeof globalObject.addEventListener === 'function') {
+            globalObject.addEventListener('pagehide', () => {
+                clearSharedActiveSession();
+            });
+        }
+    } catch (_error) {}
 })(window);

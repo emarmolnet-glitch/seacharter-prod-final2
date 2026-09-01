@@ -1523,6 +1523,41 @@
             window.coreProLiveSyncChannel = coreProLiveSyncChannel;
         }
 
+        let activeCoreProSession = null;
+        function updateActiveCoreProSession(sessionData) {
+            activeCoreProSession = sessionData;
+            if (sessionData && sessionData.reference) {
+                addLog(`[CORE PRO] Sesión activa sincronizada: ${sessionData.reference}`);
+            } else {
+                addLog(`[CORE PRO] Sesión activa limpiada o desconectada.`);
+            }
+        }
+        try {
+            const rawActiveSession = localStorage.getItem('active_core_pro_session');
+            if (rawActiveSession) {
+                updateActiveCoreProSession(JSON.parse(rawActiveSession));
+            }
+        } catch (_) {}
+        if (typeof BroadcastChannel === 'function') {
+            const coreBridgeSyncChannel = new BroadcastChannel('core_bridge_sync');
+            coreBridgeSyncChannel.addEventListener('message', (event) => {
+                const data = event.data;
+                if (data?.type === 'active_core_pro_session' || data?.reference) {
+                    updateActiveCoreProSession(data);
+                } else if (data?.type === 'active_core_pro_session_cleared' || data?.reference === null) {
+                    updateActiveCoreProSession(null);
+                }
+            });
+            window.coreBridgeSyncChannel = coreBridgeSyncChannel;
+        }
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'active_core_pro_session') {
+                try {
+                    updateActiveCoreProSession(event.newValue ? JSON.parse(event.newValue) : null);
+                } catch (_) {}
+            }
+        });
+
         function loadPendingFrozenReport() {
             if (!pending_frozen_report || !Array.isArray(pending_frozen_report.vessels) || pending_frozen_report.vessels.length === 0) {
                 addLog(`[CONGELAR_REPORTE] ${getTimestamp()} - No hay pending_frozen_report con buques para cargar.`);
