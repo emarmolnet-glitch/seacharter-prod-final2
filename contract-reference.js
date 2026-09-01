@@ -4,13 +4,67 @@
     const SESSION_KEY = 'active_contract_ref';
     const SHARED_STORAGE_KEY = 'active_core_pro_session';
     const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
+    const SYNC_BROADCAST_CHANNEL_NAME = 'seacharter_sync_channel';
     const URL_KEYS = ['ref', 'contract_ref'];
 
     let activeCachedReference = '';
     let isInitializedOnMount = false;
+    let syncBroadcastChannel = null;
 
     function normalizeReference(value) {
         return String(value || '').trim().toUpperCase();
+    }
+
+    function getOrCreateSyncChannel() {
+        if (syncBroadcastChannel) return syncBroadcastChannel;
+        if (typeof globalObject.BroadcastChannel === 'function') {
+            try {
+                syncBroadcastChannel = new globalObject.BroadcastChannel(SYNC_BROADCAST_CHANNEL_NAME);
+                if (typeof syncBroadcastChannel.addEventListener === 'function') {
+                    syncBroadcastChannel.addEventListener('message', handleSyncChannelMessage);
+                } else {
+                    syncBroadcastChannel.onmessage = handleSyncChannelMessage;
+                }
+            } catch (_error) {
+                syncBroadcastChannel = null;
+            }
+        }
+        return syncBroadcastChannel;
+    }
+
+    function handleSyncChannelMessage(event) {
+        const data = event?.data;
+        const isPing = data === 'PING_SESSION' || data?.type === 'PING_SESSION';
+        if (isPing) {
+            const currentRef = getCurrentReference() || getActiveContractRef();
+            if (currentRef) {
+                broadcastCoreSessionActive(currentRef);
+            }
+        }
+    }
+
+    function broadcastCoreSessionActive(reference) {
+        const normalized = normalizeReference(reference) || getCurrentReference();
+        if (!normalized) return null;
+
+        const payload = {
+            type: 'CORE_SESSION_ACTIVE',
+            reference: normalized,
+            timestamp: Date.now()
+        };
+
+        try {
+            const channel = getOrCreateSyncChannel();
+            if (channel) {
+                channel.postMessage(payload);
+            } else if (typeof globalObject.BroadcastChannel === 'function') {
+                const tempChannel = new globalObject.BroadcastChannel(SYNC_BROADCAST_CHANNEL_NAME);
+                tempChannel.postMessage(payload);
+                tempChannel.close?.();
+            }
+        } catch (_error) {}
+
+        return payload;
     }
 
     function readSessionReference() {
@@ -44,19 +98,21 @@
             }
         } catch (_error) {}
 
-        if (existingSharedRef === normalized) return;
+        if (existingSharedRef !== normalized) {
+            const payload = { reference: normalized, timestamp: Date.now() };
+            try {
+                globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
+            } catch (_error) {}
+            try {
+                if (typeof globalObject.BroadcastChannel === 'function') {
+                    const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
+                    channel.postMessage({ type: 'active_core_pro_session', ...payload });
+                    channel.close?.();
+                }
+            } catch (_error) {}
+        }
 
-        const payload = { reference: normalized, timestamp: Date.now() };
-        try {
-            globalObject.localStorage?.setItem(SHARED_STORAGE_KEY, JSON.stringify(payload));
-        } catch (_error) {}
-        try {
-            if (typeof globalObject.BroadcastChannel === 'function') {
-                const channel = new globalObject.BroadcastChannel(BROADCAST_CHANNEL_NAME);
-                channel.postMessage({ type: 'active_core_pro_session', ...payload });
-                channel.close?.();
-            }
-        } catch (_error) {}
+        broadcastCoreSessionActive(normalized);
     }
 
     function clearSharedActiveSession() {
@@ -168,7 +224,9 @@
             writeSharedActiveSession(fromSession);
             return fromSession;
         }
-        if (activeCachedReference) return activeCachedReference;
+        if (activeCachedReference) {
+            return activeCachedReference;
+        }
         const generated = generateVoyageRef();
         activeCachedReference = generated;
         return persistReference(generated, false);
@@ -226,6 +284,9 @@
         SESSION_KEY,
         SHARED_STORAGE_KEY,
         BROADCAST_CHANNEL_NAME,
+        SYNC_BROADCAST_CHANNEL_NAME,
+        broadcastCoreSessionActive,
+        emitActiveSession: broadcastCoreSessionActive,
         clearActiveReference: clearActiveSession,
         clearActiveSession,
         clearSharedActiveSession,
@@ -248,10 +309,13 @@
     globalObject.setActiveContractRef = setActiveContractRef;
     globalObject.clearActiveCoreProSession = clearActiveSession;
     globalObject.generateVoyageRef = generateVoyageRef;
+    globalObject.broadcastCoreSessionActive = broadcastCoreSessionActive;
+    globalObject.emitActiveSession = broadcastCoreSessionActive;
 
     function initializeOnMount() {
         if (isInitializedOnMount) return;
         isInitializedOnMount = true;
+        getOrCreateSyncChannel();
         getActiveContractRef();
     }
 
