@@ -9,10 +9,28 @@ const STATUS_CONFIG = {
     bridgeTitle: "Data Bridge inactivo",
   },
   secure: {
-    label: "SYNC: ACTIVE",
+    label: "CONNECTED",
     state: "secure",
     icon: "fa-solid fa-circle-check",
     bridgeTitle: "Data Bridge online mediante sincronización REST HTTP",
+  },
+  connected: {
+    label: "CONNECTED",
+    state: "secure",
+    icon: "fa-solid fa-circle-check",
+    bridgeTitle: "Data Bridge conectado",
+  },
+  ok: {
+    label: "CONNECTED",
+    state: "secure",
+    icon: "fa-solid fa-circle-check",
+    bridgeTitle: "Data Bridge conectado (Status OK)",
+  },
+  persisted: {
+    label: "CONNECTED",
+    state: "secure",
+    icon: "fa-solid fa-circle-check",
+    bridgeTitle: "Data Bridge conectado (Status PERSISTED)",
   },
   fallback: {
     label: "SYNC HTTP · 10S",
@@ -34,14 +52,26 @@ const STATUS_CONFIG = {
   },
 };
 
+function resolveStatusKey(statusValue) {
+  const normalized = String(statusValue || "").trim().toLowerCase();
+  if (normalized === "ok" || normalized === "persisted" || normalized === "connected" || normalized === "live" || normalized === "ready") {
+    return "secure";
+  }
+  return STATUS_CONFIG[normalized] ? normalized : "inactive";
+}
+
 export function ConnectionStatusBar() {
   const [status, setStatus] = React.useState(() => window.__dataBridgeConnectionStatus || "inactive");
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.inactive;
+  const effectiveStatus = resolveStatusKey(status);
+  const config = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.inactive;
 
   React.useEffect(() => {
     const handleStatusUpdate = (event) => {
       const nextStatus = event.detail?.status;
-      if (STATUS_CONFIG[nextStatus]) setStatus(nextStatus);
+      if (nextStatus !== undefined && nextStatus !== null) {
+        const resolved = resolveStatusKey(nextStatus);
+        if (STATUS_CONFIG[resolved]) setStatus(resolved);
+      }
     };
 
     window.addEventListener("connection-status:update", handleStatusUpdate);

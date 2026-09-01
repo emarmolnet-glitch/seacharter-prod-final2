@@ -63349,8 +63349,19 @@ if (typeof window.loadActiveFleet === 'function') {
         }
 
         function updateConnectionStatusBar(state = 'inactive') {
-            const requestedState = ['inactive', 'secure', 'fallback', 'unauthorized', 'disconnected'].includes(state) ? state : 'inactive';
-	        const normalizedState = requestedState;
+            const raw = String(state || 'inactive').toLowerCase();
+            let normalizedState = 'inactive';
+            if (raw === 'ok' || raw === 'persisted' || raw === 'connected' || raw === 'secure' || raw === 'live' || raw === 'ready') {
+                normalizedState = 'secure';
+            } else if (raw === 'fallback' || raw === 'connecting' || raw === 'sync') {
+                normalizedState = 'fallback';
+            } else if (raw === 'unauthorized') {
+                normalizedState = 'unauthorized';
+            } else if (raw === 'disconnected') {
+                normalizedState = 'disconnected';
+            } else if (['inactive', 'secure', 'fallback', 'unauthorized', 'disconnected'].includes(state)) {
+                normalizedState = state;
+            }
             if (window.__dataBridgeConnectionStatus === normalizedState) return;
             window.__dataBridgeConnectionStatus = normalizedState;
             window.dispatchEvent(new CustomEvent('connection-status:update', {
@@ -64226,8 +64237,22 @@ if (typeof window.loadActiveFleet === 'function') {
         function findMarketLatestRecord(payload, visited = new Set()) {
             if (!payload || typeof payload !== 'object' || visited.has(payload)) return null;
             visited.add(payload);
-            if (!Array.isArray(payload) && MARKET_INTEL_FIELDS.some(field => payload[field] !== undefined)) {
-                return payload;
+            if (!Array.isArray(payload)) {
+                const predictive = payload.predictive_v2 || payload.predictiveV2;
+                const metrics = predictive?.metrics || predictive;
+                if (metrics && typeof metrics === 'object') {
+                    return {
+                        ...payload,
+                        source: payload.source || 'Data Bridge (Spot V2)',
+                        capesize_tc: Number(metrics.capesize?.tceSpot ?? metrics.Capesize?.tceSpot ?? payload.capesize_tc),
+                        panamax_tc: Number(metrics.panamax?.tceSpot ?? metrics.Panamax?.tceSpot ?? payload.panamax_tc),
+                        supramax_tc: Number(metrics.supramax?.tceSpot ?? metrics.Supramax?.tceSpot ?? payload.supramax_tc),
+                        handysize_tc: Number(metrics.handysize?.tceSpot ?? metrics.Handysize?.tceSpot ?? payload.handysize_tc),
+                    };
+                }
+                if (MARKET_INTEL_FIELDS.some(field => payload[field] !== undefined)) {
+                    return payload;
+                }
             }
             const nestedValues = Array.isArray(payload) ? payload : Object.values(payload);
             for (const value of nestedValues) {
@@ -64279,7 +64304,7 @@ if (typeof window.loadActiveFleet === 'function') {
             const isManual = /manual/i.test(rawSource);
             return {
                 badge: isManual ? 'Manual' : 'Automático',
-                dataLabel: isManual ? 'Manual Data' : 'Fearnleys Data',
+                dataLabel: isManual ? 'Manual Data' : 'Data Bridge (Spot V2)',
                 tone: isManual ? 'manual' : 'automatic'
             };
         }
@@ -64295,7 +64320,7 @@ if (typeof window.loadActiveFleet === 'function') {
             };
             Object.entries(MARKET_TCE_FIELD_BY_CLASS).forEach(([vesselClass, field]) => {
                 const classSnapshot = snapshot.tceSpotByClass?.[vesselClass];
-                record[field] = classSnapshot?.baseTc;
+                record[field] = classSnapshot?.theoreticalSpotTce ?? classSnapshot?.baseTc;
                 record[`${field.replace('_tc', '')}_tce_spot`] = classSnapshot?.theoreticalSpotTce;
             });
             return record;
@@ -64347,6 +64372,24 @@ if (typeof window.loadActiveFleet === 'function') {
             const record = marketSnapshotToLegacyRecord(snapshot);
             if (!record) throw new Error('La instantánea de mercado no está disponible.');
             renderMarketIntelDashboard(record);
+
+            const dataBridgeStatus = String(snapshot.dataBridgeStatus || '').toUpperCase();
+            const isConnected = snapshot.status === 'ready' || dataBridgeStatus === 'OK' || dataBridgeStatus === 'PERSISTED' || dataBridgeStatus === 'CONNECTED';
+            if (isConnected) {
+                updateDataBridgeTransportStatus('connected');
+                updateConnectionStatusBar('secure');
+                setDataBridgeVerifiedConnection(true);
+            }
+
+            if (snapshot.aisstream_coaster_speed) {
+                window.__aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
+                if (typeof State !== 'undefined') State.aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
+            }
+            if (snapshot.aisstream_minibulker_speed) {
+                window.__aisstreamMinibulkerSpeed = snapshot.aisstream_minibulker_speed;
+                if (typeof State !== 'undefined') State.aisstreamMinibulkerSpeed = snapshot.aisstream_minibulker_speed;
+            }
+
             return record;
         }
 
@@ -64418,12 +64461,13 @@ if (typeof window.loadActiveFleet === 'function') {
             const tceInput = document.getElementById('inverse-tce-target');
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
             const classSnapshot = record?._marketSnapshot?.tceSpotByClass?.[vesselClass];
-            const marketRate = Number(classSnapshot?.theoreticalSpotTce);
+            const field = MARKET_TCE_FIELD_BY_CLASS[vesselClass];
+            const marketRate = Number(classSnapshot?.theoreticalSpotTce ?? record?.[field]);
             if (!tceInput || !Number.isFinite(marketRate)) return false;
 
             tceInput.value = String(marketRate);
-            const recordDate = formatMarketIntelDate(classSnapshot?.updatedAt);
-            const sourceLabel = classSnapshot?.source || record?.source || 'Data Bridge';
+            const recordDate = formatMarketIntelDate(classSnapshot?.updatedAt || record?.updated_at);
+            const sourceLabel = classSnapshot?.source || record?.source || 'Data Bridge (Spot V2)';
             updateBalticSpotSourceLabel(`${vesselClass} TCE Spot Teórico - ${sourceLabel} - ${recordDate}`);
             calculateInverseTce();
             return true;
@@ -65186,6 +65230,45 @@ if (typeof window.loadActiveFleet === 'function') {
             ) {
                 void handleFetchBalticSpotTce();
             }
+
+            if (vesselClass.type === 'Cost-Plus') {
+                const isCoaster = vesselClass.categoryName.toLowerCase().includes('coaster') || vesselDwt < 5000;
+                const isMinibulker = vesselClass.categoryName.toLowerCase().includes('mini') || (vesselDwt >= 5000 && vesselDwt < 15000);
+                const snapshot = window.MarketIntelligenceHydration?.getSnapshot();
+                const realSpeed = isCoaster
+                    ? (window.__aisstreamCoasterSpeed || window.State?.aisstreamCoasterSpeed || snapshot?.aisstream_coaster_speed || snapshot?.speeds?.coaster)
+                    : (isMinibulker ? (window.__aisstreamMinibulkerSpeed || window.State?.aisstreamMinibulkerSpeed || snapshot?.aisstream_minibulker_speed || snapshot?.speeds?.minibulker) : null);
+
+                if (Number.isFinite(Number(realSpeed)) && Number(realSpeed) > 0) {
+                    const speedVal = Number(realSpeed);
+                    const spdBalInput = document.getElementById('spd-ballast');
+                    const spdLadenInput = document.getElementById('spd-laden');
+                    if (spdBalInput) {
+                        spdBalInput.value = speedVal.toFixed(1);
+                        spdBalInput.dataset.navigationBase = String(speedVal);
+                        spdBalInput.dataset.autoInferred = 'true';
+                        spdBalInput.dataset.marketDefault = 'true';
+                        spdBalInput.title = `Velocidad real de mercado (${vesselClass.categoryName}): ${speedVal.toFixed(1)} kts`;
+                    }
+                    if (spdLadenInput) {
+                        spdLadenInput.value = speedVal.toFixed(1);
+                        spdLadenInput.dataset.navigationBase = String(speedVal);
+                        spdLadenInput.dataset.autoInferred = 'true';
+                        spdLadenInput.dataset.marketDefault = 'true';
+                        spdLadenInput.title = `Velocidad real de mercado (${vesselClass.categoryName}): ${speedVal.toFixed(1)} kts`;
+                    }
+                    if (typeof State !== 'undefined') {
+                        State.speedBallast = speedVal;
+                        State.speedLaden = speedVal;
+                        State.spdBallast = speedVal;
+                        State.spdLaden = speedVal;
+                        State.speedInferenceSource = isCoaster ? 'aisstream_coaster_speed' : 'aisstream_minibulker_speed';
+                    }
+                    if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+                    if (typeof syncCostPlusFromRoute === 'function') syncCostPlusFromRoute(false);
+                }
+            }
+
             const marketSpeedVesselClass = getMarketSpeedVesselClass(vesselClass.categoryName);
             if (
                 vesselDwt > 0

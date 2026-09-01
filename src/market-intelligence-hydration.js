@@ -51,6 +51,10 @@ function unwrapPayload(payload) {
 
 function findClassRecord(record, key, label) {
   const containers = [
+    record.predictive_v2?.metrics,
+    record.predictiveV2?.metrics,
+    record.predictive_v2,
+    record.predictiveV2,
     record.tce_spot_by_class,
     record.tceSpotByClass,
     record.tce_spot,
@@ -88,30 +92,35 @@ function findClassRecord(record, key, label) {
 function normalizeTceSpotClass(record, definition) {
   const { key, label } = definition;
   const classRecord = findClassRecord(record, key, label) || {};
-  const baseTc = asNumber(firstDefined(
-    classRecord.base_tc,
-    classRecord.baseTc,
-    classRecord.tc,
-    classRecord.time_charter,
-    record[`${key}_tc`],
-  ), { positive: true });
-  const baseTcChangePct = asNumber(firstDefined(
-    classRecord.base_tc_change_pct,
-    classRecord.baseTcChangePct,
-    classRecord.change_pct,
-    classRecord.changePct,
-    classRecord.variation_pct,
-    record[`${key}_change_pct`],
-  ));
+  const predictiveMetric = record.predictive_v2?.metrics?.[key]
+    || record.predictive_v2?.metrics?.[label]
+    || record.predictive_v2?.metrics?.[label.toLowerCase()]
+    || record.predictive_v2?.metrics?.[key.toUpperCase()]
+    || record.predictiveV2?.metrics?.[key]
+    || record.predictiveV2?.metrics?.[label]
+    || record.predictiveV2?.metrics?.[label.toLowerCase()]
+    || record.predictiveV2?.metrics?.[key.toUpperCase()]
+    || record.predictive_v2?.[key]
+    || record.predictive_v2?.[label]
+    || record.predictiveV2?.[key]
+    || record.predictiveV2?.[label];
+
   const theoreticalSpotTce = asNumber(firstDefined(
+    predictiveMetric?.tceSpot,
+    predictiveMetric?.tce_spot,
+    predictiveMetric?.theoreticalSpotTce,
+    predictiveMetric?.theoretical_spot_tce,
+    predictiveMetric?.spotTce,
+    predictiveMetric?.spot_tce,
+    predictiveMetric?.value,
+    classRecord.tceSpot,
+    classRecord.tce_spot,
     classRecord.theoretical_spot_tce,
     classRecord.theoreticalSpotTce,
     classRecord.tce_spot_theoretical,
     classRecord.tceSpotTheoretical,
     classRecord.tce_spot_teorico,
     classRecord.tceSpotTeorico,
-    classRecord.tce_spot,
-    classRecord.tceSpot,
     classRecord.spot_tce,
     classRecord.spotTce,
     classRecord.value,
@@ -125,8 +134,32 @@ function normalizeTceSpotClass(record, definition) {
     record[`tce_spot_teorico_${key}`],
     record[`tce_spot_${key}`],
     record[`spot_tce_${key}`],
+    record[`${key}_tc`],
   ), { positive: true });
+
+  const baseTc = asNumber(firstDefined(
+    classRecord.base_tc,
+    classRecord.baseTc,
+    classRecord.tc,
+    classRecord.time_charter,
+    record[`${key}_tc`],
+    predictiveMetric?.baseTc,
+    predictiveMetric?.base_tc,
+    theoreticalSpotTce,
+  ), { positive: true });
+  const baseTcChangePct = asNumber(firstDefined(
+    predictiveMetric?.changePct,
+    predictiveMetric?.change_pct,
+    classRecord.base_tc_change_pct,
+    classRecord.baseTcChangePct,
+    classRecord.change_pct,
+    classRecord.changePct,
+    classRecord.variation_pct,
+    record[`${key}_change_pct`],
+  ));
   const spreadUsd = asNumber(firstDefined(
+    predictiveMetric?.spreadUsd,
+    predictiveMetric?.spread_usd,
     classRecord.spread_usd,
     classRecord.spreadUsd,
     classRecord.gap_usd,
@@ -140,6 +173,9 @@ function normalizeTceSpotClass(record, definition) {
     record[`brecha_usd_${key}`],
   ));
   const spreadPct = asNumber(firstDefined(
+    predictiveMetric?.spreadPct,
+    predictiveMetric?.spread_pct,
+    predictiveMetric?.spread_percent,
     classRecord.spread_pct,
     classRecord.spreadPct,
     classRecord.spread_percent,
@@ -156,6 +192,8 @@ function normalizeTceSpotClass(record, definition) {
     record[`brecha_pct_${key}`],
   ));
   const algorithmLabel = asText(firstDefined(
+    predictiveMetric?.algorithmLabel,
+    predictiveMetric?.algorithm_label,
     classRecord.algorithm_label,
     classRecord.algorithmLabel,
     classRecord.engine_label,
@@ -164,6 +202,8 @@ function normalizeTceSpotClass(record, definition) {
     record.algorithm_label,
   ));
   const fuelLabel = asText(firstDefined(
+    predictiveMetric?.fuelLabel,
+    predictiveMetric?.fuel_label,
     classRecord.fuel_label,
     classRecord.fuelLabel,
     classRecord.fuel,
@@ -172,6 +212,8 @@ function normalizeTceSpotClass(record, definition) {
     record.fuel_label,
   ));
   const updatedAt = asText(firstDefined(
+    predictiveMetric?.updatedAt,
+    predictiveMetric?.updated_at,
     classRecord.updated_at,
     classRecord.updatedAt,
     classRecord.tce_spot_updated_at,
@@ -182,13 +224,22 @@ function normalizeTceSpotClass(record, definition) {
     record.updated_at,
     record.created_at,
   ));
-  const source = asText(firstDefined(classRecord.source, record.source));
+  const source = asText(firstDefined(
+    predictiveMetric?.source,
+    classRecord.source,
+    record.source,
+    record[`${key}_source`],
+  ));
   const formulaVersion = asText(firstDefined(
+    predictiveMetric?.formulaVersion,
+    predictiveMetric?.formula_version,
     classRecord.formula_version,
     classRecord.formulaVersion,
     record.formula_version,
+    record.formulaVersion,
   ));
   const status = asText(firstDefined(
+    predictiveMetric?.status,
     classRecord.status,
     classRecord.algorithm_status,
     record[`${key}_status`],
@@ -280,6 +331,26 @@ export function normalizeMarketIntelligencePayload(payload, receivedAt = new Dat
   ));
   const bdi = normalizeBdi(record);
   const bunkers = normalizeBunkers(record);
+  const aisstreamCoasterSpeed = asNumber(firstDefined(
+    record.aisstream_coaster_speed,
+    record.aisstreamCoasterSpeed,
+    record.coaster_speed,
+    record.coasterSpeed,
+  ), { positive: true });
+  const aisstreamMinibulkerSpeed = asNumber(firstDefined(
+    record.aisstream_minibulker_speed,
+    record.aisstreamMinibulkerSpeed,
+    record.minibulker_speed,
+    record.minibulkerSpeed,
+    record.mini_bulker_speed,
+    record.miniBulkerSpeed,
+  ), { positive: true });
+  const dataBridgeStatus = asText(firstDefined(
+    record.status,
+    record.data_bridge_status,
+    record.dataBridgeStatus,
+    payload?.status,
+  )).toUpperCase();
   const sourceId = asText(firstPath(record, ['snapshot_id', 'snapshotId', 'id', 'version']));
   const snapshotId = sourceId || [bdi.updatedAt, bunkers.updatedAt, receivedAt].filter(Boolean).join('|');
   const hasTceSpot = Object.values(tceSpotByClass).some(entry => entry.theoreticalSpotTce !== null);
@@ -291,7 +362,14 @@ export function normalizeMarketIntelligencePayload(payload, receivedAt = new Dat
     tceSpotByClass,
     bdi,
     bunkers,
-    source: asText(record.source),
+    speeds: Object.freeze({
+      coaster: aisstreamCoasterSpeed,
+      minibulker: aisstreamMinibulkerSpeed,
+    }),
+    aisstream_coaster_speed: aisstreamCoasterSpeed,
+    aisstream_minibulker_speed: aisstreamMinibulkerSpeed,
+    dataBridgeStatus,
+    source: asText(firstDefined(record.source, payload?.source, 'Data Bridge')),
     contractVersion: asText(firstDefined(record.contract_version, record.contractVersion)),
     status: hasMarketData ? 'ready' : 'partial',
   });
@@ -359,6 +437,36 @@ export function createMarketIntelligenceHydration({
         const snapshot = normalizeMarketIntelligencePayload(payload);
         writeCache(snapshot);
         publish({ status: snapshot.status, snapshot, error: null });
+
+        if (typeof globalThis.window !== 'undefined') {
+          const statusKey = (snapshot.dataBridgeStatus || '').toUpperCase();
+          const isConnected = response.ok && (statusKey === 'OK' || statusKey === 'PERSISTED' || statusKey === 'CONNECTED' || snapshot.status === 'ready');
+          if (isConnected) {
+            globalThis.window.__dataBridgeConnectionStatus = 'secure';
+            globalThis.window.updateDataBridgeTransportStatus?.('connected');
+            globalThis.window.updateConnectionStatusBar?.('secure');
+            globalThis.window.setDataBridgeVerifiedConnection?.(true);
+            globalThis.window.dispatchEvent?.(new CustomEvent('connection-status:update', {
+              detail: { status: 'secure' },
+            }));
+          }
+
+          if (snapshot.aisstream_coaster_speed) {
+            globalThis.window.__aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
+            if (globalThis.window.State) globalThis.window.State.aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
+          }
+          if (snapshot.aisstream_minibulker_speed) {
+            globalThis.window.__aisstreamMinibulkerSpeed = snapshot.aisstream_minibulker_speed;
+            if (globalThis.window.State) globalThis.window.State.aisstreamMinibulkerSpeed = snapshot.aisstream_minibulker_speed;
+          }
+          globalThis.window.dispatchEvent?.(new CustomEvent('market-speeds:update', {
+            detail: {
+              coaster: snapshot.aisstream_coaster_speed,
+              minibulker: snapshot.aisstream_minibulker_speed,
+            },
+          }));
+        }
+
         return snapshot;
       })
       .catch(error => {

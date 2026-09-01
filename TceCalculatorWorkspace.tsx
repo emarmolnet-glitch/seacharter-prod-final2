@@ -259,17 +259,40 @@ function getMarketLatestLabel(vesselCategory: string, entry: MarketLatestRecord)
     ? new Date(recordDateValue).toLocaleDateString('es-ES', { timeZone: 'UTC' })
     : 'fecha no disponible';
   const vesselClass = getMarketLatestTceField(vesselCategory)?.replace('_tc', '') || vesselCategory;
-  const sourceLabel = /manual/i.test(String(entry.source || '')) ? 'Manual Data' : 'Fearnleys Data';
-  return `${vesselClass.charAt(0).toUpperCase()}${vesselClass.slice(1)} 1Y T/C - ${sourceLabel} - ${recordDate}`;
+  const sourceLabel = /manual/i.test(String(entry.source || '')) ? 'Manual Data' : 'Data Bridge (Predictive V2)';
+  return `${vesselClass.charAt(0).toUpperCase()}${vesselClass.slice(1)} TCE Spot (V2) - ${sourceLabel} - ${recordDate}`;
 }
 
 function findMarketLatestRecord(payload: unknown, visited = new Set<object>()): MarketLatestRecord | null {
   if (!payload || typeof payload !== 'object' || visited.has(payload)) return null;
   visited.add(payload);
   if (!Array.isArray(payload)) {
-    const record = payload as Partial<MarketLatestRecord>;
+    const raw = payload as Record<string, unknown>;
+    const record = (raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data) ? raw.data : raw) as Record<string, unknown>;
+    const predictive = (record.predictive_v2 || record.predictiveV2) as Record<string, unknown> | undefined;
+    const metrics = (predictive?.metrics || predictive) as Record<string, Record<string, unknown>> | undefined;
+
+    if (metrics && typeof metrics === 'object') {
+      const capesizeSpot = Number(metrics.capesize?.tceSpot ?? metrics.Capesize?.tceSpot ?? record.capesize_tc ?? 0);
+      const panamaxSpot = Number(metrics.panamax?.tceSpot ?? metrics.Panamax?.tceSpot ?? record.panamax_tc ?? 0);
+      const supramaxSpot = Number(metrics.supramax?.tceSpot ?? metrics.Supramax?.tceSpot ?? record.supramax_tc ?? 0);
+      const handysizeSpot = Number(metrics.handysize?.tceSpot ?? metrics.Handysize?.tceSpot ?? record.handysize_tc ?? 0);
+      const bdiValue = Number(record.bdi_index ?? (record.bdi as Record<string, unknown>)?.value ?? 0);
+
+      return {
+        source: String(record.source || 'Data Bridge (Predictive V2)'),
+        record_date: String(record.record_date || record.updated_at || new Date().toISOString()),
+        updated_at: String(record.updated_at || record.record_date || new Date().toISOString()),
+        bdi_index: bdiValue,
+        capesize_tc: capesizeSpot,
+        panamax_tc: panamaxSpot,
+        supramax_tc: supramaxSpot,
+        handysize_tc: handysizeSpot,
+      };
+    }
+
     if (['capesize_tc', 'panamax_tc', 'supramax_tc', 'handysize_tc', 'bdi_index']
-      .some((field) => record[field as keyof MarketLatestRecord] !== undefined)) {
+      .some((field) => (record as Partial<MarketLatestRecord>)[field as keyof MarketLatestRecord] !== undefined)) {
       return record as MarketLatestRecord;
     }
   }
@@ -1415,15 +1438,22 @@ export function ReverseTceCalculator({
     setIsManualOverride(false);
     setIsFetchingBalticSpot(true);
     try {
-      const response = await fetch('/api/market/latest', {
+      let response = await fetch('/api/get-market-data', {
         cache: 'no-store',
       });
-      const payload = await response.json().catch(() => null);
-      const marketRecord = findMarketLatestRecord(payload);
+      let payload = await response.json().catch(() => null);
+      let marketRecord = findMarketLatestRecord(payload);
+      if (!response.ok || !marketRecord) {
+        response = await fetch('/api/market/latest', {
+          cache: 'no-store',
+        });
+        payload = await response.json().catch(() => null);
+        marketRecord = findMarketLatestRecord(payload);
+      }
       const tceField = getMarketLatestTceField(vesselCategory);
       const tceTarget = tceField ? Number(marketRecord?.[tceField]) : Number.NaN;
       const bdiIndex = Number(marketRecord?.bdi_index);
-      if (!response.ok || !marketRecord || !tceField || !Number.isFinite(tceTarget) || !Number.isFinite(bdiIndex)) {
+      if (!marketRecord || !tceField || !Number.isFinite(tceTarget) || !Number.isFinite(bdiIndex)) {
         throw new Error(payload?.error || `No se pudieron obtener las referencias de ${vesselCategory}.`);
       }
 
