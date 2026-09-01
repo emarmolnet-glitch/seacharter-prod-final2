@@ -25,6 +25,34 @@ export const db = drizzle({ client: getPool(), schema });
 
 export async function ensureApplicationSchema() {
   applicationSchemaReady ??= getPool().query(`
+    CREATE TABLE IF NOT EXISTS "AppConfig" (
+      "key" TEXT PRIMARY KEY,
+      "value" TEXT NOT NULL,
+      "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      current_session_ref TEXT,
+      value JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS app_state_current_session_ref_idx
+      ON app_state (current_session_ref) WHERE current_session_ref IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      session_id TEXT PRIMARY KEY,
+      current_session_ref TEXT,
+      session_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS user_sessions_current_session_ref_idx
+      ON user_sessions (current_session_ref) WHERE current_session_ref IS NOT NULL;
+
     CREATE TABLE IF NOT EXISTS session_sync (
       user_id TEXT PRIMARY KEY,
       sync_id TEXT NOT NULL,

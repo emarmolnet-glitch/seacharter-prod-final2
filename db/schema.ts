@@ -25,6 +25,34 @@ export const appConfig = pgTable("AppConfig", {
   updatedAt: updatedAt(),
 });
 
+export const appState = pgTable(
+  "app_state",
+  {
+    key: text("key").primaryKey(),
+    currentSessionRef: text("current_session_ref"),
+    value: jsonb("value").default(sql`'{}'::jsonb`).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("app_state_current_session_ref_idx").on(table.currentSessionRef),
+  ],
+);
+
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    sessionId: text("session_id").primaryKey(),
+    currentSessionRef: text("current_session_ref"),
+    sessionData: jsonb("session_data").default(sql`'{}'::jsonb`).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("user_sessions_current_session_ref_idx").on(table.currentSessionRef),
+  ],
+);
+
 export const bunkerPricesLog = pgTable(
   "bunker_prices_log",
   {

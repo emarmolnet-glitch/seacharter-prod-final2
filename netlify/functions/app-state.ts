@@ -1,0 +1,292 @@
+import type { Config } from "@netlify/functions";
+import { getPool } from "../../db/index.js";
+import { createCorsHeaders } from "./_shared/cors.js";
+
+const DEFAULT_STATE_KEY = "core_pro_active_session";
+const MAX_PAYLOAD_BYTES = 512_000;
+
+const baseHeaders = {
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeReference(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function extractReference(body: Record<string, unknown>): string {
+  const directCandidate =
+    body.value ||
+    body.currentSessionRef ||
+    body.current_session_ref ||
+    body.session_ref ||
+    body.sessionRef ||
+    body.reference ||
+    body.contractRef ||
+    body.contract_ref ||
+    body.ref;
+
+  if (typeof directCandidate === "string" && directCandidate.trim()) {
+    return normalizeReference(directCandidate);
+  }
+
+  if (isRecord(body.value)) {
+    return extractReference(body.value);
+  }
+  if (isRecord(body.payload)) {
+    return extractReference(body.payload);
+  }
+  if (isRecord(body.sessionPayload)) {
+    return extractReference(body.sessionPayload);
+  }
+
+  return "";
+}
+
+async function ensureAppStateTable() {
+  const pool = getPool();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      key VARCHAR(255) PRIMARY KEY,
+      value VARCHAR(255) NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    ALTER TABLE app_state
+      ADD COLUMN IF NOT EXISTS key VARCHAR(255);
+
+    ALTER TABLE app_state
+      ADD COLUMN IF NOT EXISTS value VARCHAR(255);
+
+    ALTER TABLE app_state
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+    ALTER TABLE app_state
+      ADD COLUMN IF NOT EXISTS session_ref VARCHAR(255);
+
+    ALTER TABLE app_state
+      ADD COLUMN IF NOT EXISTS current_session_ref VARCHAR(255);
+  `);
+}
+
+export default async (req: Request) => {
+  const headers = {
+    ...baseHeaders,
+    ...createCorsHeaders(req, "GET, POST, PUT, OPTIONS"),
+  };
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
+  const url = new URL(req.url);
+
+  if (req.method === "GET") {
+    try {
+      await ensureAppStateTable();
+      const pool = getPool();
+      const requestedKey = (url.searchParams.get("key") || url.searchParams.get("id") || "").trim();
+
+      const result = await pool.query(
+        `SELECT key, value, session_ref, current_session_ref, updated_at
+         FROM app_state
+         WHERE key = $1 OR key = 'core_pro_active_session' OR key = 'current_session' OR id = $1
+         ORDER BY CASE WHEN key = $1 THEN 0 WHEN key = 'core_pro_active_session' THEN 1 ELSE 2 END, updated_at DESC
+         LIMIT 1`,
+        [requestedKey || DEFAULT_STATE_KEY]
+      );
+
+      const row = result.rows[0];
+      if (row) {
+        let parsedVal = row.value;
+        if (isRecord(parsedVal)) {
+          parsedVal = extractReference(parsedVal) || row.value;
+        }
+        const resolvedRef = normalizeReference(parsedVal || row.session_ref || row.current_session_ref);
+        const resolvedKey = row.key || requestedKey || DEFAULT_STATE_KEY;
+        return Response.json({
+          success: true,
+          key: resolvedKey,
+          id: resolvedKey,
+          value: resolvedRef,
+          session_ref: resolvedRef,
+          currentSessionRef: resolvedRef,
+          reference: resolvedRef,
+          updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+          updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+        }, { headers });
+      }
+
+      // Fallback: check AppConfig if key matches default
+      try {
+        const configResult = await pool.query(
+          `SELECT "value", "updated_at" FROM "AppConfig" WHERE "key" = $1 OR "key" = $2 LIMIT 1`,
+          ["current_session_ref", "active_core_pro_session"]
+        );
+        const configRow = configResult.rows[0];
+        if (configRow?.value) {
+          let resolvedRef = "";
+          try {
+            const parsed = JSON.parse(configRow.value);
+            resolvedRef = normalizeReference(parsed?.reference || parsed);
+          } catch {
+            resolvedRef = normalizeReference(configRow.value);
+          }
+
+          if (resolvedRef) {
+            return Response.json({
+              success: true,
+              key: requestedKey || DEFAULT_STATE_KEY,
+              id: requestedKey || DEFAULT_STATE_KEY,
+              value: resolvedRef,
+              session_ref: resolvedRef,
+              currentSessionRef: resolvedRef,
+              reference: resolvedRef,
+              updated_at: configRow.updated_at ? new Date(configRow.updated_at).toISOString() : null,
+              updatedAt: configRow.updated_at ? new Date(configRow.updated_at).toISOString() : null,
+            }, { headers });
+          }
+        }
+      } catch (_) {}
+
+      return Response.json({
+        success: true,
+        key: requestedKey || DEFAULT_STATE_KEY,
+        id: requestedKey || DEFAULT_STATE_KEY,
+        value: "",
+        session_ref: "",
+        currentSessionRef: "",
+        reference: "",
+        updated_at: null,
+        updatedAt: null,
+      }, { headers });
+    } catch (error: any) {
+      console.error("[app-state] Failed to retrieve app state:", error);
+      return new Response(JSON.stringify({ error: error?.message || "Failed to retrieve app state" }), {
+        status: 500,
+        headers,
+      });
+    }
+  }
+
+  if (req.method !== "POST" && req.method !== "PUT") {
+    return Response.json({
+      success: false,
+      error: "Method not allowed",
+    }, { status: 405, headers });
+  }
+
+  try {
+    const rawBody = await req.text();
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_PAYLOAD_BYTES) {
+      return Response.json({
+        success: false,
+        error: "Payload too large",
+      }, { status: 413, headers });
+    }
+
+    let parsedBody: unknown = {};
+    if (rawBody.trim()) {
+      try {
+        parsedBody = JSON.parse(rawBody);
+      } catch (jsonErr: any) {
+        return Response.json({
+          success: false,
+          error: `Invalid JSON body: ${jsonErr?.message || "parse error"}`,
+        }, { status: 400, headers });
+      }
+    }
+
+    if (!isRecord(parsedBody)) {
+      return Response.json({
+        success: false,
+        error: "Request body must be an object",
+      }, { status: 400, headers });
+    }
+
+    const currentSessionRef = extractReference(parsedBody);
+
+    // Execute explicit safe table creation matching schema with value NOT NULL
+    await ensureAppStateTable();
+
+    const pool = getPool();
+    // Static identifier UPSERT setting value column explicitly
+    const result = await pool.query(
+      `INSERT INTO app_state (key, value, updated_at)
+       VALUES ('core_pro_active_session', $1, NOW())
+       ON CONFLICT (key) DO UPDATE
+       SET value = EXCLUDED.value,
+           updated_at = NOW()
+       RETURNING key, value, updated_at`,
+      [currentSessionRef || ""]
+    );
+
+    const persisted = result.rows[0];
+
+    // Mirror to appConfig for legacy readers if table exists
+    if (currentSessionRef) {
+      try {
+        await pool.query(
+          `INSERT INTO "AppConfig" ("key", "value", "updated_at")
+           VALUES ($1, $2, NOW())
+           ON CONFLICT ("key") DO UPDATE
+           SET "value" = EXCLUDED."value", "updated_at" = NOW()`,
+          ["current_session_ref", currentSessionRef]
+        );
+
+        const activeCoreSessionJson = JSON.stringify({
+          reference: currentSessionRef,
+          timestamp: Date.now(),
+        });
+
+        await pool.query(
+          `INSERT INTO "AppConfig" ("key", "value", "updated_at")
+           VALUES ($1, $2, NOW())
+           ON CONFLICT ("key") DO UPDATE
+           SET "value" = EXCLUDED."value", "updated_at" = NOW()`,
+          ["active_core_pro_session", activeCoreSessionJson]
+        );
+      } catch (mirrorError: any) {
+        console.warn("[app-state] Failed to mirror to AppConfig:", mirrorError?.message);
+      }
+    }
+
+    let parsedValue = persisted?.value;
+    if (isRecord(parsedValue)) {
+      parsedValue = extractReference(parsedValue) || persisted?.value;
+    }
+    const resolvedRef = normalizeReference(parsedValue || currentSessionRef);
+
+    return Response.json({
+      success: true,
+      key: persisted?.key || "core_pro_active_session",
+      id: persisted?.key || "core_pro_active_session",
+      value: resolvedRef,
+      session_ref: resolvedRef,
+      currentSessionRef: resolvedRef,
+      reference: resolvedRef,
+      updated_at: persisted?.updated_at ? new Date(persisted.updated_at).toISOString() : new Date().toISOString(),
+      updatedAt: persisted?.updated_at ? new Date(persisted.updated_at).toISOString() : new Date().toISOString(),
+    }, { headers });
+  } catch (error: any) {
+    console.error("[app-state] Persistence failed:", error);
+    return new Response(JSON.stringify({ error: error?.message || "Failed to persist app state" }), {
+      status: 500,
+      headers,
+    });
+  }
+};
+
+export const config: Config = {
+  path: [
+    "/api/app-state",
+    "/api/app_state",
+    "/api/user-sessions",
+    "/api/session-state",
+    "/api/current-session",
+  ],
+};

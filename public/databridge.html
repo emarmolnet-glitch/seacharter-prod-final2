@@ -1760,6 +1760,30 @@
             }
         }
 
+        let isFetchingRemoteSession = false;
+        async function fetchRemoteActiveSessionState() {
+            if (isFetchingRemoteSession) return null;
+            isFetchingRemoteSession = true;
+            try {
+                const response = await fetch(createCoreProApiUrl('/api/app-state'), {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const remoteRef = extractReferenceFromValue(data?.currentSessionRef || data?.reference || data);
+                    if (remoteRef) {
+                        updateActiveCoreProSession({ reference: remoteRef, timestamp: Date.now(), ...data });
+                        return remoteRef;
+                    }
+                }
+            } catch (_) {
+            } finally {
+                isFetchingRemoteSession = false;
+            }
+            return null;
+        }
+
         function refreshActiveSessionState() {
             const detectedRef = detectActiveSessionReference();
             if (detectedRef) {
@@ -1776,11 +1800,14 @@
                         updateActiveCoreProSession(null);
                     }
                 } catch (_) {}
+            } else {
+                fetchRemoteActiveSessionState();
             }
         }
 
         // Initial session discovery
         refreshActiveSessionState();
+        fetchRemoteActiveSessionState();
 
         // BroadcastChannel for instant cross-tab/frame synchronization (legacy core_bridge_sync + proactive seacharter_sync_channel)
         if (typeof BroadcastChannel === 'function') {
@@ -1853,7 +1880,10 @@
         // ==========================================
         async function loadDataBridgeSessionPayload() {
             refreshActiveSessionState();
-            const activeRef = detectActiveSessionReference() || extractReferenceFromValue(activeCoreProSession);
+            let activeRef = detectActiveSessionReference() || extractReferenceFromValue(activeCoreProSession);
+            if (!activeRef) {
+                activeRef = await fetchRemoteActiveSessionState();
+            }
             if (!activeRef) {
                 addLog(`[WARNING] ${getTimestamp()} - [CARGAR DATOS] No se detectó ninguna sesión activa. Abra un expediente en Core PRO (ej. RDM/2026-0080).`);
                 if (typeof window.alert === 'function') {

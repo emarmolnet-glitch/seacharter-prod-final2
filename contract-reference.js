@@ -8,6 +8,9 @@
     const URL_KEYS = ['ref', 'contract_ref'];
 
     let activeCachedReference = '';
+    let lastPersistedReference = '';
+    let isSaving = false;
+    let persistDebounceTimer = null;
     let isInitializedOnMount = false;
     let syncBroadcastChannel = null;
 
@@ -45,6 +48,83 @@
         }
     }
 
+    function persistSessionToDatabase(reference, extraPayload, immediate = false) {
+        const normalized = normalizeReference(reference) || getCurrentReference();
+        if (!normalized) return Promise.resolve(null);
+
+        // Guard against redundant duplicate saves
+        if (normalized === lastPersistedReference && !extraPayload) {
+            return Promise.resolve(null);
+        }
+
+        const timerApi = globalObject.setTimeout || globalThis.setTimeout;
+        const clearTimerApi = globalObject.clearTimeout || globalThis.clearTimeout;
+
+        if (persistDebounceTimer && typeof clearTimerApi === 'function') {
+            clearTimerApi(persistDebounceTimer);
+            persistDebounceTimer = null;
+        }
+
+        const executeSave = function() {
+            if (isSaving) return Promise.resolve(null);
+            if (typeof globalObject.fetch !== 'function') return Promise.resolve(null);
+
+            isSaving = true;
+            const payload = {
+                id: 'current_session',
+                key: 'current_session',
+                session_ref: normalized,
+                currentSessionRef: normalized,
+                reference: normalized,
+                timestamp: Date.now(),
+                ...(extraPayload && typeof extraPayload === 'object' ? extraPayload : {})
+            };
+
+            return globalObject.fetch('/api/app-state', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }).then(function(res) {
+                if (!res.ok) {
+                    return res.text().then(function(text) {
+                        let errMsg = 'HTTP ' + res.status;
+                        try {
+                            const parsed = JSON.parse(text);
+                            if (parsed.error) errMsg += ': ' + parsed.error;
+                        } catch (_) {
+                            if (text) errMsg += ': ' + text;
+                        }
+                        throw new Error(errMsg);
+                    });
+                }
+                return res.json();
+            }).then(function(data) {
+                lastPersistedReference = normalized;
+                console.log('[Core PRO] Sesión activa guardada en Neon:', normalized);
+                return data;
+            }).catch(function(err) {
+                console.warn('[Core PRO] No se pudo persistir la sesión activa en backend:', err?.message || err);
+                return null;
+            }).finally(function() {
+                isSaving = false;
+            });
+        };
+
+        if (immediate || typeof timerApi !== 'function') {
+            return executeSave();
+        }
+
+        return new Promise(function(resolve) {
+            persistDebounceTimer = timerApi(function() {
+                persistDebounceTimer = null;
+                resolve(executeSave());
+            }, 500);
+        });
+    }
+
     function broadcastCoreSessionActive(reference) {
         const normalized = normalizeReference(reference) || getCurrentReference();
         if (!normalized) return null;
@@ -65,6 +145,8 @@
                 tempChannel.close?.();
             }
         } catch (_error) {}
+
+        persistSessionToDatabase(normalized);
 
         return payload;
     }
@@ -300,6 +382,9 @@
         getActiveContractRef,
         isInjectionLocked: isLocked,
         normalizeReference,
+        persistSessionToDatabase,
+        saveSessionState: persistSessionToDatabase,
+        syncSessionToDatabase: persistSessionToDatabase,
         setActiveContractRef,
         setInjectionLock,
         writeSharedActiveSession,
@@ -313,6 +398,8 @@
     globalObject.generateVoyageRef = generateVoyageRef;
     globalObject.broadcastCoreSessionActive = broadcastCoreSessionActive;
     globalObject.emitActiveSession = broadcastCoreSessionActive;
+    globalObject.persistSessionToDatabase = persistSessionToDatabase;
+    globalObject.saveSessionState = persistSessionToDatabase;
 
     function initializeOnMount() {
         if (isInitializedOnMount) return;
