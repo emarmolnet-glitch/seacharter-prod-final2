@@ -54,7 +54,12 @@
         state.activeInternalNotes = data.dossier.internalNotes || '';
         window.persistLocalAuditSession?.(payload);
         document.body.dataset.activeDossierId = state.activeId;
-        if (data.dossier.reference) window.syncActiveContractReference?.(data.dossier.reference);
+        if (data.dossier.reference) {
+            window.syncActiveContractReference?.(data.dossier.reference);
+            window.ContractRefManager?.broadcastCoreSessionActive?.(data.dossier.reference)
+                || window.broadcastCoreSessionActive?.(data.dossier.reference)
+                || window.emitActiveSession?.(data.dossier.reference);
+        }
         window.showToast?.(`Dossier ${data.dossier.reference} guardado`, false, 'success');
         if (document.getElementById('view-dossiers')?.classList.contains('active-block')) await loadList();
         return data.dossier;
@@ -195,7 +200,12 @@
         document.body.dataset.activeDossierId = state.activeId;
         await window.applyAuditSessionPayload?.(data.dossier.sessionPayload);
         window.persistLocalAuditSession?.(data.dossier.sessionPayload);
-        window.syncActiveContractReference?.(data.dossier.reference);
+        if (data.dossier.reference) {
+            window.syncActiveContractReference?.(data.dossier.reference);
+            window.ContractRefManager?.broadcastCoreSessionActive?.(data.dossier.reference)
+                || window.broadcastCoreSessionActive?.(data.dossier.reference)
+                || window.emitActiveSession?.(data.dossier.reference);
+        }
         window.showToast?.(`Dossier ${data.dossier.reference} abierto`, false, 'success');
     }
 

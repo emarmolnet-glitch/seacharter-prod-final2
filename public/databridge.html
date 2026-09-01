@@ -1782,8 +1782,22 @@
         // Initial session discovery
         refreshActiveSessionState();
 
-        // BroadcastChannel for instant cross-tab/frame synchronization
+        // BroadcastChannel for instant cross-tab/frame synchronization (legacy core_bridge_sync + proactive seacharter_sync_channel)
         if (typeof BroadcastChannel === 'function') {
+            const seacharterSyncChannel = new BroadcastChannel('seacharter_sync_channel');
+            seacharterSyncChannel.addEventListener('message', (event) => {
+                const data = event.data;
+                if (data?.type === 'CORE_SESSION_ACTIVE' && data?.reference) {
+                    updateActiveCoreProSession(data);
+                }
+            });
+            window.seacharterSyncChannel = seacharterSyncChannel;
+
+            // Proactively ping Core PRO for active session
+            try {
+                seacharterSyncChannel.postMessage({ type: 'PING_SESSION', timestamp: Date.now() });
+            } catch (_) {}
+
             const coreBridgeSyncChannel = new BroadcastChannel('core_bridge_sync');
             coreBridgeSyncChannel.addEventListener('message', (event) => {
                 const data = event.data;
