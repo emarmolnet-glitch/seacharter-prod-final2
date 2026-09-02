@@ -2603,7 +2603,9 @@ export default function TceCalculatorWorkspace({
           || data.type === 'INJECT_VESSEL'
           || data.type === 'PENDING_IMO'
           || data.type === 'INJECT_IMO'
-          || data.type === 'SET_PENDING_IMO';
+          || data.type === 'SET_PENDING_IMO'
+          || data.type === 'LOAD_IMO'
+          || data.type === 'load_imo';
 
         const payload = (data.payload as Record<string, unknown>) || data;
         vessel = (payload.vessel as Record<string, unknown>)

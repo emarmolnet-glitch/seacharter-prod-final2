@@ -33,8 +33,10 @@ export default async (request: Request) => {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers });
   }
 
-  const pathImo = new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
-  const imoNumber = normalizeImo(pathImo);
+  const url = new URL(request.url);
+  const pathImo = url.pathname.split("/").filter(Boolean).at(-1);
+  const queryImo = url.searchParams.get("imo") || url.searchParams.get("imo_number") || url.searchParams.get("q");
+  const imoNumber = normalizeImo(queryImo || pathImo);
   if (!imoNumber) {
     return Response.json({ success: false, error: "A valid seven-digit IMO is required" }, { status: 400, headers });
   }

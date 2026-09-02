@@ -10,6 +10,8 @@ export type VesselTechnicalRecord = {
   latitude: number | null;
   longitude: number | null;
   vesselType: string | null;
+  vesselClass?: string | null;
+  commercialClass?: string | null;
   draftMeters: number | null;
   flag: string | null;
   callSign: string | null;
@@ -20,6 +22,22 @@ export type VesselTechnicalRecord = {
   beamMeters: number | null;
   lastPort: string | null;
   eta: string | Date | null;
+  serviceSpeedKnots?: number | null;
+  speedLaden?: number | null;
+  speedBallast?: number | null;
+  fuelConsumptionLaden?: number | null;
+  fuelConsumptionBallast?: number | null;
+  fuelConsumptionPort?: number | null;
+  consSea?: number | null;
+  consPort?: number | null;
+  consBallast?: number | null;
+  ownerManager?: string | null;
+  hasGears?: boolean | null;
+  hasScrubber?: boolean | null;
+  sourcePayload?: unknown;
+  auditStatus?: string | null;
+  validationStatus?: string | null;
+  dataSource?: string | null;
 };
 
 type VesselTechnicalRow = QueryResultRow & {
@@ -40,6 +58,14 @@ type VesselTechnicalRow = QueryResultRow & {
   beam_meters: number | string | null;
   last_port: string | null;
   eta: string | Date | null;
+  owner_manager?: string | null;
+  has_gears?: boolean | null;
+  service_speed_knots?: number | string | null;
+  process_status?: string | null;
+  status?: string | null;
+  validation_status?: string | null;
+  audit_status?: string | null;
+  source_payload?: unknown;
 };
 
 const RETURNING_COLUMNS = `
@@ -48,7 +74,103 @@ const RETURNING_COLUMNS = `
   loa_meters, beam_meters, last_port, eta
 `;
 
+const EXTENDED_QUERY_COLUMNS = `
+  imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
+  draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+  loa_meters, beam_meters, last_port, eta, owner_manager, has_gears,
+  service_speed_knots, process_status, status, validation_status, audit_status,
+  source_payload
+`;
+
+function asRecord(val: unknown): Record<string, unknown> {
+  return val && typeof val === "object" && !Array.isArray(val) ? (val as Record<string, unknown>) : {};
+}
+
+function parseNumber(val: unknown): number | null {
+  if (val === null || val === undefined || val === "") return null;
+  const num = Number(val);
+  return Number.isFinite(num) ? num : null;
+}
+
+function parsePositiveNumber(val: unknown): number | null {
+  const num = parseNumber(val);
+  return num !== null && num > 0 ? num : null;
+}
+
 function toRecord(row: VesselTechnicalRow): VesselTechnicalRecord {
+  const sourcePayload = asRecord(row.source_payload);
+  const metadata = asRecord(sourcePayload.MetaData || sourcePayload.metadata);
+
+  const ownerManager = row.owner_manager
+    || (sourcePayload.owner_manager as string)
+    || (sourcePayload.owner as string)
+    || (sourcePayload.manager as string)
+    || (metadata.Owner as string)
+    || (metadata.Manager as string)
+    || (metadata.CommercialManager as string)
+    || null;
+
+  const serviceSpeed = parsePositiveNumber(
+    row.service_speed_knots
+    ?? sourcePayload.service_speed_knots
+    ?? sourcePayload.serviceSpeedKnots
+    ?? metadata.Speed
+    ?? metadata.speed_knots
+  );
+
+  const speedLaden = parsePositiveNumber(
+    sourcePayload.spd_laden
+    ?? sourcePayload.speed_laden
+    ?? sourcePayload.speedLaden
+    ?? row.service_speed_knots
+    ?? serviceSpeed
+  );
+
+  const speedBallast = parsePositiveNumber(
+    sourcePayload.spd_ballast
+    ?? sourcePayload.speed_ballast
+    ?? sourcePayload.speedBallast
+    ?? row.service_speed_knots
+    ?? serviceSpeed
+  );
+
+  const fuelConsumptionLaden = parsePositiveNumber(
+    sourcePayload.fuel_consumption_laden
+    ?? sourcePayload.cons_sea
+    ?? sourcePayload.consSea
+    ?? metadata.FuelConsumption
+    ?? metadata.Daily_Consumption
+  );
+
+  const fuelConsumptionPort = parsePositiveNumber(
+    sourcePayload.fuel_consumption_port
+    ?? sourcePayload.cons_port
+    ?? sourcePayload.consPort
+    ?? metadata.PortConsumption
+    ?? metadata.Daily_Port_Consumption
+  );
+
+  const fuelConsumptionBallast = parsePositiveNumber(
+    sourcePayload.fuel_consumption_ballast
+    ?? sourcePayload.cons_ballast
+    ?? sourcePayload.consBallast
+    ?? fuelConsumptionLaden
+  );
+
+  const vesselClass = (sourcePayload.vessel_class as string)
+    || (sourcePayload.commercial_class as string)
+    || row.vessel_type
+    || (sourcePayload.vessel_type as string)
+    || null;
+
+  const hasScrubber = sourcePayload.has_scrubber !== undefined
+    ? Boolean(sourcePayload.has_scrubber)
+    : sourcePayload.hasScrubber !== undefined
+    ? Boolean(sourcePayload.hasScrubber)
+    : metadata.HasScrubber !== undefined
+    ? Boolean(metadata.HasScrubber)
+    : null;
+
   return {
     imoNumber: row.imo_number,
     mmsi: row.mmsi,
@@ -57,6 +179,8 @@ function toRecord(row: VesselTechnicalRow): VesselTechnicalRecord {
     latitude: row.latitude,
     longitude: row.longitude,
     vesselType: row.vessel_type,
+    vesselClass,
+    commercialClass: vesselClass,
     draftMeters: row.draft_meters,
     flag: row.flag,
     callSign: row.call_sign,
@@ -67,6 +191,22 @@ function toRecord(row: VesselTechnicalRow): VesselTechnicalRecord {
     beamMeters: row.beam_meters === null ? null : Number(row.beam_meters),
     lastPort: row.last_port,
     eta: row.eta instanceof Date ? row.eta.toISOString() : row.eta,
+    serviceSpeedKnots: serviceSpeed,
+    speedLaden,
+    speedBallast,
+    fuelConsumptionLaden,
+    fuelConsumptionBallast,
+    fuelConsumptionPort,
+    consSea: fuelConsumptionLaden,
+    consPort: fuelConsumptionPort,
+    consBallast: fuelConsumptionBallast,
+    ownerManager,
+    hasGears: row.has_gears ?? (sourcePayload.has_gears as boolean | null) ?? null,
+    hasScrubber,
+    sourcePayload: row.source_payload,
+    auditStatus: row.audit_status || null,
+    validationStatus: row.validation_status || null,
+    dataSource: "vessels_master",
   };
 }
 
@@ -84,24 +224,141 @@ export async function findVesselTechnicalRecord(
   vesselName: string | null = null,
 ) {
   if (!imoNumber && !mmsi && !vesselName) return null;
-  const result = await getPool().query<VesselTechnicalRow>(
-    `
-      SELECT ${RETURNING_COLUMNS}
-      FROM vessels_master
-      WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
-         OR ($2::text IS NOT NULL AND mmsi = $2::text)
-         OR ($3::text IS NOT NULL AND LOWER(BTRIM(vessel_name)) = LOWER(BTRIM($3::text)))
-      ORDER BY
-        CASE
-          WHEN imo_number = $1::integer THEN 0
-          WHEN mmsi = $2::text THEN 1
-          ELSE 2
-        END
-      LIMIT 1
-    `,
-    [imoNumber, mmsi, vesselName],
-  );
-  return result.rows[0] ? toRecord(result.rows[0]) : null;
+  const pool = getPool();
+
+  try {
+    const result = await pool.query<VesselTechnicalRow>(
+      `
+        SELECT ${EXTENDED_QUERY_COLUMNS}
+        FROM vessels_master
+        WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
+           OR ($2::text IS NOT NULL AND mmsi = $2::text)
+           OR ($3::text IS NOT NULL AND LOWER(BTRIM(vessel_name)) = LOWER(BTRIM($3::text)))
+        ORDER BY
+          CASE
+            WHEN imo_number = $1::integer THEN 0
+            WHEN mmsi = $2::text THEN 1
+            ELSE 2
+          END,
+          fecha_ultima_actualizacion DESC NULLS LAST
+        LIMIT 1
+      `,
+      [imoNumber, mmsi, vesselName],
+    );
+
+    if (result.rows[0]) {
+      return toRecord(result.rows[0]);
+    }
+  } catch (err) {
+    // If extended query fails due to missing optional columns, fallback to standard columns
+    const fallbackResult = await pool.query<VesselTechnicalRow>(
+      `
+        SELECT ${RETURNING_COLUMNS}
+        FROM vessels_master
+        WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
+           OR ($2::text IS NOT NULL AND mmsi = $2::text)
+           OR ($3::text IS NOT NULL AND LOWER(BTRIM(vessel_name)) = LOWER(BTRIM($3::text)))
+        ORDER BY
+          CASE
+            WHEN imo_number = $1::integer THEN 0
+            WHEN mmsi = $2::text THEN 1
+            ELSE 2
+          END
+        LIMIT 1
+      `,
+      [imoNumber, mmsi, vesselName],
+    );
+    if (fallbackResult.rows[0]) {
+      return toRecord(fallbackResult.rows[0]);
+    }
+  }
+
+  // Fallback: Check ais_vessels if not found in vessels_master
+  try {
+    const aisResult = await pool.query<{
+      imo_number: string;
+      mmsi: string | null;
+      vessel_name: string | null;
+      vessel_type: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      source: string | null;
+      audit_status: string | null;
+      raw_data: unknown;
+    }>(
+      `
+        SELECT
+          imo_number,
+          mmsi,
+          vessel_name,
+          vessel_type,
+          latitude,
+          longitude,
+          source,
+          audit_status,
+          raw_data
+        FROM ais_vessels
+        WHERE ($1::text IS NOT NULL AND regexp_replace(imo_number, '\\D', '', 'g') = $1::text)
+           OR ($2::text IS NOT NULL AND mmsi = $2::text)
+           OR ($3::text IS NOT NULL AND LOWER(BTRIM(vessel_name)) = LOWER(BTRIM($3::text)))
+        ORDER BY
+          CASE
+            WHEN regexp_replace(imo_number, '\\D', '', 'g') = $1::text THEN 0
+            WHEN mmsi = $2::text THEN 1
+            ELSE 2
+          END
+        LIMIT 1
+      `,
+      [imoNumber ? String(imoNumber) : null, mmsi, vesselName],
+    );
+
+    if (aisResult.rows[0]) {
+      const row = aisResult.rows[0];
+      const rawData = asRecord(row.raw_data);
+      const meta = asRecord(rawData.MetaData || rawData.metadata);
+      const parsedImo = parseNumber(row.imo_number) || parseNumber(rawData.imo) || imoNumber;
+      return {
+        imoNumber: parsedImo,
+        mmsi: row.mmsi || (rawData.mmsi as string) || null,
+        vesselName: row.vessel_name || (rawData.vessel_name as string) || (rawData.name as string) || null,
+        dwt: parseNumber(rawData.dwt ?? meta.DWT),
+        latitude: row.latitude ?? parseNumber(rawData.latitude),
+        longitude: row.longitude ?? parseNumber(rawData.longitude),
+        vesselType: row.vessel_type || (rawData.vessel_type as string) || null,
+        vesselClass: (rawData.vessel_class as string) || (rawData.commercial_class as string) || row.vessel_type || null,
+        commercialClass: (rawData.commercial_class as string) || (rawData.vessel_class as string) || row.vessel_type || null,
+        draftMeters: parseNumber(rawData.draft_meters ?? rawData.draft),
+        flag: (rawData.flag as string) || (meta.Flag as string) || null,
+        callSign: (rawData.call_sign as string) || null,
+        yearBuilt: parseNumber(rawData.year_built ?? rawData.built_year ?? meta.Year_Built),
+        grossTonnage: parseNumber(rawData.gross_tonnage ?? rawData.gt ?? meta.GT),
+        netTonnage: parseNumber(rawData.net_tonnage ?? rawData.nt ?? meta.NT),
+        loaMeters: parseNumber(rawData.loa_meters ?? rawData.loa ?? meta.LOA),
+        beamMeters: parseNumber(rawData.beam_meters ?? rawData.beam ?? meta.Beam),
+        lastPort: (rawData.last_port as string) || null,
+        eta: (rawData.eta as string) || null,
+        serviceSpeedKnots: parseNumber(rawData.service_speed_knots ?? meta.Speed),
+        speedLaden: parseNumber(rawData.spd_laden ?? rawData.speed_laden ?? rawData.service_speed_knots),
+        speedBallast: parseNumber(rawData.spd_ballast ?? rawData.speed_ballast ?? rawData.service_speed_knots),
+        fuelConsumptionLaden: parseNumber(rawData.fuel_consumption_laden ?? rawData.cons_sea),
+        fuelConsumptionBallast: parseNumber(rawData.fuel_consumption_ballast ?? rawData.cons_ballast),
+        fuelConsumptionPort: parseNumber(rawData.fuel_consumption_port ?? rawData.cons_port),
+        consSea: parseNumber(rawData.fuel_consumption_laden ?? rawData.cons_sea),
+        consPort: parseNumber(rawData.fuel_consumption_port ?? rawData.cons_port),
+        consBallast: parseNumber(rawData.fuel_consumption_ballast ?? rawData.cons_ballast),
+        ownerManager: (rawData.owner_manager as string) || (rawData.manager as string) || (meta.Owner as string) || (meta.Manager as string) || null,
+        hasGears: (rawData.has_gears as boolean | null) ?? null,
+        hasScrubber: (rawData.has_scrubber as boolean | null) ?? null,
+        sourcePayload: rawData,
+        auditStatus: row.audit_status || null,
+        dataSource: "ais_vessels",
+      };
+    }
+  } catch (_) {
+    // If ais_vessels query fails, continue
+  }
+
+  return null;
 }
 
 export async function upsertVesselTechnicalRecord(
