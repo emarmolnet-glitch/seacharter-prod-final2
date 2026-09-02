@@ -76,7 +76,7 @@ async function ensureAppStateTable() {
 export default async (req: Request) => {
   const headers = {
     ...baseHeaders,
-    ...createCorsHeaders(req, "GET, POST, PUT, OPTIONS"),
+    ...createCorsHeaders(req, "GET, POST, PUT, DELETE, OPTIONS"),
   };
 
   if (req.method === "OPTIONS") {
@@ -85,11 +85,106 @@ export default async (req: Request) => {
 
   const url = new URL(req.url);
 
+  if (req.method === "DELETE") {
+    try {
+      await ensureAppStateTable();
+      const pool = getPool();
+      let deleteKey = (url.searchParams.get("key") || url.searchParams.get("id") || "").trim();
+      if (!deleteKey) {
+        try {
+          const bodyText = await req.text();
+          if (bodyText.trim()) {
+            const body = JSON.parse(bodyText);
+            deleteKey = (body?.key || body?.id || "").trim();
+          }
+        } catch (_) {}
+      }
+      if (!deleteKey) {
+        deleteKey = DEFAULT_STATE_KEY;
+      }
+
+      await pool.query(
+        `DELETE FROM app_state WHERE key = $1 OR id = $1`,
+        [deleteKey]
+      );
+      try {
+        await pool.query(
+          `DELETE FROM "AppConfig" WHERE "key" = $1`,
+          [deleteKey]
+        );
+      } catch (_) {}
+
+      return Response.json({
+        success: true,
+        message: `Deleted key ${deleteKey}`,
+        key: deleteKey,
+      }, { headers });
+    } catch (error: any) {
+      console.error("[app-state] Failed to delete app state:", error);
+      return new Response(JSON.stringify({ error: error?.message || "Failed to delete app state" }), {
+        status: 500,
+        headers,
+      });
+    }
+  }
+
   if (req.method === "GET") {
     try {
       await ensureAppStateTable();
       const pool = getPool();
       const requestedKey = (url.searchParams.get("key") || url.searchParams.get("id") || "").trim();
+      const isCustomKey = Boolean(requestedKey && requestedKey !== DEFAULT_STATE_KEY && requestedKey !== "current_session" && requestedKey !== "core_pro_active_session");
+
+      if (isCustomKey) {
+        const customResult = await pool.query(
+          `SELECT key, value, session_ref, current_session_ref, updated_at
+           FROM app_state
+           WHERE key = $1 OR id = $1
+           LIMIT 1`,
+          [requestedKey]
+        );
+        const customRow = customResult.rows[0];
+        if (customRow) {
+          let parsedVal = customRow.value;
+          let parsedImo = "";
+          let targetSessionId = "";
+          if (isRecord(parsedVal)) {
+            parsedImo = String(parsedVal.imo || parsedVal.imo_number || parsedVal.imoNumber || "").trim();
+            targetSessionId = String(parsedVal.reference || parsedVal.target_session_id || parsedVal.targetSessionId || "").trim();
+          } else if (typeof parsedVal === "string" && parsedVal.trim().startsWith("{")) {
+            try {
+              const decoded = JSON.parse(parsedVal);
+              if (isRecord(decoded)) {
+                parsedImo = String(decoded.imo || decoded.imo_number || decoded.imoNumber || "").trim();
+                targetSessionId = String(decoded.reference || decoded.target_session_id || decoded.targetSessionId || "").trim();
+              }
+            } catch (_) {}
+          }
+          return Response.json({
+            success: true,
+            key: customRow.key || requestedKey,
+            id: customRow.key || requestedKey,
+            value: customRow.value,
+            imo: parsedImo || (typeof customRow.value === "string" && /^\d{7}$/.test(customRow.value.trim()) ? customRow.value.trim() : ""),
+            target_session_id: targetSessionId,
+            reference: targetSessionId,
+            updated_at: customRow.updated_at ? new Date(customRow.updated_at).toISOString() : null,
+            updatedAt: customRow.updated_at ? new Date(customRow.updated_at).toISOString() : null,
+          }, { headers });
+        }
+
+        return Response.json({
+          success: true,
+          key: requestedKey,
+          id: requestedKey,
+          value: "",
+          imo: "",
+          target_session_id: "",
+          reference: "",
+          updated_at: null,
+          updatedAt: null,
+        }, { headers });
+      }
 
       const result = await pool.query(
         `SELECT key, value, session_ref, current_session_ref, updated_at
@@ -208,12 +303,39 @@ export default async (req: Request) => {
       }, { status: 400, headers });
     }
 
-    const currentSessionRef = extractReference(parsedBody);
+    const customKey = (parsedBody.key || parsedBody.id || "").toString().trim();
+    const isCustomKey = Boolean(customKey && customKey !== "core_pro_active_session" && customKey !== "current_session");
 
     // Execute explicit safe table creation matching schema with value NOT NULL
     await ensureAppStateTable();
-
     const pool = getPool();
+
+    if (isCustomKey) {
+      const customValue = typeof parsedBody.value !== "undefined"
+        ? (typeof parsedBody.value === "object" ? JSON.stringify(parsedBody.value) : String(parsedBody.value))
+        : JSON.stringify(parsedBody);
+
+      const customResult = await pool.query(
+        `INSERT INTO app_state (key, value, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE
+         SET value = EXCLUDED.value,
+             updated_at = NOW()
+         RETURNING key, value, updated_at`,
+        [customKey, customValue]
+      );
+      const customPersisted = customResult.rows[0];
+      return Response.json({
+        success: true,
+        key: customPersisted?.key || customKey,
+        id: customPersisted?.key || customKey,
+        value: customPersisted?.value || customValue,
+        updated_at: customPersisted?.updated_at ? new Date(customPersisted.updated_at).toISOString() : new Date().toISOString(),
+      }, { headers });
+    }
+
+    const currentSessionRef = extractReference(parsedBody);
+
     // Static identifier UPSERT setting value column explicitly
     const result = await pool.query(
       `INSERT INTO app_state (key, value, updated_at)

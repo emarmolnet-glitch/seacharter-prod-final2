@@ -26523,6 +26523,137 @@ function createRouteAnchorElement(type) {
         }
         window.hydrateCalculatorVesselFromUrl = hydrateCalculatorVesselFromUrl;
 
+        function cleanupPendingImoSources() {
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.removeItem('core_pro_pending_imo');
+                    localStorage.removeItem('pending_imo');
+                }
+            } catch (_) {}
+            if (typeof fetch === 'function') {
+                fetch('/api/app-state?key=core_pro_pending_imo', {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json' }
+                }).catch(function() {});
+            }
+        }
+
+        const processedBackgroundImos = new Set();
+
+        async function hydrateCalculatorVesselFromPendingImo(payload, sourceTag) {
+            if (!payload) return false;
+            let targetImo = '';
+            let targetRef = '';
+            const tag = sourceTag || '';
+
+            if (typeof payload === 'string') {
+                const trimmed = payload.trim();
+                if (/^\d{7}$/.test(trimmed)) {
+                    targetImo = trimmed;
+                } else if (trimmed.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        return hydrateCalculatorVesselFromPendingImo(parsed, tag);
+                    } catch (_) {}
+                }
+            } else if (typeof payload === 'object') {
+                targetRef = (payload.reference || payload.target_session_id || payload.targetSessionId || payload.target_session || payload.contractRef || payload.contract_ref || payload.ref || (payload.payload && (payload.payload.reference || payload.payload.target_session_id)) || '').toString().trim().toUpperCase();
+                targetImo = (payload.imo || payload.imo_number || payload.imoNumber || payload.pending_imo || payload.core_pro_pending_imo || payload.value || (payload.vessel && (payload.vessel.imo || payload.vessel.imo_number)) || (payload.payload && (payload.payload.imo || (payload.payload.vessel && payload.payload.vessel.imo))) || '').toString().trim();
+                if (!targetImo && payload.value && typeof payload.value === 'object') {
+                    return hydrateCalculatorVesselFromPendingImo(payload.value, tag);
+                }
+            }
+
+            if (!targetImo || !/^\d{7}$/.test(targetImo)) return false;
+
+            const referenceManager = window.ContractReference || window.ContractRefManager;
+            const currentActiveRef = (
+                (referenceManager && typeof referenceManager.getActiveContractRef === 'function' ? referenceManager.getActiveContractRef() : '') ||
+                (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('active_contract_ref') : '') ||
+                ''
+            ).trim().toUpperCase();
+
+            // Si se suministra sesión destino y no coincide con la activa, descartar
+            if (targetRef && currentActiveRef && targetRef !== currentActiveRef) {
+                return false;
+            }
+
+            const dedupKey = (currentActiveRef || 'ALL') + ':' + targetImo + ':' + tag;
+            if (processedBackgroundImos.has(dedupKey)) {
+                return false;
+            }
+            processedBackgroundImos.add(dedupKey);
+
+            if (referenceManager && typeof referenceManager.setInjectionLock === 'function') {
+                referenceManager.setInjectionLock(true);
+            }
+
+            try {
+                const imoInput = document.getElementById('vessel-identity-imo');
+                if (imoInput) {
+                    imoInput.value = targetImo;
+                }
+
+                if (typeof handleManualVesselUpdate === 'function') {
+                    handleManualVesselUpdate('imo', targetImo);
+                }
+
+                const vesselData = { imo: targetImo, imo_number: targetImo, imoNumber: targetImo };
+                if (typeof window.patchSection2Vessel === 'function') {
+                    window.patchSection2Vessel(vesselData);
+                }
+                try {
+                    const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                    vStore?.patchSection2Vessel?.(vesselData);
+                } catch (_) {}
+
+                if (typeof fetchVesselByImo === 'function') {
+                    void fetchVesselByImo(targetImo);
+                }
+
+                cleanupPendingImoSources();
+                return true;
+            } finally {
+                if (referenceManager && typeof referenceManager.setInjectionLock === 'function') {
+                    setTimeout(function() {
+                        referenceManager.setInjectionLock(false);
+                    }, 300);
+                }
+            }
+        }
+        window.hydrateCalculatorVesselFromPendingImo = hydrateCalculatorVesselFromPendingImo;
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('storage', function(e) {
+                if (!e) return;
+                if (e.key === 'core_pro_pending_imo' || e.key === 'pending_imo') {
+                    if (e.newValue) {
+                        void hydrateCalculatorVesselFromPendingImo(e.newValue, 'storage');
+                    }
+                }
+            });
+
+            if (typeof BroadcastChannel === 'function') {
+                ['core_pro_channel', 'seacharter_sync_channel'].forEach(function(chanName) {
+                    try {
+                        const bc = new BroadcastChannel(chanName);
+                        bc.addEventListener('message', function(event) {
+                            if (event && event.data) {
+                                void hydrateCalculatorVesselFromPendingImo(event.data, 'bc:' + chanName);
+                            }
+                        });
+                    } catch (_) {}
+                });
+            }
+
+            try {
+                const storedPending = localStorage.getItem('core_pro_pending_imo') || localStorage.getItem('pending_imo');
+                if (storedPending) {
+                    void hydrateCalculatorVesselFromPendingImo(storedPending, 'init_storage');
+                }
+            } catch (_) {}
+        }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', hydrateCalculatorVesselFromUrl, { once: true });
         } else {
