@@ -101,7 +101,7 @@ export function extractImoAndReference(data) {
 }
 
 /**
- * Reusable IMO hydration engine: sets Section 2 fields and triggers fetchVesselByImo.
+ * Reusable IMO hydration engine: updates React state, VoyageStore, GlobalStore and triggers fetchVesselByImo/fetchVesselSpecs.
  */
 export function executeImoHydration(imoValue) {
   const cleanImo = String(imoValue || '').trim();
@@ -114,12 +114,22 @@ export function executeImoHydration(imoValue) {
   referenceManager?.setInjectionLock?.(true);
 
   try {
-    // 1. Inyección de estado en Section 2
+    // 1. Actualización nativa de estado en el input de Section 2 si existe
     const imoInput = typeof document !== 'undefined'
-      ? document.getElementById('vessel-identity-imo')
+      ? (document.getElementById?.('vessel-identity-imo') ||
+         document.getElementById?.('imo') ||
+         (typeof document.querySelector === 'function' ? (document.querySelector('input[name="imo"]') || document.querySelector('input[name="imo_number"]') || document.querySelector('input[name="vessel_imo"]')) : null))
       : null;
+
     if (imoInput) {
       imoInput.value = cleanImo;
+    }
+
+    const altImoInput = typeof document !== 'undefined' && document.getElementById?.('imo') && document.getElementById?.('imo') !== imoInput
+      ? document.getElementById?.('imo')
+      : null;
+    if (altImoInput) {
+      altImoInput.value = cleanImo;
     }
 
     if (typeof window !== 'undefined' && typeof window.handleManualVesselUpdate === 'function') {
@@ -128,6 +138,7 @@ export function executeImoHydration(imoValue) {
 
     const vesselData = { imo: cleanImo, imo_number: cleanImo, imoNumber: cleanImo };
 
+    // 2. Sincronización en Contexto Global / Zustand / VoyageStore
     if (typeof window !== 'undefined' && typeof window.patchSection2Vessel === 'function') {
       window.patchSection2Vessel(vesselData);
     }
@@ -137,11 +148,18 @@ export function executeImoHydration(imoValue) {
         const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
         vStore?.patchSection2Vessel?.(vesselData);
       } catch (_) {}
+      if (window.GlobalStore) {
+        window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...vesselData };
+        window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...vesselData };
+      }
     }
 
-    // 2. Auto-disparo de búsqueda en base de datos
-    if (typeof window !== 'undefined' && typeof window.fetchVesselByImo === 'function') {
-      void window.fetchVesselByImo(cleanImo);
+    // 3. Ejecutar la función real que busca los datos y especificaciones en la base de datos
+    if (typeof window !== 'undefined') {
+      const fetchFn = (window.fetchVesselSpecs || window.fetchVesselByImo);
+      if (typeof fetchFn === 'function') {
+        void fetchFn(cleanImo);
+      }
     }
 
     return true;
@@ -340,6 +358,7 @@ export function usePendingImoSync() {
       try {
         if (typeof window.localStorage !== 'undefined') {
           window.localStorage.removeItem('core_pro_pending_imo');
+          window.localStorage.removeItem('selected_imo');
           window.localStorage.removeItem('pending_imo');
           window.localStorage.removeItem('seacharter_pending_imo');
         }
@@ -347,6 +366,11 @@ export function usePendingImoSync() {
 
       if (typeof fetch === 'function') {
         fetch('/api/app-state?key=core_pro_pending_imo', {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        }).catch(() => {});
+
+        fetch('/api/app-state?key=selected_imo', {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' },
         }).catch(() => {});
@@ -406,11 +430,22 @@ export function usePendingImoSync() {
     };
     window.addEventListener('storage', handleStorage);
 
-    // 3. BroadcastChannels listeners ('core_pro_channel' and 'seacharter_sync_channel')
+    // 3. BroadcastChannels listeners ('cross_app_sync', 'core_pro_channel', 'seacharter_sync_channel')
+    let crossAppChannel = null;
     let coreProChannel = null;
     let seacharterSyncChannel = null;
 
     if (typeof window.BroadcastChannel === 'function') {
+      try {
+        crossAppChannel = new window.BroadcastChannel('cross_app_sync');
+        crossAppChannel.onmessage = (event) => {
+          const data = event?.data;
+          if (data && (data.type === 'LOAD_IMO' || data.imo || data.selected_imo)) {
+            processCandidate(data, 'bc:cross_app_sync');
+          }
+        };
+      } catch (_) {}
+
       try {
         coreProChannel = new window.BroadcastChannel('core_pro_channel');
         coreProChannel.onmessage = (event) => {
@@ -432,7 +467,7 @@ export function usePendingImoSync() {
       } catch (_) {}
     }
 
-    // 4. Polling to Neon DB for 'core_pro_pending_imo'
+    // 4. Polling to Neon DB for 'core_pro_pending_imo' / 'selected_imo'
     const pollNeonPendingImo = async () => {
       if (isPollingRef.current || typeof fetch !== 'function') return;
       isPollingRef.current = true;
@@ -443,11 +478,13 @@ export function usePendingImoSync() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data?.success && (data.value || data.imo)) {
+          console.log('[Core PRO] Polling check, IMO recibido:', data);
+          if (data?.success && (data.value || data.imo || data.selected_imo || data.pending_imo)) {
             processCandidate(data, 'neon:poll');
           }
         }
-      } catch (_) {
+      } catch (pollErr) {
+        console.warn('[Core PRO] Error en polling de estado:', pollErr);
       } finally {
         isPollingRef.current = false;
       }
@@ -459,6 +496,7 @@ export function usePendingImoSync() {
 
     return () => {
       window.removeEventListener('storage', handleStorage);
+      crossAppChannel?.close();
       coreProChannel?.close();
       seacharterSyncChannel?.close();
       clearInterval(pollInterval);

@@ -26589,9 +26589,16 @@ function createRouteAnchorElement(type) {
             }
 
             try {
-                const imoInput = document.getElementById('vessel-identity-imo');
+                const imoInput = document.getElementById('vessel-identity-imo') ||
+                                 document.getElementById('imo') ||
+                                 (typeof document.querySelector === 'function' ? (document.querySelector('input[name="imo"]') || document.querySelector('input[name="imo_number"]') || document.querySelector('input[name="vessel_imo"]')) : null);
                 if (imoInput) {
                     imoInput.value = targetImo;
+                }
+
+                const altImoInput = (document.getElementById('imo') && document.getElementById('imo') !== imoInput ? document.getElementById('imo') : null);
+                if (altImoInput) {
+                    altImoInput.value = targetImo;
                 }
 
                 if (typeof handleManualVesselUpdate === 'function') {
@@ -26606,9 +26613,14 @@ function createRouteAnchorElement(type) {
                     const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
                     vStore?.patchSection2Vessel?.(vesselData);
                 } catch (_) {}
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeVessel = Object.assign({}, window.GlobalStore.activeVessel || {}, vesselData);
+                    window.GlobalStore.calculatorVessel = Object.assign({}, window.GlobalStore.calculatorVessel || {}, vesselData);
+                }
 
-                if (typeof fetchVesselByImo === 'function') {
-                    void fetchVesselByImo(targetImo);
+                const fetchFn = (window.fetchVesselSpecs || window.fetchVesselByImo || fetchVesselByImo);
+                if (typeof fetchFn === 'function') {
+                    void fetchFn(targetImo);
                 }
 
                 cleanupPendingImoSources();
@@ -26634,7 +26646,7 @@ function createRouteAnchorElement(type) {
             });
 
             if (typeof BroadcastChannel === 'function') {
-                ['core_pro_channel', 'seacharter_sync_channel'].forEach(function(chanName) {
+                ['cross_app_sync', 'core_bridge_sync', 'core_pro_channel', 'seacharter_sync_channel'].forEach(function(chanName) {
                     try {
                         const bc = new BroadcastChannel(chanName);
                         bc.addEventListener('message', function(event) {
