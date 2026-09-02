@@ -472,6 +472,23 @@ function NLPInputWidget() {
     await typeIntoControl("rate-load", scenario.loading_rate);
     await typeIntoControl("rate-disch", scenario.discharge_rate);
 
+    const rawProjectCargo = scenario.projectCargo || scenario.project_cargo || {};
+    const unitWeightMT = Number(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? scenario.unitWeightMT ?? scenario.unitWeight ?? scenario.pesoUnitario) || 0;
+    const length = Number(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? scenario.dimensions?.lengthM ?? scenario.dimensions?.length ?? scenario.lengthM ?? scenario.length ?? scenario.largo) || 0;
+    const width = Number(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? scenario.dimensions?.widthM ?? scenario.dimensions?.width ?? scenario.widthM ?? scenario.width ?? scenario.ancho) || 0;
+    const height = Number(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? scenario.dimensions?.heightM ?? scenario.dimensions?.height ?? scenario.heightM ?? scenario.height ?? scenario.alto) || 0;
+    const handlingMode = String(rawProjectCargo.handlingMode ?? scenario.handlingMode ?? rawProjectCargo.configuracionOperativa ?? scenario.configuracionOperativa ?? scenario.projectHandlingMode ?? 'direct-lift').trim();
+    const hasProjectCargoData = Boolean(scenario.projectCargo || scenario.project_cargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
+
+    if (hasProjectCargoData) {
+      await typeIntoControl("project-unit-weight", unitWeightMT);
+      await typeIntoControl("project-length", length);
+      await typeIntoControl("project-width", width);
+      await typeIntoControl("project-height", height);
+      await typeIntoControl("project-handling-mode", handlingMode);
+      await typeIntoControl("peso-pieza-mt", unitWeightMT);
+    }
+
     if (!scenario.is_partial) {
       window.syncCalculatorAndMatching?.("calculator", { force: true });
       window.syncMatchingViewFromGlobalOperationalState?.();
@@ -503,6 +520,34 @@ function NLPInputWidget() {
       ...(scenario.dischargeMethod ? { methodPOD: scenario.dischargeMethod } : {}),
       ...(scenario.loading_rate > 0 ? { ratePOL: scenario.loading_rate, ritmoMode: "manual", ritmoMode_pol: "manual" } : {}),
       ...(scenario.discharge_rate > 0 ? { ratePOD: scenario.discharge_rate, ritmoMode_pod: "manual", podCalcMode: "manual" } : {}),
+      ...(hasProjectCargoData ? {
+        pesoUnitario: unitWeightMT,
+        unitWeightMT,
+        largo: length,
+        length,
+        ancho: width,
+        width,
+        alto: height,
+        height,
+        handlingMode,
+        projectHandlingMode: handlingMode,
+        projectCargo: {
+          unitWeightMT,
+          pesoUnitario: unitWeightMT,
+          length,
+          largo: length,
+          width,
+          ancho: width,
+          height,
+          alto: height,
+          handlingMode,
+          dimensions: {
+            lengthM: length,
+            widthM: width,
+            heightM: height,
+          },
+        },
+      } : {}),
       laytimeLoadCondition: scenario.loading_terms,
       laytimeDischCondition: scenario.discharge_terms,
       laytimePOL: scenario.laytimePOL,

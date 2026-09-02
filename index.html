@@ -9290,23 +9290,23 @@
                             <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
                                 <div class="input-group">
                                     <label for="project-unit-weight" class="text-amber-900">Peso unitario (MT)</label>
-                                    <input type="number" id="project-unit-weight" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                    <input type="number" id="project-unit-weight" class="input-gc" min="0" step="0.01" value="0" oninput="const v = Number(this.value)||0; if ((State.pesoUnitario ?? State.unitWeightMT) !== v) { State.pesoUnitario = v; State.unitWeightMT = v; window.SeaCharterStore?.set?.({ pesoUnitario: v, unitWeightMT: v }, { source: 'project-cargo-input' }); runEngine(); }">
                                 </div>
                                 <div class="input-group">
                                     <label for="project-length" class="text-amber-900">Largo (m)</label>
-                                    <input type="number" id="project-length" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                    <input type="number" id="project-length" class="input-gc" min="0" step="0.01" value="0" oninput="const v = Number(this.value)||0; if ((State.largo ?? State.length) !== v) { State.largo = v; State.length = v; window.SeaCharterStore?.set?.({ largo: v, length: v }, { source: 'project-cargo-input' }); runEngine(); }">
                                 </div>
                                 <div class="input-group">
                                     <label for="project-width" class="text-amber-900">Ancho (m)</label>
-                                    <input type="number" id="project-width" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                    <input type="number" id="project-width" class="input-gc" min="0" step="0.01" value="0" oninput="const v = Number(this.value)||0; if ((State.ancho ?? State.width) !== v) { State.ancho = v; State.width = v; window.SeaCharterStore?.set?.({ ancho: v, width: v }, { source: 'project-cargo-input' }); runEngine(); }">
                                 </div>
                                 <div class="input-group">
                                     <label for="project-height" class="text-amber-900">Alto (m)</label>
-                                    <input type="number" id="project-height" class="input-gc" min="0" step="0.01" value="0" oninput="runEngine()">
+                                    <input type="number" id="project-height" class="input-gc" min="0" step="0.01" value="0" oninput="const v = Number(this.value)||0; if ((State.alto ?? State.height) !== v) { State.alto = v; State.height = v; window.SeaCharterStore?.set?.({ alto: v, height: v }, { source: 'project-cargo-input' }); runEngine(); }">
                                 </div>
                                 <div class="input-group col-span-2 md:col-span-1">
                                     <label for="project-handling-mode" class="text-amber-900">Configuración operativa</label>
-                                    <select id="project-handling-mode" class="input-gc" onchange="runEngine()">
+                                    <select id="project-handling-mode" class="input-gc" onchange="if ((State.handlingMode ?? State.projectHandlingMode) !== this.value) { State.handlingMode = this.value; State.projectHandlingMode = this.value; window.SeaCharterStore?.set?.({ handlingMode: this.value, projectHandlingMode: this.value }, { source: 'project-cargo-input' }); runEngine(); }">
                                         <option value="direct-lift">Izado directo</option>
                                         <option value="roro-mafi">RoRo con MAFI</option>
                                         <option value="roro-spmt">RoRo / traslado con SPMT</option>
@@ -16229,6 +16229,24 @@
             laycan: { laydays: "", cancelling: "" },
             laydays: "", cancelling: "",
             laycanDate: "", laycanTime: "", cancellingDate: "", cancellingTime: "",
+            pesoUnitario: 0, unitWeightMT: 0, largo: 0, length: 0, ancho: 0, width: 0, alto: 0, height: 0,
+            handlingMode: 'direct-lift', projectHandlingMode: 'direct-lift',
+            projectCargo: {
+                unitWeightMT: 0,
+                pesoUnitario: 0,
+                length: 0,
+                largo: 0,
+                width: 0,
+                ancho: 0,
+                height: 0,
+                alto: 0,
+                handlingMode: 'direct-lift',
+                dimensions: {
+                    lengthM: 0,
+                    widthM: 0,
+                    heightM: 0
+                }
+            },
             totalMiles: 0,
             smartAdjustments: {
                 basicBreakEven: 0,
@@ -16320,6 +16338,106 @@
                 base.dischRate,
                 base.ritmoRealPod
             );
+            const rawProjectCargo = source.projectCargo || source.project_cargo || base.projectCargo || base.project_cargo || {};
+            const unitWeightMT = firstPositiveNumber(
+                rawProjectCargo.unitWeightMT,
+                rawProjectCargo.unitWeight,
+                rawProjectCargo.pesoUnitario,
+                source.unitWeightMT,
+                source.unitWeight,
+                source.pesoUnitario,
+                base.unitWeightMT,
+                base.unitWeight,
+                base.pesoUnitario
+            );
+            const length = firstPositiveNumber(
+                rawProjectCargo.dimensions?.lengthM,
+                rawProjectCargo.dimensions?.length,
+                rawProjectCargo.lengthM,
+                rawProjectCargo.length,
+                rawProjectCargo.largo,
+                source.dimensions?.lengthM,
+                source.dimensions?.length,
+                source.lengthM,
+                source.length,
+                source.largo,
+                base.dimensions?.lengthM,
+                base.dimensions?.length,
+                base.lengthM,
+                base.length,
+                base.largo
+            );
+            const width = firstPositiveNumber(
+                rawProjectCargo.dimensions?.widthM,
+                rawProjectCargo.dimensions?.width,
+                rawProjectCargo.widthM,
+                rawProjectCargo.width,
+                rawProjectCargo.ancho,
+                source.dimensions?.widthM,
+                source.dimensions?.width,
+                source.widthM,
+                source.width,
+                source.ancho,
+                base.dimensions?.widthM,
+                base.dimensions?.width,
+                base.widthM,
+                base.width,
+                base.ancho
+            );
+            const height = firstPositiveNumber(
+                rawProjectCargo.dimensions?.heightM,
+                rawProjectCargo.dimensions?.height,
+                rawProjectCargo.heightM,
+                rawProjectCargo.height,
+                rawProjectCargo.alto,
+                source.dimensions?.heightM,
+                source.dimensions?.height,
+                source.heightM,
+                source.height,
+                source.alto,
+                base.dimensions?.heightM,
+                base.dimensions?.height,
+                base.heightM,
+                base.height,
+                base.alto
+            );
+            const handlingMode = firstText(
+                rawProjectCargo.handlingMode,
+                source.handlingMode,
+                source.projectHandlingMode,
+                rawProjectCargo.configuracionOperativa,
+                source.configuracionOperativa,
+                base.handlingMode,
+                base.projectHandlingMode,
+                'direct-lift'
+            );
+            const basePc = base.projectCargo;
+            const projectCargo = (
+                basePc &&
+                basePc.unitWeightMT === unitWeightMT &&
+                basePc.length === length &&
+                basePc.width === width &&
+                basePc.height === height &&
+                basePc.handlingMode === handlingMode &&
+                basePc.dimensions?.lengthM === length &&
+                basePc.dimensions?.widthM === width &&
+                basePc.dimensions?.heightM === height
+            ) ? basePc : {
+                unitWeightMT,
+                pesoUnitario: unitWeightMT,
+                length,
+                largo: length,
+                width,
+                ancho: width,
+                height,
+                alto: height,
+                handlingMode,
+                dimensions: {
+                    lengthM: length,
+                    widthM: width,
+                    heightM: height
+                }
+            };
             return {
                 ...source,
                 laycan: { laydays, cancelling },
@@ -16335,7 +16453,18 @@
                 cargoType,
                 loadRate,
                 dischargeRate,
-                dischRate: dischargeRate
+                dischRate: dischargeRate,
+                pesoUnitario: unitWeightMT,
+                unitWeightMT,
+                largo: length,
+                length,
+                ancho: width,
+                width,
+                alto: height,
+                height,
+                handlingMode,
+                projectHandlingMode: handlingMode,
+                projectCargo
             };
         }
         window.normalizeActiveVoyageState = normalizeActiveVoyageState;
@@ -16421,8 +16550,23 @@
             const currentKeys = Object.keys(currentValue);
             const nextKeys = Object.keys(nextValue);
             if (currentKeys.length !== nextKeys.length) return false;
-            return currentKeys.every((key) => Object.prototype.hasOwnProperty.call(nextValue, key)
-                && Object.is(currentValue[key], nextValue[key]));
+            return currentKeys.every((key) => {
+                if (!Object.prototype.hasOwnProperty.call(nextValue, key)) return false;
+                const cur = currentValue[key];
+                const nxt = nextValue[key];
+                if (Object.is(cur, nxt)) return true;
+                if (cur && nxt && typeof cur === 'object' && typeof nxt === 'object') {
+                    if (Array.isArray(cur) || Array.isArray(nxt)) {
+                        if (!Array.isArray(cur) || !Array.isArray(nxt) || cur.length !== nxt.length) return false;
+                        return cur.every((v, i) => Object.is(v, nxt[i]));
+                    }
+                    const cKeys = Object.keys(cur);
+                    const nKeys = Object.keys(nxt);
+                    if (cKeys.length !== nKeys.length) return false;
+                    return cKeys.every((k) => Object.prototype.hasOwnProperty.call(nxt, k) && Object.is(cur[k], nxt[k]));
+                }
+                return false;
+            });
         }
 
         function hasShallowStoreChanges(partial = {}, baseline = {}) {
@@ -16433,14 +16577,16 @@
         function canonicalVoyageParamsEqual(current = {}, next = {}) {
             const scalarFields = [
                 'portBallast', 'pol', 'pod', 'laydays', 'cancelling', 'laycanDate', 'cancellingDate',
-                'cargoQuantity', 'cargoQty', 'cargoType', 'cargoTypeCode', 'loadRate', 'dischargeRate', 'dischRate'
+                'cargoQuantity', 'cargoQty', 'cargoType', 'cargoTypeCode', 'loadRate', 'dischargeRate', 'dischRate',
+                'pesoUnitario', 'unitWeightMT', 'largo', 'length', 'ancho', 'width', 'alto', 'height', 'handlingMode', 'projectHandlingMode'
             ];
             return scalarFields.every((field) => Object.is(current?.[field], next?.[field]))
                 && shallowStoreValueEqual(current?.polCoordinates, next?.polCoordinates)
                 && shallowStoreValueEqual(current?.podCoordinates, next?.podCoordinates)
                 && shallowStoreValueEqual(current?.pol_coordinates, next?.pol_coordinates)
                 && shallowStoreValueEqual(current?.pod_coordinates, next?.pod_coordinates)
-                && shallowStoreValueEqual(current?.laycan, next?.laycan);
+                && shallowStoreValueEqual(current?.laycan, next?.laycan)
+                && shallowStoreValueEqual(current?.projectCargo, next?.projectCargo);
         }
 
         function updateGlobalVoyageParams(partial = {}, metadata = {}) {
@@ -16917,6 +17063,32 @@
                 portBallastCoordinates: null,
                 polCoordinates: null,
                 podCoordinates: null,
+                pesoUnitario: 0,
+                unitWeightMT: 0,
+                largo: 0,
+                length: 0,
+                ancho: 0,
+                width: 0,
+                alto: 0,
+                height: 0,
+                handlingMode: 'direct-lift',
+                projectHandlingMode: 'direct-lift',
+                projectCargo: {
+                    unitWeightMT: 0,
+                    pesoUnitario: 0,
+                    length: 0,
+                    largo: 0,
+                    width: 0,
+                    ancho: 0,
+                    height: 0,
+                    alto: 0,
+                    handlingMode: 'direct-lift',
+                    dimensions: {
+                        lengthM: 0,
+                        widthM: 0,
+                        heightM: 0
+                    }
+                },
                 smartAdjustments: {}
             });
 
@@ -16926,6 +17098,7 @@
                 'rate-load', 'rate-disch', 'cons-sea', 'price-sea', 'cons-port', 'cons-anchorage',
                 'price-port', 'opex-daily', 'pda-pol', 'pda-pod', 'stevedoring-costs', 'pda-misc',
                 'cargo-surcharge', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion',
+                'project-unit-weight', 'project-length', 'project-width', 'project-height',
                 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'days-margin',
                 'freight-rate', 'freight-sell', 'comm-pct', 'margin-owner', 'margin-charterer',
                 'demurrage-rate', 'coa-num-embarques', 'coa-total-tm', 'target-margin',
@@ -16938,6 +17111,7 @@
                 'market-calibration-factor', 'dispatch-pct', 'laycan-dias-libres'
             ];
             zeroIds.forEach((id) => setInputValue(id, 0));
+            setInputValue('project-handling-mode', 'direct-lift');
             setInputValue('margin-owner', 0);
             setInputValue('margin-charterer', 0);
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => setInputValue(id, nextActiveReference));
@@ -17267,7 +17441,17 @@
                 cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
                 distBallast: readEffectiveBallastDistance(),
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
-                totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0
+                totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0,
+                pesoUnitario: parseFloat(document.getElementById('project-unit-weight')?.value) || State.pesoUnitario || State.unitWeightMT || 0,
+                unitWeightMT: parseFloat(document.getElementById('project-unit-weight')?.value) || State.unitWeightMT || State.pesoUnitario || 0,
+                largo: parseFloat(document.getElementById('project-length')?.value) || State.largo || State.length || 0,
+                length: parseFloat(document.getElementById('project-length')?.value) || State.length || State.largo || 0,
+                ancho: parseFloat(document.getElementById('project-width')?.value) || State.ancho || State.width || 0,
+                width: parseFloat(document.getElementById('project-width')?.value) || State.width || State.ancho || 0,
+                alto: parseFloat(document.getElementById('project-height')?.value) || State.alto || State.height || 0,
+                height: parseFloat(document.getElementById('project-height')?.value) || State.height || State.alto || 0,
+                handlingMode: document.getElementById('project-handling-mode')?.value || State.handlingMode || State.projectHandlingMode || 'direct-lift',
+                projectHandlingMode: document.getElementById('project-handling-mode')?.value || State.projectHandlingMode || State.handlingMode || 'direct-lift',
             });
         }
 
@@ -17362,6 +17546,30 @@
             syncEtaRadarFromLaycan(State.laycanDate);
             if (State.pol) setInputValue('match-pol', State.pol);
             if (State.pod) setInputValue('match-pod', State.pod);
+            const unitWeightValue = State.pesoUnitario ?? State.unitWeightMT ?? State.projectCargo?.unitWeightMT;
+            if (unitWeightValue !== undefined && unitWeightValue !== null && unitWeightValue !== "") {
+                updateInputIfNotFocused('project-unit-weight', unitWeightValue);
+                updateInputIfNotFocused('peso-pieza-mt', unitWeightValue);
+            }
+            const lengthValue = State.largo ?? State.length ?? State.projectCargo?.length ?? State.projectCargo?.dimensions?.lengthM;
+            if (lengthValue !== undefined && lengthValue !== null && lengthValue !== "") {
+                updateInputIfNotFocused('project-length', lengthValue);
+            }
+            const widthValue = State.ancho ?? State.width ?? State.projectCargo?.width ?? State.projectCargo?.dimensions?.widthM;
+            if (widthValue !== undefined && widthValue !== null && widthValue !== "") {
+                updateInputIfNotFocused('project-width', widthValue);
+            }
+            const heightValue = State.alto ?? State.height ?? State.projectCargo?.height ?? State.projectCargo?.dimensions?.heightM;
+            if (heightValue !== undefined && heightValue !== null && heightValue !== "") {
+                updateInputIfNotFocused('project-height', heightValue);
+            }
+            const handlingModeValue = State.handlingMode ?? State.projectHandlingMode ?? State.projectCargo?.handlingMode;
+            if (handlingModeValue) {
+                setInputValue('project-handling-mode', handlingModeValue);
+            }
+            if (Number(unitWeightValue) > 0 || Number(lengthValue) > 0 || Number(widthValue) > 0 || Number(heightValue) > 0) {
+                actualizarCamposTipoCarga();
+            }
             updateRouteSummary();
             try {
                 if (typeof syncGencon === 'function') syncGencon();
@@ -32986,7 +33194,9 @@ function createRouteAnchorElement(type) {
             const cargoType = [
                 document.getElementById('cargo-type')?.value,
                 document.getElementById('cargo-product')?.value,
-                window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value)
+                window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value),
+                State.cargoType,
+                State.cargoProduct
             ].filter(Boolean).join(' ');
             const calculate = window.ProjectCargoEngine?.calculateProjectCargoRequirements;
             if (typeof calculate !== 'function') {
@@ -32994,12 +33204,12 @@ function createRouteAnchorElement(type) {
             }
             return calculate({
                 cargoType,
-                unitWeightMT: document.getElementById('project-unit-weight')?.value,
-                length: document.getElementById('project-length')?.value,
-                width: document.getElementById('project-width')?.value,
-                height: document.getElementById('project-height')?.value,
-                handlingMode: document.getElementById('project-handling-mode')?.value,
-                operationDays: document.getElementById('dias-preparacion')?.value
+                unitWeightMT: document.getElementById('project-unit-weight')?.value || State.pesoUnitario || State.unitWeightMT || State.projectCargo?.unitWeightMT || 0,
+                length: document.getElementById('project-length')?.value || State.largo || State.length || State.projectCargo?.length || 0,
+                width: document.getElementById('project-width')?.value || State.ancho || State.width || State.projectCargo?.width || 0,
+                height: document.getElementById('project-height')?.value || State.alto || State.height || State.projectCargo?.height || 0,
+                handlingMode: document.getElementById('project-handling-mode')?.value || State.handlingMode || State.projectHandlingMode || State.projectCargo?.handlingMode || 'direct-lift',
+                operationDays: document.getElementById('dias-preparacion')?.value || Math.max(1, Number(State.diasPuerto || State.portDays) || 1)
             });
         }
 
@@ -37392,7 +37602,12 @@ function scheduleReactiveEngine() {
         }
 
         // --- MOTOR PRINCIPAL ---
+        let isRunningEngine = false;
+
         function runEngine() {
+            if (isRunningEngine) return;
+            isRunningEngine = true;
+            try {
             const options = arguments[0] || {};
             const deferStoreCommit = options.deferStoreCommit === true;
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
@@ -39040,6 +39255,9 @@ function scheduleReactiveEngine() {
                 renderStressTestScenario(State);
             }
             notifyPendingDraftRecalculation();
+            } finally {
+                isRunningEngine = false;
+            }
         }
 
         function bindShadowEstimator() {
@@ -53151,11 +53369,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return this.auditVessels;
             },
             setAisMatchingState(nearbyVessels, compatibleVessels, proximityDebug = null, metadata = {}) {
-                this.nearbyVessels = Array.isArray(nearbyVessels) ? nearbyVessels.slice() : [];
-                this.compatibleVessels = Array.isArray(compatibleVessels) ? compatibleVessels.slice() : [];
+                const nextNearby = Array.isArray(nearbyVessels) ? nearbyVessels.slice() : [];
+                const nextCompatible = Array.isArray(compatibleVessels) ? compatibleVessels.slice() : [];
+                const nextSource = String(metadata.source || 'calculator-proximity');
+                if (
+                    this.nearbyCount === nextNearby.length &&
+                    this.aisMatchingStateSource === nextSource &&
+                    JSON.stringify(this.nearbyVessels || []) === JSON.stringify(nextNearby) &&
+                    JSON.stringify(this.compatibleVessels || []) === JSON.stringify(nextCompatible) &&
+                    JSON.stringify(this.aisMatchingProximityDebug) === JSON.stringify(proximityDebug)
+                ) {
+                    return this.nearbyCount;
+                }
+                this.nearbyVessels = nextNearby;
+                this.compatibleVessels = nextCompatible;
                 this.nearbyCount = this.nearbyVessels.length;
                 this.aisMatchingProximityDebug = proximityDebug;
-                this.aisMatchingStateSource = String(metadata.source || 'calculator-proximity');
+                this.aisMatchingStateSource = nextSource;
                 renderAisNearbyCount(this.nearbyCount);
                 window.dispatchEvent(new CustomEvent('ais:matching-state-updated', {
                     detail: {
@@ -53168,7 +53398,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return this.nearbyCount;
             },
             setAisDataAvailability(hasAisData, metadata = {}) {
-                this.hasAisData = hasAisData === true;
+                const nextHasAisData = hasAisData === true;
+                if (this.hasAisData === nextHasAisData && (!metadata.completedAt || this.lastAisSweepAt === String(metadata.completedAt))) {
+                    return this.hasAisData;
+                }
+                this.hasAisData = nextHasAisData;
                 this.lastAisSweepAt = this.hasAisData
                     ? String(metadata.completedAt || metadata.requestedAt || new Date().toISOString())
                     : '';
@@ -59804,6 +60038,9 @@ if (typeof window.loadActiveFleet === 'function') {
                     totalLocalSupply,
                     podBackhaulCount: podBackhaulCandidates.length
                 });
+                if (window.aisMarketFreightRates && JSON.stringify(window.aisMarketFreightRates) === JSON.stringify(aisMarketFreightRates)) {
+                    return;
+                }
                 window.aisMarketFreightRates = aisMarketFreightRates;
                 window.dispatchEvent(new CustomEvent('AIS_MARKET_RATES_UPDATED', {
                     detail: aisMarketFreightRates
@@ -62687,8 +62924,13 @@ if (typeof window.loadActiveFleet === 'function') {
         function actualizarCamposTipoCarga() {
             const tipoCarga = normalizarTipoCarga();
             const isAcero = tipoCarga === 'acero';
-            const projectCargoTypeText = `${document.getElementById('cargo-type')?.value || ''} ${document.getElementById('cargo-product')?.value || ''} ${window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || ''}`;
-            const isProyecto = tipoCarga === 'proyecto' || Boolean(window.ProjectCargoEngine?.isProjectCargoType?.(projectCargoTypeText));
+            const projectCargoTypeText = `${document.getElementById('cargo-type')?.value || ''} ${document.getElementById('cargo-product')?.value || ''} ${window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || ''} ${State.cargoType || ''} ${State.cargoProduct || ''}`;
+            const unitWeightValue = Number(document.getElementById('project-unit-weight')?.value) || Number(State.pesoUnitario) || Number(State.unitWeightMT) || Number(State.projectCargo?.unitWeightMT) || 0;
+            const lengthValue = Number(document.getElementById('project-length')?.value) || Number(State.largo) || Number(State.length) || Number(State.projectCargo?.length) || 0;
+            const widthValue = Number(document.getElementById('project-width')?.value) || Number(State.ancho) || Number(State.width) || Number(State.projectCargo?.width) || 0;
+            const heightValue = Number(document.getElementById('project-height')?.value) || Number(State.alto) || Number(State.height) || Number(State.projectCargo?.height) || 0;
+            const hasProjectDimensions = unitWeightValue > 0 || lengthValue > 0 || widthValue > 0 || heightValue > 0;
+            const isProyecto = tipoCarga === 'proyecto' || Boolean(window.ProjectCargoEngine?.isProjectCargoType?.(projectCargoTypeText)) || hasProjectDimensions;
             const requiresPieceWeight = Boolean(getSelectedCargoProduct()?.requiresPieceWeight);
             const toggle = (id, show) => {
                 const el = document.getElementById(id);

@@ -4,15 +4,19 @@ import { normalizeNlpVoyagePayload } from '../shared/cargo-mapper.mjs';
 
 let isHydratingBallastDistance = false;
 
-function setValue(id, value) {
+function setValue(id, value, dispatchEvents = false) {
     const input = document.getElementById(id);
     if (!input || value === null || value === undefined || value === '') return;
-    input.value = String(value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const nextVal = String(value);
+    if (String(input.value) === nextVal) return;
+    input.value = nextVal;
+    if (dispatchEvents) {
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 }
 
-function setSelectValue(id, value) {
+function setSelectValue(id, value, dispatchEvents = false) {
     const select = document.getElementById(id);
     const normalizedValue = String(value ?? '').trim();
     if (!select || !normalizedValue) return false;
@@ -24,8 +28,11 @@ function setSelectValue(id, value) {
         || comparableValue.includes(option.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es'))
     ));
     if (!matchingOption) return false;
+    if (select.value === matchingOption.value) return true;
     select.value = matchingOption.value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    if (dispatchEvents) {
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     return true;
 }
 
@@ -290,6 +297,15 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     const methodPOD = readMethodValue(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod) || methodPOL;
     const hasValidatedPol = Boolean(scenario.pol_port);
     const hasValidatedPod = Boolean(scenario.pod_port);
+
+    const rawProjectCargo = scenario.projectCargo || scenario.project_cargo || {};
+    const unitWeightMT = Number(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? scenario.unitWeightMT ?? scenario.unitWeight ?? scenario.pesoUnitario) || 0;
+    const length = Number(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? scenario.dimensions?.lengthM ?? scenario.dimensions?.length ?? scenario.lengthM ?? scenario.length ?? scenario.largo) || 0;
+    const width = Number(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? scenario.dimensions?.widthM ?? scenario.dimensions?.width ?? scenario.widthM ?? scenario.width ?? scenario.ancho) || 0;
+    const height = Number(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? scenario.dimensions?.heightM ?? scenario.dimensions?.height ?? scenario.heightM ?? scenario.height ?? scenario.alto) || 0;
+    const handlingMode = String(rawProjectCargo.handlingMode ?? scenario.handlingMode ?? rawProjectCargo.configuracionOperativa ?? scenario.configuracionOperativa ?? scenario.projectHandlingMode ?? 'direct-lift').trim();
+    const hasProjectCargoData = Boolean(scenario.projectCargo || scenario.project_cargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
+
     if (incomingPol || scenario.pol_port) {
         ['port-pol', 'map-port-pol'].forEach((inputId) => {
             if (hasValidatedPol) selectValidatedWpiPort(inputId, scenario.pol_port);
@@ -317,12 +333,47 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
         ...(methodPOD ? { methodPOD } : {}),
         ...(shouldApplyLoadingRate ? { ratePOL: loadingRate } : {}),
         ...(shouldApplyDischargeRate ? { ratePOD: dischargeRate } : {}),
+        ...(hasProjectCargoData ? {
+            projectCargo: {
+                unitWeightMT,
+                pesoUnitario: unitWeightMT,
+                length,
+                largo: length,
+                width,
+                ancho: width,
+                height,
+                alto: height,
+                handlingMode,
+                dimensions: {
+                    lengthM: length,
+                    widthM: width,
+                    heightM: height,
+                },
+            },
+            unitWeightMT,
+            pesoUnitario: unitWeightMT,
+            length,
+            largo: length,
+            width,
+            ancho: width,
+            height,
+            alto: height,
+            handlingMode,
+        } : {}),
     });
 
     if (incomingPol || scenario.pol_port) window.syncSelectedRoutePort?.('POL', pol);
     if (incomingPod || scenario.pod_port) window.syncSelectedRoutePort?.('POD', pod);
     if (shouldApplyCargoQuantity) setValue('cargo-qty', cargoQuantity);
     if (shouldApplyCargoClassification && cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
+    if (hasProjectCargoData) {
+        setValue('project-unit-weight', unitWeightMT);
+        setValue('project-length', length);
+        setValue('project-width', width);
+        setValue('project-height', height);
+        setSelectValue('project-handling-mode', handlingMode);
+        setValue('peso-pieza-mt', unitWeightMT);
+    }
     if (shouldApplyLaydays) {
         ['map-laycan-date', 'gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setValue(id, laydays));
     }
@@ -362,6 +413,34 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
         ...(shouldApplyCargoClassification && cargoCategory ? { cargoCategory, cargoType: cargoCategory } : {}),
         ...(shouldApplyCargoClassification && cargoProduct ? { cargoProduct } : {}),
         ...(shouldApplyCargoClassification && cargoSpecification ? { cargoSpecification } : {}),
+        ...(hasProjectCargoData ? {
+            pesoUnitario: unitWeightMT,
+            unitWeightMT,
+            largo: length,
+            length,
+            ancho: width,
+            width,
+            alto: height,
+            height,
+            handlingMode,
+            projectHandlingMode: handlingMode,
+            projectCargo: {
+                unitWeightMT,
+                pesoUnitario: unitWeightMT,
+                length,
+                largo: length,
+                width,
+                ancho: width,
+                height,
+                alto: height,
+                handlingMode,
+                dimensions: {
+                    lengthM: length,
+                    widthM: width,
+                    heightM: height,
+                },
+            },
+        } : {}),
         ...(shouldApplyLoadingRate ? { loadRate: loadingRate, ritmoRealPol: loadingRate } : {}),
         ...(shouldApplyDischargeRate ? { dischargeRate, dischRate: dischargeRate, ritmoRealPod: dischargeRate } : {}),
         ...(shouldApplyDwt ? { dwt, vesselDwt: dwt } : {}),
@@ -374,6 +453,7 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
+    if (hasProjectCargoData && typeof window.actualizarCamposTipoCarga === 'function') window.actualizarCamposTipoCarga();
     if (shouldApplyCargoClassification && cargoCategory && cargoProduct) replaceCargoHierarchySelection(cargoCategory, cargoProduct);
     if (methodPOL) replaceOperationalMethod('pol', methodPOL);
     if (methodPOD) replaceOperationalMethod('pod', methodPOD);
@@ -445,6 +525,14 @@ function applyAssistantCalculatorAutofill(payload = {}) {
     const loadingMethod = resolveBigBagsMethod(`${cargoType} ${cargoProduct}`, readMethodValue(payload.methodPOL ?? payload.loading_method ?? payload.loadingMethod));
     const dischargeMethod = readMethodValue(payload.methodPOD ?? payload.discharge_method ?? payload.dischargeMethod) || loadingMethod;
 
+    const rawProjectCargo = payload.projectCargo || payload.project_cargo || {};
+    const unitWeightMT = Number(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? payload.unitWeightMT ?? payload.unitWeight ?? payload.pesoUnitario) || 0;
+    const length = Number(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? payload.dimensions?.lengthM ?? payload.dimensions?.length ?? payload.lengthM ?? payload.length ?? payload.largo) || 0;
+    const width = Number(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? payload.dimensions?.widthM ?? payload.dimensions?.width ?? payload.widthM ?? payload.width ?? payload.ancho) || 0;
+    const height = Number(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? payload.dimensions?.heightM ?? payload.dimensions?.height ?? payload.heightM ?? payload.height ?? payload.alto) || 0;
+    const handlingMode = String(rawProjectCargo.handlingMode ?? payload.handlingMode ?? rawProjectCargo.configuracionOperativa ?? payload.configuracionOperativa ?? payload.projectHandlingMode ?? 'direct-lift').trim();
+    const hasProjectCargoData = Boolean(payload.projectCargo || payload.project_cargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
+
     if (!loadingRate || !dischargeRate || !requiredDwt) {
         throw new Error('Payload de autocompletado incompleto');
     }
@@ -454,6 +542,15 @@ function applyAssistantCalculatorAutofill(payload = {}) {
         if (cargoCategory) setSelectValue('cargo-type', cargoCategory);
         if (cargoProduct) setSelectValue('cargo-product', cargoProduct);
         if (cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
+
+        if (hasProjectCargoData) {
+            setValue('project-unit-weight', unitWeightMT);
+            setValue('project-length', length);
+            setValue('project-width', width);
+            setValue('project-height', height);
+            setSelectValue('project-handling-mode', handlingMode);
+            setValue('peso-pieza-mt', unitWeightMT);
+        }
 
         setValue('vessel-dwt', requiredDwt);
         setSelectValue('metodo_carga', loadingMethod);
@@ -476,6 +573,34 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             cargoProduct,
             cargoSpecification,
             cargoType,
+            ...(hasProjectCargoData ? {
+                pesoUnitario: unitWeightMT,
+                unitWeightMT,
+                largo: length,
+                length,
+                ancho: width,
+                width,
+                alto: height,
+                height,
+                handlingMode,
+                projectHandlingMode: handlingMode,
+                projectCargo: {
+                    unitWeightMT,
+                    pesoUnitario: unitWeightMT,
+                    length,
+                    largo: length,
+                    width,
+                    ancho: width,
+                    height,
+                    alto: height,
+                    handlingMode,
+                    dimensions: {
+                        lengthM: length,
+                        widthM: width,
+                        heightM: height,
+                    },
+                },
+            } : {}),
             dwt: requiredDwt,
             vesselDwt: requiredDwt,
             class: vesselClass,
@@ -508,6 +633,9 @@ function applyAssistantCalculatorAutofill(payload = {}) {
 
     window.updateCargoVesselClassDisplay?.();
     window.syncGlobalStateToForms?.();
+    if (hasProjectCargoData && typeof window.actualizarCamposTipoCarga === 'function') {
+        window.actualizarCamposTipoCarga();
+    }
     setValue('vessel-dwt', requiredDwt);
     setSelectValue('metodo_carga', loadingMethod);
     setSelectValue('metodo_descarga_pod', dischargeMethod);
@@ -547,26 +675,79 @@ function hydrateCalculatorFromDraft(draft) {
         }, { source: 'voyage-draft-ballast-restore', silent: true });
     }
 
+    if (draft?.projectCargo) {
+        const pc = draft.projectCargo;
+        const pcWeight = Number(pc.unitWeightMT ?? pc.pesoUnitario) || 0;
+        const pcLength = Number(pc.dimensions?.lengthM ?? pc.length ?? pc.largo) || 0;
+        const pcWidth = Number(pc.dimensions?.widthM ?? pc.width ?? pc.ancho) || 0;
+        const pcHeight = Number(pc.dimensions?.heightM ?? pc.height ?? pc.alto) || 0;
+        const pcHandlingMode = String(pc.handlingMode || 'direct-lift');
+        if (pcWeight > 0 || pcLength > 0 || pcWidth > 0 || pcHeight > 0) {
+            setValue('project-unit-weight', pcWeight, false);
+            setValue('project-length', pcLength, false);
+            setValue('project-width', pcWidth, false);
+            setValue('project-height', pcHeight, false);
+            setSelectValue('project-handling-mode', pcHandlingMode, false);
+            setValue('peso-pieza-mt', pcWeight, false);
+
+            const currentState = window.SeaCharterStore?.getState?.() || {};
+            const stateMatches = (
+                Number(currentState.pesoUnitario ?? currentState.unitWeightMT) === pcWeight &&
+                Number(currentState.largo ?? currentState.length) === pcLength &&
+                Number(currentState.ancho ?? currentState.width) === pcWidth &&
+                Number(currentState.alto ?? currentState.height) === pcHeight &&
+                String(currentState.handlingMode || currentState.projectHandlingMode || 'direct-lift') === pcHandlingMode &&
+                JSON.stringify(currentState.projectCargo) === JSON.stringify(pc)
+            );
+
+            if (!stateMatches) {
+                window.SeaCharterStore?.set?.({
+                    pesoUnitario: pcWeight,
+                    unitWeightMT: pcWeight,
+                    largo: pcLength,
+                    length: pcLength,
+                    ancho: pcWidth,
+                    width: pcWidth,
+                    alto: pcHeight,
+                    height: pcHeight,
+                    handlingMode: pcHandlingMode,
+                    projectHandlingMode: pcHandlingMode,
+                    projectCargo: pc,
+                }, { source: 'voyage-draft-project-cargo', silent: true });
+            }
+            if (typeof window.actualizarCamposTipoCarga === 'function') {
+                window.actualizarCamposTipoCarga();
+            }
+        }
+    }
+
     if (draft?.lastSource !== 'tracking-audit') return;
     const vessel = draft.vessel || {};
-    setValue('nombre-buque-calculadora', vessel.name);
-    setValue('vessel-identity-imo', vessel.imo);
-    setValue('vessel-dwt', vessel.dwt);
-    setValue('vessel-identity-dwt', vessel.dwt);
-    setValue('vessel-identity-gt', vessel.gt);
-    setValue('vessel-identity-flag', vessel.flag);
-    setValue('vessel-identity-year', vessel.yearBuilt);
+    setValue('nombre-buque-calculadora', vessel.name, false);
+    setValue('vessel-identity-imo', vessel.imo, false);
+    setValue('vessel-dwt', vessel.dwt, false);
+    setValue('vessel-identity-dwt', vessel.dwt, false);
+    setValue('vessel-identity-gt', vessel.gt, false);
+    setValue('vessel-identity-flag', vessel.flag, false);
+    setValue('vessel-identity-year', vessel.yearBuilt, false);
 
-    window.SeaCharterStore?.set?.({
-        vessel: vessel.name || '',
-        vesselName: vessel.name || '',
-        imo: vessel.imo || '',
-        dwt: vessel.dwt || 0,
-        gt: vessel.gt || 0,
-        flag: vessel.flag || '',
-        yearBuilt: vessel.yearBuilt || 0,
-        distBallast: draft.ballastDistanceNm || 0,
-    }, { source: 'tracking-audit', silent: true });
+    const currentVesselState = window.SeaCharterStore?.getState?.() || {};
+    if (
+        currentVesselState.imo !== (vessel.imo || '') ||
+        Number(currentVesselState.dwt) !== Number(vessel.dwt || 0) ||
+        currentVesselState.vessel !== (vessel.name || '')
+    ) {
+        window.SeaCharterStore?.set?.({
+            vessel: vessel.name || '',
+            vesselName: vessel.name || '',
+            imo: vessel.imo || '',
+            dwt: vessel.dwt || 0,
+            gt: vessel.gt || 0,
+            flag: vessel.flag || '',
+            yearBuilt: vessel.yearBuilt || 0,
+            distBallast: draft.ballastDistanceNm || 0,
+        }, { source: 'tracking-audit', silent: true });
+    }
     window.dispatchEvent(new CustomEvent('voyage-draft:tracking-return', { detail: { draft } }));
 }
 
@@ -621,8 +802,10 @@ window.addEventListener('sea-assistant:calculator-autofill', (event) => {
 bindCalculatorStore();
 bindManualBallastDistance();
 voyageStore.subscribe((state, previousState) => {
-    if (state.draft !== previousState.draft) hydrateCalculatorFromDraft(state.draft);
-    if (state.draft?.weather !== previousState.draft?.weather && typeof window.runEngine === 'function') {
+    if (JSON.stringify(state.draft) !== JSON.stringify(previousState?.draft)) {
+        hydrateCalculatorFromDraft(state.draft);
+    }
+    if (JSON.stringify(state.draft?.weather) !== JSON.stringify(previousState?.draft?.weather) && typeof window.runEngine === 'function') {
         window.runEngine();
     }
 });

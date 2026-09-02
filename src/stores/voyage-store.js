@@ -6,6 +6,22 @@ const EMPTY_DRAFT = Object.freeze({
     pod: null,
     laycan: { laydays: '', cancelling: '' },
     cargo: { description: '', quantityMt: 0 },
+    projectCargo: {
+        unitWeightMT: 0,
+        pesoUnitario: 0,
+        length: 0,
+        largo: 0,
+        width: 0,
+        ancho: 0,
+        height: 0,
+        alto: 0,
+        handlingMode: 'direct-lift',
+        dimensions: {
+            lengthM: 0,
+            widthM: 0,
+            heightM: 0,
+        },
+    },
     loadingRate: 0,
     dischargeRate: 0,
     dwt: 0,
@@ -179,10 +195,34 @@ export function hasOperationalDraft(draft) {
 }
 
 export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
-    draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
-    applyNlpScenario: (scenario = {}) => set((current) => ({
-        draft: {
-            ...current.draft,
+    draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo }, projectCargo: { ...EMPTY_DRAFT.projectCargo, dimensions: { ...EMPTY_DRAFT.projectCargo.dimensions } } },
+    applyNlpScenario: (scenario = {}) => set((current) => {
+        const payload = scenario?.payload && typeof scenario.payload === 'object' ? scenario.payload : scenario;
+        const rawProjectCargo = payload.projectCargo || payload.project_cargo || scenario.projectCargo || scenario.project_cargo || {};
+        const unitWeightMT = cleanNonNegativeNumber(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? payload.unitWeightMT ?? payload.unitWeight ?? payload.pesoUnitario ?? scenario.unitWeightMT ?? scenario.unitWeight ?? scenario.pesoUnitario) ?? (current.draft.projectCargo?.unitWeightMT ?? 0);
+        const length = cleanNonNegativeNumber(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? payload.dimensions?.lengthM ?? payload.dimensions?.length ?? payload.lengthM ?? payload.length ?? payload.largo ?? scenario.dimensions?.lengthM ?? scenario.dimensions?.length ?? scenario.lengthM ?? scenario.length ?? scenario.largo) ?? (current.draft.projectCargo?.length ?? 0);
+        const width = cleanNonNegativeNumber(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? payload.dimensions?.widthM ?? payload.dimensions?.width ?? payload.widthM ?? payload.width ?? payload.ancho ?? scenario.dimensions?.widthM ?? scenario.dimensions?.width ?? scenario.widthM ?? scenario.width ?? scenario.ancho) ?? (current.draft.projectCargo?.width ?? 0);
+        const height = cleanNonNegativeNumber(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? payload.dimensions?.heightM ?? payload.dimensions?.height ?? payload.heightM ?? payload.height ?? payload.alto ?? scenario.dimensions?.heightM ?? scenario.dimensions?.height ?? scenario.heightM ?? scenario.height ?? scenario.alto) ?? (current.draft.projectCargo?.height ?? 0);
+        const handlingMode = cleanText(rawProjectCargo.handlingMode ?? payload.handlingMode ?? scenario.handlingMode ?? rawProjectCargo.configuracionOperativa ?? payload.configuracionOperativa ?? scenario.configuracionOperativa) || current.draft.projectCargo?.handlingMode || 'direct-lift';
+
+        const projectCargo = {
+            unitWeightMT,
+            pesoUnitario: unitWeightMT,
+            length,
+            largo: length,
+            width,
+            ancho: width,
+            height,
+            alto: height,
+            handlingMode,
+            dimensions: {
+                lengthM: length,
+                widthM: width,
+                heightM: height,
+            },
+        };
+
+        const nextDraft = {
             pol: normalizeNlpPort(scenario.pol_port || scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
             pod: normalizeNlpPort(scenario.pod_port || scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
             laycan: {
@@ -195,6 +235,7 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                     ? cleanNumber(scenario.cargo_qty ?? scenario.cargoQty) || current.draft.cargo.quantityMt
                     : current.draft.cargo.quantityMt,
             },
+            projectCargo,
             loadingRate: scenario.ratePOL !== undefined || scenario.loading_rate !== undefined || scenario.loadingRate !== undefined
                 ? cleanNumber(scenario.ratePOL ?? scenario.loading_rate ?? scenario.loadingRate) || current.draft.loadingRate
                 : current.draft.loadingRate,
@@ -206,10 +247,30 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             methodPOD: cleanMethod(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod) || current.draft.methodPOD,
             ratePOL: cleanNumber(scenario.ratePOL ?? scenario.loading_rate ?? scenario.loadingRate) || current.draft.ratePOL,
             ratePOD: cleanNumber(scenario.ratePOD ?? scenario.discharge_rate ?? scenario.dischargeRate) || current.draft.ratePOD,
-            updatedAt: new Date().toISOString(),
+            ballastDistanceNm: current.draft.ballastDistanceNm,
+            ballastDistanceSource: current.draft.ballastDistanceSource,
+            lastreCoordinates: current.draft.lastreCoordinates,
+            distanceNm: current.draft.distanceNm,
+            routeGeometry: current.draft.routeGeometry,
+            weather: current.draft.weather,
+            vessel: current.draft.vessel,
             lastSource: 'assistant-nlp',
-        },
-    })),
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'assistant-nlp' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'assistant-nlp' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
+        return {
+            draft: {
+                ...current.draft,
+                ...nextDraft,
+                updatedAt: new Date().toISOString(),
+            },
+        };
+    }),
     updateFromCalculator: (state = {}) => set((current) => {
         const ballastDistanceNm = resolveCalculatorBallastDistance(state, current.draft);
         const ballastDistanceChanged = ballastDistanceNm !== current.draft.ballastDistanceNm;
@@ -227,42 +288,78 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             || state.cancellingDate
             || state.laycan_end
         ) || current.draft.laycan.cancelling;
+
+        const rawProjectCargo = state.projectCargo || state.project_cargo || {};
+        const unitWeightMT = cleanNonNegativeNumber(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? state.unitWeightMT ?? state.unitWeight ?? state.pesoUnitario) ?? (current.draft.projectCargo?.unitWeightMT ?? 0);
+        const length = cleanNonNegativeNumber(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? state.dimensions?.lengthM ?? state.dimensions?.length ?? state.lengthM ?? state.length ?? state.largo) ?? (current.draft.projectCargo?.length ?? 0);
+        const width = cleanNonNegativeNumber(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? state.dimensions?.widthM ?? state.dimensions?.width ?? state.widthM ?? state.width ?? state.ancho) ?? (current.draft.projectCargo?.width ?? 0);
+        const height = cleanNonNegativeNumber(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? state.dimensions?.heightM ?? state.dimensions?.height ?? state.heightM ?? state.height ?? state.alto) ?? (current.draft.projectCargo?.height ?? 0);
+        const handlingMode = cleanText(rawProjectCargo.handlingMode ?? state.handlingMode ?? state.projectHandlingMode ?? rawProjectCargo.configuracionOperativa ?? state.configuracionOperativa) || current.draft.projectCargo?.handlingMode || 'direct-lift';
+
+        const projectCargo = {
+            unitWeightMT,
+            pesoUnitario: unitWeightMT,
+            length,
+            largo: length,
+            width,
+            ancho: width,
+            height,
+            alto: height,
+            handlingMode,
+            dimensions: {
+                lengthM: length,
+                widthM: width,
+                heightM: height,
+            },
+        };
+
+        const nextDraft = {
+            ...current.draft,
+            pol: normalizePort(state.polCoordinates, state.pol) || current.draft.pol,
+            pod: normalizePort(state.podCoordinates, state.pod) || current.draft.pod,
+            laycan: {
+                laydays,
+                cancelling,
+            },
+            cargo: {
+                description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),
+                quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
+            },
+            projectCargo,
+            loadingRate: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.loadingRate,
+            dischargeRate: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.dischargeRate,
+            dwt: cleanNumber(state.dwt ?? state.vesselDwt) || current.draft.dwt,
+            methodPOL: cleanMethod(state.methodPOL ?? state.loadMethod) || current.draft.methodPOL,
+            methodPOD: cleanMethod(state.methodPOD ?? state.dischargeMethod) || current.draft.methodPOD,
+            ratePOL: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.ratePOL,
+            ratePOD: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.ratePOD,
+            ballastDistanceNm,
+            ballastDistanceSource: ballastDistanceChanged
+                ? 'calculator'
+                : current.draft.ballastDistanceSource,
+            distanceNm: cleanNumber(state.totalMiles ?? state.distanceNm) || current.draft.distanceNm,
+            routeGeometry: state.routeGeometry || current.draft.routeGeometry,
+            vessel: normalizeVessel({
+                name: state.vesselName || state.vessel,
+                imo: state.imo,
+                dwt: state.dwt,
+                gt: state.gt,
+                flag: state.flag,
+                yearBuilt: state.yearBuilt,
+            }) || current.draft.vessel,
+            lastSource: 'calculator',
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'calculator' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'calculator' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
         return {
             draft: {
-                ...current.draft,
-                pol: normalizePort(state.polCoordinates, state.pol) || current.draft.pol,
-                pod: normalizePort(state.podCoordinates, state.pod) || current.draft.pod,
-                laycan: {
-                    laydays,
-                    cancelling,
-                },
-                cargo: {
-                    description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),
-                    quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
-                },
-                loadingRate: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.loadingRate,
-                dischargeRate: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.dischargeRate,
-                dwt: cleanNumber(state.dwt ?? state.vesselDwt) || current.draft.dwt,
-                methodPOL: cleanMethod(state.methodPOL ?? state.loadMethod) || current.draft.methodPOL,
-                methodPOD: cleanMethod(state.methodPOD ?? state.dischargeMethod) || current.draft.methodPOD,
-                ratePOL: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.ratePOL,
-                ratePOD: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.ratePOD,
-                ballastDistanceNm,
-                ballastDistanceSource: ballastDistanceChanged
-                    ? 'calculator'
-                    : current.draft.ballastDistanceSource,
-                distanceNm: cleanNumber(state.totalMiles ?? state.distanceNm) || current.draft.distanceNm,
-                routeGeometry: state.routeGeometry || current.draft.routeGeometry,
-                vessel: normalizeVessel({
-                    name: state.vesselName || state.vessel,
-                    imo: state.imo,
-                    dwt: state.dwt,
-                    gt: state.gt,
-                    flag: state.flag,
-                    yearBuilt: state.yearBuilt,
-                }) || current.draft.vessel,
+                ...nextDraft,
                 updatedAt: new Date().toISOString(),
-                lastSource: 'calculator',
             },
         };
     }),
@@ -304,29 +401,39 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             positionUpdatedAt: normalizedVessel.positionUpdatedAt || existingVessel.positionUpdatedAt || new Date().toISOString(),
         };
         const nextDwt = updatedVessel.dwt || current.draft.dwt;
+        const nextDraft = {
+            ...current.draft,
+            vessel: updatedVessel,
+            dwt: nextDwt,
+            loa_meters: updatedVessel.loa_meters ?? updatedVessel.loa ?? current.draft.loa_meters,
+            beam_meters: updatedVessel.beam_meters ?? updatedVessel.beam ?? current.draft.beam_meters,
+            draft_meters: updatedVessel.draft_meters ?? updatedVessel.draft ?? current.draft.draft_meters,
+            fuel_consumption_laden: updatedVessel.fuel_consumption_laden ?? current.draft.fuel_consumption_laden,
+            fuel_consumption_ballast: updatedVessel.fuel_consumption_ballast ?? current.draft.fuel_consumption_ballast,
+            fuel_consumption_port: updatedVessel.fuel_consumption_port ?? current.draft.fuel_consumption_port,
+            service_speed_knots: updatedVessel.service_speed_knots ?? updatedVessel.speedKnots ?? current.draft.service_speed_knots,
+            speed_laden: updatedVessel.speed_laden ?? current.draft.speed_laden,
+            speed_ballast: updatedVessel.speed_ballast ?? current.draft.speed_ballast,
+            gross_tonnage: updatedVessel.gross_tonnage ?? updatedVessel.gt ?? current.draft.gross_tonnage,
+            year_built: updatedVessel.year_built ?? updatedVessel.yearBuilt ?? current.draft.year_built,
+            owner_manager: updatedVessel.owner_manager || current.draft.owner_manager,
+            vessel_class: updatedVessel.vessel_class || current.draft.vessel_class,
+            flag: updatedVessel.flag || current.draft.flag,
+            has_gears: updatedVessel.has_gears ?? current.draft.has_gears,
+            has_scrubber: updatedVessel.has_scrubber ?? current.draft.has_scrubber,
+            lastSource: 'databridge-vessel-patch',
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'databridge-vessel-patch' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'databridge-vessel-patch' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
         return {
             draft: {
-                ...current.draft,
-                vessel: updatedVessel,
-                dwt: nextDwt,
-                loa_meters: updatedVessel.loa_meters ?? updatedVessel.loa ?? current.draft.loa_meters,
-                beam_meters: updatedVessel.beam_meters ?? updatedVessel.beam ?? current.draft.beam_meters,
-                draft_meters: updatedVessel.draft_meters ?? updatedVessel.draft ?? current.draft.draft_meters,
-                fuel_consumption_laden: updatedVessel.fuel_consumption_laden ?? current.draft.fuel_consumption_laden,
-                fuel_consumption_ballast: updatedVessel.fuel_consumption_ballast ?? current.draft.fuel_consumption_ballast,
-                fuel_consumption_port: updatedVessel.fuel_consumption_port ?? current.draft.fuel_consumption_port,
-                service_speed_knots: updatedVessel.service_speed_knots ?? updatedVessel.speedKnots ?? current.draft.service_speed_knots,
-                speed_laden: updatedVessel.speed_laden ?? current.draft.speed_laden,
-                speed_ballast: updatedVessel.speed_ballast ?? current.draft.speed_ballast,
-                gross_tonnage: updatedVessel.gross_tonnage ?? updatedVessel.gt ?? current.draft.gross_tonnage,
-                year_built: updatedVessel.year_built ?? updatedVessel.yearBuilt ?? current.draft.year_built,
-                owner_manager: updatedVessel.owner_manager || current.draft.owner_manager,
-                vessel_class: updatedVessel.vessel_class || current.draft.vessel_class,
-                flag: updatedVessel.flag || current.draft.flag,
-                has_gears: updatedVessel.has_gears ?? current.draft.has_gears,
-                has_scrubber: updatedVessel.has_scrubber ?? current.draft.has_scrubber,
+                ...nextDraft,
                 updatedAt: new Date().toISOString(),
-                lastSource: 'databridge-vessel-patch',
             },
         };
     }),
@@ -334,65 +441,99 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     setBallastDistance: ({ ballastDistanceNm, source = 'calculator-manual' } = {}) => set((current) => {
         const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
         if (normalizedDistance === null) return current;
+        const normalizedSource = cleanText(source) || 'calculator-manual';
+        if (current.draft.ballastDistanceNm === normalizedDistance && current.draft.ballastDistanceSource === normalizedSource) {
+            return current;
+        }
         return {
             draft: {
                 ...current.draft,
                 ballastDistanceNm: normalizedDistance,
-                ballastDistanceSource: cleanText(source) || 'calculator-manual',
+                ballastDistanceSource: normalizedSource,
                 updatedAt: new Date().toISOString(),
-                lastSource: cleanText(source) || 'calculator-manual',
+                lastSource: normalizedSource,
             },
         };
     }),
     applyTrackingAudit: ({ ballastDistanceNm, lastreCoordinates, vessel } = {}) => set((current) => {
         const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
+        const nextDraft = {
+            ...current.draft,
+            ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
+            ballastDistanceSource: normalizedDistance !== null
+                ? 'tracking-audit'
+                : current.draft.ballastDistanceSource,
+            lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+            vessel: normalizeVessel(vessel) || current.draft.vessel,
+            lastSource: 'tracking-audit',
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'tracking-audit' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'tracking-audit' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
         return {
             draft: {
-                ...current.draft,
-                ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
-                ballastDistanceSource: normalizedDistance !== null
-                    ? 'tracking-audit'
-                    : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
-                vessel: normalizeVessel(vessel) || current.draft.vessel,
+                ...nextDraft,
                 updatedAt: new Date().toISOString(),
-                lastSource: 'tracking-audit',
             },
         };
     }),
     applyMatchingCandidate: ({ ballastDistanceNm, lastreCoordinates, vessel } = {}) => set((current) => {
         const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
+        const nextDraft = {
+            ...current.draft,
+            ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
+            ballastDistanceSource: normalizedDistance !== null
+                ? 'matching-neon-maritime'
+                : current.draft.ballastDistanceSource,
+            lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+            vessel: normalizeVessel(vessel) || current.draft.vessel,
+            lastSource: 'matching-neon-maritime',
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'matching-neon-maritime' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'matching-neon-maritime' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
         return {
             draft: {
-                ...current.draft,
-                ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
-                ballastDistanceSource: normalizedDistance !== null
-                    ? 'matching-neon-maritime'
-                    : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
-                vessel: normalizeVessel(vessel) || current.draft.vessel,
+                ...nextDraft,
                 updatedAt: new Date().toISOString(),
-                lastSource: 'matching-neon-maritime',
             },
         };
     }),
     applyTrackingRoute: ({ distanceNm, routeGeometry, ballastDistanceNm, lastreCoordinates } = {}) => set((current) => {
         const normalizedBallastDistance = cleanNonNegativeNumber(ballastDistanceNm);
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
+        const nextDraft = {
+            ...current.draft,
+            ballastDistanceNm: normalizedBallastDistance ?? current.draft.ballastDistanceNm,
+            ballastDistanceSource: normalizedBallastDistance !== null
+                ? 'tracking-route'
+                : current.draft.ballastDistanceSource,
+            lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+            distanceNm: cleanNumber(distanceNm) || current.draft.distanceNm,
+            routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,
+            lastSource: 'tracking-route',
+        };
+
+        const currentComparable = { ...current.draft, updatedAt: null, lastSource: 'tracking-route' };
+        const nextComparable = { ...nextDraft, updatedAt: null, lastSource: 'tracking-route' };
+        if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) {
+            return current;
+        }
+
         return {
             draft: {
-                ...current.draft,
-                ballastDistanceNm: normalizedBallastDistance ?? current.draft.ballastDistanceNm,
-                ballastDistanceSource: normalizedBallastDistance !== null
-                    ? 'tracking-route'
-                    : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
-                distanceNm: cleanNumber(distanceNm) || current.draft.distanceNm,
-                routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,
+                ...nextDraft,
                 updatedAt: new Date().toISOString(),
-                lastSource: 'tracking-route',
             },
         };
     }),
@@ -408,7 +549,7 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
         };
     }),
     clearDraft: () => set({
-        draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
+        draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo }, projectCargo: { ...EMPTY_DRAFT.projectCargo, dimensions: { ...EMPTY_DRAFT.projectCargo.dimensions } } },
     }),
     hasOperationalDraft: () => hasOperationalDraft(get().draft),
 })));
