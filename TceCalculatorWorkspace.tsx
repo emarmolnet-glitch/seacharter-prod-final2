@@ -2553,9 +2553,38 @@ export default function TceCalculatorWorkspace({
 
   // --- 1. INTERCEPTOR DE INYECCIÓN DE DATABRIDGE (NO RESET) ---
   useEffect(() => {
+    const normalizeRef = (r: unknown) => String(r || '').trim().toUpperCase();
+
+    const getActiveSessionRef = (): string => {
+      const contractRefMgr = (window as unknown as { ContractRefManager?: { getActiveContractRef?: () => string } }).ContractRefManager;
+      return normalizeRef(
+        contractRefMgr?.getActiveContractRef?.()
+        || (window as unknown as { State?: { activeReference?: string } }).State?.activeReference
+        || voyageStore.getState()?.draft?.vessel?.name
+        || ''
+      );
+    };
+
+    const cleanupStorageAndNeon = () => {
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem('core_pro_pending_imo');
+          window.localStorage.removeItem('pending_imo');
+        }
+      } catch (_) {}
+
+      if (typeof fetch === 'function') {
+        fetch('/api/app-state?key=core_pro_pending_imo', {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        }).catch(() => {});
+      }
+    };
+
     const handleVesselInjection = (eventOrData: unknown) => {
       let vessel: Record<string, unknown> | null = null;
       let explicitRef: string | null = null;
+      let pendingImo: string | null = null;
 
       if (eventOrData && typeof eventOrData === 'object' && 'detail' in eventOrData) {
         const detail = (eventOrData as { detail?: Record<string, unknown> }).detail || {};
@@ -2564,27 +2593,61 @@ export default function TceCalculatorWorkspace({
           || ((detail.payload as Record<string, unknown>)?.vessel as Record<string, unknown>)
           || (Array.isArray((detail.payload as Record<string, unknown>)?.vessels) ? (detail.payload as { vessels: Record<string, unknown>[] }).vessels[0] : null)
           || null;
-        explicitRef = (detail.reference as string) || (detail.contractRef as string) || ((detail.payload as Record<string, unknown>)?.reference as string) || null;
+        explicitRef = (detail.reference as string) || (detail.contractRef as string) || (detail.target_session_id as string) || (detail.targetSessionId as string) || ((detail.payload as Record<string, unknown>)?.reference as string) || null;
+        pendingImo = (detail.imo as string) || (detail.pending_imo as string) || (detail.core_pro_pending_imo as string) || null;
       } else if (eventOrData && typeof eventOrData === 'object' && 'data' in eventOrData) {
         const data = (eventOrData as { data?: Record<string, unknown> }).data || {};
-        if (data.type === 'SEACHARTER_DATABRIDGE_LOAD_DATA' || data.type === 'active_core_pro_session' || data.type === 'databridge:inject-vessel' || data.type === 'INJECT_VESSEL') {
-          const payload = (data.payload as Record<string, unknown>) || data;
-          vessel = (payload.vessel as Record<string, unknown>)
-            || (Array.isArray(payload.vessels) && payload.vessels.length === 1 ? payload.vessels[0] : null)
-            || (Array.isArray(data.candidates) && data.candidates.length === 1 ? data.candidates[0] : null)
-            || null;
-          explicitRef = (data.reference as string) || (data.contractRef as string) || (payload.reference as string) || null;
+        const isKnownType = data.type === 'SEACHARTER_DATABRIDGE_LOAD_DATA'
+          || data.type === 'active_core_pro_session'
+          || data.type === 'databridge:inject-vessel'
+          || data.type === 'INJECT_VESSEL'
+          || data.type === 'PENDING_IMO'
+          || data.type === 'INJECT_IMO'
+          || data.type === 'SET_PENDING_IMO';
+
+        const payload = (data.payload as Record<string, unknown>) || data;
+        vessel = (payload.vessel as Record<string, unknown>)
+          || (Array.isArray(payload.vessels) && payload.vessels.length === 1 ? payload.vessels[0] : null)
+          || (Array.isArray(data.candidates) && data.candidates.length === 1 ? data.candidates[0] : null)
+          || null;
+        explicitRef = (data.reference as string) || (data.contractRef as string) || (data.target_session_id as string) || (data.targetSessionId as string) || (payload.reference as string) || null;
+        pendingImo = (data.imo as string) || (data.pending_imo as string) || (data.core_pro_pending_imo as string) || (payload.imo as string) || null;
+
+        if (!vessel && !pendingImo && typeof data === 'object') {
+          const possibleImo = String(data.imo || data.pending_imo || data.value || '').trim();
+          if (/^\d{7}$/.test(possibleImo)) {
+            pendingImo = possibleImo;
+          }
         }
+      } else if (typeof eventOrData === 'string') {
+        const trimmed = eventOrData.trim();
+        if (/^\d{7}$/.test(trimmed)) {
+          pendingImo = trimmed;
+        } else if (trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            return handleVesselInjection({ data: parsed });
+          } catch (_) {}
+        }
+      }
+
+      const activeRef = getActiveSessionRef();
+      const normalizedExplicitRef = normalizeRef(explicitRef);
+
+      // Si el mensaje especifica sesión destino y no coincide con la sesión activa, descartar
+      if (normalizedExplicitRef && activeRef && normalizedExplicitRef !== activeRef) {
+        return;
+      }
+
+      if (!vessel && pendingImo && /^\d{7}$/.test(String(pendingImo).trim())) {
+        const cleanImo = String(pendingImo).trim();
+        vessel = { imo: cleanImo, imo_number: cleanImo, imoNumber: cleanImo };
       }
 
       if (!vessel) return;
 
       // --- 2. ACTUALIZACIÓN PARCIAL (PATCH DEL ESTADO): Comprobar si ya existe sesión activa ---
       const contractRefMgr = (window as unknown as { ContractRefManager?: { getActiveContractRef?: () => string; setActiveContractRef?: (r: string) => string; setInjectionLock?: (l: boolean) => void } }).ContractRefManager;
-      const activeRef = contractRefMgr?.getActiveContractRef?.()
-        || (window as unknown as { State?: { activeReference?: string } }).State?.activeReference
-        || voyageStore.getState()?.draft?.vessel?.name
-        || '';
 
       // --- 3. BLOQUEO DE GENERACIÓN DE ID: Guardia de seguridad para cancelar nuevos IDs ---
       if (contractRefMgr?.setInjectionLock) {
@@ -2592,8 +2655,21 @@ export default function TceCalculatorWorkspace({
       }
 
       try {
-        if (explicitRef && explicitRef !== activeRef && contractRefMgr?.setActiveContractRef) {
-          contractRefMgr.setActiveContractRef(explicitRef);
+        if (normalizedExplicitRef && normalizedExplicitRef !== activeRef && contractRefMgr?.setActiveContractRef) {
+          contractRefMgr.setActiveContractRef(normalizedExplicitRef);
+        }
+
+        // Inyectar en input de Section 2 si existe IMO
+        const targetImo = String(vessel.imo || vessel.imo_number || vessel.imoNumber || '').trim();
+        if (targetImo && /^\d{7}$/.test(targetImo)) {
+          const imoInput = document.getElementById('vessel-identity-imo') as HTMLInputElement | null;
+          if (imoInput) {
+            imoInput.value = targetImo;
+          }
+          const manualUpdateFn = (window as unknown as { handleManualVesselUpdate?: (field: string, val: string) => void }).handleManualVesselUpdate;
+          if (typeof manualUpdateFn === 'function') {
+            manualUpdateFn('imo', targetImo);
+          }
         }
 
         // Actualización parcial que modifica ÚNICAMENTE los campos de la Sección 2
@@ -2602,6 +2678,15 @@ export default function TceCalculatorWorkspace({
         const patchFn = (window as unknown as { patchSection2Vessel?: (v: Record<string, unknown>) => void }).patchSection2Vessel;
         if (typeof patchFn === 'function') {
           patchFn(vessel);
+        }
+
+        // Auto-disparo de búsqueda en base de datos si hay IMO
+        if (targetImo && /^\d{7}$/.test(targetImo)) {
+          const fetchFn = (window as unknown as { fetchVesselByImo?: (v: string) => Promise<boolean> }).fetchVesselByImo;
+          if (typeof fetchFn === 'function') {
+            void fetchFn(targetImo);
+          }
+          cleanupStorageAndNeon();
         }
 
         // Refrescar cálculos sin desmontar componentes
@@ -2619,10 +2704,27 @@ export default function TceCalculatorWorkspace({
     const handleCustomEvent = (event: Event) => {
       handleVesselInjection(event);
     };
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (!event) return;
+      if (event.key === 'core_pro_pending_imo' || event.key === 'pending_imo') {
+        if (event.newValue) {
+          handleVesselInjection(event.newValue);
+        }
+      }
+    };
 
     window.addEventListener('message', handleWindowMessage);
+    window.addEventListener('storage', handleStorageEvent);
     window.addEventListener('databridge:vessel-injected', handleCustomEvent);
     window.addEventListener('databridge:data-loaded', handleCustomEvent);
+
+    // Initial check from localStorage for pending IMO
+    try {
+      const storedImo = window.localStorage?.getItem('core_pro_pending_imo') || window.localStorage?.getItem('pending_imo');
+      if (storedImo) {
+        handleVesselInjection(storedImo);
+      }
+    } catch (_) {}
 
     // Check URL parameters on mount for silent vessel injection
     if (typeof window !== 'undefined' && window.location?.search) {
@@ -2667,21 +2769,26 @@ export default function TceCalculatorWorkspace({
       } catch (_) {}
     }
 
-    let channel: BroadcastChannel | null = null;
+    const channels: BroadcastChannel[] = [];
     if (typeof BroadcastChannel === 'function') {
-      try {
-        channel = new BroadcastChannel('core_bridge_sync');
-        channel.addEventListener('message', (event) => {
-          handleVesselInjection(event);
-        });
-      } catch (_) {}
+      const channelNames = ['core_bridge_sync', 'core_pro_channel', 'seacharter_sync_channel'];
+      channelNames.forEach((name) => {
+        try {
+          const ch = new BroadcastChannel(name);
+          ch.addEventListener('message', (event) => {
+            handleVesselInjection(event);
+          });
+          channels.push(ch);
+        } catch (_) {}
+      });
     }
 
     return () => {
       window.removeEventListener('message', handleWindowMessage);
+      window.removeEventListener('storage', handleStorageEvent);
       window.removeEventListener('databridge:vessel-injected', handleCustomEvent);
       window.removeEventListener('databridge:data-loaded', handleCustomEvent);
-      channel?.close();
+      channels.forEach((ch) => ch.close());
     };
   }, []);
 

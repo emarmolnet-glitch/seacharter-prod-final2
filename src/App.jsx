@@ -1,6 +1,158 @@
 import React, { useEffect, useRef } from 'react';
 
 /**
+ * Normalizes reference identifiers for cross-module session matching.
+ */
+export function normalizeSessionRef(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+/**
+ * Extracts active contract reference from window/storage state.
+ */
+export function getActiveSessionReference() {
+  if (typeof window === 'undefined') return '';
+  return normalizeSessionRef(
+    window.ContractRefManager?.getActiveContractRef?.() ||
+    window.ContractReference?.getActiveContractRef?.() ||
+    window.getActiveContractRef?.() ||
+    (typeof window.sessionStorage !== 'undefined' ? window.sessionStorage.getItem('active_contract_ref') : null) ||
+    (typeof window.localStorage !== 'undefined' ? window.localStorage.getItem('active_contract_ref') : null) ||
+    ''
+  );
+}
+
+/**
+ * Checks if target reference matches the active session.
+ */
+export function matchesActiveSession(targetRef) {
+  const currentRef = getActiveSessionReference();
+  const normalizedTarget = normalizeSessionRef(targetRef);
+  if (!normalizedTarget) return true; // No target restriction means current session
+  if (!currentRef) return true;
+  return normalizedTarget === currentRef;
+}
+
+/**
+ * Extracts IMO and optional target reference from heterogeneous payloads.
+ */
+export function extractImoAndReference(data) {
+  if (!data) return null;
+
+  if (typeof data === 'string') {
+    const trimmed = data.trim();
+    if (/^\d{7}$/.test(trimmed)) {
+      return { imo: trimmed, reference: '' };
+    }
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return extractImoAndReference(parsed);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  if (typeof data !== 'object') return null;
+
+  const targetRef = normalizeSessionRef(
+    data.reference ||
+    data.target_session_id ||
+    data.targetSessionId ||
+    data.target_session ||
+    data.contractRef ||
+    data.contract_ref ||
+    data.session_id ||
+    data.sessionId ||
+    data.ref ||
+    data.payload?.reference ||
+    data.payload?.target_session_id ||
+    ''
+  );
+
+  const imoCandidate = String(
+    data.imo ||
+    data.imo_number ||
+    data.imoNumber ||
+    data.pending_imo ||
+    data.core_pro_pending_imo ||
+    data.value ||
+    data.vessel?.imo ||
+    data.vessel?.imo_number ||
+    data.payload?.imo ||
+    data.payload?.vessel?.imo ||
+    ''
+  ).trim();
+
+  if (imoCandidate && /^\d{7}$/.test(imoCandidate)) {
+    return { imo: imoCandidate, reference: targetRef };
+  }
+
+  if (data.value && typeof data.value === 'object') {
+    return extractImoAndReference(data.value);
+  }
+  if (typeof data.value === 'string' && data.value.trim().startsWith('{')) {
+    try {
+      return extractImoAndReference(JSON.parse(data.value));
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+/**
+ * Reusable IMO hydration engine: sets Section 2 fields and triggers fetchVesselByImo.
+ */
+export function executeImoHydration(imoValue) {
+  const cleanImo = String(imoValue || '').trim();
+  if (!cleanImo || !/^\d{7}$/.test(cleanImo)) return false;
+
+  const referenceManager = typeof window !== 'undefined'
+    ? (window.ContractReference || window.ContractRefManager)
+    : null;
+
+  referenceManager?.setInjectionLock?.(true);
+
+  try {
+    // 1. Inyección de estado en Section 2
+    const imoInput = typeof document !== 'undefined'
+      ? document.getElementById('vessel-identity-imo')
+      : null;
+    if (imoInput) {
+      imoInput.value = cleanImo;
+    }
+
+    if (typeof window !== 'undefined' && typeof window.handleManualVesselUpdate === 'function') {
+      window.handleManualVesselUpdate('imo', cleanImo);
+    }
+
+    const vesselData = { imo: cleanImo, imo_number: cleanImo, imoNumber: cleanImo };
+
+    if (typeof window !== 'undefined' && typeof window.patchSection2Vessel === 'function') {
+      window.patchSection2Vessel(vesselData);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+        vStore?.patchSection2Vessel?.(vesselData);
+      } catch (_) {}
+    }
+
+    // 2. Auto-disparo de búsqueda en base de datos
+    if (typeof window !== 'undefined' && typeof window.fetchVesselByImo === 'function') {
+      void window.fetchVesselByImo(cleanImo);
+    }
+
+    return true;
+  } finally {
+    if (referenceManager?.setInjectionLock) {
+      setTimeout(() => referenceManager.setInjectionLock?.(false), 250);
+    }
+  }
+}
+
+/**
  * Global BroadcastChannel synchronization hook for SeaCharter Core PRO.
  * Listens for PING_SESSION events from Data Bridge or other tabs/windows
  * and responds with the active voyage/contract session reference.
@@ -83,12 +235,7 @@ export function useSeaCharterSync() {
       }
     };
 
-    const initialRef =
-      window.ContractRefManager?.getActiveContractRef?.() ||
-      window.ContractReference?.getActiveContractRef?.() ||
-      window.getActiveContractRef?.() ||
-      (typeof window.sessionStorage !== 'undefined' ? window.sessionStorage.getItem('active_contract_ref') : null) ||
-      '';
+    const initialRef = getActiveSessionReference();
     if (initialRef) {
       persistActiveSessionToBackend(initialRef);
     }
@@ -96,12 +243,7 @@ export function useSeaCharterSync() {
     channel.onmessage = (event) => {
       const data = event?.data;
       if (data?.type === 'PING_SESSION' || data === 'PING_SESSION') {
-        const currentSessionRef =
-          window.ContractRefManager?.getActiveContractRef?.() ||
-          window.ContractReference?.getActiveContractRef?.() ||
-          window.getActiveContractRef?.() ||
-          (typeof window.sessionStorage !== 'undefined' ? window.sessionStorage.getItem('active_contract_ref') : null) ||
-          '';
+        const currentSessionRef = getActiveSessionReference();
 
         console.log('[Core PRO] PING recibido, respondiendo con:', currentSessionRef);
         channel.postMessage({
@@ -183,11 +325,154 @@ export function useUrlImoAutoLookup() {
 }
 
 /**
+ * Hook for background IMO injection via BroadcastChannels ('core_pro_channel', 'seacharter_sync_channel'),
+ * localStorage ('core_pro_pending_imo'), and Neon DB polling.
+ */
+export function usePendingImoSync() {
+  const processedKeysRef = useRef(new Set());
+  const isPollingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Helper to discard and clean up pending IMO from storage and Neon
+    const cleanupPendingImo = () => {
+      try {
+        if (typeof window.localStorage !== 'undefined') {
+          window.localStorage.removeItem('core_pro_pending_imo');
+          window.localStorage.removeItem('pending_imo');
+          window.localStorage.removeItem('seacharter_pending_imo');
+        }
+      } catch (_) {}
+
+      if (typeof fetch === 'function') {
+        fetch('/api/app-state?key=core_pro_pending_imo', {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        }).catch(() => {});
+
+        fetch('/api/app-state', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ key: 'core_pro_pending_imo' }),
+        }).catch(() => {});
+      }
+    };
+
+    // Helper to process candidate message / item
+    const processCandidate = (candidate, sourceKey = '') => {
+      const extracted = extractImoAndReference(candidate);
+      if (!extracted || !extracted.imo) return false;
+
+      if (!matchesActiveSession(extracted.reference)) {
+        return false;
+      }
+
+      const currentActiveRef = getActiveSessionReference();
+      const dedupKey = `${currentActiveRef || 'ALL'}:${extracted.imo}:${sourceKey}`;
+
+      if (processedKeysRef.current.has(dedupKey)) {
+        return false;
+      }
+
+      processedKeysRef.current.add(dedupKey);
+
+      // Inyectar en Sección 2 y disparar búsqueda en base de datos
+      const hydrated = executeImoHydration(extracted.imo);
+      if (hydrated) {
+        cleanupPendingImo();
+      }
+      return hydrated;
+    };
+
+    // 1. Initial check from localStorage
+    try {
+      const storedImo = window.localStorage?.getItem('core_pro_pending_imo') ||
+                        window.localStorage?.getItem('pending_imo') ||
+                        window.localStorage?.getItem('seacharter_pending_imo');
+      if (storedImo) {
+        processCandidate(storedImo, 'localStorage:init');
+      }
+    } catch (_) {}
+
+    // 2. Storage event listener for cross-tab localStorage changes
+    const handleStorage = (event) => {
+      if (!event) return;
+      if (event.key === 'core_pro_pending_imo' || event.key === 'pending_imo' || event.key === 'seacharter_pending_imo') {
+        if (event.newValue) {
+          processCandidate(event.newValue, `storage:${event.key}`);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // 3. BroadcastChannels listeners ('core_pro_channel' and 'seacharter_sync_channel')
+    let coreProChannel = null;
+    let seacharterSyncChannel = null;
+
+    if (typeof window.BroadcastChannel === 'function') {
+      try {
+        coreProChannel = new window.BroadcastChannel('core_pro_channel');
+        coreProChannel.onmessage = (event) => {
+          const data = event?.data;
+          if (data) {
+            processCandidate(data, 'bc:core_pro_channel');
+          }
+        };
+      } catch (_) {}
+
+      try {
+        seacharterSyncChannel = new window.BroadcastChannel('seacharter_sync_channel');
+        seacharterSyncChannel.onmessage = (event) => {
+          const data = event?.data;
+          if (data) {
+            processCandidate(data, 'bc:seacharter_sync_channel');
+          }
+        };
+      } catch (_) {}
+    }
+
+    // 4. Polling to Neon DB for 'core_pro_pending_imo'
+    const pollNeonPendingImo = async () => {
+      if (isPollingRef.current || typeof fetch !== 'function') return;
+      isPollingRef.current = true;
+      try {
+        const res = await fetch('/api/app-state?key=core_pro_pending_imo', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && (data.value || data.imo)) {
+            processCandidate(data, 'neon:poll');
+          }
+        }
+      } catch (_) {
+      } finally {
+        isPollingRef.current = false;
+      }
+    };
+
+    // Run immediate check and periodic interval
+    void pollNeonPendingImo();
+    const pollInterval = setInterval(pollNeonPendingImo, 3000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      coreProChannel?.close();
+      seacharterSyncChannel?.close();
+      clearInterval(pollInterval);
+    };
+  }, []);
+}
+
+/**
  * Main Application / Layout wrapper component for SeaCharter Core PRO.
  */
 export default function App({ children }) {
   useSeaCharterSync();
   useUrlImoAutoLookup();
+  usePendingImoSync();
 
   return (
     <div className="seacharter-core-pro-app">
