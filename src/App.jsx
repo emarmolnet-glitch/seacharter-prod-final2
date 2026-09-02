@@ -154,11 +154,47 @@ export function executeImoHydration(imoValue) {
       }
     }
 
-    // 3. Ejecutar la función real que busca los datos y especificaciones en la base de datos
+    // 3. Ejecutar la función o abrir el VesselDetailDrawer para revisión del fletador
     if (typeof window !== 'undefined') {
-      const fetchFn = (window.fetchVesselSpecs || window.fetchVesselByImo);
-      if (typeof fetchFn === 'function') {
-        void fetchFn(cleanImo);
+      if (typeof window.openVesselDetailDrawer === 'function') {
+        // Consultar ficha y abrir drawer para revisión intermedia
+        void fetch(`/api/vessel/${encodeURIComponent(cleanImo)}`)
+          .then((res) => res.json())
+          .then((payload) => {
+            if (payload?.success && payload.vessel) {
+              window.openVesselDetailDrawer(payload.vessel, 'Data Bridge (Neon DB)');
+            } else {
+              window.openVesselDetailDrawer({ imo: cleanImo, imo_number: cleanImo }, 'Data Bridge (Broadcast)');
+            }
+          })
+          .catch(() => {
+            window.openVesselDetailDrawer({ imo: cleanImo, imo_number: cleanImo }, 'Data Bridge (Broadcast)');
+          });
+      } else {
+        const fetchFn = (window.fetchVesselSpecs || window.fetchVesselByImo);
+        if (typeof fetchFn === 'function') {
+          void fetchFn(cleanImo);
+        } else if (typeof fetch === 'function') {
+          void fetch(`/api/vessel/${encodeURIComponent(cleanImo)}`)
+            .then((res) => res.json())
+            .then((payload) => {
+              if (payload?.success && payload.vessel) {
+                const fullVessel = payload.vessel;
+                try {
+                  const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                  vStore?.patchSection2Vessel?.(fullVessel);
+                } catch (_) {}
+                if (window.GlobalStore) {
+                  window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
+                  window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
+                }
+                if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
+                  window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
+                }
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
 

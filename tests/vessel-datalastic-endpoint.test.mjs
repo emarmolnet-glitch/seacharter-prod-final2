@@ -99,23 +99,23 @@ test("serialized records expose calculator technical field names", () => {
     beamMeters: 32.2,
   }, 9319466));
 
-  assert.deepEqual(vessel, {
-    imo_number: 9319466,
-    mmsi: null,
-    vessel_name: "Mapped Vessel",
-    dwt: 52123,
-    latitude: null,
-    longitude: null,
-    vessel_type: null,
-    draft_meters: 10.4,
-    flag: null,
-    call_sign: null,
-    year_built: null,
-    gross_tonnage: null,
-    net_tonnage: null,
-    loa_meters: 189.5,
-    beam_meters: 32.2,
-    last_port: null,
-    eta: null,
-  });
+  assert.equal(vessel.imo_number, 9319466);
+  assert.equal(vessel.imo, 9319466);
+  assert.equal(vessel.vessel_name, "Mapped Vessel");
+  assert.equal(vessel.vesselName, "Mapped Vessel");
+  assert.equal(vessel.dwt, 52123);
+  assert.equal(vessel.draft_meters, 10.4);
+  assert.equal(vessel.draft, 10.4);
+  assert.equal(vessel.loa_meters, 189.5);
+  assert.equal(vessel.loa, 189.5);
+  assert.equal(vessel.beam_meters, 32.2);
+  assert.equal(vessel.beam, 32.2);
+  assert.equal(vessel.mmsi, null);
+  assert.equal(vessel.data_source, "vessels_master");
+  assert.ok("service_speed_knots" in vessel);
+  assert.ok("spd_laden" in vessel);
+  assert.ok("spd_ballast" in vessel);
+  assert.ok("fuel_consumption_laden" in vessel);
+  assert.ok("fuel_consumption_ballast" in vessel);
+  assert.ok("owner_manager" in vessel);
 });

@@ -8530,6 +8530,27 @@
 
         <div class="module-tabs-wrapper">
             <div id="connection-status-root"></div>
+            <!-- BUSCADOR DIRECTO DE BUQUES EN BASE DE DATOS NEON -->
+            <div id="header-vessel-search-container" class="relative inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs shadow-2xs shrink-0 max-w-xs focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-sky-500 transition-all">
+                <i class="fa-solid fa-magnifying-glass text-[11px] text-slate-400"></i>
+                <input
+                    type="text"
+                    id="header-vessel-search-input"
+                    class="bg-transparent font-sans text-xs font-semibold text-slate-800 focus:outline-none w-36 sm:w-44 placeholder:text-slate-400"
+                    placeholder="Buscar buque (IMO / Nombre)..."
+                    aria-label="Buscar buque en base de datos"
+                    onkeydown="if (event.key === 'Enter') handleHeaderVesselSearch(this.value);"
+                >
+                <button
+                    type="button"
+                    id="header-vessel-search-btn"
+                    onclick="handleHeaderVesselSearch(document.getElementById('header-vessel-search-input').value)"
+                    class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-1.5 py-0.5 rounded transition shrink-0"
+                    title="Buscar buque en Data Bridge / Neon"
+                >
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
             <div id="header-voyage-ref-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-xs font-mono shadow-2xs shrink-0" title="Referencia Única del Viaje / Contrato">
                 <i class="fa-solid fa-hashtag text-[10px] text-slate-400"></i>
                 <span class="text-slate-400 font-sans text-[10px] uppercase font-bold tracking-wider">Ref:</span>
@@ -14079,6 +14100,184 @@
             </div>
         </div>
     </div>
+
+    <!-- CAJÓN LATERAL DERECHO (VESSEL DETAIL DRAWER - REPLICA UX DATA BRIDGE) -->
+    <div id="vessel-detail-drawer-overlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[300] hidden opacity-0 transition-opacity duration-300 no-print" onclick="closeVesselDetailDrawer()"></div>
+    <aside id="vessel-detail-drawer" class="fixed top-0 right-0 bottom-0 w-full max-w-md md:max-w-lg bg-white shadow-2xl z-[310] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col no-print" aria-label="Ficha Maestra del Buque - Data Bridge" aria-modal="true" role="dialog">
+        <!-- HEADER DEL CAJÓN -->
+        <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white shadow-sm shrink-0">
+                    <i class="fa-solid fa-ship text-sm"></i>
+                </span>
+                <div class="min-w-0">
+                    <h3 id="drawer-vessel-title" class="text-sm font-bold text-slate-900 uppercase tracking-tight truncate">Ficha del Buque</h3>
+                    <p class="text-[10px] text-slate-500 font-mono flex items-center gap-2 mt-0.5">
+                        <span>IMO: <strong id="drawer-header-imo" class="text-sky-700">-</strong></span>
+                        <span>•</span>
+                        <span id="drawer-db-status" class="inline-flex items-center gap-1 font-bold text-emerald-700"><i class="fa-solid fa-circle-check text-[9px]"></i> Data Bridge (Neon DB)</span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- BOTÓN PRINCIPAL SUPERIOR: ⚡ CARGAR DATOS -->
+                <button
+                    type="button"
+                    id="drawer-btn-cargar-datos"
+                    onclick="injectDrawerVesselIntoCalculator()"
+                    class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg shadow-md transition-all transform active:scale-95 flex items-center gap-1.5 shrink-0"
+                    title="Inyectar y autocompletar todas las variables técnicas y comerciales en la calculadora"
+                >
+                    <i class="fa-solid fa-bolt text-amber-300"></i>
+                    <span>⚡ CARGAR DATOS</span>
+                </button>
+                <button
+                    type="button"
+                    onclick="closeVesselDetailDrawer()"
+                    class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200/60 transition"
+                    aria-label="Cerrar panel"
+                >
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTENIDO SCROLLABLE DEL CAJÓN -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-5">
+            <!-- BLOQUE 1: OPERATIVA -->
+            <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-info text-sky-600"></i> OPERATIVA
+                    </span>
+                    <span id="drawer-vessel-status-badge" class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                        VALIDADO
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">Nombre Buque:</span>
+                        <strong id="drawer-vessel-name" class="text-slate-900 font-bold block truncate">-</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">Número IMO:</span>
+                        <strong id="drawer-vessel-imo" class="text-slate-900 font-mono font-bold block">-</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">MMSI:</span>
+                        <strong id="drawer-vessel-mmsi" class="text-slate-700 font-mono block">-</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">Bandera:</span>
+                        <strong id="drawer-vessel-flag" class="text-slate-700 font-semibold block">-</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">DWT (Capacidad):</span>
+                        <strong id="drawer-vessel-dwt" class="text-emerald-700 font-mono font-bold block text-sm">-</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-500 font-medium">Año Construcción:</span>
+                        <strong id="drawer-vessel-year" class="text-slate-800 font-bold block">-</strong>
+                    </div>
+                    <div class="col-span-2">
+                        <span class="block text-[10px] text-slate-500 font-medium">Gestor / Armador:</span>
+                        <strong id="drawer-vessel-manager" class="text-slate-800 font-semibold block truncate">-</strong>
+                    </div>
+                    <div class="col-span-2">
+                        <span class="block text-[10px] text-slate-500 font-medium">Clase Comercial:</span>
+                        <strong id="drawer-vessel-class" class="text-sky-700 font-bold block truncate">-</strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- BLOQUE 2: ESPECIFICACIONES TÉCNICAS -->
+            <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-gauge-high text-indigo-600"></i> ESPECIFICACIONES TÉCNICAS
+                    </span>
+                    <span class="text-[10px] font-bold text-slate-400">Perfil de Navegación</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Eslora Total (LOA):</span>
+                        <strong id="drawer-tech-loa" class="text-slate-800 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Manga (Beam):</span>
+                        <strong id="drawer-tech-beam" class="text-slate-800 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Calado Máx (Draft):</span>
+                        <strong id="drawer-tech-draft" class="text-slate-800 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Arqueo Bruto (GT):</span>
+                        <strong id="drawer-tech-gt" class="text-slate-800 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Velocidad Servicio:</span>
+                        <strong id="drawer-tech-speed" class="text-sky-700 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="block text-[10px] text-slate-500 font-medium">Vel. Lastre / Carga:</span>
+                        <strong id="drawer-tech-speeds-pair" class="text-slate-800 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-rose-50/60 p-2.5 rounded-lg border border-rose-100">
+                        <span class="block text-[10px] text-rose-700 font-medium">Consumo Mar (Sea):</span>
+                        <strong id="drawer-tech-cons-sea" class="text-rose-900 font-mono font-bold">-</strong>
+                    </div>
+                    <div class="bg-rose-50/60 p-2.5 rounded-lg border border-rose-100">
+                        <span class="block text-[10px] text-rose-700 font-medium">Consumo Puerto:</span>
+                        <strong id="drawer-tech-cons-port" class="text-rose-900 font-mono font-bold">-</strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- BLOQUE 3: EQUIPAMIENTO ADICIONAL -->
+            <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                <div class="mb-2 flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-gears text-amber-600"></i> EQUIPAMIENTO Y REGISTRO
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
+                        <span class="text-slate-600 text-[11px]">Grúas (Gears):</span>
+                        <strong id="drawer-equip-gears" class="text-slate-800 font-bold">-</strong>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
+                        <span class="text-slate-600 text-[11px]">Scrubber:</span>
+                        <strong id="drawer-equip-scrubber" class="text-slate-800 font-bold">-</strong>
+                    </div>
+                    <div class="col-span-2 flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-[10px]">
+                        <span class="text-slate-500">Último Puerto / Destino:</span>
+                        <strong id="drawer-equip-port-dest" class="text-slate-700 font-mono truncate">-</strong>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- FOOTER DEL CAJÓN -->
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+            <button
+                type="button"
+                onclick="closeVesselDetailDrawer()"
+                class="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg transition"
+            >
+                Cerrar
+            </button>
+            <button
+                type="button"
+                id="drawer-btn-cargar-datos-footer"
+                onclick="injectDrawerVesselIntoCalculator()"
+                class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all transform active:scale-95 flex items-center gap-1.5"
+            >
+                <i class="fa-solid fa-bolt text-amber-300"></i>
+                <span>CARGAR DATOS EN CALCULADORA</span>
+            </button>
+        </div>
+    </aside>
 
     <div id="pda-vessel-confirmation-modal" class="fixed inset-0 z-[240] hidden pointer-events-none items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="pda-vessel-confirmation-title">
         <div class="flex max-h-[85dvh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[#25a18e]/35 bg-slate-950 shadow-2xl shadow-[#002b38]/60">
@@ -33554,7 +33753,13 @@ function createRouteAnchorElement(type) {
             const serviceSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots);
             const ballastSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_ballast ?? source.speed_ballast ?? source.ballastSpeed);
             const ladenSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_laden ?? source.speed_laden ?? source.ladenSpeed);
+            const consSea = Number(source.fuel_consumption_laden ?? source.cons_sea ?? source.consSea ?? metadata.FuelConsumption ?? metadata.Daily_Consumption);
+            const consPort = Number(source.fuel_consumption_port ?? source.cons_port ?? source.consPort ?? metadata.PortConsumption ?? metadata.Daily_Port_Consumption);
+            const consBallast = Number(source.fuel_consumption_ballast ?? source.cons_ballast ?? source.consBallast ?? consSea);
+            const ownerManager = String(source.owner_manager || source.ownerManager || source.gestor || source.manager || metadata.Owner || metadata.Manager || metadata.CommercialManager || '').trim() || null;
             const hasScrubber = normalizeVesselBoolean(source.has_scrubber ?? source.hasScrubber ?? source.scrubber ?? metadata.HasScrubber);
+            const hasGears = normalizeVesselBoolean(source.has_gears ?? source.hasGears ?? metadata.HasGears);
+            const vesselClass = source.vessel_class || source.vesselClass || source.commercial_class || source.commercialClass || source.vessel_type || source.vesselType || null;
             return {
                 ...source,
                 vessel_name: vesselName,
@@ -33576,15 +33781,261 @@ function createRouteAnchorElement(type) {
                 draft: source.draft ?? source.draft_meters ?? source.Draft ?? null,
                 draft_meters: source.draft_meters ?? source.draft ?? source.Draft ?? null,
                 vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
-                vessel_class: source.vessel_class || source.vesselClass || source.vessel_type || source.vesselType || null,
+                vessel_class: vesselClass,
+                commercial_class: vesselClass,
                 specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
                 service_speed_knots: Number.isFinite(serviceSpeed) && serviceSpeed > 0 ? serviceSpeed : null,
                 spd_ballast: Number.isFinite(ballastSpeed) && ballastSpeed > 0 ? ballastSpeed : null,
                 spd_laden: Number.isFinite(ladenSpeed) && ladenSpeed > 0 ? ladenSpeed : null,
+                cons_sea: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
+                cons_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
+                cons_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
+                fuel_consumption_laden: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
+                fuel_consumption_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
+                fuel_consumption_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
+                owner_manager: ownerManager,
+                ownerManager,
+                gestor: ownerManager,
+                has_gears: hasGears,
+                hasGears,
                 has_scrubber: hasScrubber,
                 hasScrubber,
             };
         }
+
+        let currentDrawerVessel = null;
+
+        function openVesselDetailDrawer(vesselData, source = 'Data Bridge (Neon DB)') {
+            if (!vesselData || typeof vesselData !== 'object') return;
+            const vessel = normalizeCalculatorStoreVessel(vesselData) || vesselData;
+            currentDrawerVessel = vessel;
+
+            const name = vessel.vessel_name || vessel.vesselName || vessel.name || 'Buque Consultado';
+            const imo = String(vessel.imo || vessel.imo_number || vessel.imoNumber || '-').replace(/\D/g, '') || '-';
+            const mmsi = String(vessel.mmsi || '-');
+            const flag = vessel.flag || '-';
+            const dwt = Number(vessel.dwt);
+            const dwtText = Number.isFinite(dwt) && dwt > 0 ? `${Math.round(dwt).toLocaleString('es-ES')} MT` : '-';
+            const yearBuilt = vessel.year_built || vessel.yearBuilt || vessel.built_year || '-';
+            const ownerManager = vessel.owner_manager || vessel.ownerManager || vessel.gestor || vessel.manager || 'Gestor Registrado (Data Bridge)';
+            const commercialClass = vessel.vessel_class || vessel.commercial_class || vessel.vesselClass || vessel.commercialClass || vessel.vessel_type || (dwt > 0 && typeof getVesselClass === 'function' ? getVesselClass(dwt).categoryName : 'Granelero Comercial');
+            const speed = vessel.service_speed_knots ?? vessel.serviceSpeedKnots ?? vessel.spd_laden ?? vessel.speed_laden ?? vessel.spd_ballast ?? vessel.speed_ballast ?? null;
+            const speedText = speed ? `${speed} kts` : '-';
+            const spdBallast = vessel.spd_ballast ?? vessel.speed_ballast ?? speed ?? '-';
+            const spdLaden = vessel.spd_laden ?? vessel.speed_laden ?? speed ?? '-';
+            const loa = vessel.loa_meters ?? vessel.loa ?? vessel.loaMeters ?? null;
+            const beam = vessel.beam_meters ?? vessel.beam ?? vessel.beamMeters ?? null;
+            const draft = vessel.draft_meters ?? vessel.draft ?? vessel.draftMeters ?? null;
+            const gt = vessel.gt ?? vessel.gross_tonnage ?? vessel.grossTonnage ?? null;
+            const consSea = vessel.fuel_consumption_laden ?? vessel.cons_sea ?? vessel.consSea ?? null;
+            const consPort = vessel.fuel_consumption_port ?? vessel.cons_port ?? vessel.consPort ?? null;
+            const gears = vessel.has_gears ? 'Sí (Con Grúas)' : (vessel.has_gears === false ? 'No (Gearless)' : 'Estándar');
+            const scrubber = vessel.has_scrubber ? 'Instalado (Sí)' : (vessel.has_scrubber === false ? 'No instalado' : 'No');
+            const portDest = [vessel.last_port || vessel.lastPort, vessel.destination || vessel.plannedDestination].filter(Boolean).join(' ➔ ') || '-';
+
+            // Bind values to drawer elements
+            const setTitle = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setTitle('drawer-vessel-title', name);
+            setTitle('drawer-header-imo', imo);
+            setTitle('drawer-vessel-name', name);
+            setTitle('drawer-vessel-imo', imo);
+            setTitle('drawer-vessel-mmsi', mmsi);
+            setTitle('drawer-vessel-flag', flag);
+            setTitle('drawer-vessel-dwt', dwtText);
+            setTitle('drawer-vessel-year', String(yearBuilt));
+            setTitle('drawer-vessel-manager', ownerManager);
+            setTitle('drawer-vessel-class', commercialClass);
+            setTitle('drawer-tech-loa', loa ? `${loa} m` : '-');
+            setTitle('drawer-tech-beam', beam ? `${beam} m` : '-');
+            setTitle('drawer-tech-draft', draft ? `${draft} m` : '-');
+            setTitle('drawer-tech-gt', gt ? Number(gt).toLocaleString('es-ES') : '-');
+            setTitle('drawer-tech-speed', speedText);
+            setTitle('drawer-tech-speeds-pair', `${spdBallast} / ${spdLaden} kts`);
+            setTitle('drawer-tech-cons-sea', consSea ? `${consSea} t/d` : '-');
+            setTitle('drawer-tech-cons-port', consPort ? `${consPort} t/d` : '-');
+            setTitle('drawer-equip-gears', gears);
+            setTitle('drawer-equip-scrubber', scrubber);
+            setTitle('drawer-equip-port-dest', portDest);
+
+            const overlay = document.getElementById('vessel-detail-drawer-overlay');
+            const drawer = document.getElementById('vessel-detail-drawer');
+            if (overlay && drawer) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+                drawer.classList.remove('translate-x-full');
+            }
+        }
+        window.openVesselDetailDrawer = openVesselDetailDrawer;
+
+        function closeVesselDetailDrawer() {
+            const overlay = document.getElementById('vessel-detail-drawer-overlay');
+            const drawer = document.getElementById('vessel-detail-drawer');
+            if (overlay && drawer) {
+                overlay.classList.add('opacity-0');
+                drawer.classList.add('translate-x-full');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
+        window.closeVesselDetailDrawer = closeVesselDetailDrawer;
+
+        function injectDrawerVesselIntoCalculator() {
+            if (!currentDrawerVessel) return;
+            const vessel = currentDrawerVessel;
+
+            // Inyectar datos en la calculadora principal
+            applyDataBridgeHydrationToCalculator(vessel, { imo: vessel.imo || vessel.imo_number, imo_number: vessel.imo || vessel.imo_number });
+
+            // Sincronizar con VoyageStore Zustand
+            try {
+                const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                vStore?.patchSection2Vessel?.(vessel);
+            } catch (_) {}
+
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = vessel;
+                window.GlobalStore.calculatorVessel = vessel;
+            }
+
+            closeVesselDetailDrawer();
+            showToast(`⚡ Ficha técnica de "${vessel.vessel_name || 'Buque'}" cargada y autocompletada con éxito.`);
+        }
+        window.injectDrawerVesselIntoCalculator = injectDrawerVesselIntoCalculator;
+
+        async function handleHeaderVesselSearch(query) {
+            const rawQuery = String(query || '').trim();
+            if (!rawQuery) {
+                showToast('⚠️ Introduce un IMO o nombre de buque para buscar.');
+                return;
+            }
+
+            const searchBtn = document.getElementById('header-vessel-search-btn');
+            const originalHtml = searchBtn ? searchBtn.innerHTML : '<i class="fa-solid fa-arrow-right"></i>';
+            if (searchBtn) {
+                searchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                searchBtn.disabled = true;
+            }
+
+            try {
+                showToast('Consultando base de datos Neon...', true);
+                let lookupImo = rawQuery.replace(/\D/g, '');
+                let url = `/api/vessel/${encodeURIComponent(lookupImo || rawQuery)}`;
+                if (lookupImo.length !== 7) {
+                    url = `/api/databridge-vessel-search`;
+                }
+
+                let vessel = null;
+                if (lookupImo.length === 7) {
+                    const res = await fetch(url);
+                    const payload = await res.json().catch(() => ({}));
+                    if (payload?.success && payload?.vessel) {
+                        vessel = payload.vessel;
+                    }
+                } else {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                        body: JSON.stringify({ q: rawQuery })
+                    });
+                    const payload = await res.json().catch(() => ({}));
+                    if (payload?.success && payload?.vessel) {
+                        vessel = payload.vessel;
+                    }
+                }
+
+                if (!vessel) {
+                    // Fallback to GlobalStore
+                    vessel = findCompleteVesselInGlobalStore(rawQuery);
+                }
+
+                if (vessel) {
+                    openVesselDetailDrawer(vessel, 'Neon DB (Data Bridge)');
+                } else {
+                    showToast(`❌ No se encontró ningún buque con "${rawQuery}" en la base de datos.`);
+                }
+            } catch (err) {
+                console.error('Error buscando buque:', err);
+                showToast('❌ Error al consultar la base de datos de buques.');
+            } finally {
+                if (searchBtn) {
+                    searchBtn.innerHTML = originalHtml;
+                    searchBtn.disabled = false;
+                }
+            }
+        }
+        window.handleHeaderVesselSearch = handleHeaderVesselSearch;
+
+        function toggleVesselPreviewDetails() {
+            const details = document.getElementById('vessel-preview-details');
+            const btn = document.getElementById('toggle-vessel-preview-btn');
+            const icon = document.getElementById('preview-chevron-icon');
+            if (!details) return;
+            const isHidden = details.classList.contains('hidden');
+            details.classList.toggle('hidden', !isHidden);
+            btn?.setAttribute('aria-expanded', String(isHidden));
+            if (icon) {
+                icon.className = isHidden ? 'fa-solid fa-chevron-up text-[10px] transition-transform duration-200' : 'fa-solid fa-chevron-down text-[10px] transition-transform duration-200';
+            }
+        }
+        window.toggleVesselPreviewDetails = toggleVesselPreviewDetails;
+
+        function renderVesselMasterPreviewCard(vessel) {
+            const card = document.getElementById('vessel-master-preview-card');
+            if (!card) return;
+            if (!vessel || (!vessel.imo && !vessel.imo_number && !vessel.vessel_name && !vessel.dwt)) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            const name = vessel.vessel_name || vessel.vesselName || vessel.name || 'Buque Validado';
+            const imo = String(vessel.imo || vessel.imo_number || vessel.imoNumber || '-').replace(/\D/g, '') || '-';
+            const mmsi = String(vessel.mmsi || '-');
+            const flag = vessel.flag || '-';
+            const dwt = Number(vessel.dwt);
+            const dwtText = Number.isFinite(dwt) && dwt > 0 ? `${Math.round(dwt).toLocaleString('es-ES')} MT` : '-';
+            const yearBuilt = vessel.year_built || vessel.yearBuilt || vessel.built_year || '-';
+            const ownerManager = vessel.owner_manager || vessel.ownerManager || vessel.gestor || vessel.manager || 'Gestor Registrado (Data Bridge)';
+            const commercialClass = vessel.vessel_class || vessel.commercial_class || vessel.vesselClass || vessel.commercialClass || vessel.vessel_type || (dwt > 0 && typeof getVesselClass === 'function' ? getVesselClass(dwt).categoryName : 'Granelero Comercial');
+            const speed = vessel.service_speed_knots ?? vessel.serviceSpeedKnots ?? vessel.spd_laden ?? vessel.speed_laden ?? vessel.spd_ballast ?? vessel.speed_ballast ?? null;
+            const speedText = speed ? `${speed} kts` : '-';
+            const loa = vessel.loa_meters ?? vessel.loa ?? vessel.loaMeters ?? null;
+            const beam = vessel.beam_meters ?? vessel.beam ?? vessel.beamMeters ?? null;
+            const draft = vessel.draft_meters ?? vessel.draft ?? vessel.draftMeters ?? null;
+            const consSea = vessel.fuel_consumption_laden ?? vessel.cons_sea ?? vessel.consSea ?? null;
+            const consPort = vessel.fuel_consumption_port ?? vessel.cons_port ?? vessel.consPort ?? null;
+
+            const elName = document.getElementById('preview-vessel-name');
+            const elImo = document.getElementById('preview-vessel-imo');
+            const elMmsi = document.getElementById('preview-vessel-mmsi');
+            const elFlag = document.getElementById('preview-vessel-flag');
+            const elClass = document.getElementById('preview-commercial-class');
+            const elYear = document.getElementById('preview-year-built');
+            const elManager = document.getElementById('preview-owner-manager');
+            const elDwt = document.getElementById('preview-dwt');
+            const elSpeed = document.getElementById('preview-service-speed');
+            const elLoa = document.getElementById('preview-loa');
+            const elBeam = document.getElementById('preview-beam');
+            const elDraft = document.getElementById('preview-draft');
+            const elConsSea = document.getElementById('preview-cons-sea');
+            const elConsPort = document.getElementById('preview-cons-port');
+
+            if (elName) elName.textContent = name;
+            if (elImo) elImo.textContent = imo;
+            if (elMmsi) elMmsi.textContent = mmsi;
+            if (elFlag) elFlag.textContent = flag;
+            if (elClass) elClass.textContent = commercialClass;
+            if (elYear) elYear.textContent = String(yearBuilt);
+            if (elManager) elManager.textContent = ownerManager;
+            if (elDwt) elDwt.textContent = dwtText;
+            if (elSpeed) elSpeed.textContent = speedText;
+            if (elLoa) elLoa.textContent = loa ? `${loa} m` : '-';
+            if (elBeam) elBeam.textContent = beam ? `${beam} m` : '-';
+            if (elDraft) elDraft.textContent = draft ? `${draft} m` : '-';
+            if (elConsSea) elConsSea.textContent = consSea ? `${consSea} t/d` : '-';
+            if (elConsPort) elConsPort.textContent = consPort ? `${consPort} t/d` : '-';
+
+            card.classList.remove('hidden');
+        }
+        window.renderVesselMasterPreviewCard = renderVesselMasterPreviewCard;
 
         function findCompleteVesselInGlobalStore(searchTerm) {
             const store = window.GlobalStore;
@@ -33652,11 +34103,29 @@ function createRouteAnchorElement(type) {
                 if (speedInput && Number.isFinite(speed) && speed > 0) speedInput.value = String(speed);
             });
 
+            // Bind sea & port fuel consumptions if present
+            if (vessel.cons_sea || vessel.fuel_consumption_laden) {
+                const consSeaInput = document.getElementById('cons-sea');
+                if (consSeaInput) consSeaInput.value = String(vessel.cons_sea || vessel.fuel_consumption_laden);
+            }
+            if (vessel.cons_port || vessel.fuel_consumption_port) {
+                const consPortInput = document.getElementById('cons-port');
+                if (consPortInput) consPortInput.value = String(vessel.cons_port || vessel.fuel_consumption_port);
+            }
+
             updateCalculatorVesselIdentityDisplay(vessel, resolvedName || fallbackName);
             if (window.GlobalStore) {
                 window.GlobalStore.activeVessel = vessel;
                 window.GlobalStore.calculatorVessel = vessel;
             }
+
+            // Sync with Zustand voyageStore
+            try {
+                const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                vStore?.patchSection2Vessel?.(vessel);
+            } catch (_) {}
+
+            renderVesselMasterPreviewCard(vessel);
 
             dwtInput?.dispatchEvent(new Event('input', { bubbles: true }));
             if (typeof handleDWTChange === 'function' && resolvedDwt > 0) handleDWTChange(true, false);
