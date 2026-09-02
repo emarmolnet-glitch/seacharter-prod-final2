@@ -363,9 +363,22 @@ function normalizeDataBridgeAssistantResponse(payload) {
   const respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
   const rawAction = payload?.action ?? payload?.data?.action ?? null;
   const actionPayload = payload?.payload ?? payload?.data?.payload ?? null;
+  const projectCargoCandidate = payload?.projectCargo || payload?.data?.projectCargo || payload?.payload?.projectCargo || payload?.data?.payload?.projectCargo;
+  let effectiveAction = typeof rawAction === "string"
+    ? { action: rawAction, payload: actionPayload || {} }
+    : rawAction && typeof rawAction === "object" && actionPayload && !rawAction.payload
+      ? { ...rawAction, payload: actionPayload }
+      : rawAction;
+
+  if (!effectiveAction && projectCargoCandidate) {
+    effectiveAction = { action: 'update_fields', payload: { ...(actionPayload || {}), projectCargo: projectCargoCandidate } };
+  } else if (effectiveAction && projectCargoCandidate && effectiveAction.payload && !effectiveAction.payload.projectCargo) {
+    effectiveAction.payload.projectCargo = projectCargoCandidate;
+  }
+
   console.log("Texto de respuesta seleccionado:", respuesta || null);
-  console.log("Acción normalizada:", rawAction);
-  console.log("Payload normalizado:", actionPayload);
+  console.log("Acción normalizada:", effectiveAction);
+  console.log("Payload normalizado:", effectiveAction?.payload || actionPayload);
   if (!respuesta) {
     console.error("La respuesta no contiene ninguna propiedad textual utilizable.", payload);
     console.groupEnd();
@@ -374,11 +387,7 @@ function normalizeDataBridgeAssistantResponse(payload) {
   const normalizedResponse = {
     success: true,
     respuesta,
-    action: typeof rawAction === "string"
-      ? { action: rawAction, payload: actionPayload || {} }
-      : rawAction && typeof rawAction === "object" && actionPayload && !rawAction.payload
-        ? { ...rawAction, payload: actionPayload }
-        : rawAction,
+    action: effectiveAction,
   };
   console.log("Respuesta entregada al chat:", normalizedResponse);
   console.groupEnd();
@@ -677,6 +686,23 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
         updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
 
+        // 1b. PROJECT CARGO ENGINE & VOLUMETRIC HYDRATION
+        const rawProjectCargo = p.projectCargo || p.project_cargo || p.payload?.projectCargo || {};
+        const unitWeightMT = Number(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? p.unitWeightMT ?? p.unitWeight ?? p.pesoUnitario) || 0;
+        const length = Number(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? p.dimensions?.lengthM ?? p.dimensions?.length ?? p.lengthM ?? p.length ?? p.largo) || 0;
+        const width = Number(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? p.dimensions?.widthM ?? p.dimensions?.width ?? p.widthM ?? p.width ?? p.ancho) || 0;
+        const height = Number(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? p.dimensions?.heightM ?? p.dimensions?.height ?? p.heightM ?? p.height ?? p.alto) || 0;
+        const handlingMode = String(rawProjectCargo.handlingMode ?? p.handlingMode ?? rawProjectCargo.configuracionOperativa ?? p.configuracionOperativa ?? p.projectHandlingMode ?? 'direct-lift').trim();
+        const hasProjectCargoData = Boolean(p.projectCargo || p.project_cargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
+
+        if (hasProjectCargoData) {
+            updateInputs(["project-unit-weight", "peso-pieza-mt"], unitWeightMT);
+            updateInputs(["project-length"], length);
+            updateInputs(["project-width"], width);
+            updateInputs(["project-height"], height);
+            if (handlingMode) updateInputs(["project-handling-mode"], handlingMode);
+        }
+
         // Forzar modo MANUAL en ritmos
         document.querySelectorAll('button, span, label, div').forEach(el => {
             const txt = el.textContent.trim().toLowerCase();
@@ -785,11 +811,46 @@ async function executeActionableAiUpdateFields(actionObj) {
         if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
             Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual" });
         }
+        if (hasProjectCargoData) {
+            Object.assign(routeState, {
+                pesoUnitario: unitWeightMT,
+                unitWeightMT,
+                largo: length,
+                length,
+                ancho: width,
+                width,
+                alto: height,
+                height,
+                handlingMode,
+                projectHandlingMode: handlingMode,
+                projectCargo: {
+                    unitWeightMT,
+                    pesoUnitario: unitWeightMT,
+                    length,
+                    largo: length,
+                    width,
+                    ancho: width,
+                    height,
+                    alto: height,
+                    handlingMode,
+                    dimensions: {
+                        lengthM: length,
+                        widthM: width,
+                        heightM: height,
+                    },
+                },
+            });
+        }
         if (Object.keys(routeState).length > 0) {
             if (!window.State) window.State = {};
             Object.assign(window.State, routeState);
             window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-update-fields" });
             window.updateGlobalVoyageParams?.(routeState, { source: "assistant-update-fields" });
+            window.useVoyageStore?.getState?.().applyNlpScenario?.(routeState);
+            window.VoyageDraftStore?.getState?.().applyNlpScenario?.(routeState);
+            if (hasProjectCargoData && typeof window.actualizarCamposTipoCarga === 'function') {
+                window.actualizarCamposTipoCarga();
+            }
         }
 
         if (selectedRoutePorts) {

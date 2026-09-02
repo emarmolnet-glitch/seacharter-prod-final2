@@ -42,11 +42,29 @@ export type MaritimeWeatherSnapshot = {
   daysUntilLaycan: number | null;
   ports: { pol: MaritimePortWeather | null; pod: MaritimePortWeather | null };
 };
+export type ProjectCargoDimensions = {
+  lengthM: number;
+  widthM: number;
+  heightM: number;
+};
+export type ProjectCargoDraft = {
+  unitWeightMT: number;
+  pesoUnitario?: number;
+  length: number;
+  largo?: number;
+  width: number;
+  ancho?: number;
+  height: number;
+  alto?: number;
+  handlingMode: string;
+  dimensions: ProjectCargoDimensions;
+};
 export type DraftVoyage = {
   pol: VoyagePort | null;
   pod: VoyagePort | null;
   laycan: { laydays: string; cancelling: string };
   cargo: { description: string; quantityMt: number };
+  projectCargo?: ProjectCargoDraft | null;
   loadingRate: number;
   dischargeRate: number;
   dwt: number;

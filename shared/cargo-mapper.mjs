@@ -293,16 +293,26 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
   const compatibleLaytimePOD = normalizeLaytimeTerm(source.discharge_terms ?? source.dischargeTerms);
   const laytimePOL = explicitLaytimePOL || (compatibleLaytimePOL !== "CQD" ? compatibleLaytimePOL : "") || generalLaytime || compatibleLaytimePOL;
   const laytimePOD = explicitLaytimePOD || (compatibleLaytimePOD !== "CQD" ? compatibleLaytimePOD : "") || generalLaytime || compatibleLaytimePOD || laytimePOL;
+  const rawProjectCargo = source.projectCargo || source.project_cargo || source.payload?.projectCargo || source.payload?.project_cargo || {};
+  const unitWeightMT = Number(rawProjectCargo.unitWeightMT ?? rawProjectCargo.unitWeight ?? rawProjectCargo.pesoUnitario ?? source.unitWeightMT ?? source.unitWeight ?? source.pesoUnitario ?? source.payload?.unitWeightMT ?? source.payload?.pesoUnitario) || 0;
+  const length = Number(rawProjectCargo.dimensions?.lengthM ?? rawProjectCargo.dimensions?.length ?? rawProjectCargo.lengthM ?? rawProjectCargo.length ?? rawProjectCargo.largo ?? source.dimensions?.lengthM ?? source.dimensions?.length ?? source.lengthM ?? source.length ?? source.largo ?? source.payload?.dimensions?.lengthM ?? source.payload?.largo) || 0;
+  const width = Number(rawProjectCargo.dimensions?.widthM ?? rawProjectCargo.dimensions?.width ?? rawProjectCargo.widthM ?? rawProjectCargo.width ?? rawProjectCargo.ancho ?? source.dimensions?.widthM ?? source.dimensions?.width ?? source.widthM ?? source.width ?? source.ancho ?? source.payload?.dimensions?.widthM ?? source.payload?.ancho) || 0;
+  const height = Number(rawProjectCargo.dimensions?.heightM ?? rawProjectCargo.dimensions?.height ?? rawProjectCargo.heightM ?? rawProjectCargo.height ?? rawProjectCargo.alto ?? source.dimensions?.heightM ?? source.dimensions?.height ?? source.heightM ?? source.height ?? source.alto ?? source.payload?.dimensions?.heightM ?? source.payload?.alto) || 0;
+  const handlingMode = String(rawProjectCargo.handlingMode ?? source.handlingMode ?? rawProjectCargo.configuracionOperativa ?? source.configuracionOperativa ?? source.projectHandlingMode ?? 'direct-lift').trim();
+  const hasProjectCargo = Boolean(source.projectCargo || source.project_cargo || source.payload?.projectCargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
+
   const hasMappedFamily = mappedCargo.especificacionCargaId !== "100";
   const specificationId = hasMappedFamily
     ? mappedCargo.especificacionCargaId
     : CARGO_SPECIFICATION_IDS.includes(explicitSpecification)
       ? explicitSpecification
-      : mappedCargo.especificacionCargaId;
-  const cargoCategory = (hasMappedFamily && mappedCargo.categoriaCarga) || explicitCategory || mappedCargo.categoriaCarga;
+      : hasProjectCargo
+        ? "90"
+        : mappedCargo.especificacionCargaId;
+  const cargoCategory = (hasMappedFamily && mappedCargo.categoriaCarga) || explicitCategory || (hasProjectCargo && specificationId === "90" ? "Carga de Proyecto (Breakbulk)" : mappedCargo.categoriaCarga);
   const cargoProduct = mappedCargo.hasBigBags || (hasMappedFamily && mappedCargo.productoEspecifico)
     ? mappedCargo.productoEspecifico
-    : explicitProduct || mappedCargo.productoEspecifico;
+    : explicitProduct || (hasProjectCargo && specificationId === "90" ? (cargoDescription || "Piezas Especiales / Maquinaria") : mappedCargo.productoEspecifico);
   const validatedCargo = validateCargoHierarchy(cargoCategory, cargoProduct, cargoSource);
   const methodPOL = explicitMethodPOL || inferCargoMethod(
     cargoDescription,
@@ -312,9 +322,39 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
   );
   const methodPOD = normalizeCargoMethod(source.methodPOD ?? source.discharge_method ?? source.dischargeMethod ?? source.unloadingMethod) || methodPOL;
 
+  const normalizedProjectCargo = hasProjectCargo ? {
+    unitWeightMT,
+    pesoUnitario: unitWeightMT,
+    length,
+    largo: length,
+    width,
+    ancho: width,
+    height,
+    alto: height,
+    handlingMode,
+    dimensions: {
+      lengthM: length,
+      widthM: width,
+      heightM: height,
+    },
+  } : undefined;
+
   return {
     ...source,
     ...(cargoDescription ? { cargo_type: cargoDescription } : {}),
+    ...(normalizedProjectCargo ? {
+      projectCargo: normalizedProjectCargo,
+      pesoUnitario: unitWeightMT,
+      unitWeightMT,
+      largo: length,
+      length,
+      ancho: width,
+      width,
+      alto: height,
+      height,
+      handlingMode,
+      projectHandlingMode: handlingMode,
+    } : {}),
     cargo_category: validatedCargo.categoriaCarga,
     cargo_product: validatedCargo.productoEspecifico,
     cargo_specification: specificationId,
