@@ -1954,8 +1954,61 @@
                         timestamp: Date.now()
                     });
                     channel.close?.();
+
+                    const primaryImoBroadcast = String(
+                        (vessels[0] && (vessels[0].imo || vessels[0].imo_number || vessels[0].imoNumber)) ||
+                        ''
+                    ).trim();
+                    if (primaryImoBroadcast && /^\d{7}$/.test(primaryImoBroadcast)) {
+                        const crossAppChannel = new BroadcastChannel('cross_app_sync');
+                        crossAppChannel.postMessage({
+                            type: 'LOAD_IMO',
+                            imo: primaryImoBroadcast,
+                            reference: activeRef,
+                            timestamp: Date.now()
+                        });
+                        crossAppChannel.close?.();
+
+                        const coreProChannel = new BroadcastChannel('core_pro_channel');
+                        coreProChannel.postMessage({
+                            type: 'LOAD_IMO',
+                            imo: primaryImoBroadcast,
+                            core_pro_pending_imo: primaryImoBroadcast,
+                            reference: activeRef,
+                            timestamp: Date.now()
+                        });
+                        coreProChannel.close?.();
+                    }
                 }
             } catch (_) {}
+
+            // Send IMO cross-app to /api/app-state for Core PRO auto-completion
+            const primaryImo = String(
+                (vessels[0] && (vessels[0].imo || vessels[0].imo_number || vessels[0].imoNumber)) ||
+                ''
+            ).trim();
+            if (primaryImo && /^\d{7}$/.test(primaryImo)) {
+                try {
+                    fetch(createCoreProApiUrl('/api/app-state'), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            key: 'core_pro_pending_imo',
+                            selected_imo: primaryImo,
+                            imo: primaryImo,
+                            value: primaryImo,
+                            reference: activeRef,
+                            target_session_id: activeRef,
+                            timestamp: Date.now()
+                        })
+                    }).catch(function(err) {
+                        console.warn('[Data Bridge] Error enviando IMO a Core PRO via /api/app-state:', err);
+                    });
+                } catch (_) {}
+            }
 
             // If pending frozen report is available, load it into the audit tray
             if (pending_frozen_report && Array.isArray(pending_frozen_report.vessels) && pending_frozen_report.vessels.length > 0) {

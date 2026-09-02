@@ -2659,12 +2659,18 @@ export default function TceCalculatorWorkspace({
           contractRefMgr.setActiveContractRef(normalizedExplicitRef);
         }
 
-        // Inyectar en input de Section 2 si existe IMO
+        // Inyectar en input de Section 2 si existe IMO (<input id="vessel-identity-imo"> o <input id="imo">)
         const targetImo = String(vessel.imo || vessel.imo_number || vessel.imoNumber || '').trim();
         if (targetImo && /^\d{7}$/.test(targetImo)) {
-          const imoInput = document.getElementById('vessel-identity-imo') as HTMLInputElement | null;
+          const imoInput = (document.getElementById('vessel-identity-imo') ||
+                            document.getElementById('imo') ||
+                            (typeof document.querySelector === 'function' ? (document.querySelector('input[name="imo"]') || document.querySelector('input[name="imo_number"]') || document.querySelector('input[name="vessel_imo"]')) : null)) as HTMLInputElement | null;
           if (imoInput) {
             imoInput.value = targetImo;
+          }
+          const altImoInput = (document.getElementById('imo') && document.getElementById('imo') !== imoInput ? document.getElementById('imo') : null) as HTMLInputElement | null;
+          if (altImoInput) {
+            altImoInput.value = targetImo;
           }
           const manualUpdateFn = (window as unknown as { handleManualVesselUpdate?: (field: string, val: string) => void }).handleManualVesselUpdate;
           if (typeof manualUpdateFn === 'function') {
@@ -2672,7 +2678,7 @@ export default function TceCalculatorWorkspace({
           }
         }
 
-        // Actualización parcial que modifica ÚNICAMENTE los campos de la Sección 2
+        // Actualización directa en VoyageStore y GlobalStore
         voyageStore.getState()?.patchSection2Vessel?.(vessel);
 
         const patchFn = (window as unknown as { patchSection2Vessel?: (v: Record<string, unknown>) => void }).patchSection2Vessel;
@@ -2680,10 +2686,21 @@ export default function TceCalculatorWorkspace({
           patchFn(vessel);
         }
 
+        if (typeof window !== 'undefined') {
+          const gStore = (window as unknown as { GlobalStore?: { activeVessel?: Record<string, unknown>; calculatorVessel?: Record<string, unknown> } }).GlobalStore;
+          if (gStore) {
+            gStore.activeVessel = { ...(gStore.activeVessel || {}), ...vessel };
+            gStore.calculatorVessel = { ...(gStore.calculatorVessel || {}), ...vessel };
+          }
+        }
+
         // Auto-disparo de búsqueda en base de datos si hay IMO
         if (targetImo && /^\d{7}$/.test(targetImo)) {
+          const fetchSpecsFn = (window as unknown as { fetchVesselSpecs?: (v: string) => Promise<boolean> }).fetchVesselSpecs;
           const fetchFn = (window as unknown as { fetchVesselByImo?: (v: string) => Promise<boolean> }).fetchVesselByImo;
-          if (typeof fetchFn === 'function') {
+          if (typeof fetchSpecsFn === 'function') {
+            void fetchSpecsFn(targetImo);
+          } else if (typeof fetchFn === 'function') {
             void fetchFn(targetImo);
           }
           cleanupStorageAndNeon();
@@ -2769,9 +2786,29 @@ export default function TceCalculatorWorkspace({
       } catch (_) {}
     }
 
+    // Check Global Context (GlobalStore / Audit / VoyageStore) on mount
+    try {
+      const gStore = (window as unknown as { GlobalStore?: { activeVessel?: { imo?: string }; auditVessels?: Array<{ imo?: string }> } }).GlobalStore;
+      const initialActiveImo = String(
+        gStore?.activeVessel?.imo ||
+        (Array.isArray(gStore?.auditVessels) && gStore.auditVessels[0]?.imo) ||
+        voyageStore.getState()?.draft?.vessel?.imo ||
+        ''
+      ).trim();
+      if (initialActiveImo && /^\d{7}$/.test(initialActiveImo)) {
+        const fetchSpecsFn = (window as unknown as { fetchVesselSpecs?: (v: string) => Promise<boolean> }).fetchVesselSpecs;
+        const fetchFn = (window as unknown as { fetchVesselByImo?: (v: string) => Promise<boolean> }).fetchVesselByImo;
+        if (typeof fetchSpecsFn === 'function') {
+          void fetchSpecsFn(initialActiveImo);
+        } else if (typeof fetchFn === 'function') {
+          void fetchFn(initialActiveImo);
+        }
+      }
+    } catch (_) {}
+
     const channels: BroadcastChannel[] = [];
     if (typeof BroadcastChannel === 'function') {
-      const channelNames = ['core_bridge_sync', 'core_pro_channel', 'seacharter_sync_channel'];
+      const channelNames = ['cross_app_sync', 'core_bridge_sync', 'core_pro_channel', 'seacharter_sync_channel'];
       channelNames.forEach((name) => {
         try {
           const ch = new BroadcastChannel(name);
