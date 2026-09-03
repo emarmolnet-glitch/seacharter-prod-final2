@@ -131,6 +131,11 @@ Asunto: Especificaciones Técnicas y Plan de Izado (Project Cargo) — MV [Nombr
 Cuerpo:
 Estimados [Agente/Armador],\\n\\nCon motivo del embarque de [Tipo de Carga/Maquinaria] ([Peso Unitario] MT por unidad, dimensiones: [Dimensiones LxWxH]), detallamos las especificaciones técnicas obligatorias de estiba e izado:\\n\\n- Puntos de Izado: Uso obligatorio de puntos certificados (lifting lugs) y balancines (spreader beams).\\n- Requisitos de Grúas: Operativa asistida por grúas con capacidad combinada mínima de [SWL Requerido] MT.\\n- Distribución de Carga: Límite de deck load admisible verificado. Se requiere calce de madera compensado de [Grosor] cm.\\n\\nPor favor, confirmen la disponibilidad de estos medios en el muelle asignado.\\n\\nAtentamente,\\nSupercargo & Port Captain Division — SeaCharter
 
+PLANTILLA 6: OFERTA COMERCIAL (RESPUESTA A SOLICITUD)
+Asunto: Oferta Comercial / Cotización de Flete: [POL] a [POD] — [Tonelaje] MT [Tipo de Carga]
+Cuerpo:
+Estimado [Nombre Cliente],\\n\\nAgradecemos su consulta y los detalles facilitados en su mensaje. En base a sus requerimientos, nos complace presentar nuestra oferta formal para la operación:\\n\\n- Ruta: [POL] ➔ [POD]\\n- Mercancía: [Tonelaje] MT de [Tipo de Carga] ([Factor de Estiba / Notas])\\n- Laycan Propuesto: [Fechas Laycan]\\n- Términos de Fletamento: [Condiciones, ej. FIOST]\\n- Flete Calculado: [Flete] USD/MT (Lumpsum: [Lumpsum], si aplica)\\n- Validez: Oferta sujeta a firme confirmación y disponibilidad del buque hasta el [Fecha/Hora Expiración].\\n\\nEsta propuesta se ha calculado considerando las condiciones actuales de mercado y el rendimiento operativo estimado para la ruta.\\n\\nQuedamos a la espera de sus comentarios para proceder con la negociación.\\n\\nAtentamente,\\nChartering Desk — Rodahmar Shipping
+
 Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON resultante (email_body) para que el frontend pueda renderizar los párrafos tal cual en el componente <textarea> durante la revisión humana del modal.
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
