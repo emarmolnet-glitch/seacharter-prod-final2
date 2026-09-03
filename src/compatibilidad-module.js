@@ -10,6 +10,7 @@
 
 import { toIsoAlpha2Flag } from '../db/flag-country-codes.mjs';
 import { isDwtWithinCommercialBand, resolveCommercialDwtBounds, resolveVesselDwt } from '../cargo-taxonomy.mjs';
+import { SPOT_PROXIMITY_NM, classifyVesselOpenness } from '../vessel-openness-engine.mjs';
 
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
     cargoName: "Cement in Bulk (Clinker)",
@@ -156,6 +157,10 @@ class CompatibilityModuleManager {
             podCountry,
             podCoords,
             laycan: laycan,
+            // Fechas crudas del laycan: el motor de apertura las necesita para
+            // contrastar la disponibilidad proyectada de cada buque.
+            laydayStart: laydays ? String(laydays) : '',
+            cancelling: cancelling ? String(cancelling) : '',
             loadingRate: loadingRate,
         };
     }
@@ -241,6 +246,7 @@ class CompatibilityModuleManager {
                 });
 
                 if (commercialFleet.length > 0) {
+                    const opennessReferenceNow = new Date();
                     dynamicRadarMatches = commercialFleet.slice(0, 8).map((ship, idx) => {
                         const imo = Number(String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '')) || (9200000 + idx);
                         const name = String(ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${imo}`).toUpperCase();
@@ -255,6 +261,27 @@ class CompatibilityModuleManager {
                         const vesselType = ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
                         const distNm = Number(ship.distancePolNm || ship.distance_nm || (0.8 + idx * 1.5)).toFixed(1);
+                        const speedKnots = Number(ship.sog ?? ship.speed ?? ship.speedKnots ?? 0.2);
+                        const navStatusRaw = ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus ?? ship.navStatus ?? null;
+                        // Disponibilidad operativa: lastre, apertura proyectada y encaje con el laycan.
+                        const openness = classifyVesselOpenness(
+                            {
+                                draught: ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? null,
+                                max_draft: ship.max_draft ?? ship.summer_draft ?? ship.draught_max ?? ship.draft_meters ?? null,
+                                nav_status: navStatusRaw,
+                                sog: speedKnots,
+                                destination: ship.destination ?? ship.destination_port ?? null,
+                                eta: ship.eta ?? ship.destinationEta ?? null,
+                                dwt,
+                            },
+                            {
+                                laydayStart: activeOp.laydayStart,
+                                cancelling: activeOp.cancelling,
+                                distanceToPolNm: Number(distNm),
+                                dwt,
+                                now: opennessReferenceNow,
+                            },
+                        );
 
                         const isVesselTypeExcluded = isDryBulk && (MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType) || !COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType));
                         const score = isVesselTypeExcluded ? 0 : (idx === 0 ? 98 : Math.max(75, 96 - idx * 4));
@@ -270,17 +297,25 @@ class CompatibilityModuleManager {
                             owner: ownerManager,
                             propietario: ownerManager,
                             isLiveRadar: true,
+                            vesselOpenness: openness,
+                            estimatedBallastStatus: openness.isBallast,
+                            estimatedOpenDate: openness.estimatedOpenDate,
+                            laycanCompliant: openness.laycanCompliant,
                             radarLive: {
                                 latitude: Number(ship.latitude || ship.lat || 36.76),
                                 longitude: Number(ship.longitude || ship.lon || 5.09),
                                 distancePolNm: Number(distNm),
-                                speedKnots: Number(ship.speed || ship.speedKnots || 0.2),
+                                speedKnots,
                                 headingDeg: Number(ship.heading || ship.headingDeg || 45),
                                 navStatus: ship.navStatus || "En fondeo / Rada POL",
                                 operationalStatus: "LISTO PARA CARGA / EN RADA POL",
                                 polZone: activeOp.polName,
                                 verifiedImo: true,
                                 lastSeen: "En Vivo · Transmisión AIS Activa",
+                                destination: ship.destination ?? ship.destination_port ?? null,
+                                currentDraftMeters: openness.currentDraftMeters,
+                                maxDraftMeters: openness.maxDraftMeters,
+                                openness,
                             },
                             neonDbMaster: {
                                 vesselType,
@@ -329,6 +364,17 @@ class CompatibilityModuleManager {
             success: true,
             timestamp: new Date().toISOString(),
             activeOperation: activeOp,
+            opennessSummary: {
+                spotAtPolCount: pairedMatches.filter(m => m.vesselOpenness?.status === 'IN_PORT_SPOT').length,
+                ballasterCount: pairedMatches.filter(m => m.vesselOpenness?.status === 'BALLASTER').length,
+                ladenProjectedCount: pairedMatches.filter(m => m.vesselOpenness?.status === 'LADEN_PROJECTED').length,
+                laycanCompliantCount: pairedMatches.filter(m => m.vesselOpenness?.laycanCompliant === true).length,
+                laycanLateCount: pairedMatches.filter(m => m.vesselOpenness?.laycanStatus === 'LATE').length,
+                laydayStart: activeOp.laydayStart || null,
+                cancelling: activeOp.cancelling || null,
+                laycanWindowApplied: Boolean(activeOp.laydayStart || activeOp.cancelling),
+                spotProximityNm: SPOT_PROXIMITY_NM,
+            },
             hasLiveCompatibleVessels,
             alternativeDbVessel: null,
             radarSummary: {
@@ -412,6 +458,62 @@ class CompatibilityModuleManager {
         `;
     }
 
+    /**
+     * Resuelve la disponibilidad operativa de un buque. Se prefiere el veredicto
+     * del motor (servidor o cliente); si la tarjeta llega sin él, se recalcula
+     * en el momento para que el badge nunca quede vacío.
+     */
+    resolveVesselOpenness(item) {
+        const precomputed = item?.vesselOpenness || item?.radarLive?.openness;
+        if (precomputed && precomputed.badge) return precomputed;
+
+        return classifyVesselOpenness(
+            {
+                draught: item?.radarLive?.currentDraftMeters ?? item?.currentDraftMeters ?? null,
+                max_draft: item?.radarLive?.maxDraftMeters ?? item?.neonDbMaster?.draftMeters ?? null,
+                nav_status: item?.radarLive?.navStatus ?? null,
+                sog: item?.radarLive?.speedKnots ?? null,
+                destination: item?.radarLive?.destination ?? null,
+                dwt: item?.neonDbMaster?.dwt ?? item?.dwt ?? null,
+            },
+            {
+                laydayStart: this.currentOperation?.laydayStart,
+                cancelling: this.currentOperation?.cancelling,
+                distanceToPolNm: Number(item?.radarLive?.distancePolNm ?? item?.distancePolNm ?? NaN),
+                dwt: item?.neonDbMaster?.dwt ?? item?.dwt ?? null,
+            },
+        );
+    }
+
+    /**
+     * Badge de disponibilidad para la tarjeta del buque:
+     * 🟢 En Puerto / Spot · 🔵 Ballaster / En Lastre · ⏱️ Apertura estimada (ETA).
+     */
+    renderOpennessBadge(item) {
+        const openness = this.resolveVesselOpenness(item);
+        if (!openness?.badge) return '';
+
+        const { badge } = openness;
+        const laycanChip = {
+            WITHIN: { label: 'En Laycan', tone: 'within' },
+            EARLY: { label: 'Antes de Laydays', tone: 'early' },
+            LATE: { label: 'Fuera de Laycan', tone: 'late' },
+        }[openness.laycanStatus] || null;
+
+        const ratioHint = Number.isFinite(openness.draftRatio)
+            ? `Ratio de calado ${(openness.draftRatio * 100).toFixed(0)}% (${openness.currentDraftMeters?.toFixed?.(2) ?? '—'}m / ${openness.maxDraftMeters?.toFixed?.(2) ?? '—'}m)`
+            : 'Sin calado comparable en la señal AIS';
+
+        return `
+        <div class="compat-openness-row" data-openness-status="${openness.status}">
+            <span class="compat-openness-badge tone-${badge.tone}" title="${ratioHint}">
+                <span aria-hidden="true">${badge.icon}</span> ${badge.label}
+            </span>
+            <span class="compat-openness-detail">${badge.detail}</span>
+            ${laycanChip ? `<span class="compat-laycan-chip ${laycanChip.tone}">${laycanChip.label}</span>` : ''}
+        </div>`;
+    }
+
     renderLeftRadarBlock(matches, summary, selectedImo, hasAvailability = true, alternativeDbVessel = null) {
         const polZone = this.currentOperation?.polName || "Zona no definida";
         const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
@@ -421,6 +523,24 @@ class CompatibilityModuleManager {
             : resolveCommercialDwtBounds(this.currentOperation?.cargoVolumeMt);
         const dwtBandLabel = dwtBand.minDwt > 0 && dwtBand.maxDwt > 0
             ? `DWT ${dwtBand.minDwt.toLocaleString('en-US')} – ${dwtBand.maxDwt.toLocaleString('en-US')} MT (-10% / +50% sobre la carga)`
+            : '';
+
+        // Reparto de la flota compatible por estado de apertura frente al Laycan.
+        const opennessTally = compatibleMatches.reduce((tally, match) => {
+            const status = this.resolveVesselOpenness(match)?.status || 'UNKNOWN';
+            tally[status] = (tally[status] || 0) + 1;
+            return tally;
+        }, {});
+        const opennessStripParts = [
+            opennessTally.IN_PORT_SPOT ? `🟢 ${opennessTally.IN_PORT_SPOT} spot en POL` : '',
+            opennessTally.BALLASTER ? `🔵 ${opennessTally.BALLASTER} en lastre` : '',
+            opennessTally.LADEN_PROJECTED ? `⏱️ ${opennessTally.LADEN_PROJECTED} con apertura estimada` : '',
+        ].filter(Boolean);
+        const laycanWindowLabel = this.currentOperation?.laydayStart && this.currentOperation?.cancelling
+            ? ` · Laycan ${formatDateShort(this.currentOperation.laydayStart)} / ${formatDateShort(this.currentOperation.cancelling)}`
+            : '';
+        const opennessStripLabel = opennessStripParts.length > 0
+            ? `${opennessStripParts.join(' · ')}${laycanWindowLabel}`
             : '';
 
         if (!hasAvailability || compatibleMatches.length === 0) {
@@ -500,6 +620,10 @@ class CompatibilityModuleManager {
                 <div class="p-3 bg-sky-50/70 border-b border-sky-100 text-xs text-sky-900 flex items-center gap-1.5 px-4 font-bold">
                     <i class="fa-solid fa-weight-hanging text-sky-500"></i> Tolerancia comercial de tamaño: ${dwtBandLabel}
                 </div>` : ''}
+                ${opennessStripLabel ? `
+                <div class="p-3 bg-emerald-50/70 border-b border-emerald-100 text-xs text-emerald-900 flex items-center gap-1.5 px-4 font-bold">
+                    <i class="fa-solid fa-calendar-check text-emerald-600"></i> Disponibilidad operativa: ${opennessStripLabel}
+                </div>` : ''}
 
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
                     ${compatibleMatches.map((item) => {
@@ -534,6 +658,8 @@ class CompatibilityModuleManager {
                                     ${dynamicTagLabel}
                                 </span>
                             </div>
+
+                            ${this.renderOpennessBadge(item)}
 
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-200/80 text-[11px]">
                                 <div>

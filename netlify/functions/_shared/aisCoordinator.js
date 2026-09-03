@@ -160,8 +160,14 @@ function normalizeTelemetry(value) {
     speedKnots: finiteNumber(vessel.speed, vessel.sog, vessel.speed_knots),
     courseDegrees: finiteNumber(vessel.course, vessel.cog, vessel.course_degrees),
     headingDegrees: finiteNumber(vessel.heading, vessel.heading_degrees),
-    navigationStatus: textValue(vessel.navigation_status, vessel.nav_status),
+    navigationStatus: textValue(vessel.navigation_status, vessel.nav_status, vessel.navigational_status),
+    // Calado instantáneo y calado máximo: entradas del motor de disponibilidad
+    // operativa (lastre = calado actual / calado máximo). Sin ellos el radar no
+    // permite distinguir un buque en lastre de uno comprometido con otra carga.
+    draught: finiteNumber(vessel.draught, vessel.draught_average, vessel.draft),
+    maxDraught: finiteNumber(vessel.draught_max, vessel.max_draft, vessel.summer_draft),
     destination: textValue(vessel.destination),
+    destinationEta: textValue(vessel.eta, vessel.eta_UTC, vessel.eta_utc),
     positionTimestamp: textValue(
       vessel.last_position_UTC,
       vessel.last_position_utc,

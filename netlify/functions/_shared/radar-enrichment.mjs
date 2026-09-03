@@ -65,6 +65,10 @@ export function mergeRadarTechnicalData(vessels, masterRows = []) {
       dwtStatus: dwt === null ? "UNKNOWN" : "VERIFIED_NEON",
       draftMeters,
       draft_meters: draftMeters,
+      // El calado del maestro es el calado de diseño: se publica como máximo para
+      // que el motor de apertura no lo confunda con el calado AIS instantáneo.
+      maxDraught: draftMeters,
+      max_draft: draftMeters,
       flag: textValue(master?.flag, vessel?.flag),
       callSign: textValue(master?.call_sign, vessel?.callSign),
       yearBuilt: finiteNumber(master?.year_built),
