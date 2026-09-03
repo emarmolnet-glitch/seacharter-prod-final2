@@ -100,6 +100,39 @@ Para actualizar un solo campo:
 Para configurar un viaje completo (ruta y toneladas):
 { "action": "calculate_route", "pol": "NombrePuerto", "pod": "NombrePuerto", "tonnage": 12000 }
 
+Para redactar un correo operativo (Actionable AI — DRAFT_EMAIL):
+{ "action": "DRAFT_EMAIL", "payload": { "email_to": "destinatario@dominio.com", "email_subject": "Asunto exacto según plantilla", "email_body": "Cuerpo exacto según plantilla" } }
+
+=== MANUAL DE ESTILO PARA EMAILS OPERATIVOS (PLANTILLAS) ===
+Utiliza estas plantillas exactas según la petición del usuario, sustituyendo los campos entre corchetes por los datos reales presentes en el contexto del viaje (voyages_tracking, telemetría AIS, calculadora PDA o motor Project Cargo). Si falta algún dato específico, adapta o elimina esa frase sutilmente para que nunca se envíe un correo con corchetes vacíos.
+
+PLANTILLA 1: ACTUALIZACIÓN DE TRÁNSITO Y ETA
+Asunto: Actualización de Tránsito y ETA — MV [Nombre Buque] ([Puerto Destino])
+Cuerpo:
+Estimados [Cliente/Agente],\\n\\nLes informamos de la posición actualizada del MV [Nombre Buque]. El buque se encuentra navegando a [Velocidad Nudos] nudos con destino [Puerto Destino].\\n\\nEl ETA revisado es el [Fecha ETA] a las [Hora ETA] LT.\\n\\nPor favor, manténgannos informados sobre las perspectivas de atraque y cualquier congestión en puerto.\\n\\nSaludos cordiales,\\nOperaciones — Rodahmar Shipping
+
+PLANTILLA 2: INICIO DE OPERACIONES Y PREVISIÓN DE HORAS
+Asunto: Inicio de Operaciones y Cronograma — MV [Nombre Buque] en [Puerto]
+Cuerpo:
+Estimados,\\n\\nConfirmamos que las operaciones de [Carga/Descarga] de las [Tonelaje] MT de [Mercancía] han comenzado oficialmente en el puerto de [Puerto] el [Fecha Inicio] a las [Hora Inicio] LT.\\n\\nRitmo operativo actual: [Ritmo Actual] MT/día.\\nRitmo óptimo objetivo: [Ritmo Objetivo] MT/día.\\n\\nPrevisión de Finalización (Forecast): Considerando un tiempo neto estimado de [Horas/Días Operativos], prevemos completar las operaciones el próximo [Fecha Fin Estimada] a las [Hora Fin] LT, sujeto a condiciones meteorológicas.\\n\\n[OPCIONAL - INCLUIR SOLO SI EL RITMO ES BAJO: Para evitar incurrir en demoras, recomendamos encarecidamente maximizar el uso simultáneo de medios de muelle y grúas de abordo].\\n\\nSaludos cordiales,\\nOperaciones — Rodahmar Shipping
+
+PLANTILLA 3: ALERTA DE DEMORAS (LAYTIME WARNING)
+Asunto: Aviso de Plancha / Riesgo de Demoras — MV [Nombre Buque] en [Puerto]
+Cuerpo:
+Estimados [Cliente/Armador],\\n\\nNos ponemos en contacto en relación a las operaciones del MV [Nombre Buque] en [Puerto]. Según nuestros cálculos, el tiempo de plancha (Laytime) permitido expira el [Fecha Expiración Laytime].\\n\\nDebido a [Motivo del Retraso, ej. congestión/clima], prevemos entrar en demoras a partir de esa fecha. Adjuntamos la estimación preliminar del Statement of Facts para su revisión.\\n\\nQuedamos a su disposición.\\n\\nSaludos cordiales,\\nOperaciones — Rodahmar Shipping
+
+PLANTILLA 4: AUDITORÍA TÉCNICA Y DUE DILIGENCE
+Asunto: Auditoría y Compatibilidad Técnica — MV [Nombre Buque] para [Tipo de Carga]
+Cuerpo:
+Estimados,\\n\\nTras procesar la auditoría técnica del candidato MV [Nombre Buque] ([DWT] DWT, construido en [Año]) para la carga de [Tonelaje] MT de [Tipo de Carga] en la ruta [POL] ➔ [POD], detallamos las conclusiones:\\n\\n- Verificación de Calados: Calado máximo admisible validado. Margen bajo quilla (UKC) seguro con un calado previsto de [Calado Calculado] metros.\\n- Bodegas & Estiba: Factor de estiba compatible. Condición de bodegas apta (Grúas SWL [Capacidad Grúas] T).\\n- Restricciones Portuarias: Sin incidencias con LOA ([Eslora] m) ni manga ([Manga] m).\\n- Dictamen: Buque técnicamente aprobado para su contratación (Due Diligence Passed).\\n\\nQuedamos a la espera de su validación final para proceder.\\n\\nAtentamente,\\nTechnical Operations Desk — SeaCharter
+
+PLANTILLA 5: PROJECT CARGO Y MEDIOS IDÓNEOS
+Asunto: Especificaciones Técnicas y Plan de Izado (Project Cargo) — MV [Nombre Buque]
+Cuerpo:
+Estimados [Agente/Armador],\\n\\nCon motivo del embarque de [Tipo de Carga/Maquinaria] ([Peso Unitario] MT por unidad, dimensiones: [Dimensiones LxWxH]), detallamos las especificaciones técnicas obligatorias de estiba e izado:\\n\\n- Puntos de Izado: Uso obligatorio de puntos certificados (lifting lugs) y balancines (spreader beams).\\n- Requisitos de Grúas: Operativa asistida por grúas con capacidad combinada mínima de [SWL Requerido] MT.\\n- Distribución de Carga: Límite de deck load admisible verificado. Se requiere calce de madera compensado de [Grosor] cm.\\n\\nPor favor, confirmen la disponibilidad de estos medios en el muelle asignado.\\n\\nAtentamente,\\nSupercargo & Port Captain Division — SeaCharter
+
+Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON resultante (email_body) para que el frontend pueda renderizar los párrafos tal cual en el componente <textarea> durante la revisión humana del modal.
+
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
 
   const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${actionExecutionDirective}`;

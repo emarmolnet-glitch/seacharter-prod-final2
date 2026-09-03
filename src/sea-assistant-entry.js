@@ -428,6 +428,13 @@ function normalizeActionFieldName(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function isDraftEmailAction(candidate) {
+  // El borrador de correo se extrae igual que el resto de acciones para que su JSON
+  // nunca quede visible en el chat y viaje entero al modal de revisión humana.
+  const name = candidate?.action || candidate?.intent || candidate?.type || candidate?.name;
+  return String(name || "").trim().toUpperCase() === "DRAFT_EMAIL";
+}
+
 function findActionableAiJsonObject(responseText) {
   const text = String(responseText || "");
   for (let start = 0; start < text.length; start += 1) {
@@ -456,7 +463,8 @@ function findActionableAiJsonObject(responseText) {
       const rawJson = text.slice(start, end + 1);
       try {
         const parsed = JSON.parse(rawJson);
-        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(parsed?.action)) {
+        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(parsed?.action)
+          || isDraftEmailAction(parsed)) {
           return { action: parsed, start, end: end + 1 };
         }
       } catch (error) {
@@ -474,7 +482,8 @@ function extractActionableAiResponse(responseText) {
   if (jsonBlock) {
     try {
       const action = JSON.parse(jsonBlock[1]);
-      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(action?.action)) {
+      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(action?.action)
+        || isDraftEmailAction(action)) {
         return {
           visibleText: originalText.replace(jsonBlock[0], "").trim(),
           action,
