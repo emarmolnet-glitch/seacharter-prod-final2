@@ -1,3 +1,8 @@
+/**
+ * Pasarela de correo de Core PRO: recibe por POST el borrador ya revisado por el
+ * operador en el modal DRAFT_EMAIL y lo despacha vía la API REST de Resend.
+ * Requiere RESEND_API_KEY en el entorno; RESEND_FROM_EMAIL es opcional.
+ */
 const RESEND_API_URL = "https://api.resend.com/emails";
 const DEFAULT_FROM_ADDRESS = "SeaCharter Core PRO <no-reply@seacharter.app>";
 const REQUEST_TIMEOUT_MS = 15_000;
