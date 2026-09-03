@@ -9,6 +9,12 @@ import {
   isDwtWithinCommercialBand,
   resolveCommercialDwtBounds,
 } from "../../cargo-taxonomy.mjs";
+import {
+  BALLAST_DRAFT_RATIO_THRESHOLD,
+  DEFAULT_BALLAST_SPEED_KNOTS,
+  SPOT_PROXIMITY_NM,
+  classifyVesselOpenness,
+} from "../../vessel-openness-engine.mjs";
 
 interface VesselMasterRecord extends QueryResultRow {
   imo_number: number | string | null;
@@ -163,6 +169,12 @@ export interface CandidateEvaluationInput {
   distancePodNm: number;
   locationContext: LocationContext;
   isLiveRadar?: boolean;
+  // Señales de disponibilidad operativa (Vessel Openness) del payload AIS.
+  currentDraftMeters?: number;
+  maxDraftMeters?: number;
+  navStatusRaw?: string | number | null;
+  destination?: string | null;
+  reportedEta?: string | null;
 }
 
 export function evaluateMathematicalMatch(
@@ -334,6 +346,16 @@ export default async function handler(req: Request, _context: Context) {
     const cargoVolumeMt = Number(bodyData.cargoVolumeMt || bodyData.cargoQuantity || bodyData.cargoQty || url.searchParams.get("cargoVolumeMt") || url.searchParams.get("qty") || 0) || 0;
     const commercialDwtBounds = resolveCommercialDwtBounds(cargoVolumeMt);
     const laycan = String(bodyData.laycan || bodyData.laycanWindow || url.searchParams.get("laycan") || "").trim();
+    // Fechas crudas del laycan: necesarias para contrastar la apertura proyectada
+    // de cada buque contra la ventana real de carga.
+    const laydayStart = String(
+      bodyData.laydayStart || bodyData.laydays || bodyData.laycanStart || bodyData.laycanDate
+      || url.searchParams.get("laydayStart") || url.searchParams.get("laydays") || ""
+    ).trim();
+    const cancelling = String(
+      bodyData.cancelling || bodyData.cancellingDate || bodyData.laycanEnd
+      || url.searchParams.get("cancelling") || url.searchParams.get("laycanEnd") || ""
+    ).trim();
     const loadingRate = String(bodyData.loadingRate || url.searchParams.get("loadingRate") || "").trim();
 
     let polCoords = extractCoordinates(bodyData.polCoords);
@@ -394,6 +416,8 @@ export default async function handler(req: Request, _context: Context) {
       podMaxDraftMeters: 11.00,
       laycan,
       laycanWindow: laycan,
+      laydayStart,
+      cancelling,
       loadingRate,
       loadingRateMtWw: 3000,
       minDwt: commercialDwtBounds.minDwt,
@@ -495,6 +519,12 @@ export default async function handler(req: Request, _context: Context) {
         distancePodNm: distPodNm,
         locationContext,
         isLiveRadar: false,
+        // `vessels_master.draft_meters` es el calado de diseño: sirve de máximo,
+        // no de calado instantáneo (el registro no lleva señal AIS asociada).
+        maxDraftMeters: Number(r.draft_meters || 0),
+        navStatusRaw: null,
+        destination: null,
+        reportedEta: null,
       });
     }
 
@@ -551,8 +581,19 @@ export default async function handler(req: Request, _context: Context) {
         flag: String(dbRow?.flag || ship.flag || "🌍"),
         latitude: lat,
         longitude: lon,
-        speedKnots: Number(ship.speed || ship.speedKnots || 0),
+        speedKnots: Number(ship.sog ?? ship.speed ?? ship.speedKnots ?? 0),
         headingDeg: Number(ship.heading || ship.headingDeg || 0),
+        // Calado instantáneo (AIS) y calado máximo (diseño) se mantienen separados:
+        // el motor de apertura necesita el contraste entre ambos para el lastre.
+        currentDraftMeters: Number(
+          ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? ship.draft_meters ?? 0
+        ),
+        maxDraftMeters: Number(
+          dbRow?.draft_meters ?? ship.max_draft ?? ship.summer_draft ?? ship.draught_max ?? ship.maxDraft ?? 0
+        ),
+        navStatusRaw: ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus ?? ship.navStatus ?? null,
+        destination: ship.destination ?? ship.destination_port ?? null,
+        reportedEta: ship.eta ?? ship.destinationEta ?? null,
         navStatus: ship.navStatus || (locationContext === "POD" ? "En rada/aproximación POD" : "En aproximación POL"),
         operationalStatus: locationContext === "POD" ? "EN DESTINO / OPORTUNIDAD BACKHAUL" : "EN APROXIMACIÓN / DISPONIBLE",
         distancePolNm: distPolNm,
@@ -571,9 +612,32 @@ export default async function handler(req: Request, _context: Context) {
     );
     const excludedByDwtBandCount = allCandidates.length - commerciallySizedCandidates.length;
 
+    // Motor de disponibilidad operativa: lastre, apertura proyectada y encaje
+    // con el laycan. Se ejecuta sobre el mismo instante para toda la flota para
+    // que las fechas proyectadas sean comparables entre candidatos.
+    const opennessReferenceNow = new Date();
+
     const evaluatedList = commerciallySizedCandidates.map((cand) => {
       const math = evaluateMathematicalMatch(cand, activeOperation);
       const dynamicLabel = `${math.compatibilityScore}% - ${cand.name} - ${cand.vesselType}`;
+      const openness = classifyVesselOpenness(
+        {
+          draught: cand.currentDraftMeters,
+          max_draft: cand.maxDraftMeters,
+          nav_status: cand.navStatusRaw ?? cand.navStatus,
+          sog: cand.speedKnots,
+          destination: cand.destination,
+          eta: cand.reportedEta,
+          dwt: cand.dwt,
+        },
+        {
+          laydayStart: activeOperation.laydayStart,
+          cancelling: activeOperation.cancelling,
+          distanceToPolNm: cand.distancePolNm > 0 ? cand.distancePolNm : null,
+          dwt: cand.dwt,
+          now: opennessReferenceNow,
+        },
+      );
 
       return {
         imo: cand.imo,
@@ -601,6 +665,10 @@ export default async function handler(req: Request, _context: Context) {
           verifiedImo: true,
           excludedNoiseCategory: null,
           lastSeen: "En Vivo · Transmisión AIS Activa",
+          destination: cand.destination ?? null,
+          currentDraftMeters: openness.currentDraftMeters,
+          maxDraftMeters: openness.maxDraftMeters,
+          openness,
         },
         neonDbMaster: {
           vesselType: cand.vesselType,
@@ -617,6 +685,10 @@ export default async function handler(req: Request, _context: Context) {
           dbStatus: "Sincronizado & Verificado",
         },
         technicalEvaluation: math.technicalEvaluation,
+        vesselOpenness: openness,
+        estimatedBallastStatus: openness.isBallast,
+        estimatedOpenDate: openness.estimatedOpenDate,
+        laycanCompliant: openness.laycanCompliant,
         compatibilityScore: math.compatibilityScore,
         isTopMatch: false,
         technicalJustification: math.technicalJustification,
@@ -644,10 +716,27 @@ export default async function handler(req: Request, _context: Context) {
     const hasLiveCompatibleVessels = rawIncomingVessels.length > 0 ? liveCompatibleCandidates.length > 0 : true;
     const alternativeDbVessel = evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || evaluatedList[0] || null;
 
+    // Recuento de disponibilidad para la cabecera del panel de radar.
+    const opennessSummary = {
+      spotAtPolCount: evaluatedList.filter((cand) => cand.vesselOpenness?.status === "IN_PORT_SPOT").length,
+      ballasterCount: evaluatedList.filter((cand) => cand.vesselOpenness?.status === "BALLASTER").length,
+      ladenProjectedCount: evaluatedList.filter((cand) => cand.vesselOpenness?.status === "LADEN_PROJECTED").length,
+      unknownCount: evaluatedList.filter((cand) => (cand.vesselOpenness?.status ?? "UNKNOWN") === "UNKNOWN").length,
+      laycanCompliantCount: evaluatedList.filter((cand) => cand.vesselOpenness?.laycanCompliant === true).length,
+      laycanLateCount: evaluatedList.filter((cand) => cand.vesselOpenness?.laycanStatus === "LATE").length,
+      laydayStart: activeOperation.laydayStart || null,
+      cancelling: activeOperation.cancelling || null,
+      laycanWindowApplied: Boolean(activeOperation.laydayStart || activeOperation.cancelling),
+      ballastDraftRatioThreshold: BALLAST_DRAFT_RATIO_THRESHOLD,
+      defaultBallastSpeedKnots: DEFAULT_BALLAST_SPEED_KNOTS,
+      spotProximityNm: SPOT_PROXIMITY_NM,
+    };
+
     const responsePayload = {
       success: true,
       timestamp: new Date().toISOString(),
       activeOperation,
+      opennessSummary,
       radarSummary: {
         totalSignalsPolZone: evaluatedList.length,
         filteredMerchantCount: evaluatedList.length,
