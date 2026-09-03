@@ -9,6 +9,7 @@
  */
 
 import { toIsoAlpha2Flag } from '../db/flag-country-codes.mjs';
+import { isDwtWithinCommercialBand, resolveCommercialDwtBounds, resolveVesselDwt } from '../cargo-taxonomy.mjs';
 
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
     cargoName: "Cement in Bulk (Clinker)",
@@ -206,6 +207,8 @@ class CompatibilityModuleManager {
 
         let dynamicRadarMatches = [];
         let hasLiveCompatibleVessels = true;
+        // Banda de tolerancia comercial (-10% / +50%) sobre el lote de carga activo.
+        const commercialDwtBand = resolveCommercialDwtBounds(activeOp.cargoVolumeMt);
 
         if (typeof window !== 'undefined' && activeOp.polName && activeOp.cargoName) {
             const liveFleet = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
@@ -232,6 +235,8 @@ class CompatibilityModuleManager {
                         if (isMandatoryExcluded || !isCompatible) return false;
                     }
 
+                    if (!isDwtWithinCommercialBand(resolveVesselDwt(ship), commercialDwtBand.tonnage)) return false;
+
                     return isNotNoise && isMerchant;
                 });
 
@@ -240,7 +245,12 @@ class CompatibilityModuleManager {
                         const imo = Number(String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '')) || (9200000 + idx);
                         const name = String(ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${imo}`).toUpperCase();
                         const mmsi = String(ship.mmsi || ship.MMSI || '210984000');
-                        const dwt = Number(ship.dwt || ship.deadweight || 10850);
+                        // Sin DWT en la señal AIS, el placeholder se mantiene dentro de la banda
+                        // comercial para no mostrar tonelaje incoherente con el lote solicitado.
+                        const reportedDwt = resolveVesselDwt(ship);
+                        const dwt = reportedDwt && reportedDwt > 0
+                            ? reportedDwt
+                            : (commercialDwtBand.applied ? Math.round(commercialDwtBand.tonnage * 1.1) : 10850);
                         const draft = Number(ship.draft || ship.draft_meters || ship.max_draft || 7.80);
                         const vesselType = ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
@@ -326,6 +336,9 @@ class CompatibilityModuleManager {
                 filteredMerchantCount: pairedMatches.length,
                 excludedNonCommercialCount: 0,
                 strictImoFilterApplied: true,
+                commercialDwtBandApplied: commercialDwtBand.applied,
+                minDwt: commercialDwtBand.minDwt,
+                maxDwt: commercialDwtBand.maxDwt,
                 exclusionCriteria: "Pesqueros, Remolcadores (Tugs), Embarcaciones de Pasaje/Recreo y No-Mercantes excluidos tajantemente.",
             },
             neonDbSummary: {
@@ -402,6 +415,13 @@ class CompatibilityModuleManager {
     renderLeftRadarBlock(matches, summary, selectedImo, hasAvailability = true, alternativeDbVessel = null) {
         const polZone = this.currentOperation?.polName || "Zona no definida";
         const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
+        // Banda de DWT admitida para el lote activo, resuelta desde el motor o recalculada en cliente.
+        const dwtBand = summary?.commercialDwtBandApplied
+            ? { minDwt: Number(summary.minDwt) || 0, maxDwt: Number(summary.maxDwt) || 0 }
+            : resolveCommercialDwtBounds(this.currentOperation?.cargoVolumeMt);
+        const dwtBandLabel = dwtBand.minDwt > 0 && dwtBand.maxDwt > 0
+            ? `DWT ${dwtBand.minDwt.toLocaleString('en-US')} – ${dwtBand.maxDwt.toLocaleString('en-US')} MT (-10% / +50% sobre la carga)`
+            : '';
 
         if (!hasAvailability || compatibleMatches.length === 0) {
             const fallbackVessel = alternativeDbVessel || (matches && matches[0]) || null;
@@ -476,6 +496,10 @@ class CompatibilityModuleManager {
                     </span>
                     <span class="text-emerald-700 font-black text-[11px] hidden sm:inline">100% IMO Validado</span>
                 </div>
+                ${dwtBandLabel ? `
+                <div class="p-3 bg-sky-50/70 border-b border-sky-100 text-xs text-sky-900 flex items-center gap-1.5 px-4 font-bold">
+                    <i class="fa-solid fa-weight-hanging text-sky-500"></i> Tolerancia comercial de tamaño: ${dwtBandLabel}
+                </div>` : ''}
 
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
                     ${compatibleMatches.map((item) => {
