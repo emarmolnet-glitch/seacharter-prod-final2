@@ -114,6 +114,61 @@ function optionalNumber(value) {
   return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : null;
 }
 
+// Comercial: banda de tolerancia de tamaño de buque frente al lote de carga.
+// El margen inferior del 10% admite short-shipment / carga parcial; el techo estricto
+// del +50% descarta tonelaje sobredimensionado (p. ej. un Supramax de 58.000 DWT
+// ofertado para un lote de 5.000 MT).
+export const COMMERCIAL_DWT_MIN_MULTIPLIER = 0.9;
+export const COMMERCIAL_DWT_MAX_MULTIPLIER = 1.5;
+
+const DWT_ALIASES = Object.freeze([
+  "dwt",
+  "DWT",
+  "deadweight",
+  "dead_weight",
+  "dwtMt",
+  "dwt_mt",
+  "dwt_ajustado",
+]);
+
+export function resolveVesselDwt(vessel) {
+  if (vessel === null || vessel === undefined) return null;
+  if (typeof vessel === "number" || typeof vessel === "string") return optionalNumber(vessel);
+  const direct = optionalNumber(vessel.dwt ?? vessel.DWT ?? vessel.deadweight);
+  if (direct !== null && direct > 0) return direct;
+  const nested = optionalNumber(findNestedValue(vessel, DWT_ALIASES));
+  return nested !== null && nested > 0 ? nested : direct;
+}
+
+export function resolveCommercialDwtBounds(tonnage) {
+  const cargoTonnage = optionalNumber(tonnage) || 0;
+  if (!(cargoTonnage > 0)) {
+    return { tonnage: 0, minDwt: null, maxDwt: null, applied: false };
+  }
+  return {
+    tonnage: cargoTonnage,
+    minDwt: Math.round(cargoTonnage * COMMERCIAL_DWT_MIN_MULTIPLIER),
+    maxDwt: Math.round(cargoTonnage * COMMERCIAL_DWT_MAX_MULTIPLIER),
+    applied: true,
+  };
+}
+
+// Un DWT desconocido no se penaliza: el buque queda pendiente de auditoría y sigue visible.
+export function isDwtWithinCommercialBand(dwt, tonnage) {
+  const bounds = resolveCommercialDwtBounds(tonnage);
+  if (!bounds.applied) return true;
+  const vesselDwt = optionalNumber(dwt);
+  if (vesselDwt === null || vesselDwt <= 0) return true;
+  return vesselDwt >= bounds.minDwt && vesselDwt <= bounds.maxDwt;
+}
+
+export function filterVesselsByCommercialDwt(vessels, tonnage) {
+  const fleet = Array.isArray(vessels) ? vessels : [];
+  const bounds = resolveCommercialDwtBounds(tonnage);
+  if (!bounds.applied) return fleet;
+  return fleet.filter((vessel) => isDwtWithinCommercialBand(resolveVesselDwt(vessel), bounds.tonnage));
+}
+
 function classifyVesselDesign(shipType, vessel) {
   const declaredType = normalizeText(shipType || findNestedValue(vessel, ["ship_type", "vessel_type", "shipType", "vesselType", "tipo_buque", "type", "scrapedType", "categoryLabel", "vesselClass", "radarCategory"]));
   const isAisCargoCode = /^7[0-9]$/.test(declaredType) || declaredType === "70";

@@ -3,6 +3,12 @@ import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { createCorsHeaders } from "./_shared/cors.js";
 import { resolveWpiPort } from "./_shared/wpi-port-resolver.mjs";
+import {
+  COMMERCIAL_DWT_MAX_MULTIPLIER,
+  COMMERCIAL_DWT_MIN_MULTIPLIER,
+  isDwtWithinCommercialBand,
+  resolveCommercialDwtBounds,
+} from "../../cargo-taxonomy.mjs";
 
 interface VesselMasterRecord extends QueryResultRow {
   imo_number: number | string | null;
@@ -326,6 +332,7 @@ export default async function handler(req: Request, _context: Context) {
     const podCountry = String(bodyData.podCountry || url.searchParams.get("podCountry") || "").trim();
     const cargoName = String(bodyData.cargoName || bodyData.cargoType || url.searchParams.get("cargoName") || url.searchParams.get("cargo") || "").trim();
     const cargoVolumeMt = Number(bodyData.cargoVolumeMt || bodyData.cargoQuantity || bodyData.cargoQty || url.searchParams.get("cargoVolumeMt") || url.searchParams.get("qty") || 0) || 0;
+    const commercialDwtBounds = resolveCommercialDwtBounds(cargoVolumeMt);
     const laycan = String(bodyData.laycan || bodyData.laycanWindow || url.searchParams.get("laycan") || "").trim();
     const loadingRate = String(bodyData.loadingRate || url.searchParams.get("loadingRate") || "").trim();
 
@@ -389,10 +396,27 @@ export default async function handler(req: Request, _context: Context) {
       laycanWindow: laycan,
       loadingRate,
       loadingRateMtWw: 3000,
+      minDwt: commercialDwtBounds.minDwt,
+      maxDwt: commercialDwtBounds.maxDwt,
+      commercialDwtBand: {
+        applied: commercialDwtBounds.applied,
+        minDwt: commercialDwtBounds.minDwt,
+        maxDwt: commercialDwtBounds.maxDwt,
+        minMultiplier: COMMERCIAL_DWT_MIN_MULTIPLIER,
+        maxMultiplier: COMMERCIAL_DWT_MAX_MULTIPLIER,
+      },
     });
 
     let dbRows: VesselMasterRecord[] = [];
     try {
+      // La banda comercial se inyecta en la consulta para no descargar tonelaje
+      // fuera de rango; los buques sin DWT registrado siguen entrando como pendientes.
+      const dwtBandClause = commercialDwtBounds.applied
+        ? "AND (dwt IS NULL OR dwt BETWEEN $1 AND $2)"
+        : "";
+      const dwtBandValues = commercialDwtBounds.applied
+        ? [commercialDwtBounds.minDwt, commercialDwtBounds.maxDwt]
+        : [];
       const result = await pool.query<VesselMasterRecord>(`
         SELECT
           imo_number,
@@ -419,9 +443,10 @@ export default async function handler(req: Request, _context: Context) {
         FROM vessels_master
         WHERE imo_number IS NOT NULL
           AND imo_number > 1000000
+          ${dwtBandClause}
         ORDER BY dwt ASC NULLS LAST
         LIMIT 100
-      `);
+      `, dwtBandValues);
       dbRows = result.rows;
     } catch (dbErr) {
       console.warn("[vessel-compatibility] Error querying Neon DB vessels_master:", (dbErr as Error)?.message);
@@ -538,7 +563,15 @@ export default async function handler(req: Request, _context: Context) {
       liveRadarCandidatesCount++;
     }
 
-    const evaluatedList = Array.from(candidateMap.values()).map((cand) => {
+    // Filtro de tolerancia comercial: acota el tamaño del buque a la banda
+    // [carga x 0,9 , carga x 1,5] antes de puntuar y devolver resultados.
+    const allCandidates = Array.from(candidateMap.values());
+    const commerciallySizedCandidates = allCandidates.filter((cand) =>
+      isDwtWithinCommercialBand(cand.dwt, commercialDwtBounds.tonnage),
+    );
+    const excludedByDwtBandCount = allCandidates.length - commerciallySizedCandidates.length;
+
+    const evaluatedList = commerciallySizedCandidates.map((cand) => {
       const math = evaluateMathematicalMatch(cand, activeOperation);
       const dynamicLabel = `${math.compatibilityScore}% - ${cand.name} - ${cand.vesselType}`;
 
@@ -621,7 +654,12 @@ export default async function handler(req: Request, _context: Context) {
         liveRadarCandidatesCount,
         excludedNonCommercialCount: 0,
         strictImoFilterApplied: true,
+        commercialDwtBandApplied: commercialDwtBounds.applied,
+        excludedByDwtBandCount,
         exclusionCriteria: "Pesqueros, Remolcadores (Tugs), Embarcaciones de Pasaje/Recreo y No-Mercantes excluidos tajantemente.",
+        dwtBandCriteria: commercialDwtBounds.applied
+          ? `Tolerancia comercial: DWT entre ${commercialDwtBounds.minDwt.toLocaleString()} y ${commercialDwtBounds.maxDwt.toLocaleString()} MT para un lote de ${commercialDwtBounds.tonnage.toLocaleString()} MT (-10% / +50%).`
+          : "Sin cantidad de carga declarada: banda de DWT comercial no aplicada.",
       },
       neonDbSummary: {
         connected: true,
