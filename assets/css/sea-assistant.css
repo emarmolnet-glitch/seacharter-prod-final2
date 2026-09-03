@@ -961,3 +961,238 @@
   color: var(--sca-teal-dark);
   background: #ffffff;
 }
+
+/* --- MODAL DE REVISIÓN DE CORREO (acción DRAFT_EMAIL de Data Bridge) --- */
+.sca-email-modal {
+  --sca-email-navy: #0f172a;
+  --sca-email-ink: #1e293b;
+  --sca-email-muted: #64748b;
+  --sca-email-line: #e2e8f0;
+  --sca-email-teal: #0f9f84;
+  --sca-email-teal-dark: #087966;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
+  font-family: Inter, "Segoe UI", Aptos, sans-serif;
+  color: var(--sca-email-ink);
+  animation: sca-email-fade 160ms ease;
+}
+
+.sca-email-modal__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow: hidden;
+  border: 1px solid #dbe3ec;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.35);
+  animation: sca-email-rise 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sca-email-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--sca-email-line);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.sca-email-modal__eyebrow {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sca-email-teal-dark);
+}
+
+.sca-email-modal__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sca-email-navy);
+}
+
+.sca-email-modal__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sca-email-muted);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.sca-email-modal__close:hover {
+  background: #e2e8f0;
+  color: var(--sca-email-navy);
+}
+
+.sca-email-modal__close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.9;
+}
+
+.sca-email-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.sca-email-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sca-email-modal__field > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--sca-email-muted);
+}
+
+.sca-email-modal__field--grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sca-email-modal__input,
+.sca-email-modal__textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--sca-email-ink);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.sca-email-modal__textarea {
+  min-height: 200px;
+  resize: vertical;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.sca-email-modal__input:focus,
+.sca-email-modal__textarea:focus {
+  border-color: var(--sca-email-teal);
+  box-shadow: 0 0 0 3px rgba(15, 159, 132, 0.16);
+}
+
+.sca-email-modal__feedback {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: var(--sca-email-muted);
+  font-size: 12.5px;
+}
+
+.sca-email-modal__feedback.is-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.sca-email-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.sca-email-modal__button {
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.sca-email-modal__button--ghost {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: var(--sca-email-ink);
+}
+
+.sca-email-modal__button--ghost:hover {
+  background: #f1f5f9;
+}
+
+.sca-email-modal__button--primary {
+  background: var(--sca-email-navy);
+  color: #ffffff;
+}
+
+.sca-email-modal__button--primary:hover {
+  background: #1e293b;
+}
+
+.sca-email-modal__button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.sca-email-modal.is-sending .sca-email-modal__input,
+.sca-email-modal.is-sending .sca-email-modal__textarea {
+  opacity: 0.75;
+}
+
+@keyframes sca-email-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sca-email-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 560px) {
+  .sca-email-modal {
+    padding: 12px;
+  }
+
+  .sca-email-modal__dialog {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .sca-email-modal__textarea {
+    min-height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sca-email-modal,
+  .sca-email-modal__dialog {
+    animation: none;
+  }
+}

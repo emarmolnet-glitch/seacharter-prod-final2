@@ -2108,10 +2108,201 @@ if (document.readyState === "loading") {
   mountSeaAssistant();
 }
 
+const DRAFT_EMAIL_ENDPOINT = "/api/send-email";
+const DRAFT_EMAIL_TIMEOUT_MS = 20_000;
+let activeDraftEmailModal = null;
+
+function readDraftEmailField(source, keys) {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value) && value.length > 0) return value.filter(Boolean).join(", ");
+  }
+  return "";
+}
+
+function extractDraftEmailPayload(actionObj) {
+  const payload = actionObj?.payload || actionObj?.data?.payload || actionObj || {};
+  return {
+    to: readDraftEmailField(payload, ["email_to", "to", "recipient", "destinatario"]),
+    subject: readDraftEmailField(payload, ["email_subject", "subject", "asunto"]),
+    body: readDraftEmailField(payload, ["email_body", "body", "message", "cuerpo"]),
+  };
+}
+
+function closeDraftEmailModal() {
+  if (!activeDraftEmailModal) return;
+  const { overlay, onKeydown, previousFocus } = activeDraftEmailModal;
+  activeDraftEmailModal = null;
+  document.removeEventListener("keydown", onKeydown, true);
+  overlay.remove();
+  if (previousFocus && typeof previousFocus.focus === "function") {
+    try {
+      previousFocus.focus();
+    } catch {
+      /* El elemento previo ya no está en el DOM. */
+    }
+  }
+}
+
+function openDraftEmailModal(actionObj) {
+  const draft = extractDraftEmailPayload(actionObj);
+  console.log("✉️ [Cerebro.ia/DraftEmail] Borrador interceptado para revisión humana", {
+    to: draft.to,
+    subject: draft.subject,
+    bodyLength: draft.body.length,
+  });
+
+  closeDraftEmailModal();
+
+  const previousFocus = document.activeElement;
+  const overlay = document.createElement("div");
+  overlay.className = "sca-email-modal";
+  overlay.innerHTML = `
+    <div class="sca-email-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sca-email-modal-title">
+      <header class="sca-email-modal__header">
+        <div>
+          <p class="sca-email-modal__eyebrow"><span aria-hidden="true">✉</span> Borrador generado por Data Bridge</p>
+          <h2 class="sca-email-modal__title" id="sca-email-modal-title">Revisa y envía el correo</h2>
+        </div>
+        <button type="button" class="sca-email-modal__close" aria-label="Cerrar sin enviar">${icons.close}</button>
+      </header>
+      <form class="sca-email-modal__form" novalidate>
+        <label class="sca-email-modal__field">
+          <span>Destinatario</span>
+          <input type="email" class="sca-email-modal__input" name="to" autocomplete="off" placeholder="destinatario@empresa.com" required />
+        </label>
+        <label class="sca-email-modal__field">
+          <span>Asunto</span>
+          <input type="text" class="sca-email-modal__input" name="subject" maxlength="500" placeholder="Asunto del correo" required />
+        </label>
+        <label class="sca-email-modal__field sca-email-modal__field--grow">
+          <span>Mensaje</span>
+          <textarea class="sca-email-modal__textarea" name="body" rows="12" placeholder="Cuerpo del mensaje" required></textarea>
+        </label>
+        <p class="sca-email-modal__feedback" role="alert" hidden></p>
+        <footer class="sca-email-modal__actions">
+          <button type="button" class="sca-email-modal__button sca-email-modal__button--ghost" data-draft-email-cancel>Cancelar</button>
+          <button type="submit" class="sca-email-modal__button sca-email-modal__button--primary">Enviar Correo</button>
+        </footer>
+      </form>
+    </div>`;
+
+  const form = overlay.querySelector(".sca-email-modal__form");
+  const toInput = form.querySelector('[name="to"]');
+  const subjectInput = form.querySelector('[name="subject"]');
+  const bodyInput = form.querySelector('[name="body"]');
+  const feedback = overlay.querySelector(".sca-email-modal__feedback");
+  const submitButton = form.querySelector('[type="submit"]');
+
+  // Los valores se asignan por propiedad, nunca por innerHTML, para no interpretar el borrador como HTML.
+  toInput.value = draft.to;
+  subjectInput.value = draft.subject;
+  bodyInput.value = draft.body;
+
+  let sending = false;
+
+  const showFeedback = (message, isError = true) => {
+    feedback.textContent = message;
+    feedback.hidden = !message;
+    feedback.classList.toggle("is-error", Boolean(message) && isError);
+  };
+
+  const requestClose = () => {
+    if (sending) return;
+    closeDraftEmailModal();
+  };
+
+  const onKeydown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      requestClose();
+    }
+  };
+
+  overlay.addEventListener("mousedown", (event) => {
+    if (event.target === overlay) requestClose();
+  });
+  overlay.querySelector(".sca-email-modal__close").addEventListener("click", requestClose);
+  overlay.querySelector("[data-draft-email-cancel]").addEventListener("click", requestClose);
+  document.addEventListener("keydown", onKeydown, true);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (sending) return;
+
+    const emailRequest = {
+      to: toInput.value.trim(),
+      subject: subjectInput.value.trim(),
+      body: bodyInput.value.trim(),
+    };
+    if (!emailRequest.to) return showFeedback("Indica el destinatario del correo.");
+    if (!emailRequest.subject) return showFeedback("Indica el asunto del correo.");
+    if (!emailRequest.body) return showFeedback("El cuerpo del correo está vacío.");
+
+    sending = true;
+    showFeedback("");
+    submitButton.disabled = true;
+    submitButton.textContent = "Enviando…";
+    overlay.classList.add("is-sending");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), DRAFT_EMAIL_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(DRAFT_EMAIL_ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(emailRequest),
+        signal: controller.signal,
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || result?.ok === false) {
+        throw new Error(result?.error || `La pasarela de correo respondió con estado ${response.status}.`);
+      }
+
+      window.showToast?.("Correo enviado correctamente", false, "success");
+      closeDraftEmailModal();
+      return;
+    } catch (error) {
+      console.error("❌ [Cerebro.ia/DraftEmail] No se pudo enviar el correo", error);
+      const message = error?.name === "AbortError"
+        ? "El envío tardó demasiado. Inténtalo de nuevo."
+        : (error?.message || "No se pudo enviar el correo.");
+      showFeedback(message);
+      window.showToast?.(message, false, "error");
+    } finally {
+      window.clearTimeout(timeoutId);
+      sending = false;
+      submitButton.disabled = false;
+      submitButton.textContent = "Enviar Correo";
+      overlay.classList.remove("is-sending");
+    }
+  });
+
+  document.body.appendChild(overlay);
+  activeDraftEmailModal = { overlay, onKeydown, previousFocus };
+
+  const firstEmptyField = [toInput, subjectInput, bodyInput].find((field) => !field.value.trim());
+  (firstEmptyField || bodyInput).focus();
+
+  return true;
+}
+
+window.openDraftEmailModal = openDraftEmailModal;
+window.closeDraftEmailModal = closeDraftEmailModal;
+
 async function executeActionableAiAction(actionObj) {
     if (!actionObj) return false;
     const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
-    
+    const normalizedActionName = String(actionName || "").trim().toUpperCase();
+
+    // El borrador de correo nunca toca la calculadora: se intercepta y pasa por revisión humana.
+    if (normalizedActionName === "DRAFT_EMAIL") {
+        return openDraftEmailModal(actionObj);
+    }
+
     if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {
         return await executeActionableAiUpdateFields(actionObj);
     }
