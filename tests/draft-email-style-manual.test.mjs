@@ -34,13 +34,14 @@ test('the master prompt defines DRAFT_EMAIL as an executable action', () => {
   assert.match(prompt, /"email_body"/);
 });
 
-test('the operational email style manual ships the five standard templates', () => {
+test('the operational email style manual ships the six standard templates', () => {
   assert.match(prompt, /=== MANUAL DE ESTILO PARA EMAILS OPERATIVOS \(PLANTILLAS\) ===/);
   assert.match(prompt, /PLANTILLA 1: ACTUALIZACIÓN DE TRÁNSITO Y ETA/);
   assert.match(prompt, /PLANTILLA 2: INICIO DE OPERACIONES Y PREVISIÓN DE HORAS/);
   assert.match(prompt, /PLANTILLA 3: ALERTA DE DEMORAS \(LAYTIME WARNING\)/);
   assert.match(prompt, /PLANTILLA 4: AUDITORÍA TÉCNICA Y DUE DILIGENCE/);
   assert.match(prompt, /PLANTILLA 5: PROJECT CARGO Y MEDIOS IDÓNEOS/);
+  assert.match(prompt, /PLANTILLA 6: OFERTA COMERCIAL \(RESPUESTA A SOLICITUD\)/);
   // Las fuentes operativas de los campos entre corchetes quedan declaradas.
   assert.match(prompt, /voyages_tracking, telemetría AIS, calculadora PDA o motor Project Cargo/);
   assert.match(prompt, /nunca se envíe un correo con corchetes vacíos/);
@@ -54,13 +55,13 @@ test('template bodies carry escaped newlines so email_body stays valid JSON', ()
     .slice(1)
     .map((section) => section.split('Cuerpo:\n')[1].split('\n')[0]);
 
-  assert.equal(templateBodies.length, 5);
+  assert.equal(templateBodies.length, 6);
   for (const body of templateBodies) {
     // Ningún cuerpo contiene saltos de línea reales: solo la secuencia escapada \n.
     assert.match(body, /\\n/);
     const rendered = JSON.parse(`"${body.replace(/"/g, '\\"')}"`);
     assert.ok(rendered.split('\n').length > 1);
-    assert.ok(rendered.includes('Estimados') || rendered.includes('Confirmamos'));
+    assert.ok(rendered.includes('Estimado') || rendered.includes('Confirmamos'));
   }
 
   assert.match(prompt, /los saltos de línea \(\\n\) se escapan correctamente en el JSON resultante \(email_body\)/);
