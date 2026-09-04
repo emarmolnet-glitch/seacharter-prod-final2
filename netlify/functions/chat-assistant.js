@@ -136,6 +136,29 @@ Asunto: Oferta Comercial / Cotización de Flete: [POL] a [POD] — [Tonelaje] MT
 Cuerpo:
 Estimado [Nombre Cliente],\\n\\nAgradecemos su consulta y los detalles facilitados en su mensaje. En base a sus requerimientos, nos complace presentar nuestra oferta formal para la operación:\\n\\n- Ruta: [POL] ➔ [POD]\\n- Mercancía: [Tonelaje] MT de [Tipo de Carga] ([Factor de Estiba / Notas])\\n- Laycan Propuesto: [Fechas Laycan]\\n- Términos de Fletamento: [Condiciones, ej. FIOST]\\n- Flete Calculado: [Flete] USD/MT (Lumpsum: [Lumpsum], si aplica)\\n- Validez: Oferta sujeta a firme confirmación y disponibilidad del buque hasta el [Fecha/Hora Expiración].\\n\\nEsta propuesta se ha calculado considerando las condiciones actuales de mercado y el rendimiento operativo estimado para la ruta.\\n\\nQuedamos a la espera de sus comentarios para proceder con la negociación.\\n\\nAtentamente,\\nChartering Desk — Rodahmar Shipping
 
+=== PROTOCOLO RFI (REQUEST FOR INFORMATION) — CORREOS DE REQUERIMIENTO OPERATIVO ===
+REGLA ESTRICTA DE SALIDA (ANULA CUALQUIER OTRA INSTRUCCIÓN CONVERSACIONAL): cuando el usuario pida un cuestionario pre-arribo, una petición de plano de estiba (Stowage Plan) o una confirmación de readiness de carga, está TERMINANTEMENTE PROHIBIDO responder con texto conversacional, saludos, explicaciones, resúmenes o formato Markdown.
+   - En esos tres casos tu respuesta debe ser ÚNICAMENTE un objeto JSON válido con la acción DRAFT_EMAIL, sin ningún carácter antes ni después, para que el frontend abra directamente el modal de envío.
+   - La estructura obligatoria es exactamente la ya definida arriba: { "action": "DRAFT_EMAIL", "payload": { "email_to": "...", "email_subject": "...", "email_body": "..." } }. No inventes campos nuevos ni renombres los existentes.
+   - Selecciona la plantilla RFI por destinatario: agente portuario ➔ RFI-1, Capitán/Armador ➔ RFI-2, cliente/fletador ➔ RFI-3.
+   - Rellena "email_to" con el correo del destinatario si consta en el contexto (agente, armador, cliente); si no consta, envía "email_to" como cadena vacía para que el operador lo complete en el modal. Nunca inventes direcciones de correo.
+   - Sustituye los campos entre corchetes por los datos reales del contexto (DraftVoyage, voyages_tracking, calculadora PDA, telemetría AIS). Si falta un dato concreto, adapta o elimina esa frase con naturalidad: jamás envíes un correo con corchetes sin resolver.
+
+PLANTILLA RFI-1 (AGENTE PORTUARIO — PRE-ARRIVAL)
+Asunto: Requerimiento Operativo y Proforma PDA — MV [vessel_name] en [port_name]
+Cuerpo:
+Estimados [Nombre del Agente],\\n\\nLes contactamos para anunciar la nominación del MV [vessel_name] para operar [cargo_tonnage] MT de [cargo_type] en su puerto de [port_name].\\n\\nPara finalizar nuestros cálculos de escala y dar instrucciones precisas al Capitán, rogamos nos confirmen a la mayor brevedad:\\n\\n1. Calado máximo permisible en el muelle previsto.\\n2. Requisitos de Remolcadores y Practicaje.\\n3. Horario oficial de turnos de estiba (SHEX/SHINC aplicable).\\n4. Estimación de Proforma Disbursement Account (PDA).\\n\\nSaludos cordiales,\\nOperations Desk — Rodahmar Shipping
+
+PLANTILLA RFI-2 (CAPITÁN/ARMADOR — ESTIBA)
+Asunto: Instrucciones de Viaje y Requerimiento de Estiba — MV [vessel_name]
+Cuerpo:
+Al Capitán del MV [vessel_name] y a sus Armadores,\\n\\nNos complace confirmarles las instrucciones operativas para el próximo viaje con origen [pol_port] y destino [pod_port].\\n\\nMercancía prevista: [cargo_tonnage] MT de [cargo_type].\\n\\nPrevio a la llegada al puerto, rogamos nos remita la siguiente documentación:\\n\\n1. Plano de Estiba preliminar (Stowage Plan).\\n2. Confirmación de que las bodegas estarán limpias, barridas y secas (Hold Condition).\\n3. Confirmación del estado operativo de todas las grúas de abordo.\\n\\nAtentamente,\\nOperaciones — Rodahmar Shipping
+
+PLANTILLA RFI-3 (CLIENTE/FLETADOR — READINESS)
+Asunto: Confirmación de Readiness y Especificaciones de Carga
+Cuerpo:
+Estimado [Nombre del Cliente],\\n\\nPara proceder con la nominación en firme del buque, necesitamos que nos confirmen formalmente los detalles técnicos de la partida:\\n\\n1. Fecha exacta de disponibilidad de la carga en muelle (Cargo Readiness Date).\\n2. Packing List final detallando peso bruto total y volumen.\\n3. Contacto directo del recibidor/cargador (Shipper/Receiver) para la coordinación aduanera.\\n\\nCualquier discrepancia entre las dimensiones declaradas y las reales a pie de muelle puede derivar en un rechazo por parte del Capitán (Deadfreight). Rogamos máxima precisión.\\n\\nSaludos cordiales,\\nChartering Desk — Rodahmar Shipping
+
 Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON resultante (email_body) para que el frontend pueda renderizar los párrafos tal cual en el componente <textarea> durante la revisión humana del modal.
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
