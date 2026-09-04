@@ -123,17 +123,15 @@ test('dot decluttering is deterministic for the same fleet payload', () => {
   assert.deepEqual(first, second);
 });
 
-test('Globe.gl uses flat native Three.js vectors with AIS heading rotation', () => {
+test('Globe.gl uses fixed HTML/SVG vessel markers at surface altitude', () => {
   assert.match(globeSource, /const SURFACE_ALTITUDE = 0/);
-  assert.match(globeSource, /new THREE\.ConeGeometry/);
-  assert.match(globeSource, /mesh\.scale\.set\(1, 1, VESSEL_VECTOR_FLAT_SCALE\)/);
-  assert.match(globeSource, /headingRadians[\s\S]*Math\.cos\(headingRadians\)[\s\S]*Math\.sin\(headingRadians\)/);
   assert.match(globeSource, /renderVesselLayer\(view, view\.vessels\)/);
-  assert.match(globeSource, /\.customLayerLabel\([\s\S]*\.onCustomLayerClick\(/);
-  assert.doesNotMatch(globeSource, /VESSEL_VECTOR_GLYPH|vessel-vector|htmlElementsData/);
+  assert.match(globeSource, /function createVesselMarker\(vessel\)[\s\S]*globe-vessel-marker-ring[\s\S]*globe-radar-tooltip/);
+  assert.match(globeSource, /\.htmlLat\([\s\S]*\.htmlLng\([\s\S]*\.htmlAltitude\(\(\) => SURFACE_ALTITUDE\)[\s\S]*\.htmlTransitionDuration\(0\)/);
+  assert.match(globeSource, /\.pointsData\(\[\]\)[\s\S]*\.htmlElementsData\(\[\]\)/);
+  assert.doesNotMatch(globeSource, /\.pointsData\(vessels\)/);
   assert.match(globeSource, /baseLat: lat,[\s\S]*baseLng: lng,[\s\S]*originalLatitude: lat,[\s\S]*originalLongitude: lng/);
   assert.doesNotMatch(indexSource, /three@0\.160\.0|three\.min\.js/);
-  assert.match(globeSource, /configureVesselPointFallback[\s\S]*pointResolution\(32\)[\s\S]*pointsData\(\[\]\)/);
 });
 
 test('density view prioritizes the persistent Radar snapshot before secondary sources', () => {
@@ -145,7 +143,7 @@ test('density view prioritizes the persistent Radar snapshot before secondary so
   assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.matchingVessels/);
 });
 
-test('density globe keeps rendering through the native point fallback when Three.js is unavailable', () => {
+test('density globe renders every vessel through the HTML layer', () => {
   const vessels = Array.from({ length: 31 }, (_, index) => ({
     IMO: String(9200000 + index),
     vesselName: `Density ${index + 1}`,
@@ -157,20 +155,21 @@ test('density globe keeps rendering through the native point fallback when Three
     speed: 12.5,
   }));
   const renderState = mountDensityGlobeWithMatchingFleet(vessels);
-  assert.equal(renderState.pointsData.length, 31);
+  assert.equal(renderState.pointsData.length, 0);
+  assert.equal(renderState.htmlElementsData.length, 31);
   assert.equal(renderState.customLayerData.length, 0);
   assert.equal(renderState.arcsData.length, 31);
-  assert.equal(renderState.pointResolution, 32);
-  assert.equal(renderState.pointAltitude, 0);
-  assert.equal(renderState.pointRadius, 0.15);
-  const tooltip = renderState.pointLabel(renderState.pointsData[0]);
-  assert.match(tooltip, /Density 1/);
-  assert.match(tooltip, /Distancia al POL · 1,200 NM/);
-  assert.match(tooltip, /ETA al POL/);
+  assert.equal(renderState.htmlAltitude(), 0);
+  assert.equal(renderState.htmlTransitionDuration, 0);
+  assert.equal(renderState.htmlLat(renderState.htmlElementsData[0]), 35);
+  assert.equal(renderState.htmlLng(renderState.htmlElementsData[0]), -8);
+  const marker = renderState.htmlElement(renderState.htmlElementsData[0]);
+  assert.match(marker.innerHTML, /globe-vessel-marker/);
+  assert.match(marker.innerHTML, /Density 1/);
   assert.equal(renderState.labelsData.length, 0);
 });
 
-test('density globe fallback keeps every valid vessel and excludes only null coordinates', () => {
+test('density globe HTML layer keeps every valid vessel and excludes only null coordinates', () => {
   const vessels = Array.from({ length: 17 }, (_, index) => ({
     IMO: String(9400000 + index),
     vesselName: `Persistent ${index + 1}`,
@@ -179,6 +178,7 @@ test('density globe fallback keeps every valid vessel and excludes only null coo
     heading: 45,
   }));
   const renderState = mountDensityGlobeWithMatchingFleet(vessels);
-  assert.equal(renderState.pointsData.length, 16);
+  assert.equal(renderState.pointsData.length, 0);
+  assert.equal(renderState.htmlElementsData.length, 16);
   assert.equal(renderState.labelsData.length, 0);
 });

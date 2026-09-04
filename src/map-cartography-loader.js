@@ -1,7 +1,7 @@
 const GLOBE_SCRIPT_ID = 'global-fleet-globe-runtime';
 const GLOBE_STYLES_ID = 'global-fleet-globe-styles';
 const GLOBE_RUNTIME_URL = 'https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';
-const GLOBE_MODULE_URL = '/GlobalFleetGlobe.js?v=20260904-chat-lod-fix';
+const GLOBE_MODULE_URL = '/GlobalFleetGlobe.js?v=20260904-vessel-html-marker';
 
 let cartographyPromise = null;
 
@@ -10,7 +10,7 @@ function ensureStylesheet() {
   const stylesheet = document.createElement('link');
   stylesheet.id = GLOBE_STYLES_ID;
   stylesheet.rel = 'stylesheet';
-  stylesheet.href = '/assets/css/density-globe.css?v=20260808-main-globe-recovery';
+  stylesheet.href = '/assets/css/density-globe.css?v=20260904-vessel-html-marker';
   document.head.appendChild(stylesheet);
 }
 

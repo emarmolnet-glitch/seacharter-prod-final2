@@ -368,6 +368,142 @@
   pointer-events: none;
 }
 
+.globe-vessel-anchor {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.globe-vessel-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 36px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translate(-50%, -100%);
+  transform-origin: 50% 100%;
+}
+
+.globe-vessel-marker-glyph {
+  display: block;
+  width: 30px;
+  height: 36px;
+  color: #67e8f9;
+  transition: color 120ms ease;
+}
+
+.globe-vessel-marker-glyph svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.globe-vessel-marker-ring {
+  fill: rgba(3, 16, 31, 0.88);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.globe-vessel-marker-crosshair {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.25;
+}
+
+.globe-vessel-marker-anchor-line {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1;
+}
+
+.globe-vessel-marker-anchor-point {
+  fill: #f8fafc;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.globe-vessel-marker-hull {
+  fill: currentColor;
+}
+
+.globe-vessel-marker-deck {
+  fill: #f8fafc;
+}
+
+.globe-vessel-anchor.is-port-anchored .globe-vessel-marker-glyph {
+  color: #5eead4;
+}
+
+.globe-vessel-marker:hover .globe-vessel-marker-glyph,
+.globe-vessel-marker:focus-visible .globe-vessel-marker-glyph {
+  color: #a5f3fc;
+}
+
+.globe-vessel-marker:focus-visible {
+  outline: none;
+}
+
+.globe-radar-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  display: grid;
+  width: 210px;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(103, 232, 249, 0.28);
+  border-radius: 8px;
+  background: rgba(3, 16, 31, 0.96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  color: #dbeafe;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 100;
+}
+
+.globe-radar-tooltip strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.globe-radar-tooltip span {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 6px;
+  color: #a9c4d8;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.globe-radar-tooltip b {
+  color: #67e8f9;
+  font-weight: 800;
+}
+
+.globe-radar-tooltip code {
+  color: #f8fafc;
+  font-size: 9px;
+}
+
+.globe-vessel-marker:hover .globe-radar-tooltip,
+.globe-vessel-marker:focus-visible .globe-radar-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 #view-map .map-command-shell,
 #view-map #map-host,
 #view-map #map-container,

@@ -54,14 +54,14 @@ test('Triple-Sourcing: client merge deduplicates by IMO or name plus DWT and pri
   assert.equal(fallbackMerged[0].latitude, 10);
 });
 
-test('Map Visual Differentiation: GlobalFleetGlobe uses native Three.js tactical vectors', async (t) => {
+test('Map Visual Differentiation: GlobalFleetGlobe uses the Data Bridge HTML/SVG marker', async (t) => {
   const globeSource = await readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
 
-  assert.match(globeSource, /new THREE\.ConeGeometry/);
-  assert.match(globeSource, /VESSEL_VECTOR_FLAT_SCALE = 0\.16/);
-  assert.match(globeSource, /color: COMMERCIAL_VESSEL_COLOR/);
-  assert.match(globeSource, /\.customLayerData\(\[\]\)/);
-  assert.doesNotMatch(globeSource, /htmlElementsData|htmlElement\(|🏷️|📡/, 'Markers should not depend on image or SVG fallbacks');
+  assert.match(globeSource, /function createVesselMarker\(vessel\)/);
+  assert.match(globeSource, /globe-vessel-marker-glyph/);
+  assert.match(globeSource, /\.htmlElementsData\(\[\]\)/);
+  assert.match(globeSource, /\.htmlElement\(createVesselMarker\)/);
+  assert.doesNotMatch(globeSource, /\.pointsData\(vessels\)/, 'Vessels must not render through native WebGL points');
 });
 
 test('Coasters, Minibulkers, and Class B Transponders: Classification in cargo-taxonomy.mjs', async (t) => {

@@ -51,12 +51,11 @@ test('AIS normalization preserves an explicit unknown-direction state', () => {
   assert.equal(vessel.hasHeading, false);
 });
 
-test('3D globe renders native Three.js heading vectors without image fallbacks', () => {
+test('3D globe renders fixed HTML/SVG vessel markers', () => {
   assert.match(globeSource, /const course = findValidAisDirection[\s\S]*if \(course !== null\)[\s\S]*const heading = findValidAisDirection/);
-  assert.match(globeSource, /new THREE\.ConeGeometry\(VESSEL_VECTOR_RADIUS, VESSEL_VECTOR_LENGTH, VESSEL_VECTOR_SEGMENTS\)/);
-  assert.match(globeSource, /headingRadians[\s\S]*Math\.cos\(headingRadians\)[\s\S]*Math\.sin\(headingRadians\)/);
-  assert.match(globeSource, /new THREE\.Matrix4\(\)\.makeBasis\(side, direction, normal\)/);
-  assert.match(globeSource, /\.customThreeObject\([\s\S]*\.customLayerData\(\[\]\)/);
-  assert.doesNotMatch(globeSource, /\.htmlElement\(|\.htmlElementsData\(/);
+  assert.match(globeSource, /function createVesselMarker\(vessel\)/);
+  assert.match(globeSource, /<svg viewBox="0 0 32 38" fill="none">/);
+  assert.match(globeSource, /\.pointsData\(\[\]\)[\s\S]*\.htmlElementsData\(\[\]\)[\s\S]*\.htmlElement\(createVesselMarker\)/);
+  assert.match(globeSource, /view\.globe\.pointsData\(\[\]\)\.htmlElementsData\(vessels\)/);
   assert.doesNotMatch(globeSource, /applyVesselDecluttering|getDeclutterBucketKey|OVERLAP_BUCKET_DEGREES/);
 });
