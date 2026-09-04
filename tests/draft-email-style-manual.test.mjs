@@ -72,3 +72,39 @@ test('Core PRO extracts the DRAFT_EMAIL JSON instead of printing it in the chat'
   assert.match(frontendSource, /\|\| isDraftEmailAction\(parsed\)\) \{/);
   assert.match(frontendSource, /\|\| isDraftEmailAction\(action\)\) \{/);
 });
+
+test('the RFI protocol forces a JSON-only DRAFT_EMAIL answer', () => {
+  assert.match(prompt, /=== PROTOCOLO RFI \(REQUEST FOR INFORMATION\)/);
+  // La regla estricta cubre los tres disparadores operativos.
+  assert.match(prompt, /cuestionario pre-arribo/);
+  assert.match(prompt, /petición de plano de estiba \(Stowage Plan\)/);
+  assert.match(prompt, /confirmación de readiness de carga/);
+  assert.match(prompt, /PROHIBIDO responder con texto conversacional/);
+  assert.match(prompt, /ÚNICAMENTE un objeto JSON válido con la acción DRAFT_EMAIL/);
+  // El contrato con el modal del frontend se mantiene intacto.
+  assert.match(prompt, /"email_to": "\.\.\.", "email_subject": "\.\.\.", "email_body": "\.\.\."/);
+  assert.match(prompt, /No inventes campos nuevos ni renombres los existentes/);
+  // El protocolo RFI vive dentro del prompt del asistente, tras la acción DRAFT_EMAIL.
+  assert.ok(prompt.indexOf('"action": "DRAFT_EMAIL"') < prompt.indexOf('=== PROTOCOLO RFI'));
+});
+
+test('the RFI protocol ships the three requirement templates with escaped newlines', () => {
+  const rfiSections = prompt.split(/PLANTILLA RFI-\d \(/).slice(1);
+  assert.equal(rfiSections.length, 3);
+
+  assert.match(rfiSections[0], /^AGENTE PORTUARIO — PRE-ARRIVAL\)/);
+  assert.match(rfiSections[0], /Asunto: Requerimiento Operativo y Proforma PDA — MV \[vessel_name\] en \[port_name\]/);
+  assert.match(rfiSections[1], /^CAPITÁN\/ARMADOR — ESTIBA\)/);
+  assert.match(rfiSections[1], /Asunto: Instrucciones de Viaje y Requerimiento de Estiba — MV \[vessel_name\]/);
+  assert.match(rfiSections[2], /^CLIENTE\/FLETADOR — READINESS\)/);
+  assert.match(rfiSections[2], /Asunto: Confirmación de Readiness y Especificaciones de Carga/);
+
+  for (const section of rfiSections) {
+    const body = section.split('Cuerpo:\n')[1].split('\n')[0];
+    // El cuerpo viaja en una sola línea con \n escapados, listo para el JSON del modal.
+    assert.match(body, /\\n/);
+    const rendered = JSON.parse(`"${body.replace(/"/g, '\\"')}"`);
+    assert.ok(rendered.split('\n').length > 1);
+    assert.match(rendered, /Rodahmar Shipping$/);
+  }
+});
