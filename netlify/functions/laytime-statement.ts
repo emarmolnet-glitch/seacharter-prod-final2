@@ -3,11 +3,59 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { netlifyDb } from "../../db/netlify.js";
 import { laytimeStatements } from "../../db/schema.js";
 import { calculateLaytime } from "../../laytime-engine.mjs";
+import { neon } from "@neondatabase/serverless";
 
 const CONTRACT_PATTERN = /^[A-Z0-9][A-Z0-9/_-]{2,79}$/;
 const OPERATIONS = new Set(["LOAD", "DISCHARGE"]);
 
 type StatementBody = Record<string, any>;
+
+function resolveDatabaseUrl() {
+  return process.env.DATABASE_URL_WRITE
+    || process.env.DATABASE_WRITE_URL
+    || process.env.DATABASE_URL
+    || process.env.NEON_DATABASE_URL
+    || process.env.NETLIFY_DB_URL;
+}
+
+async function ensureTableExists() {
+  const url = resolveDatabaseUrl();
+  if (!url) return;
+  const sqlClient = neon(url);
+  await sqlClient`
+    CREATE TABLE IF NOT EXISTS laytime_statements (
+      id SERIAL PRIMARY KEY,
+      contract_ref VARCHAR(255) NOT NULL,
+      operation VARCHAR(50) NOT NULL,
+      quantity_mt NUMERIC DEFAULT 0,
+      rate_mt_day NUMERIC,
+      allowed_hours NUMERIC,
+      laytime_rule VARCHAR(50),
+      weather_permitting BOOLEAN DEFAULT true,
+      once_on_demurrage BOOLEAN DEFAULT true,
+      commencement_delay_minutes INTEGER DEFAULT 0,
+      port_time_zone VARCHAR(50),
+      demurrage_rate_usd_day NUMERIC DEFAULT 0,
+      nor_tendered_at TIMESTAMP,
+      nor_accepted_at TIMESTAMP,
+      laytime_commenced_at TIMESTAMP,
+      operation_started_at TIMESTAMP,
+      operation_completed_at TIMESTAMP,
+      statement_as_of_at TIMESTAMP,
+      incidents JSONB DEFAULT '[]'::jsonb,
+      calculation JSONB DEFAULT '{}'::jsonb,
+      status VARCHAR(50),
+      allowed_seconds INTEGER DEFAULT 0,
+      used_seconds INTEGER DEFAULT 0,
+      excluded_seconds INTEGER DEFAULT 0,
+      balance_seconds INTEGER DEFAULT 0,
+      demurrage_usd NUMERIC DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `;
+  await sqlClient`CREATE INDEX IF NOT EXISTS idx_laytime_contract ON laytime_statements (UPPER(contract_ref));`;
+}
 
 function responseError(status: number, error: string, details?: unknown) {
   return Response.json({ success: false, error, ...(details ? { details } : {}) }, { status });
@@ -147,6 +195,7 @@ export default async (request: Request, context: Context) => {
   if (!CONTRACT_PATTERN.test(contractRef)) return responseError(400, "La referencia contractual no es válida.");
 
   try {
+    await ensureTableExists();
     if (request.method === "GET") return await getStatements(contractRef, request);
     if (request.method === "PUT" || request.method === "POST") {
       const body = await request.json().catch(() => null) as StatementBody | null;
