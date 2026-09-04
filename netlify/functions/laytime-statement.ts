@@ -156,7 +156,7 @@ export default async (request: Request, context: Context) => {
     return responseError(405, "Método no permitido.");
   } catch (error: any) {
     console.error("[laytime-statement] Request failed.", { requestId: context.requestId, contractRef, message: error?.message });
-    return responseError(500, "No fue posible calcular o guardar la plancha.");
+    return responseError(500, `Error interno BD: ${error?.message || "Desconocido"}`);
   }
 };
 
