@@ -2,6 +2,7 @@
     'use strict';
 
     const views = new Map();
+    const vesselMarkerViews = new WeakMap();
     const pendingMountFrames = new Map();
     const activeVesselFocusTimers = new Map();
     const DEFAULT_KEY = 'main';
@@ -408,6 +409,48 @@
             .replace(/'/g, '&#039;');
     }
 
+    function createVesselMarker(vessel) {
+        const anchor = document.createElement('div');
+        anchor.className = vessel.portAnchored ? 'globe-vessel-anchor is-port-anchored' : 'globe-vessel-anchor';
+
+        const name = vessel.vesselName || vessel.name || 'Buque';
+        const latitude = Number(vessel.latitude ?? vessel.lat ?? 0);
+        const longitude = Number(vessel.longitude ?? vessel.lng ?? 0);
+        const coords = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        const dwt = vessel.dwt ? `${Number(vessel.dwt).toLocaleString('es-ES')} DWT` : 'N/D';
+        const type = vessel.vesselType || vessel.type || 'N/D';
+        const safeName = escapeTooltipText(name);
+        const safeDwt = escapeTooltipText(dwt);
+        const safeType = escapeTooltipText(type);
+        const safeCoords = escapeTooltipText(coords);
+
+        anchor.innerHTML = `
+            <button type="button" class="globe-vessel-marker" aria-label="${safeName} localizado">
+                <span class="globe-vessel-marker-glyph" aria-hidden="true">
+                    <svg viewBox="0 0 32 38" fill="none">
+                        <circle class="globe-vessel-marker-ring" cx="16" cy="14.5" r="11.5"/>
+                        <path class="globe-vessel-marker-crosshair" d="M16 1v3M16 25v3M2.5 14.5h3M26.5 14.5h3"/>
+                        <path class="globe-vessel-marker-hull" d="M9.5 15.8h13l-2.1 4.65a2.1 2.1 0 0 1-1.91 1.23h-4.98a2.1 2.1 0 0 1-1.91-1.23L9.5 15.8Z"/>
+                        <path class="globe-vessel-marker-deck" d="M12.35 14.65v-3.8h2.45v-2.6h3.95v2.6h2.5v3.8h-8.9Z"/>
+                        <path class="globe-vessel-marker-anchor-line" d="M16 26v8"/>
+                        <circle class="globe-vessel-marker-anchor-point" cx="16" cy="36" r="1.5"/>
+                    </svg>
+                </span>
+                <span class="globe-radar-tooltip" role="tooltip">
+                    <strong>${safeName}</strong>
+                    <span><b>DWT:</b> ${safeDwt}</span>
+                    <span><b>Tipo:</b> ${safeType}</span>
+                    <span><b>Posición:</b> <code>${safeCoords}</code></span>
+                </span>
+            </button>`;
+        anchor.addEventListener('click', (event) => {
+            if (!event.target?.closest?.('.globe-vessel-marker')) return;
+            const view = vesselMarkerViews.get(vessel);
+            if (view) handleVesselClick(view, vessel);
+        });
+        return anchor;
+    }
+
     function resolvePolCoordinates(view) {
         const portLabel = Array.isArray(view?.portLabels)
             ? view.portLabels.find(label => label?.role === 'POL')
@@ -624,27 +667,19 @@
             && typeof THREE.Matrix4 === 'function');
     }
 
-    function configureVesselPointFallback(view, reason = 'three-unavailable') {
+    function configureVesselHtmlLayer(view) {
         if (!view?.globe) return false;
-        view.renderMode = 'points';
-        view.vectorFallbackReason = reason;
+        view.renderMode = 'html';
+        view.vectorFallbackReason = null;
         view.globe.customLayerData?.([]);
         view.globe
-            .pointResolution(32)
-            .pointsMerge(false)
-            .pointLat('lat')
-            .pointLng('lng')
-            .pointColor(() => COMMERCIAL_VESSEL_COLOR)
-            .pointAltitude(SURFACE_ALTITUDE)
-            .pointRadius(0.15)
-            .pointLabel((vessel) => safeVesselTacticalLabel(view, vessel))
-            .onPointHover((vessel) => {
-                view.hoveredVessel = vessel || null;
-                view.container.style.cursor = vessel ? 'pointer' : 'grab';
-            })
-            .onPointClick((vessel) => handleVesselClick(view, vessel))
-            .pointsTransitionDuration(0)
-            .pointsData([]);
+            .pointsData([])
+            .htmlElementsData([])
+            .htmlLat((vessel) => Number(vessel.latitude ?? vessel.lat ?? 0))
+            .htmlLng((vessel) => Number(vessel.longitude ?? vessel.lng ?? 0))
+            .htmlAltitude(() => SURFACE_ALTITUDE)
+            .htmlTransitionDuration(0)
+            .htmlElement(createVesselMarker);
         return true;
     }
 
@@ -675,17 +710,9 @@
 
     function renderVesselLayer(view, vessels) {
         if (!view?.globe) return 'unmounted';
-        if (view.renderMode === 'vectors') {
-            try {
-                view.globe.customLayerData(vessels);
-                return 'vectors';
-            } catch (error) {
-                console.warn('[GlobalFleetGlobe] Error en geometría direccional; se conserva el globo con puntos nativos.', error);
-                configureVesselPointFallback(view, 'three-render-error');
-            }
-        }
-        view.globe.pointsData(vessels);
-        return 'points';
+        vessels.forEach((vessel) => vesselMarkerViews.set(vessel, view));
+        view.globe.pointsData([]).htmlElementsData(vessels);
+        return 'html';
     }
 
     function getTacticalLabels(view) {
@@ -1209,7 +1236,7 @@
             hoveredVessel: null,
             selectedVessel: null,
             selectedVesselIdentity: null,
-            renderMode: 'points',
+            renderMode: 'html',
             lastVesselRenderMode: null,
             vectorFallbackReason: null,
             autoRotate: false,
@@ -1278,9 +1305,7 @@
                 .labelsTransitionDuration(0)
                 .labelsData([]);
             configurePortTileEngine(view);
-            if (!configureVesselVectorLayer(view)) {
-                configureVesselPointFallback(view, hasCompatibleThreeNamespace() ? 'three-layer-configuration-error' : 'three-unavailable');
-            }
+            configureVesselHtmlLayer(view);
             view.globe.pointOfView(view.initialView, view.initialViewDuration);
             view.controls = view.globe.controls();
             view.controls.enableDamping = true;
