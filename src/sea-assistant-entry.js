@@ -11,6 +11,7 @@ const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
 const AI_USER_CONTEXT_MAX_CHARS = 8_000;
 const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
+const VESSEL_NAME_RESOLUTION_ENDPOINT = "/api/vessel-name-resolution";
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -463,7 +464,7 @@ function findActionableAiJsonObject(responseText) {
       const rawJson = text.slice(start, end + 1);
       try {
         const parsed = JSON.parse(rawJson);
-        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(parsed?.action)
+        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"].includes(parsed?.action)
           || isDraftEmailAction(parsed)) {
           return { action: parsed, start, end: end + 1 };
         }
@@ -482,7 +483,7 @@ function extractActionableAiResponse(responseText) {
   if (jsonBlock) {
     try {
       const action = JSON.parse(jsonBlock[1]);
-      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"].includes(action?.action)
+      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"].includes(action?.action)
         || isDraftEmailAction(action)) {
         return {
           visibleText: originalText.replace(jsonBlock[0], "").trim(),
@@ -2079,18 +2080,18 @@ const fileInput = root.querySelector("#sca-file-input");
 
       console.log("Acción seleccionada para ejecución:", action);
 
-      if (action) await executeActionableAiAction(action);
+      const actionResult = action ? await executeActionableAiAction(action) : null;
       if (action) {
         console.log("La acción terminó de ejecutarse.");
       } else {
         console.log("La respuesta no contiene una acción ejecutable.");
       }
 
-      const textoVisible = actionableResponse.visibleText || "Acción completada.";
+      const textoVisible = actionResult?.message || actionableResponse.visibleText || "Acción completada.";
       replaceWithAssistantMessage(
         thinkingMessage,
         textoVisible,
-        { meta: formatTime() },
+        { meta: formatTime(), error: actionResult?.error === true },
       );
       console.groupEnd();
     } catch (error) {
@@ -2302,6 +2303,51 @@ function openDraftEmailModal(actionObj) {
 window.openDraftEmailModal = openDraftEmailModal;
 window.closeDraftEmailModal = closeDraftEmailModal;
 
+async function executeActionableAiLocateVessel(actionObj) {
+    const vesselName = String(actionObj?.vessel_name || actionObj?.payload?.vessel_name || "")
+        .normalize("NFKC")
+        .trim()
+        .replace(/^(?:M\s*\/?\s*V|MV)\s+/i, "")
+        .replace(/\s+/g, " ");
+    const fallbackMessage = vesselName
+        ? `No he podido identificar de forma única el buque ${vesselName}. Introduce el número IMO manualmente para localizarlo.`
+        : "No he podido identificar el buque por nombre. Introduce el número IMO manualmente para localizarlo.";
+
+    if (!vesselName) return { handled: true, error: true, message: fallbackMessage };
+
+    try {
+        const response = await fetch(VESSEL_NAME_RESOLUTION_ENDPOINT, {
+            method: "POST",
+            headers: { "content-type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ vessel_name: vesselName }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        const imo = String(payload?.vessel?.imo || "").replace(/\D/g, "");
+        if (!response.ok || payload?.status !== "resolved" || !/^\d{7}$/.test(imo)) {
+            return { handled: true, error: true, message: fallbackMessage };
+        }
+
+        const locateVessel = window.locateTrackingVesselByImo;
+        if (typeof locateVessel !== "function") {
+            return { handled: true, error: true, message: fallbackMessage };
+        }
+
+        const located = await locateVessel({
+            imo,
+            vesselName: payload?.vessel?.vessel_name || vesselName,
+        });
+        if (!located) return { handled: true, error: true, message: fallbackMessage };
+
+        return {
+            handled: true,
+            message: `${payload?.vessel?.vessel_name || vesselName} localizado con IMO ${imo}. He abierto el tracking en el mapa.`,
+        };
+    } catch (error) {
+        console.error("❌ [Cerebro.ia/LocateVessel] No se pudo resolver el IMO", error);
+        return { handled: true, error: true, message: fallbackMessage };
+    }
+}
+
 async function executeActionableAiAction(actionObj) {
     if (!actionObj) return false;
     const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
@@ -2310,6 +2356,10 @@ async function executeActionableAiAction(actionObj) {
     // El borrador de correo nunca toca la calculadora: se intercepta y pasa por revisión humana.
     if (normalizedActionName === "DRAFT_EMAIL") {
         return openDraftEmailModal(actionObj);
+    }
+
+    if (normalizedActionName === "LOCATE_VESSEL") {
+        return executeActionableAiLocateVessel(actionObj);
     }
 
     if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {
