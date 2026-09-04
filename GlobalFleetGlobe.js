@@ -136,6 +136,24 @@
         ['latitud', 'longitud']
     ]);
 
+    /**
+     * Blindaje anti-teleportación compartido. Usa GeoPositionGuard cuando está
+     * disponible y, si no, aplica la misma regla en local: un cero exacto en
+     * cualquiera de los dos ejes solo puede venir de un `Number(null)` y
+     * arrastraría la cámara a Null Island o al meridiano de Greenwich sobre el
+     * Canal de la Mancha / Inglaterra.
+     */
+    function isTrustworthyCoordinatePair(lat, lng) {
+        const guard = window.GeoPositionGuard;
+        if (typeof guard?.isTrustworthyCoordinate === 'function') {
+            return guard.isTrustworthyCoordinate(lat, lng);
+        }
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+        if (lat === 0 || lng === 0) return false;
+        if (Math.abs(lat) < 0.02 && Math.abs(lng) < 0.02) return false;
+        return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    }
+
     function readCoordinatePair(scope) {
         if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null;
         for (const [latKey, lngKey] of COORDINATE_KEY_PAIRS) {
@@ -147,8 +165,7 @@
                 [lat, lng] = [lng, lat];
                 axisOrder = 'lng-lat-corrected';
             }
-            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
-            if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) continue;
+            if (!isTrustworthyCoordinatePair(lat, lng)) continue;
             return { lat, lng, axisOrder, source: `${latKey}/${lngKey}` };
         }
         return null;
@@ -266,13 +283,7 @@
     }
 
     function isRenderableVesselPoint(vessel) {
-        return vessel
-            && Number.isFinite(vessel.lat)
-            && Number.isFinite(vessel.lng)
-            && vessel.lat >= -90
-            && vessel.lat <= 90
-            && vessel.lng >= -180
-            && vessel.lng <= 180;
+        return Boolean(vessel) && isTrustworthyCoordinatePair(vessel.lat, vessel.lng);
     }
 
     function prepareVessels(input, cameraAltitude = INITIAL_VIEW.altitude) {
@@ -727,7 +738,7 @@
     function normalizeRoutePoint(point) {
         const lat = toFiniteNumber(point?.lat, point?.latitude, point?.Latitude, Array.isArray(point) ? point[0] : null);
         const lng = toFiniteNumber(point?.lng, point?.lon, point?.longitude, point?.Longitude, Array.isArray(point) ? point[1] : null);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+        if (!isTrustworthyCoordinatePair(lat, lng)) return null;
         return { lat, lng };
     }
 
@@ -850,6 +861,7 @@
     function focusCoordinates(lat, lng, key = 'density', altitude = FOCUS_ALTITUDE, duration = CAMERA_TRANSITION_MS) {
         const view = getView(key) || getView(DEFAULT_KEY);
         const normalized = normalizeRoutePoint({ lat, lng });
+        // Sin punto fiable la cámara se queda donde está: nunca viaja a (0,0).
         if (!view || !normalized) return false;
         view.globe.pointOfView({ ...normalized, altitude }, duration);
         return true;
@@ -905,6 +917,7 @@
         const normalized = normalizeVessel(vessel);
         const view = getView(key) || getView(DEFAULT_KEY);
         if (!normalized || !view) return false;
+        if (!isTrustworthyCoordinatePair(normalized.originalLatitude, normalized.originalLongitude)) return false;
         selectVessel(normalized, view.key);
         setAutoRotate(false, view.key);
         if (view.key === 'tracking') {

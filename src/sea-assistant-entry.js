@@ -1367,9 +1367,21 @@ function collectChatContext() {
     metodoDescargaPOD: firstText(dischargeMethodSelect?.selectedOptions?.[0]?.textContent, state.dischargeMethod),
   };
 
+  // Identidad obligatoria del expediente activo (# REF + IMO dinámico). El
+  // asistente debe razonar siempre sobre el contrato seleccionado en la
+  // cabecera, nunca sobre un IMO fijo o heredado de una consulta anterior.
+  const activeSession = window.ActiveSessionContext?.getActiveSession?.() || {};
+  const sesionActiva = {
+    referencia: firstText(activeSession.reference, readElementValue("quick-ref", "gc-ref", "asb-ref")),
+    imo: firstText(activeSession.imo, readElementValue("vessel-identity-imo", "imo")),
+    mmsi: firstText(activeSession.mmsi),
+    buque: firstText(activeSession.vesselName, state.vesselName, voyageDraft.vessel?.name, readElementValue("vessel-name")),
+  };
+
   return {
     modulo: activeModule,
     moduloId: activeModuleDescriptor.id,
+    sesionActiva,
     rol: roleMode === "charterer" ? "Fletador/Charterer" : "Armador/Shipowner",
     datosModulo: moduleScreenContext,
     sugerenciasProactivas: proactiveEvaluation.issues,

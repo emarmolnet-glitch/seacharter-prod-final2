@@ -8,8 +8,18 @@ import { voyageStore, hasOperationalDraft } from './src/stores/voyage-store.js';
 import { normalizeAisDestination } from './src/tracking-destination.mjs';
 import { mountDatalasticCreditCounter } from './src/components/DatalasticCreditCounter.js';
 import { datalasticCreditStore } from './src/stores/datalastic-credit-store.js';
+import {
+    forgetTrustedPosition,
+    getLastTrustedPosition,
+    isTrustworthyCoordinate,
+    normalizeTrustedPosition,
+    rememberTrustedPosition,
+    resolveSafeMapPosition,
+} from './src/geo-position-guard.mjs';
+import { getActiveSession, registerVesselIdentity } from './src/active-session-context.mjs';
 
 const TRACKING_MAP_KEY = 'tracking';
+const TRACKING_POSITION_SCOPE = 'tracking';
 const hasFetchedMapData = { current: new Set() };
 const hasCalculatedMapRoute = { current: new Set() };
 const trackingTelemetryFetchRef = { current: new Map() };
@@ -147,12 +157,44 @@ function hasAuditDraft() {
     return hasOperationalDraft(getVoyageDraft());
 }
 
+// Blindaje anti-teleportación: un punto solo se acepta si supera la validación
+// geográfica, de modo que (0,0) o un eje vacío nunca llegan al globo.
 function normalizeMapPoint(value) {
-    if (!value) return null;
-    const latitude = Number(value.lat ?? value.latitude ?? (Array.isArray(value) ? value[0] : NaN));
-    const longitude = Number(value.lng ?? value.lon ?? value.longitude ?? (Array.isArray(value) ? value[1] : NaN));
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return { ...value, lat: latitude, lng: longitude, latitude, longitude };
+    return normalizeTrustedPosition(value);
+}
+
+// Puertos del expediente activo usados como respaldo cartográfico cuando la
+// telemetría AIS deja de emitir (buque atracado, operaciones finalizadas).
+function getTrackingDossierPorts() {
+    const data = trackingState.data;
+    const contract = data?.contract || {};
+    const routePorts = data?.route?.ports || {};
+    const voyage = trackingState.activeVoyage || {};
+    return {
+        phase: Number(data?.live?.phase ?? contract.phase ?? voyage.currentPhase),
+        ports: {
+            ballast: routePorts.ballast || contract.previousPort || null,
+            pol: routePorts.pol || contract.pol || voyage.loadPort || null,
+            pod: routePorts.pod || contract.pod || voyage.dischargePort || null,
+        },
+    };
+}
+
+// Posición definitiva del marcador: telemetría fiable, última posición válida
+// retenida o puerto de operaciones activo. Nunca coordenadas nulas.
+function resolveTrackingPosition(candidate) {
+    return resolveSafeMapPosition({
+        scope: TRACKING_POSITION_SCOPE,
+        candidate,
+        dossier: getTrackingDossierPorts(),
+    });
+}
+
+function trackingPositionTrustLabel(position) {
+    if (!position || position.positionTrust === 'live') return '';
+    if (position.positionTrust === 'retained') return 'Última posición válida retenida (sin señal AIS)';
+    const portName = position.portName ? ` · ${position.portName}` : '';
+    return `Puerto de operaciones activo${portName} (sin señal AIS)`;
 }
 
 function trackingStatusLabel(status) {
@@ -1072,7 +1114,7 @@ function getManualTrackingContext() {
 }
 
 function getBasicVesselPosition() {
-    return normalizeMapPoint(trackingState.basicVessel?.position || trackingState.basicVessel);
+    return resolveTrackingPosition(trackingState.basicVessel?.position || trackingState.basicVessel);
 }
 
 function basicVesselNavigation(vessel = trackingState.basicVessel) {
@@ -1090,8 +1132,8 @@ function basicVesselNavigation(vessel = trackingState.basicVessel) {
 function syncBasicVesselMap(focus = false) {
     const vessel = trackingState.basicVessel;
     const position = getBasicVesselPosition();
-    if (!position && trackingState.data) return;
-    const mapVessel = position ? {
+    if (!position && (trackingState.data || vessel)) return;
+    const mapVessel = position && vessel ? {
         ...vessel,
         name: vessel.name,
         vesselName: vessel.name,
@@ -1104,6 +1146,8 @@ function syncBasicVesselMap(focus = false) {
         speedOverGround: vessel.speedKnots,
         courseOverGround: vessel.course,
         heading: vessel.heading,
+        positionSource: position.positionSource || vessel.positionSource,
+        positionTrust: position.positionTrust,
     } : null;
     replaceTrackingMapVessels(mapVessel ? [mapVessel] : [], focus ? mapVessel : null);
 }
@@ -1180,6 +1224,7 @@ function renderBasicVesselCard() {
     document.getElementById('tracking-ais-details').textContent = vesselDetails;
     document.getElementById('tracking-ais-position').textContent = [
         position ? `Lat ${formatTrackingNumber(position.lat, { minimumFractionDigits: 3 })} · Lon ${formatTrackingNumber(position.lng, { minimumFractionDigits: 3 })}` : '',
+        trackingPositionTrustLabel(position),
         vessel?.destination ? `Destino AIS: ${vessel.destination}` : '',
     ].filter(Boolean).join(' · ');
     document.getElementById('tracking-ais-navigation').textContent = vessel ? basicVesselNavigation(vessel) : '';
@@ -1200,7 +1245,7 @@ function normalizeTrackingVesselQuery(value) {
 }
 
 function getTrackingVesselImo(vessel, fallback = '') {
-    const candidates = [vessel?.imo, vessel?.imoNumber, fallback];
+    const candidates = [vessel?.imo, vessel?.imoNumber, fallback, getActiveSession().imo];
     for (const candidate of candidates) {
         const digits = String(candidate || '').replace(/\D/g, '');
         if (digits.length === 7) return digits;
@@ -1208,15 +1253,35 @@ function getTrackingVesselImo(vessel, fallback = '') {
     return '';
 }
 
-function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
-    if (!vessel || !telemetry) return vessel;
-    const position = {
-        ...(normalizeMapPoint(vessel.position) || {}),
+function mergeCoordinatorTelemetry(vessel, rawTelemetry, meta) {
+    if (!vessel || !rawTelemetry) return vessel;
+    const telemetry = {
+        ...rawTelemetry,
+        latitude: Number(rawTelemetry.latitude),
+        longitude: Number(rawTelemetry.longitude),
+    };
+    // Solo se sobrescriben las coordenadas cuando la telemetría es creíble; si
+    // el proveedor devuelve vacíos o ceros se conserva la posición anterior.
+    const hasLivePosition = isTrustworthyCoordinate(telemetry.latitude, telemetry.longitude);
+    const retainedPosition = normalizeMapPoint(vessel.position) || normalizeMapPoint(vessel);
+    // Punto candidato con la telemetría recibida. Se descarta por completo en
+    // favor de la posición retenida si el blindaje no lo considera fiable.
+    let position = {
+        ...(retainedPosition || {}),
         lat: telemetry.latitude,
         lng: telemetry.longitude,
+        lon: telemetry.longitude,
         latitude: telemetry.latitude,
         longitude: telemetry.longitude,
     };
+    if (!hasLivePosition) position = retainedPosition;
+    if (hasLivePosition) {
+        rememberTrustedPosition(TRACKING_POSITION_SCOPE, position, {
+            source: 'ais_coordinator',
+            imo: telemetry.imo || vessel.imo,
+            vesselName: telemetry.name || vessel.name,
+        });
+    }
     return {
         ...vessel,
         name: telemetry.name || vessel.name,
@@ -1224,12 +1289,13 @@ function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
         mmsi: telemetry.mmsi || vessel.mmsi,
         flag: telemetry.flag || vessel.flag,
         vesselType: telemetry.vesselType || vessel.vesselType,
-        latitude: telemetry.latitude,
-        longitude: telemetry.longitude,
-        lat: telemetry.latitude,
-        lng: telemetry.longitude,
-        lon: telemetry.longitude,
+        latitude: position?.latitude ?? null,
+        longitude: position?.longitude ?? null,
+        lat: position?.lat ?? null,
+        lng: position?.lng ?? null,
+        lon: position?.lng ?? null,
         position,
+        positionTrust: hasLivePosition ? 'live' : 'retained',
         speedKnots: telemetry.speedKnots,
         speedOverGround: telemetry.speedKnots,
         course: telemetry.courseDegrees,
@@ -1238,7 +1304,9 @@ function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
         navigationStatus: telemetry.navigationStatus || vessel.navigationStatus,
         destination: telemetry.destination || vessel.destination,
         timestamp: telemetry.positionTimestamp || meta?.fetchedAt || vessel.timestamp,
-        positionUpdatedAt: telemetry.positionTimestamp || meta?.fetchedAt || vessel.positionUpdatedAt,
+        positionUpdatedAt: hasLivePosition
+            ? (telemetry.positionTimestamp || meta?.fetchedAt || vessel.positionUpdatedAt)
+            : (vessel.positionUpdatedAt || telemetry.positionTimestamp || null),
         aisCacheStatus: meta?.cacheStatus || null,
     };
 }
@@ -1277,13 +1345,10 @@ async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'No fue posible recuperar la posición AIS coordinada.');
-    }
-    const latitude = Number(payload.data.latitude);
-    const longitude = Number(payload.data.longitude);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
-        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-        throw new Error('La respuesta AIS no contiene coordenadas válidas.');
+        // La telemetría externa puede devolver `vessel: null` al perder la señal
+        // AIS en puerto. El buque sigue siendo válido: se degrada la posición
+        // en lugar de romper la consulta y vaciar el mapa.
+        return { ...vessel, positionTrust: 'retained', aisSignalLost: true };
     }
     window.DatalasticConsumptionLog?.recordFromMeta({
         module: 'Tracking',
@@ -1291,7 +1356,10 @@ async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
         meta: payload.meta || {},
     });
     void refreshAisConsumptionMonitor();
-    return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
+    const latitude = Number(payload.data.latitude);
+    const longitude = Number(payload.data.longitude);
+    const merged = mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
+    return { ...merged, aisSignalLost: merged.positionTrust !== 'live' };
 }
 
 function cacheTrackingTelemetry(query, vessel) {
@@ -1339,9 +1407,14 @@ async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
 }
 
 function syncCoordinatorPositionState(vessel) {
-    const position = normalizeMapPoint(vessel?.position || vessel);
-    if (!position) return;
+    if (!vessel) return;
+    // La posición se resuelve siempre a través del blindaje geográfico: si la
+    // telemetría vino vacía se retiene la última válida o el puerto operativo.
+    const position = resolveTrackingPosition(vessel.position || vessel)
+        || normalizeMapPoint(trackingState.basicVessel?.position)
+        || null;
     trackingState.basicVessel = { ...vessel, position };
+    if (!position) return;
     if (trackingState.data) {
         trackingState.data = {
             ...trackingState.data,
@@ -1396,7 +1469,10 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
         const payload = await fetchTrackingTelemetry(query, options);
         if (controller.signal.aborted) return;
         if (payload.found === false || !payload.vessel) {
-            trackingState.basicVessel = null;
+            const retainedPosition = getBasicVesselPosition();
+            // Sin coincidencia en telemetría el marcador no desaparece ni salta:
+            // se mantiene la última posición válida o el puerto de operaciones.
+            if (!retainedPosition) trackingState.basicVessel = null;
             trackingStore.getState().failVesselSearch(payload.message || 'No se encontró el buque solicitado.');
             if (!trackingState.data) {
                 syncBasicVesselMap();
@@ -1404,7 +1480,9 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
             }
             document.getElementById('tracking-ais-vessel').textContent = query;
             document.getElementById('tracking-ais-details').textContent = payload.message || 'No se encontró una coincidencia. Revisa el nombre, IMO o MMSI.';
-            document.getElementById('tracking-ais-position').textContent = '';
+            document.getElementById('tracking-ais-position').textContent = retainedPosition
+                ? `Última posición válida retenida · Lat ${formatTrackingNumber(retainedPosition.lat, { minimumFractionDigits: 3 })} · Lon ${formatTrackingNumber(retainedPosition.lng, { minimumFractionDigits: 3 })}`
+                : '';
             document.getElementById('tracking-ais-navigation').textContent = '';
             document.getElementById('tracking-ais-time').textContent = '';
             return;
@@ -1443,12 +1521,15 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
     } catch (error) {
         if (error?.name === 'AbortError') return;
         if (silent && trackingState.basicVessel) return;
-        trackingState.basicVessel = null;
+        const retainedPosition = getBasicVesselPosition();
+        if (!retainedPosition) trackingState.basicVessel = null;
         trackingStore.getState().failVesselSearch(error?.message || 'No fue posible consultar el buque.');
         if (!trackingState.data) syncBasicVesselMap();
         document.getElementById('tracking-ais-vessel').textContent = query;
         document.getElementById('tracking-ais-details').textContent = error?.message || 'No fue posible consultar el buque.';
-        document.getElementById('tracking-ais-position').textContent = '';
+        document.getElementById('tracking-ais-position').textContent = retainedPosition
+            ? `Última posición válida retenida · Lat ${formatTrackingNumber(retainedPosition.lat, { minimumFractionDigits: 3 })} · Lon ${formatTrackingNumber(retainedPosition.lng, { minimumFractionDigits: 3 })}`
+            : '';
         document.getElementById('tracking-ais-navigation').textContent = '';
         document.getElementById('tracking-ais-time').textContent = '';
     } finally {
@@ -1522,7 +1603,9 @@ function syncTrackingMap(data) {
     ensureTrackingMap();
     const route = data.route || {};
     const ports = route.ports || {};
-    const position = normalizeMapPoint(data.live?.position);
+    // Si el contrato llega sin posición AIS (o con coordenadas vacías) el buque
+    // se ancla a su última posición válida o al puerto de operaciones activo.
+    const position = resolveTrackingPosition(data.live?.position);
     const vessel = position ? [{
         ...position,
         name: data.contract?.vesselName,
@@ -1548,7 +1631,7 @@ function renderTrackingMapChrome(data) {
             ? { level: 'critical', title: `${statement.operation === 'LOAD' ? 'POL' : 'POD'} ON DEMURRAGE`, detail: `USD ${formatTrackingNumber(statement.calculation.demurrageUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} acumulados. Balance ${statement.calculation.balanceLabel}.` }
             : { level: 'warning', title: `Plancha ${statement.operation === 'LOAD' ? 'POL' : 'POD'} incompleta`, detail: `Faltan: ${asTrackingArray(statement.calculation.missingCritical).join(', ')}` });
     const alerts = [...asTrackingArray(data.alerts), ...laytimeAlerts];
-    const position = normalizeMapPoint(live.position);
+    const position = resolveTrackingPosition(live.position);
     const pol = contract.pol || {};
     const pod = contract.pod || {};
     const routeOrigin = pol.name || pol.id || '';
@@ -1572,7 +1655,12 @@ function renderTrackingMapChrome(data) {
         : '';
     document.getElementById('tracking-ais-vessel').textContent = vesselName;
     document.getElementById('tracking-ais-details').textContent = vesselDetails;
-    document.getElementById('tracking-ais-position').textContent = position ? `Lat ${formatTrackingNumber(position.lat, { minimumFractionDigits: 3 })} · Lon ${formatTrackingNumber(position.lng, { minimumFractionDigits: 3 })}` : '';
+    document.getElementById('tracking-ais-position').textContent = position
+        ? [
+            `Lat ${formatTrackingNumber(position.lat, { minimumFractionDigits: 3 })} · Lon ${formatTrackingNumber(position.lng, { minimumFractionDigits: 3 })}`,
+            trackingPositionTrustLabel(position),
+        ].filter(Boolean).join(' · ')
+        : '';
     document.getElementById('tracking-ais-navigation').textContent = navigation;
     document.getElementById('tracking-ais-time').textContent = live.aisUpdatedAt ? formatTrackingTime(live.aisUpdatedAt) : '';
     document.getElementById('tracking-contract-status').textContent = String(contract.status || live.status || 'ACTIVE').replaceAll('_', ' ');
@@ -1930,12 +2018,14 @@ async function loadTrackingContract(rawRef, silent = false, options = {}) {
         inputMessage.dataset.state = 'warning';
         return;
     }
-    if (normalizeTrackingRef(trackingState.contractRef) !== contractRef) {
+    const previousRef = normalizeTrackingRef(trackingState.contractRef);
+    if (previousRef !== contractRef) {
         stopLaytimeRequest({ clearStatements: true });
         trackingState.laytimeIncidents = [];
     }
     trackingState.contractRef = contractRef;
     trackingState.activeVoyageError = '';
+    if (previousRef && previousRef !== contractRef) forgetTrustedPosition(TRACKING_POSITION_SCOPE);
     const referenceManager = window.ContractReference || window.ContractRefManager;
     referenceManager?.setActiveContractRef?.(contractRef) || window.setActiveContractRef?.(contractRef);
     trackingState.loading = true;
@@ -1967,11 +2057,17 @@ async function loadTrackingContract(rawRef, silent = false, options = {}) {
             routeProgressPct: payload.live?.progressPct,
             updatedAt: payload.generatedAt || null,
         };
+        registerVesselIdentity({
+            reference: payload.contract?.reference || contractRef,
+            imo: payload.contract?.vesselImo,
+            mmsi: payload.contract?.vesselMmsi,
+            vesselName: payload.contract?.vesselName,
+        });
         trackingState.basicVessel = {
             name: payload.contract?.vesselName,
             imo: payload.contract?.vesselImo,
             mmsi: payload.contract?.vesselMmsi,
-            position: payload.live?.position,
+            position: resolveTrackingPosition(payload.live?.position),
             positionUpdatedAt: payload.live?.aisUpdatedAt,
             speedKnots: payload.live?.averageSpeedKnots,
             destination: payload.contract?.pod?.name,
@@ -2108,6 +2204,37 @@ window.addEventListener('vessel-selection:changed', (event) => {
     if (!trackingOpen || trackingState.activeVoyageLoading || trackingState.loading || trackingState.data) return;
     hydrateTrackingFromActiveVessel(activeVessel, true);
 });
+
+/**
+ * Sincronización estricta con el selector superior de expedientes (# REF).
+ * Cualquier cambio de referencia invalida el expediente cargado, descarta la
+ * posición retenida del buque anterior y recarga contrato, plancha y telemetría
+ * con el IMO dinámico del nuevo contrato.
+ */
+function handleActiveReferenceChange(reference) {
+    const nextRef = normalizeTrackingRef(reference);
+    if (!nextRef || nextRef === normalizeTrackingRef(trackingState.contractRef)) return;
+    forgetTrustedPosition(TRACKING_POSITION_SCOPE);
+    hasFetchedMapData.current.clear();
+    hasCalculatedMapRoute.current.clear();
+    stopLaytimeRequest({ clearStatements: true });
+    trackingState.laytimeIncidents = [];
+    trackingState.basicVessel = null;
+    trackingState.data = null;
+    trackingState.activeVoyage = null;
+    trackingState.routeDistance = null;
+    clearTrackingMapVisuals();
+    const contractInput = document.getElementById('tracking-live-contract-ref');
+    if (contractInput) contractInput.value = nextRef;
+    if (!document.getElementById('tracking-live-overlay')?.classList.contains('is-open')) {
+        trackingState.contractRef = nextRef;
+        return;
+    }
+    void loadTrackingContract(nextRef, false, { forceRefresh: true, forceTelemetry: true, forceRoute: true });
+}
+
+window.addEventListener('contract-reference:changed', (event) => handleActiveReferenceChange(event?.detail?.reference));
+window.addEventListener('active-session:changed', (event) => handleActiveReferenceChange(event?.detail?.reference));
 
 function closeTrackingLive(options = {}) {
     const restoreNavigation = options?.restoreNavigation !== false;

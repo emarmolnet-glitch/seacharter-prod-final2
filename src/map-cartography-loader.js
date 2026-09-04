@@ -1,3 +1,8 @@
+// El blindaje geográfico debe estar en `window` antes de que el globo cargue,
+// para que la renderización cartográfica comparta exactamente la misma
+// validación anti-teleportación que el resto de la aplicación.
+import './geo-position-guard.mjs';
+
 const GLOBE_SCRIPT_ID = 'global-fleet-globe-runtime';
 const GLOBE_STYLES_ID = 'global-fleet-globe-styles';
 const GLOBE_RUNTIME_URL = 'https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';

@@ -619,6 +619,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
     <script defer src="/contract-reference.js"></script>
+    <script type="module" src="./src/active-session-context.mjs?v=20260904-ref-imo-injection"></script>
     <script defer src="./npl-data-analysis-engine.js"></script>
     <script defer src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
@@ -43822,13 +43823,29 @@ function scheduleReactiveEngine() {
             } catch (error) {
                 console.warn('[Contract Reference] Reference update continued in safe mode.', error);
             }
-            if (State.activeReference !== activeReference) {
+            const referenceChanged = State.activeReference !== activeReference;
+            if (referenceChanged) {
                 State.activeReference = activeReference;
             }
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== activeReference) input.value = activeReference;
             });
+            if (referenceChanged && activeReference) {
+                // Propagación inmediata al contexto de sesión: descarta el IMO y la
+                // posición retenida del expediente anterior y notifica a tracking,
+                // plancha y asistente para que dejen de usar datos obsoletos.
+                try {
+                    window.ActiveSessionContext?.applyActiveReference?.(activeReference);
+                } catch (error) {
+                    console.warn('[Contract Reference] El contexto de sesión activa no pudo actualizarse.', error);
+                }
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeReference = activeReference;
+                    window.GlobalStore.activeContractRef = activeReference;
+                }
+                document.body.dataset.activeContractRef = activeReference;
+            }
             return activeReference;
         }
 
@@ -43838,6 +43855,11 @@ function scheduleReactiveEngine() {
             const reference = event.detail?.reference;
             if (!reference || State.activeReference === reference) return;
             State.activeReference = reference;
+            if (window.GlobalStore) {
+                window.GlobalStore.activeReference = reference;
+                window.GlobalStore.activeContractRef = reference;
+            }
+            document.body.dataset.activeContractRef = reference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== reference) input.value = reference;

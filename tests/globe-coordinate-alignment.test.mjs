@@ -25,17 +25,33 @@ function loadRadarCoordinateResolver() {
 test('globe preserves known geographic coordinates without texture longitude offsets', () => {
   const normalizeVessels = loadGlobeNormalizer();
   const vessels = normalizeVessels([
-    { vesselName: 'Greenwich Anchor', latitude: 51.4779, longitude: 0 },
+    { vesselName: 'Thames Estuary', latitude: 51.4779, longitude: 0.5502 },
     { vesselName: 'South Atlantic', ais: { latitude: -30.25, longitude: -15.75 } },
     { vesselName: 'Singapore Roads', latitude: 1.264, longitude: 103.84 },
   ]);
 
   assert.deepEqual(vessels.map(({ lat, lng }) => [lat, lng]), [
-    [51.4779, 0],
+    [51.4779, 0.5502],
     [-30.25, -15.75],
     [1.264, 103.84],
   ]);
   assert.ok(vessels.every(vessel => vessel.coordinateAxisOrder === 'lat-lng'));
+});
+
+test('globe refuses to place a vessel on Null Island or the Greenwich meridian', () => {
+  const normalizeVessels = loadGlobeNormalizer();
+
+  // Una longitud exactamente 0 solo aparece cuando la telemetría llega vacía y
+  // `Number(null)` la convierte en cero, lo que teleportaría el marcador al
+  // Canal de la Mancha / Inglaterra. El blindaje geográfico lo descarta.
+  const vessels = normalizeVessels([
+    { vesselName: 'Telemetria Vacia', latitude: 51.4779, longitude: null },
+    { vesselName: 'Null Island', latitude: 0, longitude: 0 },
+    { vesselName: 'Sin Latitud', latitude: null, longitude: -8.6538 },
+    { vesselName: 'Aveiro Roads', latitude: 40.6405, longitude: -8.6538 },
+  ]);
+
+  assert.deepEqual(vessels.map(({ lat, lng }) => [lat, lng]), [[40.6405, -8.6538]]);
 });
 
 test('globe reads latitude and longitude from the same AIS scope', () => {

@@ -46,6 +46,7 @@ Esta regla prevalece sobre el enrutador de intenciones, las herramientas, el his
   const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage, cálculos, PDAs e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
 \nAnálisis Universal por Módulo:
+   - IDENTIDAD DEL EXPEDIENTE (obligatoria): contexto.sesionActiva contiene la referencia del contrato activo (# REF), el IMO dinámico, el MMSI y el nombre del buque seleccionados ahora mismo en la cabecera. Es la única fuente autorizada de identidad: usa siempre ese IMO y esa referencia, e ignora cualquier IMO, MMSI o referencia distinta que aparezca en el historial, en mensajes anteriores o en datos residuales de pantalla. Si contexto.sesionActiva.imo está vacío, dilo explícitamente en lugar de suponer un IMO.
    - Identifica primero contexto.modulo y contexto.moduloId. Usa contexto.datosModulo como fuente operativa de la vista activa y contexto.sugerenciasProactivas como lista inicial de comprobaciones, sin limitarte a ella.
    - MAPA: valida POL, POD, laycan, ruta calculada, distancias y restricciones geográficas.
    - CALCULADORA: contrasta carga, costes, flete, TCE, márgenes, PDAs y coherencia económica general de la pantalla activa.
