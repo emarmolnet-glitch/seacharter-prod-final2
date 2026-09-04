@@ -525,7 +525,13 @@ async function ensureTrackingMap(lifecycleToken = trackingMapLifecycleToken) {
     const globeApi = await trackingMapLoadPromise;
     const trackingOverlayOpen = document.getElementById('tracking-live-overlay')?.classList.contains('is-open');
     if (lifecycleToken !== trackingMapLifecycleToken || !trackingOverlayOpen) return null;
-    const instance = globeApi.mount?.({ containerId: 'tracking-globe', key: TRACKING_MAP_KEY, vesselsData: [], restoreRouteState: false });
+    const instance = globeApi.mount?.({
+        containerId: 'tracking-globe',
+        key: TRACKING_MAP_KEY,
+        vesselsData: [],
+        restoreRouteState: false,
+        autoRotate: false,
+    });
     trackingState.mapMounted = Boolean(instance);
     return instance || null;
 }
@@ -1528,7 +1534,9 @@ function syncTrackingMap(data) {
     trackingState.routes = { ballast: asTrackingArray(route.ballast), laden: asTrackingArray(route.laden) };
     replaceTrackingMapVessels(vessel, position ? vessel[0] : null);
     window.GlobalFleetGlobe?.setRouteSegments?.(ports, TRACKING_MAP_KEY, { ballastPortName: ports.ballast?.name || '', focus: true, persist: false }, trackingState.routes);
-    if (position && !trackingState.routes.laden.length) window.GlobalFleetGlobe?.focusCoordinates?.(position.lat, position.lng, TRACKING_MAP_KEY, 1.35);
+    if (position && !trackingState.routes.laden.length) {
+        window.GlobalFleetGlobe?.focusCoordinates?.(position.lat, position.lng, TRACKING_MAP_KEY, 0.42, 1100);
+    }
 }
 
 function renderTrackingMapChrome(data) {
@@ -2138,6 +2146,11 @@ window.locateTrackingVesselByImo = async ({ imo, vesselName = '' } = {}) => {
     const locatedImo = getTrackingVesselImo(trackingStore.getState().vessel);
     if (locatedImo !== cleanImo) return false;
     if (input && vesselName) input.value = `${vesselName} · IMO ${cleanImo}`;
+    const position = getBasicVesselPosition();
+    if (position) {
+        await ensureTrackingMap(trackingMapLifecycleToken);
+        window.GlobalFleetGlobe?.focusCoordinates?.(position.lat, position.lng, TRACKING_MAP_KEY, 0.42, 1100);
+    }
     return true;
 };
 

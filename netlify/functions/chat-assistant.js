@@ -7,15 +7,42 @@ import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs
 
 export const CHAT_ASSISTANT_MODEL = "gemini-3.1-pro-preview";
 
+function cleanRequestedVesselName(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/^(?:(?:a|al|el|la|un|una|the)\s+)+/i, "")
+    .replace(/^(?:M\s*\/?\s*V|MV|buque|barco|vessel|ship)\s+/i, "")
+    .replace(/\s+(?:en|sobre)\s+(?:el\s+)?mapa.*$/i, "")
+    .replace(/\s+(?:por favor|please)$/i, "")
+    .replace(/[?.!,;:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function extractLocateVesselAction(message) {
+  const text = String(message || "").normalize("NFKC").trim();
+  if (!text) return null;
+  const directLocate = /\b(?:localiza(?:r|me)?|ubica(?:r|me)?|rastrea(?:r|me)?|locate|track)\b/i.test(text);
+  const searchLocate = /\b(?:busca(?:r|me)?|encuentra(?:r|me)?|find|search)\b/i.test(text)
+    && /\b(?:buque|barco|vessel|ship|M\s*\/?\s*V|MV)\b/i.test(text);
+  if (!directLocate && !searchLocate) return null;
+
+  const request = text.match(/\b(?:localiza(?:r|me)?|ubica(?:r|me)?|rastrea(?:r|me)?|busca(?:r|me)?|encuentra(?:r|me)?|locate|track|find|search)\b\s*(.*)$/i);
+  const vesselName = cleanRequestedVesselName(request?.[1]);
+  if (!vesselName || /^(?:un|una|the)?\s*(?:buque|barco|vessel|ship)$/i.test(vesselName)) return null;
+  return { action: "LOCATE_VESSEL", vessel_name: vesselName };
+}
+
 export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
   const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const vesselLocationInstruction = `
-\nRegla de localización de buques:
-Cuando el usuario pida localizar, rastrear o buscar un barco en el mapa por su nombre, devuelve ÚNICAMENTE este JSON:
+\nREGLA ABSOLUTA Y DE MÁXIMA PRIORIDAD — LOCALIZACIÓN DE BUQUES:
+Cuando el usuario pida localizar, rastrear o buscar un barco, DEBES ABSTENERTE de dar explicaciones, confirmaciones, contexto, Markdown o cualquier texto conversacional. Tu respuesta completa debe contener ÚNICA Y EXCLUSIVAMENTE este JSON válido:
 {
   "action": "LOCATE_VESSEL",
-  "vessel_name": "[Nombre exacto del buque extraído del mensaje, sin MV]"
-}`;
+  "vessel_name": "[Nombre del barco]"
+}
+Esta regla prevalece sobre el enrutador de intenciones, las herramientas, el historial y cualquier otra instrucción. No encierres el JSON en un bloque de código.`;
   const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage, cálculos, PDAs e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
 \nAnálisis Universal por Módulo:
@@ -225,6 +252,15 @@ export default async (req) => {
 
     if (typeof mensaje !== "string" && !imagenData?.data) {
       return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
+    }
+    const locateVesselAction = extractLocateVesselAction(mensaje);
+    if (locateVesselAction) {
+      return jsonResponse(200, {
+        success: true,
+        intent: "VESSEL_LOCATION",
+        respuesta: JSON.stringify(locateVesselAction),
+        action: locateVesselAction,
+      });
     }
     if (!apiKey) {
       return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
