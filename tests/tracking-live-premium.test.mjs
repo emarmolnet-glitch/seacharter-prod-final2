@@ -58,6 +58,13 @@ test('primary navigation exposes Tracking inside the shared application layout',
   assert.doesNotMatch(scriptSource, /Maritime control room/i);
 });
 
+test('chat can open tracking and hydrate it with a resolved IMO', () => {
+  assert.match(scriptSource, /window\.locateTrackingVesselByImo = async/);
+  assert.match(scriptSource, /openTrackingLive\(\)/);
+  assert.match(scriptSource, /await loadTrackingVessel\(cleanImo, false, \{ forceRefresh: true \}\)/);
+  assert.match(scriptSource, /getTrackingVesselImo\(trackingStore\.getState\(\)\.vessel\)/);
+});
+
 test('tracking open and close events synchronize the active header module', () => {
   assert.match(scriptSource, /CustomEvent\('tracking-live:open'\)/);
   assert.match(scriptSource, /CustomEvent\('tracking-live:close', \{ detail: \{ restoreNavigation \} \}\)/);

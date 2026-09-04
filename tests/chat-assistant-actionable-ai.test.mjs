@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const backendSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
+const vesselNameResolutionSource = await readFile(new URL('../netlify/functions/vessel-name-resolution.mts', import.meta.url), 'utf8');
 
 function parseActionableResponse(responseText) {
   const parserStart = frontendSource.indexOf('const ACTIONABLE_AI_JSON_BLOCK');
@@ -45,7 +46,7 @@ test('Core PRO strips and executes hidden update_field JSON before rendering', (
   assert.match(frontendSource, /window\.recalcularDiasPuerto\?\.\(\)/);
   assert.match(frontendSource, /window\.runEngine\?\.\(\)/);
   assert.match(frontendSource, /extractActionableAiResponse\(response\.respuesta\)[\s\S]*executeActionableAiAction\(action\)[\s\S]*replaceWithAssistantMessage\(/);
-  assert.match(frontendSource, /actionableResponse\.visibleText \|\| "Acción completada\."/);
+  assert.match(frontendSource, /actionResult\?\.message \|\| actionableResponse\.visibleText \|\| "Acción completada\."/);
 });
 
 test('update_fields preserves the server payload and awaits the map workflow', () => {
@@ -86,15 +87,41 @@ test('update_fields selects POL and POD through Datalastic before calculating th
 });
 
 test('Core PRO executes hidden calculate_route actions through the existing map workflow', () => {
-  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(action\?\.action\)/);
-  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel"\]\.includes\(parsed\?\.action\)/);
+  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"\]\.includes\(action\?\.action\)/);
+  assert.match(frontendSource, /\["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"\]\.includes\(parsed\?\.action\)/);
   assert.match(frontendSource, /function executeActionableAiRoute\(action\)/);
   assert.match(frontendSource, /async function selectActionableAiWpiRoute\(pol, pod\)/);
   assert.match(frontendSource, /await window\.selectFirstWpiAutocompleteMatch\(inputId, query\)/);
   assert.match(frontendSource, /const selectedPorts = await selectActionableAiWpiRoute\(pol, pod\)/);
   assert.match(frontendSource, /window\.injectVoyageScenario\(validatedScenario, \{ deferFinalActions: true \}\)/);
   assert.match(frontendSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult, \{ forceRouteCalculation: true \}\)/);
-  assert.match(frontendSource, /if \(action\) await executeActionableAiAction\(action\)/);
+  assert.match(frontendSource, /const actionResult = action \? await executeActionableAiAction\(action\) : null/);
+});
+
+test('chat vessel requests resolve a unique IMO and hand it to tracking', () => {
+  assert.match(backendSource, /Cuando el usuario pida localizar, rastrear o buscar un barco en el mapa por su nombre/);
+  assert.match(backendSource, /"action": "LOCATE_VESSEL"/);
+  assert.match(backendSource, /"vessel_name": "\[Nombre exacto del buque extraído del mensaje, sin MV\]"/);
+  assert.match(frontendSource, /async function executeActionableAiLocateVessel\(actionObj\)/);
+  assert.match(frontendSource, /fetch\(VESSEL_NAME_RESOLUTION_ENDPOINT/);
+  assert.match(frontendSource, /payload\?\.status !== "resolved"/);
+  assert.match(frontendSource, /window\.locateTrackingVesselByImo/);
+  assert.match(frontendSource, /Introduce el número IMO manualmente para localizarlo/);
+  assert.match(vesselNameResolutionSource, /status: matches\.length > 1 \? "ambiguous" : "not_found"/);
+  assert.match(vesselNameResolutionSource, /uniqueMatches\.set\(imo/);
+  assert.match(vesselNameResolutionSource, /path: "\/api\/vessel-name-resolution"/);
+});
+
+test('Core PRO hides a plain LOCATE_VESSEL JSON object from the chat', () => {
+  const result = parseActionableResponse('{ "action": "LOCATE_VESSEL", "vessel_name": "Ever Given" }');
+
+  assert.deepEqual(result, {
+    visibleText: '',
+    action: {
+      action: 'LOCATE_VESSEL',
+      vessel_name: 'Ever Given',
+    },
+  });
 });
 
 test('complete-form chat actions validate both ports through WPI autocomplete before injection', () => {

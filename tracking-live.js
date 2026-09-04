@@ -2126,4 +2126,19 @@ document.addEventListener('keydown', (event) => {
 window.openTrackingLive = openTrackingLive;
 window.closeTrackingLive = closeTrackingLive;
 
+window.locateTrackingVesselByImo = async ({ imo, vesselName = '' } = {}) => {
+    const cleanImo = String(imo || '').replace(/\D/g, '');
+    if (!/^\d{7}$/.test(cleanImo)) return false;
+
+    openTrackingLive();
+    const input = document.getElementById('tracking-input-vessel');
+    if (input) input.value = cleanImo;
+    await loadTrackingVessel(cleanImo, false, { forceRefresh: true });
+
+    const locatedImo = getTrackingVesselImo(trackingStore.getState().vessel);
+    if (locatedImo !== cleanImo) return false;
+    if (input && vesselName) input.value = `${vesselName} · IMO ${cleanImo}`;
+    return true;
+};
+
 createTrackingOverlay();
