@@ -19,8 +19,8 @@ test('main map keeps explicit viewport dimensions independently from density', (
 });
 
 test('main globe renders a material fallback without waiting for remote textures', () => {
-  assert.match(globeSource, /https:\/\/unpkg\.com\/three-globe\/example\/img\/earth-blue-marble\.jpg/);
-  assert.match(globeSource, /https:\/\/unpkg\.com\/three-globe\/example\/img\/earth-topology\.png/);
+  assert.match(globeSource, /\/\/unpkg\.com\/three-globe\/example\/img\/earth-blue-marble\.jpg/);
+  assert.match(globeSource, /\/\/unpkg\.com\/three-globe\/example\/img\/earth-topology\.png/);
   assert.match(globeSource, /new THREE\.MeshPhongMaterial\(\{[\s\S]*color: GLOBE_FALLBACK_COLOR/);
   assert.match(globeSource, /waitForGlobeReady: false/);
   assert.match(globeSource, /globe\.globeMaterial\(fallbackGlobeMaterial\)/);

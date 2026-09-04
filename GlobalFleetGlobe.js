@@ -10,6 +10,11 @@
     const CAMERA_TRANSITION_MS = 700;
     const ACTIVE_VESSEL_FOCUS_ALTITUDE = 0.72;
     const ACTIVE_VESSEL_TRANSITION_MS = 1200;
+    const TRACKING_VESSEL_FOCUS_ALTITUDE = 0.42;
+    const TRACKING_VESSEL_TRANSITION_MS = 1100;
+    const PORT_DETAIL_ENTER_ALTITUDE = 0.58;
+    const PORT_DETAIL_EXIT_ALTITUDE = 0.72;
+    const PORT_TILE_ENGINE_MAX_LEVEL = 18;
     const COMMERCIAL_VESSEL_COLOR = '#10B981';
     const TANKER_VESSEL_COLOR = '#F59E0B';
     const NOISE_VESSEL_COLOR = '#EF4444';
@@ -22,8 +27,8 @@
     const VESSEL_VECTOR_SURFACE_OFFSET = 0.08;
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
-    const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-    const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+    const EARTH_IMAGE_URL = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+    const EARTH_TOPOLOGY_URL = '//unpkg.com/three-globe/example/img/earth-topology.png';
     const GLOBE_FALLBACK_COLOR = '#1a202c';
     const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
 
@@ -329,6 +334,53 @@
     function getCameraAltitude(view) {
         const pointOfView = view?.globe?.pointOfView?.();
         return toFiniteNumber(pointOfView?.altitude, view?.initialView?.altitude, INITIAL_VIEW.altitude) || INITIAL_VIEW.altitude;
+    }
+
+    function getPortTileUrl(x, y, z) {
+        return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    }
+
+    function setPortDetailActive(view, active) {
+        const nextActive = Boolean(active);
+        if (!view?.globe || typeof view.globe.globeTileEngineUrl !== 'function' || view.portDetailActive === nextActive) return;
+        view.portDetailActive = nextActive;
+        view.globe.globeTileEngineUrl(nextActive ? getPortTileUrl : null);
+    }
+
+    function configurePortTileEngine(view) {
+        const globe = view?.globe;
+        const supportsTileUrl = typeof globe?.globeTileEngineUrl === 'function';
+        const supportsMaxLevel = typeof globe?.globeTileEngineMaxLevel === 'function';
+        window.globalFleetGlobeDiagnostics = {
+            ...(window.globalFleetGlobeDiagnostics || {}),
+            supportsTileUrl,
+            supportsMaxLevel,
+        };
+        if (!supportsTileUrl) {
+            console.warn('[GlobalFleetGlobe] globeTileEngineUrl no está disponible en el runtime cargado.');
+            return false;
+        }
+        if (supportsMaxLevel) globe.globeTileEngineMaxLevel(PORT_TILE_ENGINE_MAX_LEVEL);
+        else console.warn('[GlobalFleetGlobe] globeTileEngineMaxLevel no está disponible; se usa el límite nativo.');
+        globe.globeTileEngineUrl(null);
+        return true;
+    }
+
+    function updatePortDetailForAltitude(view, altitude) {
+        const normalizedAltitude = toFiniteNumber(altitude);
+        if (!Number.isFinite(normalizedAltitude)) return;
+        if (!view.portDetailActive && normalizedAltitude <= PORT_DETAIL_ENTER_ALTITUDE) {
+            setPortDetailActive(view, true);
+        } else if (view.portDetailActive && normalizedAltitude > PORT_DETAIL_EXIT_ALTITUDE) {
+            setPortDetailActive(view, false);
+        }
+    }
+
+    function handleGlobeZoom(view, pointOfView) {
+        const altitude = toFiniteNumber(pointOfView?.altitude);
+        updatePortDetailForAltitude(view, altitude);
+        const detailActive = Boolean(view?.portDetailActive);
+        console.log('Altitud:', altitude, 'Modo LOD:', detailActive);
     }
 
     function getCentralRadarVessels() {
@@ -828,6 +880,14 @@
         if (!normalized || !view) return false;
         selectVessel(normalized, view.key);
         setAutoRotate(false, view.key);
+        if (view.key === 'tracking') {
+            view.globe.pointOfView({
+                lat: normalized.originalLatitude,
+                lng: normalized.originalLongitude,
+                altitude: TRACKING_VESSEL_FOCUS_ALTITUDE
+            }, TRACKING_VESSEL_TRANSITION_MS);
+            return true;
+        }
         view.globe.pointOfView({
             lat: normalized.originalLatitude,
             lng: normalized.originalLongitude,
@@ -994,7 +1054,7 @@
         const view = getView(key);
         if (!view) return false;
         view.globe.pointOfView(view.initialView || INITIAL_VIEW, CAMERA_TRANSITION_MS);
-        setAutoRotate(true, key);
+        setAutoRotate(false, key);
         return true;
     }
 
@@ -1152,7 +1212,8 @@
             renderMode: 'points',
             lastVesselRenderMode: null,
             vectorFallbackReason: null,
-            autoRotate: options.autoRotate !== false,
+            autoRotate: false,
+            portDetailActive: false,
             focusFirstVesselEnabled: options.focusFirstVessel !== false,
             hasFocusedVessel: false,
             resizeObserver: null,
@@ -1173,13 +1234,15 @@
             const globe = window.Globe({ animateIn: false, waitForGlobeReady: false })(container)
                 .width(size.width)
                 .height(size.height)
-                .backgroundColor('rgba(0, 0, 0, 0)');
+                .backgroundColor('rgba(0,0,0,0)');
             if (fallbackGlobeMaterial) globe.globeMaterial(fallbackGlobeMaterial);
             view.globe = globe
                 .globeImageUrl(EARTH_IMAGE_URL)
                 .bumpImageUrl(EARTH_TOPOLOGY_URL)
-                .atmosphereColor('#39D7E8')
+                .showAtmosphere(true)
+                .atmosphereColor('#39d7e8')
                 .atmosphereAltitude(0.16)
+                .onZoom((pointOfView) => handleGlobeZoom(view, pointOfView))
                 .arcStartLat('startLat')
                 .arcStartLng('startLng')
                 .arcEndLat('endLat')
@@ -1214,6 +1277,7 @@
                 .labelLabel((label) => label?.text || '')
                 .labelsTransitionDuration(0)
                 .labelsData([]);
+            configurePortTileEngine(view);
             if (!configureVesselVectorLayer(view)) {
                 configureVesselPointFallback(view, hasCompatibleThreeNamespace() ? 'three-layer-configuration-error' : 'three-unavailable');
             }
@@ -1221,7 +1285,7 @@
             view.controls = view.globe.controls();
             view.controls.enableDamping = true;
             view.controls.dampingFactor = 0.08;
-            view.controls.autoRotate = view.autoRotate;
+            view.controls.autoRotate = false;
             view.controls.autoRotateSpeed = 0.45;
             view.handleControlsChange = null;
             view.handleInteractionStart = () => setAutoRotate(false, key);
@@ -1232,7 +1296,7 @@
             if (view.handleControlsChange) view.controls.addEventListener?.('change', view.handleControlsChange);
             view.controls.addEventListener?.('start', view.handleInteractionStart);
             view.container.addEventListener('pointerdown', view.handleContainerPointerDown);
-            createAutoRotateControl(view);
+            updatePortDetailForAltitude(view, view.initialView.altitude);
         } catch (error) {
             views.delete(key);
             window.globalFleetGlobeLastError = { message: error?.message || String(error), key, occurredAt: Date.now() };

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const backendSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
+const trackingSource = await readFile(new URL('../tracking-live.js', import.meta.url), 'utf8');
 const vesselNameResolutionSource = await readFile(new URL('../netlify/functions/vessel-name-resolution.mts', import.meta.url), 'utf8');
 
 function parseActionableResponse(responseText) {
@@ -13,6 +14,17 @@ function parseActionableResponse(responseText) {
   const sandbox = { responseText, result: null };
   vm.runInNewContext(
     `${frontendSource.slice(parserStart, parserEnd)}\nresult = extractActionableAiResponse(responseText);`,
+    sandbox,
+  );
+  return JSON.parse(JSON.stringify(sandbox.result));
+}
+
+function parseLocateRequest(message) {
+  const extractionStart = backendSource.indexOf('function cleanRequestedVesselName');
+  const extractionEnd = backendSource.indexOf('export function buildSystemInstruction', extractionStart);
+  const sandbox = { message, result: null };
+  vm.runInNewContext(
+    `${backendSource.slice(extractionStart, extractionEnd).replace('export function extractLocateVesselAction', 'function extractLocateVesselAction')}\nresult = extractLocateVesselAction(message);`,
     sandbox,
   );
   return JSON.parse(JSON.stringify(sandbox.result));
@@ -99,13 +111,19 @@ test('Core PRO executes hidden calculate_route actions through the existing map 
 });
 
 test('chat vessel requests resolve a unique IMO and hand it to tracking', () => {
-  assert.match(backendSource, /Cuando el usuario pida localizar, rastrear o buscar un barco en el mapa por su nombre/);
+  assert.match(backendSource, /DEBES ABSTENERTE de dar explicaciones/);
+  assert.match(backendSource, /ÚNICA Y EXCLUSIVAMENTE este JSON válido/);
   assert.match(backendSource, /"action": "LOCATE_VESSEL"/);
-  assert.match(backendSource, /"vessel_name": "\[Nombre exacto del buque extraído del mensaje, sin MV\]"/);
+  assert.match(backendSource, /"vessel_name": "\[Nombre del barco\]"/);
+  assert.match(backendSource, /const locateVesselAction = extractLocateVesselAction\(mensaje\)/);
+  assert.match(backendSource, /respuesta: JSON\.stringify\(locateVesselAction\)/);
   assert.match(frontendSource, /async function executeActionableAiLocateVessel\(actionObj\)/);
+  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = "\/api\/cerebro-ia"/);
+  assert.doesNotMatch(frontendSource, /calm-shortbread-55bcfc.*cerebro-ia/);
   assert.match(frontendSource, /fetch\(VESSEL_NAME_RESOLUTION_ENDPOINT/);
   assert.match(frontendSource, /payload\?\.status !== "resolved"/);
   assert.match(frontendSource, /window\.locateTrackingVesselByImo/);
+  assert.match(trackingSource, /focusCoordinates\?\.\(position\.lat, position\.lng, TRACKING_MAP_KEY, 0\.42, 1100\)/);
   assert.match(frontendSource, /Introduce el número IMO manualmente para localizarlo/);
   assert.match(vesselNameResolutionSource, /status: matches\.length > 1 \? "ambiguous" : "not_found"/);
   assert.match(vesselNameResolutionSource, /uniqueMatches\.set\(imo/);
@@ -122,6 +140,18 @@ test('Core PRO hides a plain LOCATE_VESSEL JSON object from the chat', () => {
       vessel_name: 'Ever Given',
     },
   });
+});
+
+test('vessel location requests deterministically produce only the locate action payload', () => {
+  assert.deepEqual(parseLocateRequest('Localiza el buque Ever Given'), {
+    action: 'LOCATE_VESSEL',
+    vessel_name: 'Ever Given',
+  });
+  assert.deepEqual(parseLocateRequest('Busca el barco Nordic Star en el mapa'), {
+    action: 'LOCATE_VESSEL',
+    vessel_name: 'Nordic Star',
+  });
+  assert.equal(parseLocateRequest('Busca una tarifa para Bilbao'), null);
 });
 
 test('complete-form chat actions validate both ports through WPI autocomplete before injection', () => {

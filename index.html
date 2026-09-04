@@ -55516,6 +55516,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function initAisMap() {
             const densityView = document.getElementById('view-ais');
             if (!densityView?.classList.contains('active-block')) return;
+            if (!window.GlobalFleetGlobe) {
+                void ensureMapCartographyLoaded()
+                    .then(() => initAisMap())
+                    .catch((error) => console.error('[AIS] No se pudo cargar Globe.gl 2.46.1.', error));
+                return;
+            }
             const densityPolCoordinates = getDensityPolCoordinates();
             try {
                         const mapContainer = document.getElementById('ais-map');
@@ -55544,7 +55550,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 initialViewDuration: densityPolCoordinates ? 700 : 0,
                                 focusFirstVessel: false,
                                 focusActiveVesselOnMount: false,
-                                autoRotate: true
+                                autoRotate: false
                             });
                             window.mapaAIS = aisMap;
                             syncDensityActiveVessel(displayVessels);
@@ -55560,63 +55566,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             try { updateAisMarkers(); } catch (e) { console.warn('updateAisMarkers error:', e); }
                             return;
                         }
-                        if (typeof L === 'undefined' || typeof L.map !== 'function') {
-                            console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
-                            return;
-                        }
-
-                        if (aisMap) {
-                            cancelAisMapAnimationFrame();
-                            aisMapAnimationFrameId = requestAnimationFrame(() => {
-                                aisMapAnimationFrameId = null;
-                                if (aisMap && typeof aisMap.invalidateSize === 'function') aisMap.invalidateSize();
-                            });
-                            return;
-                        }
-
-                        void mapContainer.offsetWidth;
-
-                        aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
-                        window.mapaAIS = aisMap;
-                        if (typeof createNauticalBaseLayer === 'function') {
-                            try { createNauticalBaseLayer().addTo(aisMap); } catch (_) {}
-                        }
-// --- INYECTAR LA FLOTA EN TRÁNSITO DESDE EL BACKEND ---
-if (typeof window.loadActiveFleet === 'function') {
-    window.loadActiveFleet(aisMap);
-}
-// ------------------------------------------------------
-
-                        if (window.MapController?.attachDensityMap) {
-                            try { window.MapController.attachDensityMap(aisMap); } catch (_) {}
-                        }
-
-                        if (typeof L.markerClusterGroup === 'function') {
-                            aisClusterGroup = L.markerClusterGroup({
-                                spiderfyOnMaxZoom: true,
-                                disableClusteringAtZoom: 15,
-                                zoomToBoundsOnClick: true
-                            });
-                            aisClusterGroup.on('clusterclick', function (a) {
-                                a.layer.zoomToBounds();
-                            });
-                            aisMap.addLayer(aisClusterGroup);
-                        } else if (typeof L.layerGroup === 'function') {
-                            aisClusterGroup = L.layerGroup().addTo(aisMap);
-                        }
-
-                        cancelAisMapAnimationFrame();
-                        aisMapAnimationFrameId = requestAnimationFrame(() => {
-                            aisMapAnimationFrameId = null;
-                            if (!aisMap) return;
-                            try { aisMap.invalidateSize(); } catch (_) {}
-                            if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
-                                try { window.renderAisProspectionRadii({ fit: false }); } catch (_) {}
-                            }
-                            if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                                try { window.reapplyCentralFiltersAndRedraw(); } catch (_) {}
-                            }
-                        });
             } catch (err) {
                 console.error('Safe AIS map initialization caught error:', err);
             }
