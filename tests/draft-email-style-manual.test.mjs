@@ -108,3 +108,43 @@ test('the RFI protocol ships the three requirement templates with escaped newlin
     assert.match(rendered, /Rodahmar Shipping$/);
   }
 });
+
+test('the legal protocol forces a JSON-only DRAFT_EMAIL answer for LOP and LOI', () => {
+  assert.match(prompt, /=== PROTOCOLO DE PLANTILLAS LEGALES \(LOP y LOI\)/);
+  // La regla estricta cubre los dos disparadores legales.
+  assert.match(prompt, /Carta de Protesta \(Letter of Protest \/ LOP\)/);
+  assert.match(prompt, /Carta de Indemnidad \(Letter of Indemnity \/ LOI\)/);
+  assert.match(prompt, /PROHIBIDO responder con texto conversacional/);
+  assert.match(prompt, /ÚNICAMENTE un objeto JSON válido con la acción DRAFT_EMAIL/);
+  // El protocolo legal vive dentro del prompt del asistente, tras la acción DRAFT_EMAIL.
+  assert.ok(prompt.indexOf('"action": "DRAFT_EMAIL"') < prompt.indexOf('=== PROTOCOLO DE PLANTILLAS LEGALES'));
+  // La redacción contractual no se suaviza ni se reformula.
+  assert.match(prompt, /No suavices ni reescribas la redacción legal/);
+});
+
+test('the legal protocol ships the two LOP templates and the LOI template', () => {
+  const legalSections = prompt.split(/PLANTILLA (?:LOP|LOI)-\d \(/).slice(1);
+  assert.equal(legalSections.length, 3);
+
+  assert.match(legalSections[0], /^LETTER OF PROTEST — DISCREPANCIA DE CARGA\)/);
+  assert.match(legalSections[0], /Asunto: LETTER OF PROTEST - Cargo Discrepancy - MV \[vessel_name\] \/ \[port_name\]/);
+  assert.match(legalSections[1], /^LETTER OF PROTEST — RETRASOS DE TERMINAL \/ LAYTIME\)/);
+  assert.match(legalSections[1], /Asunto: LETTER OF PROTEST - Terminal Delays \/ Stoppages - MV \[vessel_name\]/);
+  assert.match(legalSections[2], /^EMISIÓN DE LOI — DESCARGA SIN OBL\)/);
+  assert.match(legalSections[2], /Asunto: LOI - Request to Discharge without Original Bills of Lading - MV \[vessel_name\]/);
+
+  for (const section of legalSections) {
+    const body = section.split('Cuerpo:\n')[1].split('\n')[0];
+    // El cuerpo viaja en una sola línea con \n escapados, listo para el JSON del modal.
+    assert.match(body, /\\n/);
+    const rendered = JSON.parse(`"${body.replace(/"/g, '\\"')}"`);
+    assert.ok(rendered.split('\n').length > 1);
+    assert.match(rendered, /Dear Sirs,/);
+    assert.match(rendered, /Rodahmar Shipping$/);
+  }
+
+  // La cláusula probatoria y la reserva de laytime/derechos se conservan literales.
+  assert.match(legalSections[0], /strictly "weight, measure, and quality unknown"/);
+  assert.match(legalSections[1], /will not count as laytime/);
+  assert.match(legalSections[2], /International Group P&I Club Letter of Indemnity \(LOI\)/);
+});

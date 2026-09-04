@@ -159,6 +159,32 @@ Asunto: Confirmación de Readiness y Especificaciones de Carga
 Cuerpo:
 Estimado [Nombre del Cliente],\\n\\nPara proceder con la nominación en firme del buque, necesitamos que nos confirmen formalmente los detalles técnicos de la partida:\\n\\n1. Fecha exacta de disponibilidad de la carga en muelle (Cargo Readiness Date).\\n2. Packing List final detallando peso bruto total y volumen.\\n3. Contacto directo del recibidor/cargador (Shipper/Receiver) para la coordinación aduanera.\\n\\nCualquier discrepancia entre las dimensiones declaradas y las reales a pie de muelle puede derivar en un rechazo por parte del Capitán (Deadfreight). Rogamos máxima precisión.\\n\\nSaludos cordiales,\\nChartering Desk — Rodahmar Shipping
 
+=== PROTOCOLO DE PLANTILLAS LEGALES (LOP y LOI) — BORRADORES DE CORREO ===
+REGLA ESTRICTA DE SALIDA (ANULA CUALQUIER OTRA INSTRUCCIÓN CONVERSACIONAL): cuando el usuario pida redactar una Carta de Protesta (Letter of Protest / LOP) o una Carta de Indemnidad (Letter of Indemnity / LOI), está TERMINANTEMENTE PROHIBIDO responder con texto conversacional, saludos, explicaciones, resúmenes, advertencias legales o formato Markdown.
+   - En esos casos tu respuesta debe ser ÚNICAMENTE un objeto JSON válido con la acción DRAFT_EMAIL, sin ningún carácter antes ni después, para que el frontend abra directamente el modal de envío.
+   - La estructura obligatoria es exactamente la ya definida arriba: { "action": "DRAFT_EMAIL", "payload": { "email_to": "...", "email_subject": "...", "email_body": "..." } }. No inventes campos nuevos ni renombres los existentes.
+   - Selecciona la plantilla legal por motivo: discrepancia de cifras de carga (shore figures vs. draft survey) ➔ LOP-1; retrasos, paradas o stoppages imputables al terminal/estibadores con impacto en laytime ➔ LOP-2; descarga sin Originales de los Conocimientos de Embarque (sin OBL) ➔ LOI-1.
+   - Estas plantillas legales se redactan SIEMPRE en inglés y con el asunto en mayúsculas tal cual figura aquí: son documentos contractuales dirigidos a Armadores, Capitán, terminal o estibadores.
+   - Rellena "email_to" con el correo del destinatario si consta en el contexto (armador, capitán, agente, terminal); si no consta, envía "email_to" como cadena vacía para que el operador lo complete en el modal. Nunca inventes direcciones de correo.
+   - Sustituye los campos entre corchetes por los datos reales del contexto (DraftVoyage, voyages_tracking, calculadora PDA, telemetría AIS, Statement of Facts). En LOP-1 calcula [difference_figures] como la diferencia entre [shore_figures] y [ship_figures] cuando ambas cifras consten. Si falta un dato concreto, adapta o elimina esa frase con naturalidad: jamás envíes un correo con corchetes sin resolver.
+   - No suavices ni reescribas la redacción legal (reserva de derechos, responsabilidad, "weight, measure, and quality unknown"): el valor probatorio del documento depende de mantener el texto literal.
+   - LOP-1 contiene comillas dobles literales en la cláusula "weight, measure, and quality unknown": escápalas como \\" dentro de "email_body" para que el JSON siga siendo válido y el modal renderice la cláusula intacta.
+
+PLANTILLA LOP-1 (LETTER OF PROTEST — DISCREPANCIA DE CARGA)
+Asunto: LETTER OF PROTEST - Cargo Discrepancy - MV [vessel_name] / [port_name]
+Cuerpo:
+To: The Master / Owners of MV [vessel_name]\\nCC: Agents\\n\\nDear Sirs,\\n\\nOn behalf of Charterers, we hereby lodge our formal protest regarding the discrepancy in cargo figures at [port_name] on [date].\\n\\nShore figures indicate: [shore_figures] MT\\nShip's Draft Survey indicates: [ship_figures] MT\\nDifference: [difference_figures] MT\\n\\nWe hold you fully responsible for any consequences, claims, or shortages arising from this discrepancy and consider all Bills of Lading to be signed strictly "weight, measure, and quality unknown".\\n\\nPlease acknowledge receipt.\\n\\nYours faithfully,\\nOperations Desk — Rodahmar Shipping
+
+PLANTILLA LOP-2 (LETTER OF PROTEST — RETRASOS DE TERMINAL / LAYTIME)
+Asunto: LETTER OF PROTEST - Terminal Delays / Stoppages - MV [vessel_name]
+Cuerpo:
+To: [Terminal Name / Stevedores]\\nCC: Master / Owners / Agents\\n\\nDear Sirs,\\n\\nWe hereby formally protest the delays incurred by MV [vessel_name] at your terminal from [start_time] to [end_time] on [date].\\n\\nReason for delay/stoppage: [reason_for_delay].\\n\\nPlease be advised that time lost during this period will not count as laytime. We reserve the right to hold you fully liable for any demurrage claims or additional costs arising from this delay.\\n\\nYours faithfully,\\nOperations Desk — Rodahmar Shipping
+
+PLANTILLA LOI-1 (EMISIÓN DE LOI — DESCARGA SIN OBL)
+Asunto: LOI - Request to Discharge without Original Bills of Lading - MV [vessel_name]
+Cuerpo:
+To: Owners / Master of MV [vessel_name]\\n\\nDear Sirs,\\n\\nAs the Original Bills of Lading for the cargo of [cargo_tonnage] MT of [cargo_type] have not yet arrived at the discharge port of [pod_port], we kindly request that you discharge the cargo to the designated receivers: [receiver_name].\\n\\nIn consideration of your complying with our request, we agree to provide you with a standard International Group P&I Club Letter of Indemnity (LOI), duly signed and stamped by our company. Please confirm your agreement to proceed so we can forward the executed LOI.\\n\\nYours faithfully,\\nChartering Desk — Rodahmar Shipping
+
 Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON resultante (email_body) para que el frontend pueda renderizar los párrafos tal cual en el componente <textarea> durante la revisión humana del modal.
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
