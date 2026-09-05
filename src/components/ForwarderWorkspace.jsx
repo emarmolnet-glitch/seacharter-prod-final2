@@ -99,6 +99,13 @@ export function ForwarderWorkspace() {
   const [stevedoreGangs, setStevedoreGangs] = useState(0);
   const [lashingTeam, setLashingTeam] = useState(0);
   const [heavyLiftCrane, setHeavyLiftCrane] = useState(0);
+  const [mafiPlatforms, setMafiPlatforms] = useState(0);
+
+  // =========================================================================
+  // Motor de Inferencia (Auto-Detección de Modalidad y Buque Recomendado)
+  // =========================================================================
+  const [shippingMode, setShippingMode] = useState('Lo-Lo');
+  const [vesselType, setVesselType] = useState('Geared Breakbulk (Lo-Lo)');
 
   // =========================================================================
   // Sección 4: Logística Terrestre y Terminal (Servicios Periféricos)
@@ -121,6 +128,7 @@ export function ForwarderWorkspace() {
   const setSlings = setHighCapacitySlings;
   const setGangs = setStevedoreGangs;
   const setHeavyLift = setHeavyLiftCrane;
+  const setMafi = setMafiPlatforms;
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -511,6 +519,9 @@ export function ForwarderWorkspace() {
       setShackles(0);
       setGangs(0);
       setHeavyLift(0);
+      setMafiPlatforms(0);
+      setShippingMode('Lo-Lo');
+      setVesselType('Geared Breakbulk (Lo-Lo)');
       setEstimatedCost('');
       setSalePrice('');
       return;
@@ -523,6 +534,7 @@ export function ForwarderWorkspace() {
     let total_m2 = 0;
     let maxPieceWeight = 0;
     let roRoItems = 0;
+    const staticItems = [];
 
     const roRoRegex = /camion|vehiculo|trailer|tractor|coche|furgoneta/i;
 
@@ -546,8 +558,23 @@ export function ForwarderWorkspace() {
       const normalizedType = rawType.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (roRoRegex.test(rawType) || roRoRegex.test(normalizedType)) {
         roRoItems += qty;
+      } else {
+        staticItems.push({
+          ...item,
+          qty,
+          quantity: qty,
+          pieceWeight,
+          weight: pieceWeight,
+        });
       }
     });
+
+    // Motor de Inferencia (Auto-Detección de Modalidad y Buque Recomendado)
+    const autoMode = roRoItems > 0 ? 'Ro-Ro' : 'Lo-Lo';
+    const recommendedVessel = roRoItems > 0 ? 'MPP / Pure Ro-Ro Carrier' : 'Geared Breakbulk (Lo-Lo)';
+
+    setShippingMode(autoMode);
+    setVesselType(recommendedVessel);
 
     // totalWeightTons: Suma de pesos / 1000
     const totalWeightTons = totalWeightKg / 1000;
@@ -561,10 +588,33 @@ export function ForwarderWorkspace() {
     const Eslingas = Math.ceil(totalPieces / 2);
     // Grilletes: (Eslingas * 2) + (Cadenas * 2)
     const Grilletes = (Eslingas * 2) + (Cadenas * 2);
-    // Cuadrillas de Estibadores (Turnos): Math.ceil(totalPieces / 15) (Asumimos que una mano de obra carga/trinca 15 piezas complejas por turno)
-    const Gangs = Math.ceil(totalPieces / 15);
-    // Grúa Auxiliar (Heavy Lift): Si maxPieceWeight > 35000 (más de 35 toneladas excede la capacidad de grúas estándar de muchos buques), asigna 1, si no 0
-    const HeavyLift = maxPieceWeight > 35000 ? 1 : 0;
+
+    // Aplicación Automática de Heurísticas Portuarias (Bifurcación por autoMode)
+    let HeavyLift = 0;
+    let MAFIs = 0;
+    let Gangs = 0;
+
+    if (autoMode === 'Ro-Ro') {
+      // Si autoMode === 'Ro-Ro':
+      // Grúa Auxiliar (Heavy Lift) = 0 (la carga entra rodando o en MAFI).
+      HeavyLift = 0;
+      // Plataformas MAFI = Cuenta cuántas piezas de staticItems superan los 5000 kg y asigna 1 MAFI por cada una.
+      MAFIs = staticItems.reduce((acc, it) => {
+        const wt = Math.max(0, parseFloat(String(it.pieceWeight ?? it.weight ?? it.unit_weight_kg ?? 0).replace(',', '.')) || 0);
+        const q = Math.max(1, Number(it.qty ?? it.quantity) || 1);
+        return acc + (wt > 5000 ? q : 0);
+      }, 0);
+      // Cuadrillas (Estibadores) = Math.ceil(totalPieces / 25) (ratio más eficiente).
+      Gangs = Math.ceil(totalPieces / 25);
+    } else {
+      // Si autoMode === 'Lo-Lo':
+      // Plataformas MAFI = 0.
+      MAFIs = 0;
+      // Grúa Auxiliar (Heavy Lift) = 1 si la pieza más pesada (maxPieceWeight) supera los 8000 kg, si no 0.
+      HeavyLift = maxPieceWeight > 8000 ? 1 : 0;
+      // Cuadrillas (Estibadores) = Math.ceil(totalPieces / 15).
+      Gangs = Math.ceil(totalPieces / 15);
+    }
 
     // Actualiza los estados correspondientes con estos valores autocalculados
     setDunnage(Dunnage);
@@ -573,6 +623,7 @@ export function ForwarderWorkspace() {
     setShackles(Grilletes);
     setGangs(Gangs);
     setHeavyLift(HeavyLift);
+    setMafiPlatforms(MAFIs);
 
     // Asignación Inteligente de Surveyor: En la lógica donde evaluabas si hay piezas de más de 35 toneladas (maxPieceWeight > 35000),
     // haz que si esa condición se cumple, el surveyorCost se establezca automáticamente en 1500 (si estaba en 0).
@@ -590,8 +641,8 @@ export function ForwarderWorkspace() {
     const freightCost = RT * 65;
     // lashingCost: (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15)
     const lashingCost = (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15);
-    // stevedoringCost: (Gangs * 1200) + (HeavyLift * 2500)
-    const stevedoringCost = (Gangs * 1200) + (HeavyLift * 2500);
+    // Actualiza los costes multiplicando: MAFIs x 300€, Heavy Lift x 2500€, Estibadores x 1200€. Suma todo al stevedoringCost.
+    const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
 
     // Cálculo Automático de Almacenaje: Tarifa portuaria de 2€ por m² al día basándose en el footprint estimado de la carga.
     // terminalStorageCost = Math.ceil(totalVolumeM3 / 2.5) * storageDays * 2
@@ -632,6 +683,9 @@ export function ForwarderWorkspace() {
     setStevedoreGangs(0);
     setLashingTeam(0);
     setHeavyLiftCrane(0);
+    setMafiPlatforms(0);
+    setShippingMode('Lo-Lo');
+    setVesselType('Geared Breakbulk (Lo-Lo)');
     setStorageDays(0);
     setSurveyorCost(0);
     setInlandCost(0);
@@ -675,6 +729,9 @@ export function ForwarderWorkspace() {
       setStevedoreGangs(labor.stevedore_gangs_shifts || 0);
       setLashingTeam(labor.lashing_team || 0);
       setHeavyLiftCrane(labor.heavy_lift_crane || 0);
+      setMafiPlatforms(labor.mafi_platforms ?? labor.mafiPlatforms ?? 0);
+      if (payload.shipping_mode) setShippingMode(payload.shipping_mode);
+      if (payload.recommended_vessel) setVesselType(payload.recommended_vessel);
 
       const peri = payload.peripheral_services || {};
       setStorageDays(peri.storage_days ?? peri.storageDays ?? 0);
@@ -695,6 +752,9 @@ export function ForwarderWorkspace() {
       setStevedoreGangs(0);
       setLashingTeam(0);
       setHeavyLiftCrane(0);
+      setMafiPlatforms(0);
+      setShippingMode('Lo-Lo');
+      setVesselType('Geared Breakbulk (Lo-Lo)');
       setStorageDays(0);
       setSurveyorCost(0);
       setInlandCost(0);
@@ -777,7 +837,10 @@ export function ForwarderWorkspace() {
         stevedore_gangs_shifts: Number(stevedoreGangs) || 0,
         lashing_team: Number(lashingTeam) || 0,
         heavy_lift_crane: Number(heavyLiftCrane) || 0,
+        mafi_platforms: Number(mafiPlatforms) || 0,
       },
+      shipping_mode: shippingMode,
+      recommended_vessel: vesselType,
       peripheral_services: {
         storage_days: Number(storageDays) || 0,
         terminal_storage_cost: terminalStorageCost,
@@ -858,6 +921,9 @@ export function ForwarderWorkspace() {
     setStevedoreGangs(0);
     setLashingTeam(0);
     setHeavyLiftCrane(0);
+    setMafiPlatforms(0);
+    setShippingMode('Lo-Lo');
+    setVesselType('Geared Breakbulk (Lo-Lo)');
     setEstimatedCost('');
     setSalePrice('');
 
@@ -1495,6 +1561,22 @@ export function ForwarderWorkspace() {
                   </p>
                 </div>
 
+                {/* Banner Visual Dinámico - Feedback Motor Logístico */}
+                <div
+                  id="logistic-engine-banner"
+                  role="status"
+                  aria-live="polite"
+                  className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium transition-all shadow-sm flex items-center gap-2.5 ${
+                    shippingMode === 'Ro-Ro'
+                      ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200'
+                      : 'bg-sky-950/40 border-sky-500/30 text-sky-200'
+                  }`}
+                >
+                  <span>
+                    🤖 Motor Logístico: Operativa <strong className="font-bold text-white">{shippingMode}</strong> autodetectada. Buque recomendado: <strong className="font-bold text-white">{vesselType}</strong>
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   <NumericCounter
                     label="Maderas de Estiba (Dunnage)"
@@ -1536,7 +1618,7 @@ export function ForwarderWorkspace() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   <NumericCounter
                     label="Cuadrillas de Estibadores (Turnos)"
                     subtitle="Turnos completos de estiba portuaria"
@@ -1554,6 +1636,12 @@ export function ForwarderWorkspace() {
                     subtitle="Grúa móvil portuaria para piezas de gran tonelaje"
                     value={heavyLiftCrane}
                     onChange={setHeavyLiftCrane}
+                  />
+                  <NumericCounter
+                    label="Plataformas MAFI"
+                    subtitle="Roll trailers portuarios para carga estática pesada"
+                    value={mafiPlatforms}
+                    onChange={setMafiPlatforms}
                   />
                 </div>
               </section>
@@ -1697,7 +1785,7 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={estimatedCost}
                       onChange={(e) => setEstimatedCost(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full bg-white text-slate-900 font-bold border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                     <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
@@ -1717,7 +1805,7 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={salePrice}
                       onChange={(e) => setSalePrice(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      className="w-full bg-white text-slate-900 font-bold border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                     />
                     <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
