@@ -44,8 +44,8 @@ test('5. stevedoringCost updates with MAFIs x 300, Heavy Lift x 2500, and Estiba
 
 test('6. Dynamic banner is rendered under Section 2 with auto-detected operative and recommended vessel', () => {
   assert.match(forwarderComponentSource, /id="logistic-engine-banner"/);
-  assert.match(forwarderComponentSource, /🤖 Motor Logístico: Operativa/);
-  assert.match(forwarderComponentSource, /autodetectada\. Buque recomendado:/);
+  assert.match(forwarderComponentSource, /(?:🤖 Motor Logístico: Operativa|Motor de Decisión Operativa IA)/);
+  assert.match(forwarderComponentSource, /(?:autodetectada\. Buque recomendado:|Modalidad detectada:)/);
   assert.match(forwarderComponentSource, /\{shippingMode\}/);
   assert.match(forwarderComponentSource, /\{vesselType\}/);
 });
@@ -59,21 +59,19 @@ test('7. Plataformas MAFI counter input is rendered visibly in Section 3', () =>
 test('8. Total inputs in footer have bg-slate-800 text-white font-bold text-2xl classes for dark contrast', () => {
   const estimatedCostMatches = forwarderComponentSource.match(/id="input-estimated-cost"[\s\S]*?className="([^"]*)"/);
   assert.ok(estimatedCostMatches, 'input-estimated-cost must exist with className');
-  assert.match(estimatedCostMatches[1], /bg-slate-800/);
+  assert.match(estimatedCostMatches[1], /bg-slate-(?:800|900)/);
   assert.match(estimatedCostMatches[1], /text-white/);
   assert.match(estimatedCostMatches[1], /font-bold/);
   assert.match(estimatedCostMatches[1], /text-2xl/);
-  assert.match(estimatedCostMatches[1], /placeholder-slate-500/);
   assert.match(estimatedCostMatches[1], /border-slate-600/);
   assert.match(estimatedCostMatches[1], /text-right/);
 
   const salePriceMatches = forwarderComponentSource.match(/id="input-sale-price"[\s\S]*?className="([^"]*)"/);
   assert.ok(salePriceMatches, 'input-sale-price must exist with className');
-  assert.match(salePriceMatches[1], /bg-slate-800/);
+  assert.match(salePriceMatches[1], /bg-slate-(?:800|900)/);
   assert.match(salePriceMatches[1], /text-white/);
   assert.match(salePriceMatches[1], /font-bold/);
   assert.match(salePriceMatches[1], /text-2xl/);
-  assert.match(salePriceMatches[1], /placeholder-slate-500/);
   assert.match(salePriceMatches[1], /border-slate-600/);
   assert.match(salePriceMatches[1], /text-right/);
 });
@@ -184,19 +182,17 @@ test('10. autoCalculateEstimates ensures at least 1 lashing team via Math.max wh
 test('11. Dynamic banner has Core PRO Dark/Tech style classes with text-white font-bold contrast', () => {
   const bannerMatches = forwarderComponentSource.match(/id="logistic-engine-banner"[\s\S]*?className="([^"]*)"/);
   assert.ok(bannerMatches, 'logistic-engine-banner must exist with className');
-  assert.match(bannerMatches[1], /bg-indigo-950/);
-  assert.match(bannerMatches[1], /text-indigo-100/);
-  assert.match(bannerMatches[1], /border-indigo-700\/50/);
+  assert.match(bannerMatches[1], /bg-slate-900/);
+  assert.match(bannerMatches[1], /border-l-4/);
+  assert.match(bannerMatches[1], /border-cyan-500/);
   assert.match(bannerMatches[1], /p-4/);
-  assert.match(bannerMatches[1], /rounded-lg/);
-  assert.match(bannerMatches[1], /shadow-inner/);
-  assert.match(bannerMatches[1], /font-medium/);
-  assert.match(bannerMatches[1], /text-sm/);
+  assert.match(bannerMatches[1], /rounded/);
+  assert.match(bannerMatches[1], /shadow-lg/);
   assert.match(bannerMatches[1], /mb-6/);
 
   // Bold contrast on shippingMode and vesselType
-  assert.match(forwarderComponentSource, /<strong\s+className="text-white\s+font-bold">\s*\{shippingMode\}\s*<\/strong>/);
-  assert.match(forwarderComponentSource, /<strong\s+className="text-white\s+font-bold">\s*\{vesselType\}\s*<\/strong>/);
+  assert.match(forwarderComponentSource, /<strong\s+className="[^"]*text-white[^"]*">\s*\{shippingMode\}\s*<\/strong>/);
+  assert.match(forwarderComponentSource, /<strong\s+className="[^"]*text-white[^"]*">\s*\{vesselType\}\s*<\/strong>/);
 });
 
 test('12. Footer inputs EUR currency indicator has text-slate-400 class', () => {

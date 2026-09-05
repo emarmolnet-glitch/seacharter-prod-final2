@@ -980,10 +980,11 @@ export function ForwarderWorkspace() {
   };
 
   return (
-    <div className="w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative print:bg-white print:overflow-visible print:h-auto">
-      {/* ======================================================== */}
-      {/* COLUMNA IZQUIERDA (Sidebar - ancho fijo w-80)           */}
-      {/* ======================================================== */}
+    <>
+      <div className={`w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : 'print:bg-white print:overflow-visible print:h-auto'}`}>
+        {/* ======================================================== */}
+        {/* COLUMNA IZQUIERDA (Sidebar - ancho fijo w-80)           */}
+        {/* ======================================================== */}
       <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
         {/* Cabecera Sidebar y Botón Principal */}
         <div className="p-4 border-b border-slate-800">
@@ -1567,16 +1568,15 @@ export function ForwarderWorkspace() {
                   </p>
                 </div>
 
-                {/* Banner Visual Dinámico - Feedback Motor Logístico */}
-                <div
-                  id="logistic-engine-banner"
-                  role="status"
-                  aria-live="polite"
-                  className="bg-indigo-950 text-indigo-100 border border-indigo-700/50 p-4 rounded-lg shadow-inner flex items-center font-medium text-sm mb-6"
-                >
-                  <span>
-                    🤖 Motor Logístico: Operativa <strong className="text-white font-bold">{shippingMode}</strong> autodetectada. Buque recomendado: <strong className="text-white font-bold">{vesselType}</strong>
-                  </span>
+                <div id="logistic-engine-banner" role="status" aria-live="polite" className="bg-slate-900 border-l-4 border-cyan-500 p-4 rounded shadow-lg flex items-center gap-4 mb-6">
+                  <div className="text-2xl">⚙️</div>
+                  <div className="flex flex-col">
+                    <span className="text-cyan-400 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
+                    <span className="text-slate-200 mt-1">
+                      Modalidad detectada: <strong className="text-white ml-1 mr-3">{shippingMode}</strong>
+                      Buque recomendado: <strong className="text-white">{vesselType}</strong>
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -1771,12 +1771,12 @@ export function ForwarderWorkspace() {
             {/* ==================================================== */}
             {/* FOOTER DEL MODAL: Resumen Financiero y Guardado      */}
             {/* ==================================================== */}
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/90 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 max-w-xl">
+            <div className="bg-slate-900 p-6 rounded-b-lg border-t border-slate-700 flex flex-col md:flex-row md:items-end justify-between gap-6 mt-6 shrink-0">
+              <div className="flex flex-col sm:flex-row gap-6 w-full md:w-2/3">
                 {/* Input: Coste Total Estimado (€) */}
-                <div>
-                  <label htmlFor="input-estimated-cost" className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Coste Total Estimado (€)
+                <div className="w-full sm:w-1/2">
+                  <label htmlFor="input-estimated-cost" className="block text-cyan-400 font-bold text-xs mb-1">
+                    COSTE TOTAL ESTIMADO (€)
                   </label>
                   <div className="relative">
                     <input
@@ -1787,16 +1787,16 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={estimatedCost}
                       onChange={(e) => setEstimatedCost(e.target.value)}
-                      className="bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500"
+                      className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-semibold pointer-events-none">EUR</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">EUR</span>
                   </div>
                 </div>
 
                 {/* Input: Precio Venta a Cliente (€) */}
-                <div>
-                  <label htmlFor="input-sale-price" className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Precio Venta a Cliente (€)
+                <div className="w-full sm:w-1/2">
+                  <label htmlFor="input-sale-price" className="block text-cyan-400 font-bold text-xs mb-1">
+                    PRECIO VENTA A CLIENTE (€)
                   </label>
                   <div className="relative">
                     <input
@@ -1807,27 +1807,20 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={salePrice}
                       onChange={(e) => setSalePrice(e.target.value)}
-                      className="bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500"
+                      className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-semibold pointer-events-none">EUR</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">EUR</span>
                   </div>
                 </div>
               </div>
 
               {/* Botones de acción */}
-              <div className="flex items-center gap-3 justify-end pt-2 md:pt-0">
-                <button
-                  type="button"
-                  onClick={() => setIsCargoModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
+              <div className="flex flex-col gap-3 shrink-0">
                 <button
                   type="button"
                   id="btn-generate-executive-report"
                   onClick={() => setShowExecutiveReport(true)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white text-xs font-bold rounded-xl border border-blue-500/30 transition cursor-pointer flex items-center gap-2"
+                  className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded font-bold transition-colors shadow-lg cursor-pointer flex items-center justify-center gap-2"
                 >
                   <span>📄</span>
                   <span>Generar Reporte Ejecutivo</span>
@@ -1836,7 +1829,7 @@ export function ForwarderWorkspace() {
                   type="button"
                   id="btn-save-project-cargo"
                   onClick={handleSaveProjectCargo}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center gap-2"
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded font-bold transition-colors shadow-lg cursor-pointer flex items-center justify-center gap-2"
                 >
                   <span>💾</span>
                   <span>Guardar Flete y Estiba en Proyecto</span>
@@ -1846,6 +1839,7 @@ export function ForwarderWorkspace() {
           </div>
         </div>
       )}
+      </div>
 
       {/* ======================================================== */}
       {/* VISTA DEL REPORTE EJECUTIVO / COTIZACIÓN COMERCIAL       */}
@@ -1908,7 +1902,7 @@ export function ForwarderWorkspace() {
         };
 
         return (
-          <div className="fixed inset-0 bg-white z-50 overflow-y-auto print:static print:inset-auto print:z-auto print:overflow-visible print:bg-white text-slate-900">
+          <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto print:bg-white print:p-0 print:static print:inset-auto print:overflow-visible text-slate-900">
             {/* Reglas de impresión CSS para compatibilidad nativa y fondos sólidos */}
             <style>{`
               @media print {
@@ -1929,29 +1923,23 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* Botones Flotantes en la esquina superior derecha (Ocultos en impresión con print:hidden) */}
-            <div className="fixed top-6 right-6 z-50 flex items-center gap-3 print:hidden shadow-xl bg-white/95 backdrop-blur-md p-2 rounded-2xl border border-slate-200">
+            {/* BOTONERA FLOTANTE - Z-INDEX ALTO PARA ASEGURAR VISIBILIDAD */}
+            <div className="fixed top-6 right-8 flex gap-4 z-[9999] print:hidden">
               <button
                 type="button"
                 id="btn-print-executive-report"
-                onClick={() => {
-                  if (typeof window !== 'undefined' && typeof window.print === 'function') {
-                    window.print();
-                  }
-                }}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-blue-500/25 transition cursor-pointer flex items-center gap-2"
+                onClick={() => window.print()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded shadow-2xl font-bold flex items-center gap-2 cursor-pointer border-2 border-blue-400"
               >
-                <span>🖨️</span>
-                <span>Imprimir / Guardar PDF</span>
+                🖨️ Imprimir / PDF
               </button>
               <button
                 type="button"
                 id="btn-close-executive-report"
                 onClick={() => setShowExecutiveReport(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded shadow-2xl font-bold flex items-center gap-2 cursor-pointer border-2 border-slate-600"
               >
-                <span>✕</span>
-                <span>Cerrar</span>
+                ✖ Cerrar Reporte
               </button>
             </div>
 
@@ -2266,7 +2254,7 @@ export function ForwarderWorkspace() {
           </div>
         );
       })()}
-    </div>
+    </>
   );
 }
 

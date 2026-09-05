@@ -1,15 +1,7 @@
 import * as XLSX from 'xlsx';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-
-// Configurar el worker de PDF.js usando CDN compatible con la versión instalada o worker local
-if (pdfjsLib.GlobalWorkerOptions) {
-  try {
-    const pdfVersion = pdfjsLib.version || '5.4.624';
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.mjs`;
-  } catch (_) {
-    // Si no está en entorno con workerSrc dinámico, pdfjs ejecutará en fallback
-  }
-}
+import * as pdfjsLib from 'pdfjs-dist';
+// FIX: pdf.js version 4+ usa extensión .mjs para el worker en el CDN
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 /**
  * Expresiones regulares para detección de patrones de carga:
@@ -18,8 +10,81 @@ if (pdfjsLib.GlobalWorkerOptions) {
  * - Cantidad inicial: números al comienzo de línea o columna
  */
 export const DIMENSION_REGEX = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/;
-export const WEIGHT_REGEX = /(?:(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)\b|(?:\s+|^)(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d{3,})\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)?\s*$)/i;
+export const WEIGHT_REGEX = /(?:(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)\b|(?:\s+|^)(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d{4,})\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)?\s*$)/i;
 export const QTY_REGEX = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|\.)?\s+)/i;
+
+/**
+ * Extrae dinámicamente el peso numérico de una línea o texto de descripción.
+ * Si no hay coincidencia directa de peso con unidad o al final de la línea,
+ * busca la última cifra grande antes de "kg", números de 4 o más dígitos (ej. 8,500, 12,600, 9,200),
+ * o cualquier número superior a 100 dentro de la cadena.
+ * @param {string} line
+ * @param {RegExpMatchArray|null} wtMatch
+ * @returns {number}
+ */
+export function extractWeightFromLine(line, wtMatch = null) {
+  const match = wtMatch || line.match(WEIGHT_REGEX);
+  let wt = null;
+
+  if (match) {
+    const rawWeightStr = (match[1] || match[2] || match[0] || '').trim();
+    const isTons = /t|tn|ton/i.test(match[0]);
+    const cleanedStr = rawWeightStr.replace(/,/g, '');
+    let val = parseFloat(rawWeightStr.replace(',', ''));
+    if (!isNaN(parseFloat(cleanedStr))) {
+      val = parseFloat(cleanedStr);
+    }
+    if (!isTons && /^\d{1,3}\.\d{3}$/.test(rawWeightStr)) {
+      val = parseFloat(rawWeightStr.replace(/\./g, ''));
+    }
+    if (!isNaN(val) && val > 0) {
+      wt = isTons ? val * 1000 : val;
+    }
+  }
+
+  // Si no se obtuvo un peso válido, buscar la última cifra grande antes de "kg" o números de 4+ dígitos (ej. 8,500, 12,600)
+  if (!wt || wt <= 0) {
+    const kgPrecedingMatch = line.match(/(\d{1,3}(?:,\d{3})+|\d{4,}|\d+)\s*(?:kilos?|kgs?|kg)\b/i);
+    if (kgPrecedingMatch) {
+      const parsedKg = parseFloat(kgPrecedingMatch[1].replace(/,/g, ''));
+      if (!isNaN(parsedKg) && parsedKg > 0) {
+        wt = parsedKg;
+      }
+    }
+  }
+
+  // Buscar cualquier número de 4 o más dígitos en la línea (con o sin comas, ej. 8,500 o 12600)
+  if (!wt || wt <= 0) {
+    const fourDigitMatches = [...line.matchAll(/\b(\d{1,3}(?:,\d{3})+|\d{4,})(?:\.\d+)?\b/g)];
+    if (fourDigitMatches.length > 0) {
+      // Tomar la última cifra numérica grande de la línea
+      const lastFourDigit = fourDigitMatches[fourDigitMatches.length - 1][1];
+      const parsedVal = parseFloat(lastFourDigit.replace(/,/g, ''));
+      if (!isNaN(parsedVal) && parsedVal > 0) {
+        wt = parsedVal;
+      }
+    }
+  }
+
+  // Si el parser falla en la extracción dinámica, intenta extraer cualquier número superior a 100 de la cadena
+  if (!wt || wt <= 0) {
+    // Buscar todas las secuencias numéricas (enteros o flotantes, limpiando comas de miles)
+    const anyNumberMatches = [...line.matchAll(/\b(\d+(?:,\d{3})*(?:\.\d+)?)\b/g)];
+    const validCandidates = [];
+    for (const m of anyNumberMatches) {
+      const numVal = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(numVal) && numVal > 100) {
+        validCandidates.push(numVal);
+      }
+    }
+    if (validCandidates.length > 0) {
+      // Usar la última cifra superior a 100 encontrada en la descripción/línea
+      wt = validCandidates[validCandidates.length - 1];
+    }
+  }
+
+  return (wt && wt > 0) ? wt : 0;
+}
 
 /**
  * Escanea líneas de texto y detecta filas de carga mediante expresiones regulares.
@@ -58,23 +123,7 @@ export function parseLinesWithRegex(lines) {
         h = parseFloat(dimMatch[3].replace(',', '.')) || 1;
       }
 
-      let wt = 1000;
-      if (wtMatch) {
-        const rawWeightStr = (wtMatch[1] || wtMatch[2] || wtMatch[0] || '').trim();
-        const isTons = /t|tn|ton/i.test(wtMatch[0]);
-        // Limpiar comas antes de convertir a número: parseFloat(string.replace(',', ''))
-        const cleanedStr = rawWeightStr.replace(/,/g, '');
-        let val = parseFloat(rawWeightStr.replace(',', ''));
-        if (!isNaN(parseFloat(cleanedStr))) {
-          val = parseFloat(cleanedStr);
-        }
-        if (!isTons && /^\d{1,3}\.\d{3}$/.test(rawWeightStr)) {
-          val = parseFloat(rawWeightStr.replace(/\./g, ''));
-        }
-        if (!isNaN(val) && val > 0) {
-          wt = isTons ? val * 1000 : val;
-        }
-      }
+      let wt = extractWeightFromLine(line, wtMatch);
 
       let desc = line
         .replace(QTY_REGEX, '')
@@ -86,6 +135,11 @@ export function parseLinesWithRegex(lines) {
 
       if (!desc || desc.length < 2) {
         desc = `Pieza Proyecto #${index + 1}`;
+      }
+
+      // Si aún no se detectó peso, intentar extraer cualquier número > 100 de la descripción
+      if (!wt || wt <= 0) {
+        wt = extractWeightFromLine(desc) || 0;
       }
 
       cargoItems.push({
@@ -191,7 +245,7 @@ export function parseExcelBuffer(arrayBuffer) {
         h = parseFloat(String(row[colMap.height]).replace(/[^\d.,]/g, '').replace(',', '.')) || 1;
       }
 
-      let wt = 1000;
+      let wt = 0;
       if (colMap.weight !== -1 && row[colMap.weight] != null) {
         const wtStr = String(row[colMap.weight]).trim();
         const isTons = /t|tn|ton/i.test(wtStr);
@@ -206,6 +260,10 @@ export function parseExcelBuffer(arrayBuffer) {
         if (!isNaN(wtNum) && wtNum > 0) {
           wt = isTons ? wtNum * 1000 : wtNum;
         }
+      }
+
+      if (!wt || wt <= 0) {
+        wt = extractWeightFromLine(descVal) || 0;
       }
 
       items.push({
