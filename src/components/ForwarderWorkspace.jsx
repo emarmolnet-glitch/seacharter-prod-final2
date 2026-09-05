@@ -511,7 +511,7 @@ export function ForwarderWorkspace() {
                       <thead className="bg-slate-900 font-bold text-slate-400 border-b border-slate-800">
                         <tr>
                           <th className="px-3 py-2.5 w-16">Cant.</th>
-                          <th className="px-3 py-2.5 w-[42%]">Tipo / Modelo (Descripción completa)</th>
+                          <th className="px-3 py-2.5 w-[50%]">Tipo / Modelo (Descripción completa)</th>
                           <th className="px-3 py-2.5 w-20">L (m)</th>
                           <th className="px-3 py-2.5 w-20">W (m)</th>
                           <th className="px-3 py-2.5 w-20">H (m)</th>
@@ -523,7 +523,7 @@ export function ForwarderWorkspace() {
                         {cargoItems.map((item) => (
                           <tr key={item.id}>
                             <td className="px-2 py-2"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2"><input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-3 py-1 text-slate-100 rounded text-xs" /></td>
+                            <td className="px-2 py-2 w-[50%]"><input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-3 py-1.5 text-slate-100 rounded text-xs" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
@@ -615,7 +615,7 @@ export function ForwarderWorkspace() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA DEL REPORTE EJECUTIVO (CORREGIDO: Muestra Partidas del Proyecto)   */}
+      {/* VISTA DEL REPORTE EJECUTIVO (CORREGIDO: Botones visibles y costes ponderados) */}
       {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
@@ -627,8 +627,18 @@ export function ForwarderWorkspace() {
 
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
+        // Cálculo métrico total para ponderación proporcional de costes por pieza
+        const totalMetricUnits = cargoItems.reduce((sum, item) => {
+          const qty = Number(item.quantity) || 1;
+          const l = parseFloat(item.length) || 1;
+          const w = parseFloat(item.width) || 1;
+          const h = parseFloat(item.height) || 1;
+          const wt = parseFloat(item.weight) || 1000;
+          return sum + (qty * Math.max(wt, l * w * h * 100));
+        }, 0) || 1;
+
         return (
-          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[2147483647] overflow-y-auto p-4 sm:p-12 text-slate-900">
+          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[2147483647] overflow-y-auto pt-28 pb-16 px-4 sm:px-12 text-slate-900">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -639,7 +649,7 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA FIJA FUERA DE LA HOJA PARA EVITAR SOLAPES */}
+            {/* BOTONERA FIJA SUPERIOR CON MARGEN SUFICIENTE PARA NO QUEDAR OCULTA */}
             <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-6 print-hidden">
               <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-2 cursor-pointer border border-blue-400">
                 🖨️ Imprimir / Guardar PDF
@@ -689,7 +699,7 @@ export function ForwarderWorkspace() {
                 </div>
               </section>
 
-              {/* Detalle de Partidas Reales del Proyecto */}
+              {/* Detalle Ponderado de Partidas Reales del Proyecto */}
               <section className="mb-8">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">📋 Desglose de Partidas y Servicios del Proyecto</h3>
                 <table className="w-full text-xs border-collapse">
@@ -703,12 +713,21 @@ export function ForwarderWorkspace() {
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {cargoItems.map((item, idx) => {
-                      const itemShareCost = (finalTotalCost / Math.max(1, cargoItems.length));
-                      const itemShareSale = (finalTotalSale / Math.max(1, cargoItems.length));
+                      const qty = Number(item.quantity) || 1;
+                      const l = parseFloat(item.length) || 1;
+                      const w = parseFloat(item.width) || 1;
+                      const h = parseFloat(item.height) || 1;
+                      const wt = parseFloat(item.weight) || 1000;
+                      const itemMetric = qty * Math.max(wt, l * w * h * 100);
+                      const ratio = itemMetric / totalMetricUnits;
+
+                      const itemShareCost = finalTotalCost * ratio;
+                      const itemShareSale = finalTotalSale * ratio;
+
                       return (
                         <tr key={idx}>
-                          <td className="py-3 px-3 font-semibold text-slate-900">{item.type || 'Pieza de Proyecto'} ({item.length}x{item.width}x{item.height}m)</td>
-                          <td className="py-3 px-3 text-center font-mono">{item.quantity}</td>
+                          <td className="py-3 px-3 font-semibold text-slate-900">{item.type || 'Pieza de Proyecto'} ({l}x{w}x{h}m)</td>
+                          <td className="py-3 px-3 text-center font-mono">{qty}</td>
                           <td className="py-3 px-3 text-right font-mono">{formatCurrency(itemShareCost)}</td>
                           <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(itemShareSale)}</td>
                         </tr>
