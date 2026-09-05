@@ -658,10 +658,6 @@ async function executeActionableAiUpdateFields(actionObj) {
         // --------------------------------------------------------
 
         const updateInputs = (ids, value, dispatchEvents = true) => {
-
-
-      
-        const updateInputs = (ids, value, dispatchEvents = true) => {
             if (value === undefined || value === null || value === "") return;
             ids.forEach((id) => {
                 const selector = `#${id}, [name="${id}"], .${id}`;
