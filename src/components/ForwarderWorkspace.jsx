@@ -830,17 +830,16 @@ export function ForwarderWorkspace() {
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-sky-400 uppercase">2. Trincaje y Materiales</h3>
                   
-                  {/* FIX BANNER IA: Sin morado, 100% Dark Tech */}
                   <div className="bg-white border border-slate-200 border-l-4 border-l-cyan-500 p-4 rounded shadow-sm flex items-center gap-4 mb-6">
-  <div className="text-2xl">⚙️</div>
-  <div className="flex flex-col">
-    <span className="text-cyan-600 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
-    <span className="text-slate-600 mt-1 text-xs">
-      Modalidad detectada: <strong className="text-slate-900 px-1 font-black">{shippingMode}</strong>
-      Buque recomendado: <strong className="text-slate-900">{vesselType}</strong>
-    </span>
-  </div>
-</div>
+                    <div className="text-2xl">⚙️</div>
+                    <div className="flex flex-col">
+                      <span className="text-cyan-600 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
+                      <span className="text-slate-600 mt-1 text-xs">
+                        Modalidad detectada: <strong className="text-slate-900 px-1 font-black">{shippingMode}</strong>
+                        Buque recomendado: <strong className="text-slate-900">{vesselType}</strong>
+                      </span>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                     <NumericCounter label="Maderas" value={dunnageWood} onChange={setDunnageWood} />
@@ -898,8 +897,8 @@ export function ForwarderWorkspace() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-3">
-                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded font-bold">📄 Reporte Ejecutivo</button>
-                  <button onClick={handleSaveProjectCargo} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded font-bold">💾 GUARDAR PROYECTO</button>
+                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded font-bold cursor-pointer">📄 Reporte Ejecutivo</button>
+                  <button onClick={handleSaveProjectCargo} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded font-bold cursor-pointer">💾 GUARDAR PROYECTO</button>
                 </div>
               </div>
             </div>
@@ -929,8 +928,8 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA CLÁSICA - FIJA A LA PANTALLA */}
-            <div className="fixed top-6 right-8 flex gap-4 z-[99999] print:hidden">
+            {/* BOTONERA CLÁSICA - ANCLADA Y SIEMPRE VISIBLE */}
+            <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-4 print:hidden">
               <button onClick={(e) => { e.preventDefault(); window.print(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-lg font-bold flex items-center gap-2 cursor-pointer border border-blue-500">
                 🖨️ Imprimir / PDF
               </button>
@@ -941,8 +940,6 @@ export function ForwarderWorkspace() {
 
             {/* FOLIO A4 BLANCO */}
             <div className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-2xl border border-slate-200 rounded-lg print:shadow-none print:border-none print:max-w-full print-exact">
-
-            <div className="max-w-4xl mx-auto p-10 bg-white text-slate-900 my-8 shadow-2xl border border-slate-200 rounded-lg print:my-0 print:p-8 print:shadow-none print:border-none print:max-w-full print-exact">
               <header className="border-b-2 border-slate-900 pb-6 mb-6">
                 <div className="flex justify-between gap-4 mb-4">
                   <div>
