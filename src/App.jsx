@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
 
 /**
  * Normalizes reference identifiers for cross-module session matching.
@@ -543,14 +544,44 @@ export function usePendingImoSync() {
 /**
  * Main Application / Layout wrapper component for SeaCharter Core PRO.
  */
-export default function App({ children }) {
+export default function App({ children, currentView: initialView = 'MAP' }) {
   useSeaCharterSync();
   useUrlImoAutoLookup();
   usePendingImoSync();
 
+  const [currentView, setCurrentView] = useState(initialView);
+
+  useEffect(() => {
+    const handleViewChange = (event) => {
+      const nextView = event?.detail?.view || event?.detail;
+      if (nextView) {
+        setCurrentView(String(nextView).toUpperCase());
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('navigation:view-change', handleViewChange);
+      if (!window.setAppView) {
+        window.setAppView = (view) => {
+          const normalized = String(view).toUpperCase();
+          setCurrentView(normalized);
+          window.dispatchEvent(new CustomEvent('navigation:view-change', { detail: { view: normalized } }));
+        };
+      }
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('navigation:view-change', handleViewChange);
+      }
+    };
+  }, []);
+
   return (
     <div className="seacharter-core-pro-app">
-      {children}
+      {currentView === 'FORWARDERS' ? (
+        <ForwarderWorkspace />
+      ) : (
+        children
+      )}
     </div>
   );
 }
