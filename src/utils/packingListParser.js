@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 
-// FIX CRÍTICO: pdf.js versión 4+ exige la extensión .mjs para el worker. Esto elimina el error 404 y el bloqueo de CSP.
+// FIX: Usar .mjs para que funcione el worker de PDF en versiones nuevas
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 export const parsePackingListFile = async (file) => {
@@ -9,14 +9,9 @@ export const parsePackingListFile = async (file) => {
   const fileName = file.name.toLowerCase();
 
   try {
-    if (fileName.endsWith('.pdf')) {
-      return await parsePDF(file);
-    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-      return await parseExcel(file);
-    } else {
-      const text = await file.text();
-      return parseText(text);
-    }
+    if (fileName.endsWith('.pdf')) return await parsePDF(file);
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) return await parseExcel(file);
+    return parseText(await file.text());
   } catch (error) {
     console.error("[Project Cargo Parser] Error leyendo el archivo:", error);
     throw error;
@@ -31,8 +26,24 @@ const parsePDF = async (file) => {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(" ");
-    fullText += pageText + "\n";
+
+    // MAGIA: Ordenar el texto por coordenada Y para reconstruir las filas de la tabla
+    const items = content.items.sort((a, b) => {
+      if (Math.abs(b.transform[5] - a.transform[5]) > 5) return b.transform[5] - a.transform[5];
+      return a.transform[4] - b.transform[4];
+    });
+
+    let lastY = -1;
+    let currentLine = "";
+    items.forEach(item => {
+      if (lastY !== -1 && Math.abs(item.transform[5] - lastY) > 5) {
+        fullText += currentLine.trim() + "\n";
+        currentLine = "";
+      }
+      currentLine += item.str + " ";
+      lastY = item.transform[5];
+    });
+    fullText += currentLine.trim() + "\n";
   }
   return parseText(fullText);
 };
@@ -42,79 +53,61 @@ const parseExcel = async (file) => {
   const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-  const lines = json.map(row => row.join(" ")).join("\n");
-  return parseText(lines);
+  return parseText(json.map(row => row.join(" ")).join("\n"));
 };
 
 const parseText = (text) => {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
   const parsedPieces = [];
-
-  // Detección de dimensiones LxWxH
-  const dimRegex = /(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)/i;
-  // Detección de pesos robusta: captura números con comas (ej. 8,500) antes de kg/ton
-  const weightRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d+)\s*(?:kilos?|kg|tons?|tn|t)\b/i;
-  const qtyRegex = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|\.)?\s+)/i;
+  
+  // Buscar el patrón de dimensiones: ej. 12.00x2.30x2.50
+  const dimRegex = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/i;
 
   lines.forEach((line, index) => {
-    // Ignorar cabeceras
-    if (/^(item|n[ºo]|descrip|qty|cant|largo|ancho|alto|peso|weight|dimensiones)/i.test(line)) return;
+    // Ignorar las cabeceras de la tabla
+    if (/^(item|n[ºo]|descrip|qty|cant|largo|ancho|alto|peso|weight|dimensiones|categoría)/i.test(line)) return;
 
     const dimMatch = line.match(dimRegex);
-    const wtMatch = line.match(weightRegex);
-    const qtyMatch = line.match(qtyRegex);
+    if (dimMatch) {
+      // 1. Extraer dimensiones
+      const l = parseFloat(dimMatch[1].replace(',', '.'));
+      const w = parseFloat(dimMatch[2].replace(',', '.'));
+      const h = parseFloat(dimMatch[3].replace(',', '.'));
 
-    // Detección algorítmica: si tiene medidas, pesos o palabras clave industriales, es una pieza
-    if (dimMatch || wtMatch || /bomba|bastidor|ósmosis|osmosis|camión|cabeza|góndola|furgoneta|skid|transformador|filtro|módulo/i.test(line)) {
+      // 2. Partir la línea usando las dimensiones como pivote central
+      const parts = line.split(dimMatch[0]);
+      const leftSide = parts[0].trim(); // Aquí está el nombre y la cantidad
+      const rightSide = parts[1] ? parts[1].trim() : ''; // Aquí están los pesos (8,500 y 34,000)
+
+      // 3. Extraer el Peso (el primer número de la derecha)
+      const rightNumbers = rightSide.match(/\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\b/g);
+      let wt = 1000;
+      if (rightNumbers && rightNumbers.length > 0) {
+        wt = parseFloat(rightNumbers[0].replace(/,/g, '')); // Quita las comas de "8,500" -> 8500
+      }
+
+      // 4. Extraer la Cantidad y Descripción de la izquierda
+      const leftNumbers = leftSide.match(/\b\d+\b/g);
       let qty = 1;
-      if (qtyMatch) {
-        qty = parseInt(qtyMatch[1], 10) || 1;
+      let desc = leftSide;
+      
+      if (leftNumbers && leftNumbers.length > 0) {
+        qty = parseInt(leftNumbers[leftNumbers.length - 1], 10);
+        // Quitar el número de la descripción
+        desc = leftSide.replace(new RegExp(`\\b${qty}\\b\\s*$`), '').trim();
       }
 
-      let l = 1, w = 1, h = 1;
-      if (dimMatch) {
-        l = parseFloat(dimMatch[1].replace(',', '.')) || 1;
-        w = parseFloat(dimMatch[2].replace(',', '.')) || 1;
-        h = parseFloat(dimMatch[3].replace(',', '.')) || 1;
-      }
+      if (!desc || desc.length < 2) desc = `Bulto #${index + 1}`;
 
-      let wt = null;
-      if (wtMatch) {
-        // Limpiamos las comas (ej: 8,500 -> 8500)
-        const cleanNumStr = wtMatch[1].replace(/,/g, '');
-        const val = parseFloat(cleanNumStr);
-        wt = /t|tn|ton/i.test(wtMatch[0]) ? val * 1000 : val;
-      } else {
-        // Fallback: si no dice "kg" pero vemos un número grande (ej. 12,600), lo asumimos como peso
-        const fallbackWtMatch = line.match(/\b(\d{3,}(?:[.,]\d{3})*)\b/);
-        if (fallbackWtMatch) {
-          const cleanNumStr = fallbackWtMatch[1].replace(/,/g, '');
-          const val = parseFloat(cleanNumStr);
-          if (val > 100) wt = val;
-        }
-      }
-
-      // Si todo falla, asignamos un peso simbólico bajo
-      if (!wt) wt = 1000;
-
-      let desc = line
-        .replace(qtyRegex, '')
-        .replace(dimRegex, '')
-        .replace(weightRegex, '')
-        .replace(/[-–—|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (!desc || desc.length < 2) desc = `Bulto Proyecto #${index + 1}`;
-
+      // Añadir la pieza lista al estado
       parsedPieces.push({
         id: Date.now() + index + Math.random(),
         quantity: qty,
-        type: desc,
-        length_m: l,
-        width_m: w,
-        height_m: h,
-        unit_weight_kg: wt,
+        type: desc.replace(/[-–—|]/g, '').trim(),
+        length: l,
+        width: w,
+        height: h,
+        weight: wt,
       });
     }
   });
