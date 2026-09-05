@@ -831,16 +831,16 @@ export function ForwarderWorkspace() {
                   <h3 className="text-sm font-black text-sky-400 uppercase">2. Trincaje y Materiales</h3>
                   
                   {/* FIX BANNER IA: Sin morado, 100% Dark Tech */}
-                  <div className="bg-slate-900 border-l-4 border-cyan-500 p-4 rounded shadow-lg flex items-center gap-4 mb-6">
-                    <div className="text-2xl">⚙️</div>
-                    <div className="flex flex-col">
-                      <span className="text-cyan-400 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
-                      <span className="text-slate-200 mt-1">
-                        Modalidad detectada: <strong className="text-white bg-slate-700 px-2 py-0.5 rounded ml-1 mr-3">{shippingMode}</strong>
-                        Buque recomendado: <strong className="text-white">{vesselType}</strong>
-                      </span>
-                    </div>
-                  </div>
+                  <div className="bg-white border border-slate-200 border-l-4 border-l-cyan-500 p-4 rounded shadow-sm flex items-center gap-4 mb-6">
+  <div className="text-2xl">⚙️</div>
+  <div className="flex flex-col">
+    <span className="text-cyan-600 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
+    <span className="text-slate-600 mt-1 text-xs">
+      Modalidad detectada: <strong className="bg-white text-slate-900 border border-slate-300 px-2 py-0.5 rounded shadow-sm mx-1">{shippingMode}</strong>
+      Buque recomendado: <strong className="text-slate-900">{vesselType}</strong>
+    </span>
+  </div>
+</div>
 
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                     <NumericCounter label="Maderas" value={dunnageWood} onChange={setDunnageWood} />
@@ -920,7 +920,7 @@ export function ForwarderWorkspace() {
         const finalTotalMargin = finalTotalSale - calculatedTotalCost;
 
         return (
-          <div className="fixed inset-0 bg-white z-[2147483647] overflow-y-auto print:bg-white print:p-0 print:static print:inset-auto print:overflow-visible text-slate-900">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] overflow-y-auto p-4 sm:p-10 print:p-0 print:bg-white text-slate-900">
             <style>{`
               @media print {
                 body { background-color: #ffffff !important; color: #0f172a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -929,15 +929,18 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* FIX BOTONERA: Z-index máximo para que no quede detrás de nada */}
-            <div className="fixed top-6 right-8 flex gap-4 z-[2147483647] print:hidden">
-              <button onClick={(e) => { e.preventDefault(); window.print(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded shadow-2xl font-bold border-2 border-blue-400">
+            {/* BOTONERA CLÁSICA - ANCLADA JUSTO ENCIMA DEL FOLIO PARA QUE NO DESAPAREZCA */}
+            <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-4 print:hidden">
+              <button onClick={(e) => { e.preventDefault(); window.print(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-lg font-bold flex items-center gap-2 cursor-pointer border border-blue-500">
                 🖨️ Imprimir / PDF
               </button>
-              <button onClick={(e) => { e.preventDefault(); setShowExecutiveReport(false); }} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded shadow-2xl font-bold border-2 border-slate-600">
+              <button onClick={(e) => { e.preventDefault(); setShowExecutiveReport(false); }} className="bg-white hover:bg-slate-50 text-slate-800 px-6 py-2.5 rounded-lg shadow-lg font-bold flex items-center gap-2 cursor-pointer border border-slate-300">
                 ✖ Cerrar Reporte
               </button>
             </div>
+
+            {/* FOLIO A4 BLANCO */}
+            <div className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-2xl border border-slate-200 rounded-lg print:shadow-none print:border-none print:max-w-full print-exact">
 
             <div className="max-w-4xl mx-auto p-10 bg-white text-slate-900 my-8 shadow-2xl border border-slate-200 rounded-lg print:my-0 print:p-8 print:shadow-none print:border-none print:max-w-full print-exact">
               <header className="border-b-2 border-slate-900 pb-6 mb-6">
