@@ -451,8 +451,8 @@ export function ForwarderWorkspace() {
                       <thead className="bg-slate-100 font-bold border-b border-slate-200">
                         <tr>
                           <th className="px-4 py-3 text-left">Servicio</th>
-                          <th className="px-4 py-3 text-right">Coste</th>
-                          <th className="px-4 py-3 text-right">Venta</th>
+                          <th className="px-4 py-3 text-right">Coste (€)</th>
+                          <th className="px-4 py-3 text-right">Venta (€)</th>
                           <th className="px-4 py-3 text-center">Acciones</th>
                         </tr>
                       </thead>
@@ -463,8 +463,8 @@ export function ForwarderWorkspace() {
                             <td className="px-4 py-3 text-right text-rose-600 font-bold">{Number(item.cost_eur).toLocaleString('es-ES')} €</td>
                             <td className="px-4 py-3 text-right text-emerald-600 font-bold">{Number(item.sale_price_eur).toLocaleString('es-ES')} €</td>
                             <td className="px-4 py-3 text-center">
-                              <button onClick={() => handleEditService(item)} className="mr-2">✏️</button>
-                              <button onClick={() => handleDeleteService(item.id)}>🗑️</button>
+                              <button onClick={() => handleEditService(item)} className="mx-1">✏️</button>
+                              <button onClick={() => handleDeleteService(item.id)} className="mx-1">🗑️</button>
                             </td>
                           </tr>
                         ))}
@@ -482,11 +482,11 @@ export function ForwarderWorkspace() {
         </main>
 
         {/* ==================================================== */}
-        {/* MODAL PRINCIPAL: Corregido solape de la 'X' y inputs */}
+        {/* MODAL PRINCIPAL: Ancho expandido para descripciones */}
         {/* ==================================================== */}
         {isCargoModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 sm:p-6 overflow-y-auto print:hidden">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100 mt-12">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100 mt-12">
               
               <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-black text-slate-100">Project Cargo Builder</h2>
@@ -495,7 +495,7 @@ export function ForwarderWorkspace() {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-800/70">
                 
-                {/* SECCIÓN 1: Packing List con input ancho ampliado */}
+                {/* SECCIÓN 1: Packing List con bloques ultra anchos */}
                 <section className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-sm font-black text-sky-400 uppercase">1. Lista de Empaque</h3>
@@ -511,7 +511,7 @@ export function ForwarderWorkspace() {
                       <thead className="bg-slate-900 font-bold text-slate-400 border-b border-slate-800">
                         <tr>
                           <th className="px-3 py-2.5 w-16">Cant.</th>
-                          <th className="px-3 py-2.5 min-w-[280px]">Tipo / Modelo (Descripción completa)</th>
+                          <th className="px-3 py-2.5 w-[42%]">Tipo / Modelo (Descripción completa)</th>
                           <th className="px-3 py-2.5 w-20">L (m)</th>
                           <th className="px-3 py-2.5 w-20">W (m)</th>
                           <th className="px-3 py-2.5 w-20">H (m)</th>
@@ -523,7 +523,7 @@ export function ForwarderWorkspace() {
                         {cargoItems.map((item) => (
                           <tr key={item.id}>
                             <td className="px-2 py-2"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2"><input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-3 py-1 text-slate-100 rounded" /></td>
+                            <td className="px-2 py-2"><input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-3 py-1 text-slate-100 rounded text-xs" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
                             <td className="px-2 py-2"><input type="number" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
@@ -614,9 +614,9 @@ export function ForwarderWorkspace() {
         )}
       </div>
 
-      {/* ==================================================== */}
-      {/* VISTA DEL REPORTE EJECUTIVO (PRINT-READY BLANCO A4)  */}
-      {/* ==================================================== */}
+      {/* ========================================================================= */}
+      {/* VISTA DEL REPORTE EJECUTIVO (CORREGIDO: Muestra Partidas del Proyecto)   */}
+      {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
         const totalVolumeM3 = totals.m3 || 0;
@@ -628,7 +628,7 @@ export function ForwarderWorkspace() {
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
         return (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[2147483647] overflow-y-auto p-4 sm:p-10 print:p-0 print:bg-white print:overflow-visible text-slate-900">
+          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[2147483647] overflow-y-auto p-4 sm:p-12 text-slate-900">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -639,7 +639,7 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA FLOTANTE SEPARADA DEL HEADER */}
+            {/* BOTONERA FIJA FUERA DE LA HOJA PARA EVITAR SOLAPES */}
             <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-6 print-hidden">
               <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-2 cursor-pointer border border-blue-400">
                 🖨️ Imprimir / Guardar PDF
@@ -649,7 +649,7 @@ export function ForwarderWorkspace() {
               </button>
             </div>
 
-            {/* FOLIO A4 AISLADO PARA IMPRESIÓN PURA */}
+            {/* FOLIO A4 BLANCO */}
             <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-12 bg-white text-slate-900 shadow-2xl border border-slate-200 rounded-xl">
               <header className="border-b-2 border-slate-900 pb-6 mb-8">
                 <div className="flex justify-between items-start gap-4 mb-4">
@@ -689,33 +689,31 @@ export function ForwarderWorkspace() {
                 </div>
               </section>
 
-              {/* Detalle de Artículos / Partidas */}
+              {/* Detalle de Partidas Reales del Proyecto */}
               <section className="mb-8">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">📋 Detalle de Partidas Operativas</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">📋 Desglose de Partidas y Servicios del Proyecto</h3>
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300">
-                      <th className="py-2.5 px-3 text-left">Concepto</th>
-                      <th className="py-2.5 px-3 text-right">Coste (€)</th>
-                      <th className="py-2.5 px-3 text-right">Venta (€)</th>
+                      <th className="py-2.5 px-3 text-left">Concepto / Partida</th>
+                      <th className="py-2.5 px-3 text-center">Piezas</th>
+                      <th className="py-2.5 px-3 text-right">Coste Estimado (€)</th>
+                      <th className="py-2.5 px-3 text-right">Precio Venta (€)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-900">Flete Marítimo (Base RT: {reportRT.toFixed(2)} RT)</td>
-                      <td className="py-3 px-3 text-right font-mono">{formatCurrency(finalTotalCost * 0.7)}</td>
-                      <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(finalTotalSale * 0.7)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-900">Estiba, Trincaje y Medios Especiales (MAFIs / Grúas)</td>
-                      <td className="py-3 px-3 text-right font-mono">{formatCurrency(finalTotalCost * 0.2)}</td>
-                      <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(finalTotalSale * 0.2)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-900">Logística Periférica (Almacenaje, Surveyor, Aduanas)</td>
-                      <td className="py-3 px-3 text-right font-mono">{formatCurrency(finalTotalCost * 0.1)}</td>
-                      <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(finalTotalSale * 0.1)}</td>
-                    </tr>
+                    {cargoItems.map((item, idx) => {
+                      const itemShareCost = (finalTotalCost / Math.max(1, cargoItems.length));
+                      const itemShareSale = (finalTotalSale / Math.max(1, cargoItems.length));
+                      return (
+                        <tr key={idx}>
+                          <td className="py-3 px-3 font-semibold text-slate-900">{item.type || 'Pieza de Proyecto'} ({item.length}x{item.width}x{item.height}m)</td>
+                          <td className="py-3 px-3 text-center font-mono">{item.quantity}</td>
+                          <td className="py-3 px-3 text-right font-mono">{formatCurrency(itemShareCost)}</td>
+                          <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(itemShareSale)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </section>
