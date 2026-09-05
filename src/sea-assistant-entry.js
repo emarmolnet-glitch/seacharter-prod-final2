@@ -625,6 +625,42 @@ async function executeActionableAiUpdateFields(actionObj) {
         
         if (!p || typeof p !== 'object' || Object.keys(p).length === 0) return false;
 
+        // --- ESCUDO FRONTEND: AUTO-BUSCADOR DE BUQUE VÍA IA ---
+        const imoDetectado = p.imo || p.imo_number || p.imoNumber;
+
+        if (imoDetectado) {
+            const imoInput = document.getElementById('vessel-identity-imo'); 
+            
+            if (imoInput) {
+                // 1. Escribimos el número en la casilla
+                imoInput.value = imoDetectado;
+                
+                // 2. Avisamos a Vanilla JS de que el valor ha cambiado (dispara el oninput)
+                imoInput.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                // 3. Creamos un evento de teclado idéntico a pulsar la tecla Enter
+                const enterEvent = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true
+                });
+                
+                // 4. Disparamos el Enter virtual con un ligero retraso
+                setTimeout(() => {
+                    imoInput.dispatchEvent(enterEvent);
+                    console.log("🤖 IA: Disparando Enter automático para buscar el buque IMO:", imoDetectado);
+                }, 400); 
+            }
+        }
+        // --------------------------------------------------------
+
+        const updateInputs = (ids, value, dispatchEvents = true) => {
+
+
+      
         const updateInputs = (ids, value, dispatchEvents = true) => {
             if (value === undefined || value === null || value === "") return;
             ids.forEach((id) => {
