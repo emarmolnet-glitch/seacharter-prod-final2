@@ -99,7 +99,7 @@ test('6. Dynamic banner has Core PRO Dark/Tech styling and bold contrast labels'
   assert.ok(bannerMatches);
   assert.equal(
     bannerMatches[1],
-    'bg-indigo-950 text-indigo-100 border border-indigo-700/50 p-4 rounded-lg shadow-inner flex items-center font-medium text-sm mb-6'
+    'bg-slate-900 border-l-4 border-cyan-500 p-4 rounded shadow-lg flex items-center gap-4 mb-6'
   );
 });
 
@@ -108,13 +108,31 @@ test('7. Footer inputs have dark contrast styles and EUR symbol is text-slate-40
   assert.ok(estimatedCostMatches);
   assert.equal(
     estimatedCostMatches[1],
-    'bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500'
+    'w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner'
   );
 
   const salePriceMatches = forwarderComponentSource.match(/id="input-sale-price"[\s\S]*?className="([^"]*)"/);
   assert.ok(salePriceMatches);
   assert.equal(
     salePriceMatches[1],
-    'bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500'
+    'w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner'
   );
+});
+
+test('8. extractWeightFromLine extracts numbers > 100 from description without defaulting to 1000', () => {
+  const extractFnMatch = parserSource.match(/export\s+function\s+extractWeightFromLine\([\s\S]*?^}/m);
+  assert.ok(extractFnMatch, 'extractWeightFromLine function must be defined and exported');
+  const extractWeightFromLine = new Function('WEIGHT_REGEX', 'line', 'wtMatch', extractFnMatch[0].replace('export function extractWeightFromLine(line, wtMatch = null) {', '').replace(/}$/, '')).bind(null, WEIGHT_REGEX);
+
+  // Case 1: Line with explicit 4-digit number at the end
+  const w1 = extractWeightFromLine('1 Bomba Centrifuga 4.5 x 2.1 x 1.8 9,200', null);
+  assert.equal(w1, 9200);
+
+  // Case 2: Line with description containing a number > 100 before dimensions or embedded
+  const w2 = extractWeightFromLine('Transformador 750 KVA 3.0 x 2.0 x 2.5', null);
+  assert.equal(w2, 750);
+
+  // Case 3: Line with large number before kg
+  const w3 = extractWeightFromLine('Filtro de Arena 2.5 x 2.5 x 3.0 peso 12,600 kg', null);
+  assert.equal(w3, 12600);
 });

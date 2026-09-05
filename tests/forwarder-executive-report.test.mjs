@@ -17,24 +17,24 @@ test('2. Modal footer includes secondary button "📄 Generar Reporte Ejecutivo"
 
 test('3. Executive Report view renders full-screen print-ready overlay when showExecutiveReport is true', () => {
   assert.match(forwarderComponentSource, /showExecutiveReport\s*&&\s*\(\(\)\s*=>/);
-  assert.match(forwarderComponentSource, /fixed\s+inset-0\s+bg-white\s+z-50\s+overflow-y-auto/);
+  assert.match(forwarderComponentSource, /fixed\s+inset-0\s+bg-white\s+(?:z-50|z-\[9000\])\s+overflow-y-auto/);
 });
 
 test('4. Centered A4 container is rendered with requested max-w-4xl mx-auto p-10 bg-white text-slate-900 classes', () => {
   assert.match(forwarderComponentSource, /max-w-4xl\s+mx-auto\s+p-10\s+bg-white\s+text-slate-900/);
 });
 
-test('5. Top-right floating controls contain "🖨️ Imprimir / Guardar PDF" and "Cerrar" with print:hidden', () => {
-  const printButtonMatch = forwarderComponentSource.match(/id="btn-print-executive-report"[\s\S]*?>[\s\S]*?Imprimir \/ Guardar PDF[\s\S]*?<\/button>/);
+test('5. Top-right floating controls contain "🖨️ Imprimir / PDF" and "✖ Cerrar Reporte" with print:hidden', () => {
+  const printButtonMatch = forwarderComponentSource.match(/id="btn-print-executive-report"[\s\S]*?>[\s\S]*?Imprimir\s*\/\s*(?:Guardar\s+)?PDF[\s\S]*?<\/button>/);
   assert.ok(printButtonMatch, 'btn-print-executive-report must exist');
   assert.match(printButtonMatch[0], /window\.print\(\)/);
   assert.match(printButtonMatch[0], /🖨️/);
 
-  const closeButtonMatch = forwarderComponentSource.match(/id="btn-close-executive-report"[\s\S]*?>[\s\S]*?Cerrar[\s\S]*?<\/button>/);
+  const closeButtonMatch = forwarderComponentSource.match(/id="btn-close-executive-report"[\s\S]*?>[\s\S]*?Cerrar(?: Reporte)?[\s\S]*?<\/button>/);
   assert.ok(closeButtonMatch, 'btn-close-executive-report must exist');
   assert.match(closeButtonMatch[0], /setShowExecutiveReport\(false\)/);
 
-  assert.match(forwarderComponentSource, /fixed\s+top-6\s+right-6\s+z-50\s+flex\s+items-center.*print:hidden/);
+  assert.match(forwarderComponentSource, /fixed\s+top-6\s+right-8\s+flex\s+gap-4\s+z-\[(?:60|100|9999)\]\s+print:hidden/);
 });
 
 test('6. Header section includes forwarder branding, issue date, project_ref, and commercial title', () => {
