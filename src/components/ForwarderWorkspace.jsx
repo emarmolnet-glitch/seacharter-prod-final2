@@ -836,7 +836,7 @@ export function ForwarderWorkspace() {
   <div className="flex flex-col">
     <span className="text-cyan-600 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
     <span className="text-slate-600 mt-1 text-xs">
-      Modalidad detectada: <strong className="bg-white text-slate-900 border border-slate-300 px-2 py-0.5 rounded shadow-sm mx-1">{shippingMode}</strong>
+      Modalidad detectada: <strong className="text-slate-900 px-1 font-black">{shippingMode}</strong>
       Buque recomendado: <strong className="text-slate-900">{vesselType}</strong>
     </span>
   </div>
@@ -929,8 +929,8 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA CLÁSICA - ANCLADA JUSTO ENCIMA DEL FOLIO PARA QUE NO DESAPAREZCA */}
-            <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-4 print:hidden">
+            {/* BOTONERA CLÁSICA - FIJA A LA PANTALLA */}
+            <div className="fixed top-6 right-8 flex gap-4 z-[99999] print:hidden">
               <button onClick={(e) => { e.preventDefault(); window.print(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-lg font-bold flex items-center gap-2 cursor-pointer border border-blue-500">
                 🖨️ Imprimir / PDF
               </button>
