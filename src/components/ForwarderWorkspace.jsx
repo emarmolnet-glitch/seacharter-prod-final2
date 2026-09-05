@@ -76,6 +76,9 @@ export function ForwarderWorkspace() {
   const [editingLineItemId, setEditingLineItemId] = useState(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
 
+  // Estado del Reporte Ejecutivo / Cotización Comercial (Print-Ready)
+  const [showExecutiveReport, setShowExecutiveReport] = useState(false);
+
   // Estado para la importación asistida por IA (Packing List)
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
   const fileInputRef = useRef(null);
@@ -974,11 +977,11 @@ export function ForwarderWorkspace() {
   };
 
   return (
-    <div className="w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative">
+    <div className="w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative print:bg-white print:overflow-visible print:h-auto">
       {/* ======================================================== */}
       {/* COLUMNA IZQUIERDA (Sidebar - ancho fijo w-80)           */}
       {/* ======================================================== */}
-      <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden">
+      <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
         {/* Cabecera Sidebar y Botón Principal */}
         <div className="p-4 border-b border-slate-800">
           <div className="flex items-center justify-between mb-3">
@@ -1094,7 +1097,7 @@ export function ForwarderWorkspace() {
       {/* ======================================================== */}
       {/* LIENZO CENTRAL (Main Area - flex-1)                     */}
       {/* ======================================================== */}
-      <main className="flex-1 bg-slate-50 flex flex-col h-full overflow-y-auto">
+      <main className="flex-1 bg-slate-50 flex flex-col h-full overflow-y-auto print:hidden">
         {saveSuccessMessage && (
           <div className="m-4 mb-0 p-3 bg-emerald-100 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-xs font-semibold shadow-sm">
             <div className="flex items-center gap-2">
@@ -1277,7 +1280,7 @@ export function ForwarderWorkspace() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="project-cargo-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto animate-fade-in print:hidden"
         >
           <div className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100 ring-1 ring-white/10 my-auto">
             {/* Header del Modal */}
@@ -1823,6 +1826,15 @@ export function ForwarderWorkspace() {
                 </button>
                 <button
                   type="button"
+                  id="btn-generate-executive-report"
+                  onClick={() => setShowExecutiveReport(true)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white text-xs font-bold rounded-xl border border-blue-500/30 transition cursor-pointer flex items-center gap-2"
+                >
+                  <span>📄</span>
+                  <span>Generar Reporte Ejecutivo</span>
+                </button>
+                <button
+                  type="button"
                   id="btn-save-project-cargo"
                   onClick={handleSaveProjectCargo}
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center gap-2"
@@ -1835,6 +1847,426 @@ export function ForwarderWorkspace() {
           </div>
         </div>
       )}
+
+      {/* ======================================================== */}
+      {/* VISTA DEL REPORTE EJECUTIVO / COTIZACIÓN COMERCIAL       */}
+      {/* Optimizado para impresión (Print-Ready)                  */}
+      {/* ======================================================== */}
+      {showExecutiveReport && (() => {
+        const totalWeightTons = (totals.weight || 0) / 1000;
+        const totalVolumeM3 = totals.m3 || 0;
+        const reportRT = Math.max(totalWeightTons, totalVolumeM3);
+
+        // Costes base calculados según reglas operativas
+        const costFreight = reportRT * 65;
+        const costLabor = ((Number(stevedoreGangs) || 0) * 1200) + ((Number(lashingTeam) || 0) * 800);
+        const lashingMaterials = ((Number(dunnageWood) || 0) * 30) +
+          ((Number(chainsBinders) || 0) * 80) +
+          ((Number(highCapacitySlings) || 0) * 40) +
+          ((Number(shackles) || 0) * 15);
+        const costMaterials = ((Number(mafiPlatforms) || 0) * 300) +
+          ((Number(heavyLiftCrane) || 0) * 2500) +
+          lashingMaterials;
+        const storageCost = Math.ceil(totals.m2 || 0) * (Number(storageDays) || 0) * 2;
+        const costPeripheral = storageCost +
+          (Number(surveyorCost) || 0) +
+          (Number(inlandCost) || 0) +
+          (Number(customsCost) || 0);
+
+        const calculatedTotalCost = costFreight + costLabor + costMaterials + costPeripheral;
+        const finalTotalCost = (parseFloat(estimatedCost) > 0) ? parseFloat(estimatedCost) : calculatedTotalCost;
+        const finalTotalSale = (parseFloat(salePrice) > 0) ? parseFloat(salePrice) : (finalTotalCost * 1.15);
+        const finalTotalMargin = finalTotalSale - finalTotalCost;
+
+        // Distribución ponderada en caso de edición manual de los totales
+        const costRatio = calculatedTotalCost > 0 ? (finalTotalCost / calculatedTotalCost) : 1;
+        const saleRatio = finalTotalCost > 0 ? (finalTotalSale / finalTotalCost) : 1.15;
+
+        const row1Cost = costFreight * costRatio;
+        const row1Sale = row1Cost * saleRatio;
+        const row1Margin = row1Sale - row1Cost;
+
+        const row2Cost = costLabor * costRatio;
+        const row2Sale = row2Cost * saleRatio;
+        const row2Margin = row2Sale - row2Cost;
+
+        const row3Cost = costMaterials * costRatio;
+        const row3Sale = row3Cost * saleRatio;
+        const row3Margin = row3Sale - row3Cost;
+
+        const row4Cost = costPeripheral * costRatio;
+        const row4Sale = row4Cost * saleRatio;
+        const row4Margin = row4Sale - row4Cost;
+
+        const formatCurrency = (val) => {
+          const num = Number(val) || 0;
+          return num.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+        };
+
+        const formatMarginPct = (margin, sale) => {
+          if (!sale || sale <= 0) return '0.0%';
+          return ((margin / sale) * 100).toFixed(1) + '%';
+        };
+
+        return (
+          <div className="fixed inset-0 bg-white z-50 overflow-y-auto print:static print:inset-auto print:z-auto print:overflow-visible print:bg-white text-slate-900">
+            {/* Reglas de impresión CSS para compatibilidad nativa y fondos sólidos */}
+            <style>{`
+              @media print {
+                body {
+                  background-color: #ffffff !important;
+                  color: #0f172a !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                @page {
+                  size: A4 portrait;
+                  margin: 12mm 15mm 12mm 15mm;
+                }
+                .print-exact {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+              }
+            `}</style>
+
+            {/* Botones Flotantes en la esquina superior derecha (Ocultos en impresión con print:hidden) */}
+            <div className="fixed top-6 right-6 z-50 flex items-center gap-3 print:hidden shadow-xl bg-white/95 backdrop-blur-md p-2 rounded-2xl border border-slate-200">
+              <button
+                type="button"
+                id="btn-print-executive-report"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && typeof window.print === 'function') {
+                    window.print();
+                  }
+                }}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-blue-500/25 transition cursor-pointer flex items-center gap-2"
+              >
+                <span>🖨️</span>
+                <span>Imprimir / Guardar PDF</span>
+              </button>
+              <button
+                type="button"
+                id="btn-close-executive-report"
+                onClick={() => setShowExecutiveReport(false)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <span>✕</span>
+                <span>Cerrar</span>
+              </button>
+            </div>
+
+            {/* Contenedor Centrado simulando Folio A4 */}
+            <div className="max-w-4xl mx-auto p-10 bg-white text-slate-900 my-8 shadow-2xl border border-slate-200 rounded-lg print:my-0 print:p-8 print:shadow-none print:border-none print:max-w-full print-exact">
+              {/* 1. Cabecera (Header) */}
+              <header className="border-b-2 border-slate-900 pb-6 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-2xl" aria-hidden="true">⚓</span>
+                      <span className="text-xl font-black tracking-tight text-slate-900 uppercase">
+                        Universal Forwarding / B2B Module
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      División Especializada de Fletamentos y Carga de Proyecto
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Operaciones Multimodales · Heavy Lift & Breakbulk · Puertos Globales
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg border sm:border-0 border-slate-200">
+                    <div className="text-xs text-slate-600 mb-1">
+                      <span className="font-semibold text-slate-800">Fecha de Emisión: </span>
+                      <span className="font-mono">{new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 mb-1">
+                      <span className="font-semibold text-slate-800">Referencia del Proyecto: </span>
+                      <span className="font-mono font-bold text-slate-900">{activeProject?.project_ref || 'EXP-PRJ-2026-001'}</span>
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      <span className="font-semibold text-slate-800">Cliente: </span>
+                      <span className="font-bold text-blue-900">{activeProject?.client_name || 'Cliente B2B / Industrial'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">
+                      OFERTA COMERCIAL - PROJECT CARGO
+                    </h1>
+                    <p className="text-xs text-slate-500">
+                      Estudio Técnico Operativo y Cotización Integral de Flete y Servicios Portuarios
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold border border-slate-300 print-exact">
+                    <span>Documento Oficial</span>
+                    <span>•</span>
+                    <span>Cotización Firme</span>
+                  </div>
+                </div>
+              </header>
+
+              {/* 2. Resumen Operativo (Operational Summary) */}
+              <section className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 print-exact">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-200/80 pb-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                    <span>📊</span>
+                    <span>Resumen Operativo (Operational Summary)</span>
+                  </h3>
+                  <span className="text-[11px] font-bold text-slate-500 font-mono">
+                    {totals.quantity} piezas en lista de empaque
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm print-exact">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Volumen Total (M³)
+                    </span>
+                    <span className="text-base font-black text-slate-900 font-mono block">
+                      {totals.m3.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
+                      Superficie: {totals.m2.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm print-exact">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Peso Total (Tons)
+                    </span>
+                    <span className="text-base font-black text-slate-900 font-mono block">
+                      {totalWeightTons.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tons
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
+                      {totals.weight.toLocaleString('es-ES')} kg
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm print-exact">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Revenue Tons (RT)
+                    </span>
+                    <span className="text-base font-black text-blue-700 font-mono block">
+                      {reportRT.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RT
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
+                      Max(Volumen, Peso)
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm print-exact">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Modalidad Operativa
+                    </span>
+                    <div className="mt-1">
+                      <span className={`inline-block px-2.5 py-0.5 text-xs font-black rounded ${shippingMode === 'Ro-Ro' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-sky-100 text-sky-900 border border-sky-300'}`}>
+                        {shippingMode}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      {shippingMode === 'Ro-Ro' ? 'Operativa Ro-Ro' : 'Operativa Lo-Lo'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm print-exact">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Buque Recomendado
+                    </span>
+                    <span className="text-xs font-black text-slate-900 leading-tight block mt-1">
+                      {vesselType}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      Apto Heavy Lift
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              {/* 3. Desglose de Partidas (Financial Breakdown) */}
+              <section className="mb-6">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-2">
+                  <span>📋</span>
+                  <span>Desglose de Partidas (Financial Breakdown)</span>
+                </h3>
+
+                <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm print-exact">
+                  <table className="border-collapse w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 uppercase tracking-wider font-bold border-b border-slate-300 text-[11px] print-exact">
+                        <th className="py-3 px-4 w-1/4">Concepto</th>
+                        <th className="py-3 px-4 w-2/5">Descripción</th>
+                        <th className="py-3 px-3 w-[12%] text-right">Coste (€)</th>
+                        <th className="py-3 px-3 w-[12%] text-right">Venta (€)</th>
+                        <th className="py-3 px-3 w-[11%] text-right">Margen</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {/* Fila 1: Flete Marítimo (Base RT) */}
+                      <tr className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 align-top">
+                          Flete Marítimo (Base RT)
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 leading-relaxed align-top">
+                          Flete base marítimo oceánico calculado sobre <strong className="text-slate-800 font-mono">{reportRT.toFixed(2)} RT</strong> a tarifa contractual de 65,00 €/RT para buque tipo {vesselType}.
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-slate-700 align-top">
+                          {formatCurrency(row1Cost)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 align-top">
+                          {formatCurrency(row1Sale)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-emerald-700 font-semibold align-top">
+                          {formatCurrency(row1Margin)}
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            ({formatMarginPct(row1Margin, row1Sale)})
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* Fila 2: Estiba y Trincaje (Cuadrillas, Trincadores) */}
+                      <tr className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 align-top">
+                          Estiba y Trincaje (Cuadrillas, Trincadores)
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 leading-relaxed align-top">
+                          Mano de obra portuaria especializada y cuadrillas homologadas ({stevedoreGangs} turnos de cuadrilla de estibadores a 1.200 €/turno, {lashingTeam} equipos de trincaje profesional).
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-slate-700 align-top">
+                          {formatCurrency(row2Cost)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 align-top">
+                          {formatCurrency(row2Sale)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-emerald-700 font-semibold align-top">
+                          {formatCurrency(row2Margin)}
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            ({formatMarginPct(row2Margin, row2Sale)})
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* Fila 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage) */}
+                      <tr className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 align-top">
+                          Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 leading-relaxed align-top">
+                          Medios de estiba pesada y trincaje de alta resistencia ({mafiPlatforms} plataformas rodantes MAFI, {heavyLiftCrane} grúa(s) auxiliar(es) Heavy Lift, {chainsBinders} cadenas y tensores, {dunnageWood} lotes de dunnage de madera, {highCapacitySlings} eslingas y {shackles} grilletes).
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-slate-700 align-top">
+                          {formatCurrency(row3Cost)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 align-top">
+                          {formatCurrency(row3Sale)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-emerald-700 font-semibold align-top">
+                          {formatCurrency(row3Margin)}
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            ({formatMarginPct(row3Margin, row3Sale)})
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas) */}
+                      <tr className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 align-top">
+                          Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas)
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 leading-relaxed align-top">
+                          Servicios logísticos complementarios ({storageDays} días de almacenaje en terminal sobre superficie ocupada de {Math.ceil(totals.m2)} m², inspección pericial por Marine Surveyor oficial, acarreo inland y formalidades aduaneras).
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-slate-700 align-top">
+                          {formatCurrency(row4Cost)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 align-top">
+                          {formatCurrency(row4Sale)}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono text-emerald-700 font-semibold align-top">
+                          {formatCurrency(row4Margin)}
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            ({formatMarginPct(row4Margin, row4Sale)})
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 print-exact">
+                      <tr>
+                        <td colSpan={2} className="py-3 px-4 text-right uppercase tracking-wider text-[11px] text-slate-600">
+                          Subtotales de la Cotización:
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-slate-800 font-black">
+                          {formatCurrency(finalTotalCost)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-slate-900 font-black">
+                          {formatCurrency(finalTotalSale)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-emerald-800 font-black">
+                          {formatCurrency(finalTotalMargin)}
+                          <span className="block text-[10px] text-emerald-600 font-normal">
+                            ({formatMarginPct(finalTotalMargin, finalTotalSale)})
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </section>
+
+              {/* Totales: PRECIO TOTAL DE VENTA AL CLIENTE */}
+              <div className="bg-slate-900 text-white p-6 rounded-2xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg border border-slate-800 print-exact">
+                <div>
+                  <span className="text-[11px] uppercase font-bold tracking-wider text-blue-400 block mb-1">
+                    Importe Total de la Cotización
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
+                    PRECIO TOTAL DE VENTA AL CLIENTE
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Tarifa all-in de flete marítimo, trincaje y operativa portuaria (Impuestos no incluidos)
+                  </p>
+                </div>
+                <div className="text-center md:text-right bg-slate-800/80 p-4 rounded-xl border border-slate-700/60 min-w-[240px] print-exact">
+                  <div className="text-3xl sm:text-4xl font-black font-mono text-emerald-400 tracking-tight">
+                    {formatCurrency(finalTotalSale)}
+                  </div>
+                  <div className="text-xs text-slate-300 font-medium mt-1">
+                    Margen Comercial Transitario: <strong className="text-white font-mono">{formatCurrency(finalTotalMargin)}</strong> ({formatMarginPct(finalTotalMargin, finalTotalSale)})
+                  </div>
+                </div>
+              </div>
+
+              {/* Cláusulas y Condiciones Operativas */}
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-[11px] text-slate-600 space-y-1.5 mb-6 print-exact">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                  Términos y Condiciones de la Cotización
+                </h4>
+                <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                  <li>Validez de la oferta: 15 días naturales a partir de la fecha de emisión.</li>
+                  <li>Sujeto a confirmación de booking marítimo, calados y disponibilidad de grúas y medios en muelle.</li>
+                  <li>La mercancía debe presentarse provista de puntos de izado y centros de gravedad claramente señalizados.</li>
+                  <li>Operativa sujeta a las condiciones meteorológicas y regulaciones de seguridad portuaria vigentes.</li>
+                </ul>
+              </div>
+
+              {/* Firmas de Conformidad */}
+              <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-200 text-center">
+                <div>
+                  <div className="border-b border-slate-400 pb-12 mb-2"></div>
+                  <p className="text-xs font-bold text-slate-800">Por Universal Forwarding / Transitario</p>
+                  <p className="text-[10px] text-slate-500">Departamento de Project Cargo & Chartering</p>
+                </div>
+                <div>
+                  <div className="border-b border-slate-400 pb-12 mb-2"></div>
+                  <p className="text-xs font-bold text-slate-800">Aceptación y Conformidad del Cliente</p>
+                  <p className="text-[10px] text-slate-500">{activeProject?.client_name || 'Firma autorizada y sello'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
