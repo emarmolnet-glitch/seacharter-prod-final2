@@ -642,6 +642,7 @@
     <script type="module" src="./src/market-intelligence-hydration.js?v=20260826-visual-mirror"></script>
     <script type="module" src="./src/step7-baltic-spot-reference.js?v=20260826-visual-mirror"></script>
     <script type="module" src="./src/compatibilidad-module.js"></script>
+    <script type="module" src="./src/forwarder-workspace-entry.jsx"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -13392,6 +13393,13 @@
                     </div>
                 </section>
             </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MÓDULO: FORWARDERS (TRANSITARIOS B2B)      -->
+        <!-- ========================================== -->
+        <div id="view-forwarders" class="view-section absolute inset-0 overflow-hidden hidden" aria-label="Módulo B2B Proyectos Transitarios">
+            <div id="forwarder-workspace-root" class="w-full h-full"></div>
         </div>
 
         <!-- BOTÓN FLOTANTE (FAB) DEL ASISTENTE IA -->
@@ -28537,6 +28545,24 @@ function createRouteAnchorElement(type) {
                 modules.forEach(moduleConfig => {
                     tabs.appendChild(createModuleButton(moduleConfig, 'primary'));
                 });
+
+                // Separador visual (línea vertical) y botón 💼 PROYECTOS a la derecha de AUDITORIA
+                const separator = document.createElement('div');
+                separator.className = 'w-px h-5 bg-slate-700/80 mx-1 self-center shrink-0';
+                separator.setAttribute('aria-hidden', 'true');
+                tabs.appendChild(separator);
+
+                const forwarderBtn = document.createElement('button');
+                forwarderBtn.type = 'button';
+                forwarderBtn.id = 'tab-btn-forwarders';
+                forwarderBtn.dataset.moduleId = 'FORWARDERS';
+                forwarderBtn.className = 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap';
+                forwarderBtn.textContent = '💼 PROYECTOS';
+                forwarderBtn.setAttribute('aria-label', '💼 PROYECTOS');
+                forwarderBtn.addEventListener('click', () => {
+                    switchTab('FORWARDERS');
+                });
+                tabs.appendChild(forwarderBtn);
             }
             if (mobileMenu) {
                 mobileMenu.innerHTML = '';
@@ -28546,6 +28572,21 @@ function createRouteAnchorElement(type) {
                     item.appendChild(createModuleButton(moduleConfig, 'mobile'));
                     mobileMenu.appendChild(item);
                 });
+
+                const mobileItem = document.createElement('li');
+                mobileItem.className = 'tools-dropdown-item';
+                const mobileBtn = document.createElement('button');
+                mobileBtn.type = 'button';
+                mobileBtn.id = 'mobile-tab-btn-forwarders';
+                mobileBtn.dataset.moduleId = 'FORWARDERS';
+                mobileBtn.className = 'tools-dropdown-action';
+                mobileBtn.textContent = '💼 PROYECTOS';
+                mobileBtn.addEventListener('click', () => {
+                    switchTab('FORWARDERS');
+                    closeMobileModuleNav();
+                });
+                mobileItem.appendChild(mobileBtn);
+                mobileMenu.appendChild(mobileItem);
             }
             updateMobileModuleNavLabel(activeNavigationModuleId);
         }
@@ -28553,6 +28594,10 @@ function createRouteAnchorElement(type) {
         function updateMobileModuleNavLabel(tabId) {
             const currentLabel = document.getElementById('mobile-module-nav-current');
             if (!currentLabel) return;
+            if (tabId === 'FORWARDERS' || tabId === 'forwarders') {
+                currentLabel.textContent = '💼 PROYECTOS';
+                return;
+            }
             const currentModule = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].find(moduleConfig => moduleConfig.id === tabId);
             const rawLabel = currentModule?.label || 'Mapa';
             currentLabel.textContent = getLocalizedModuleLabel(rawLabel);
@@ -28859,15 +28904,18 @@ function createRouteAnchorElement(type) {
         window.userPreferences = userPreferences;
 
         function updateNavigationContext(tabId) {
-            if (!MODULE_NAVIGATION.includes(tabId)) return;
+            const isForwarders = tabId === 'FORWARDERS' || tabId === 'forwarders';
+            if (!MODULE_NAVIGATION.includes(tabId) && !isForwarders) return;
             activeNavigationModuleId = tabId;
-            MODULE_NAVIGATION.forEach(moduleId => {
+            const allModules = [...MODULE_NAVIGATION, 'FORWARDERS'];
+            allModules.forEach(moduleId => {
                 document.querySelectorAll(`[data-module-id="${moduleId}"]`).forEach(button => {
                     button.classList.remove('bg-blue-600', 'text-white', 'shadow');
                     button.classList.add('text-[#002060]');
-                    button.setAttribute('aria-current', moduleId === tabId ? 'page' : 'false');
+                    const isCurrent = moduleId === tabId || (moduleId === 'FORWARDERS' && isForwarders);
+                    button.setAttribute('aria-current', isCurrent ? 'page' : 'false');
 
-                    if (moduleId === tabId && button.classList.contains('tab-btn')) {
+                    if (isCurrent && button.classList.contains('tab-btn')) {
                         button.classList.remove('text-[#002060]');
                         button.classList.add('bg-blue-600', 'text-white', 'shadow');
                     }
@@ -29168,7 +29216,10 @@ function createRouteAnchorElement(type) {
         }
 
         function switchTab(tabId) {
-            const targetView = document.getElementById(`view-${tabId}`);
+            let targetView = document.getElementById(`view-${tabId}`);
+            if (!targetView && (tabId === 'FORWARDERS' || tabId === 'forwarders')) {
+                targetView = document.getElementById('view-forwarders') || document.getElementById('view-FORWARDERS');
+            }
             if (!targetView) {
                 console.warn(`[Navigation] Unknown tab ignored: ${tabId}`);
                 return false;
@@ -29211,6 +29262,15 @@ function createRouteAnchorElement(type) {
             }
             if (tabId === 'compatibilidad') {
                 window.mountCompatibilityModule?.(targetView);
+            }
+            if (tabId === 'FORWARDERS' || tabId === 'forwarders') {
+                window.currentView = 'FORWARDERS';
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('navigation:view-change', { detail: { view: 'FORWARDERS' } }));
+                }
+                if (typeof window.mountForwarderWorkspace === 'function') {
+                    window.mountForwarderWorkspace(targetView);
+                }
             }
             if (tabId === 'auditor') {
                 const inheritedVessel = window.activeAuditVessel 
