@@ -56,18 +56,26 @@ test('7. Plataformas MAFI counter input is rendered visibly in Section 3', () =>
   assert.match(forwarderComponentSource, /onChange=\{setMafiPlatforms\}/);
 });
 
-test('8. Total inputs in footer have bg-white text-slate-900 font-bold classes for perfect readability', () => {
+test('8. Total inputs in footer have bg-slate-800 text-white font-bold text-2xl classes for dark contrast', () => {
   const estimatedCostMatches = forwarderComponentSource.match(/id="input-estimated-cost"[\s\S]*?className="([^"]*)"/);
   assert.ok(estimatedCostMatches, 'input-estimated-cost must exist with className');
-  assert.match(estimatedCostMatches[1], /bg-white/);
-  assert.match(estimatedCostMatches[1], /text-slate-900/);
+  assert.match(estimatedCostMatches[1], /bg-slate-800/);
+  assert.match(estimatedCostMatches[1], /text-white/);
   assert.match(estimatedCostMatches[1], /font-bold/);
+  assert.match(estimatedCostMatches[1], /text-2xl/);
+  assert.match(estimatedCostMatches[1], /placeholder-slate-500/);
+  assert.match(estimatedCostMatches[1], /border-slate-600/);
+  assert.match(estimatedCostMatches[1], /text-right/);
 
   const salePriceMatches = forwarderComponentSource.match(/id="input-sale-price"[\s\S]*?className="([^"]*)"/);
   assert.ok(salePriceMatches, 'input-sale-price must exist with className');
-  assert.match(salePriceMatches[1], /bg-white/);
-  assert.match(salePriceMatches[1], /text-slate-900/);
+  assert.match(salePriceMatches[1], /bg-slate-800/);
+  assert.match(salePriceMatches[1], /text-white/);
   assert.match(salePriceMatches[1], /font-bold/);
+  assert.match(salePriceMatches[1], /text-2xl/);
+  assert.match(salePriceMatches[1], /placeholder-slate-500/);
+  assert.match(salePriceMatches[1], /border-slate-600/);
+  assert.match(salePriceMatches[1], /text-right/);
 });
 
 test('9. Behavioral simulation: verify Ro-Ro vs Lo-Lo heuristic calculations', () => {
@@ -164,3 +172,38 @@ test('9. Behavioral simulation: verify Ro-Ro vs Lo-Lo heuristic calculations', (
   assert.equal(roroWithMafi.Gangs, 1);
   assert.equal(roroWithMafi.stevedoringCost, (3 * 300) + (0 * 2500) + (1 * 1200));
 });
+
+test('10. autoCalculateEstimates ensures at least 1 lashing team via Math.max when cargoItems exists', () => {
+  assert.match(forwarderComponentSource, /const\s+setLashingTeams\s*=\s*setLashingTeam/);
+  assert.match(
+    forwarderComponentSource,
+    /setLashingTeams\(cargoItems\.length\s*>\s*0\s*\?\s*Math\.max\(1,\s*Math\.ceil\(totalPieces\s*\/\s*20\)\s*\+\s*\(roRoItems\s*>\s*0\s*\?\s*1\s*:\s*0\)\)\s*:\s*0\)/
+  );
+});
+
+test('11. Dynamic banner has Core PRO Dark/Tech style classes with text-white font-bold contrast', () => {
+  const bannerMatches = forwarderComponentSource.match(/id="logistic-engine-banner"[\s\S]*?className="([^"]*)"/);
+  assert.ok(bannerMatches, 'logistic-engine-banner must exist with className');
+  assert.match(bannerMatches[1], /bg-indigo-950/);
+  assert.match(bannerMatches[1], /text-indigo-100/);
+  assert.match(bannerMatches[1], /border-indigo-700\/50/);
+  assert.match(bannerMatches[1], /p-4/);
+  assert.match(bannerMatches[1], /rounded-lg/);
+  assert.match(bannerMatches[1], /shadow-inner/);
+  assert.match(bannerMatches[1], /font-medium/);
+  assert.match(bannerMatches[1], /text-sm/);
+  assert.match(bannerMatches[1], /mb-6/);
+
+  // Bold contrast on shippingMode and vesselType
+  assert.match(forwarderComponentSource, /<strong\s+className="text-white\s+font-bold">\s*\{shippingMode\}\s*<\/strong>/);
+  assert.match(forwarderComponentSource, /<strong\s+className="text-white\s+font-bold">\s*\{vesselType\}\s*<\/strong>/);
+});
+
+test('12. Footer inputs EUR currency indicator has text-slate-400 class', () => {
+  const eurMatches = forwarderComponentSource.match(/<span[^>]*>EUR<\/span>/g);
+  assert.ok(eurMatches && eurMatches.length >= 2, 'Should find at least 2 EUR labels');
+  eurMatches.forEach((tag) => {
+    assert.match(tag, /text-slate-400/);
+  });
+});
+
