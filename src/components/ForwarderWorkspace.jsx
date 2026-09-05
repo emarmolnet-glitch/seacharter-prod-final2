@@ -101,6 +101,15 @@ export function ForwarderWorkspace() {
   const [heavyLiftCrane, setHeavyLiftCrane] = useState(0);
 
   // =========================================================================
+  // Sección 4: Logística Terrestre y Terminal (Servicios Periféricos)
+  // =========================================================================
+  const [storageDays, setStorageDays] = useState(0);
+  const [surveyorCost, setSurveyorCost] = useState(0);
+  const [inlandCost, setInlandCost] = useState(0);
+  const [customsCost, setCustomsCost] = useState(0);
+  const userEditedSurveyor = useRef(false);
+
+  // =========================================================================
   // Resumen Financiero y Acción de Guardado
   // =========================================================================
   const [estimatedCost, setEstimatedCost] = useState('');
@@ -511,6 +520,7 @@ export function ForwarderWorkspace() {
     let totalPieces = 0;
     let totalWeightKg = 0;
     let totalVolumeM3 = 0;
+    let total_m2 = 0;
     let maxPieceWeight = 0;
     let roRoItems = 0;
 
@@ -526,6 +536,7 @@ export function ForwarderWorkspace() {
       totalPieces += qty;
       totalWeightKg += qty * pieceWeight;
       totalVolumeM3 += qty * (l * w * h);
+      total_m2 += qty * (l * w);
 
       if (pieceWeight > maxPieceWeight) {
         maxPieceWeight = pieceWeight;
@@ -563,6 +574,15 @@ export function ForwarderWorkspace() {
     setGangs(Gangs);
     setHeavyLift(HeavyLift);
 
+    // Asignación Inteligente de Surveyor: En la lógica donde evaluabas si hay piezas de más de 35 toneladas (maxPieceWeight > 35000),
+    // haz que si esa condición se cumple, el surveyorCost se establezca automáticamente en 1500 (si estaba en 0).
+    // Si el usuario lo cambia manualmente después, respeta su valor.
+    let currentSurveyorCost = Number(surveyorCost) || 0;
+    if (maxPieceWeight > 35000 && Number(surveyorCost) === 0 && !userEditedSurveyor.current) {
+      currentSurveyorCost = 1500;
+      setSurveyorCost(1500);
+    }
+
     // Cálculo de Costes (Revenue Ton y TCE MPP)
     // Revenue Ton (RT): Math.max(totalWeightTons, totalVolumeM3). En carga de proyecto, el flete se cobra por lo que ocupe más espacio o peso
     const RT = Math.max(totalWeightTons, totalVolumeM3);
@@ -572,8 +592,23 @@ export function ForwarderWorkspace() {
     const lashingCost = (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15);
     // stevedoringCost: (Gangs * 1200) + (HeavyLift * 2500)
     const stevedoringCost = (Gangs * 1200) + (HeavyLift * 2500);
-    // totalEstimatedCost: Suma del flete, trincaje y estiba
-    const totalEstimatedCost = freightCost + lashingCost + stevedoringCost;
+
+    // Cálculo Automático de Almacenaje: Tarifa portuaria de 2€ por m² al día basándose en el footprint estimado de la carga.
+    // terminalStorageCost = Math.ceil(totalVolumeM3 / 2.5) * storageDays * 2
+    // Fórmula final: terminalStorageCost = Math.ceil(total_m2) * storageDays * 2
+    const totalM2 = total_m2;
+    const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+
+    // totalEstimatedCost: Suma del flete, trincaje, estiba y gastos periféricos (almacenaje, surveyor, transporte terrestre y aduanas)
+    // freightCost + lashingCost + stevedoringCost + terminalStorageCost + surveyorCost + inlandCost + customsCost
+    const totalEstimatedCost =
+      freightCost +
+      lashingCost +
+      stevedoringCost +
+      terminalStorageCost +
+      (currentSurveyorCost || Number(surveyorCost) || 0) +
+      (Number(inlandCost) || 0) +
+      (Number(customsCost) || 0);
 
     // Actualiza el estado del input "Coste Total Estimado" con el valor de totalEstimatedCost redondeado y formateado
     setEstimatedCost(totalEstimatedCost.toFixed(2));
@@ -581,10 +616,10 @@ export function ForwarderWorkspace() {
     setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
-  // Ciclo de Vida: Re-cálculo automático continuo cada vez que cambie cargoItems
+  // Ciclo de Vida: Re-cálculo automático continuo cada vez que cambien cargoItems o servicios periféricos
   useEffect(() => {
     autoCalculateEstimates(cargoItems);
-  }, [cargoItems]);
+  }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
   // Abrir modal para crear un nuevo servicio
   const handleOpenCreateService = () => {
@@ -597,6 +632,11 @@ export function ForwarderWorkspace() {
     setStevedoreGangs(0);
     setLashingTeam(0);
     setHeavyLiftCrane(0);
+    setStorageDays(0);
+    setSurveyorCost(0);
+    setInlandCost(0);
+    setCustomsCost(0);
+    userEditedSurveyor.current = false;
     setEstimatedCost('');
     setSalePrice('');
     setIsCargoModalOpen(true);
@@ -636,6 +676,13 @@ export function ForwarderWorkspace() {
       setLashingTeam(labor.lashing_team || 0);
       setHeavyLiftCrane(labor.heavy_lift_crane || 0);
 
+      const peri = payload.peripheral_services || {};
+      setStorageDays(peri.storage_days ?? peri.storageDays ?? 0);
+      setSurveyorCost(peri.surveyor_cost ?? peri.surveyorCost ?? 0);
+      setInlandCost(peri.inland_cost ?? peri.inlandCost ?? 0);
+      setCustomsCost(peri.customs_cost ?? peri.customsCost ?? 0);
+      userEditedSurveyor.current = (peri.surveyor_cost ?? peri.surveyorCost) != null;
+
       const fin = payload.financial_summary || {};
       setEstimatedCost(fin.estimated_total_cost_eur != null ? String(fin.estimated_total_cost_eur) : (item.cost_eur != null ? String(item.cost_eur) : ''));
       setSalePrice(fin.customer_sale_price_eur != null ? String(fin.customer_sale_price_eur) : (item.sale_price_eur != null ? String(item.sale_price_eur) : ''));
@@ -648,6 +695,11 @@ export function ForwarderWorkspace() {
       setStevedoreGangs(0);
       setLashingTeam(0);
       setHeavyLiftCrane(0);
+      setStorageDays(0);
+      setSurveyorCost(0);
+      setInlandCost(0);
+      setCustomsCost(0);
+      userEditedSurveyor.current = false;
       setEstimatedCost(item.cost_eur != null ? String(item.cost_eur) : '');
       setSalePrice(item.sale_price_eur != null ? String(item.sale_price_eur) : '');
     }
@@ -684,6 +736,11 @@ export function ForwarderWorkspace() {
 
   // Guardado del Flete y Estiba (Crear o Actualizar)
   const handleSaveProjectCargo = () => {
+    const terminalStorageCost = Math.ceil(totals.m2) * (Number(storageDays) || 0) * 2;
+    const finalSurveyorCost = Number(surveyorCost) || 0;
+    const finalInlandCost = Number(inlandCost) || 0;
+    const finalCustomsCost = Number(customsCost) || 0;
+
     const payload = {
       project_id: activeProject?.id,
       project_ref: activeProject?.project_ref,
@@ -720,6 +777,17 @@ export function ForwarderWorkspace() {
         stevedore_gangs_shifts: Number(stevedoreGangs) || 0,
         lashing_team: Number(lashingTeam) || 0,
         heavy_lift_crane: Number(heavyLiftCrane) || 0,
+      },
+      peripheral_services: {
+        storage_days: Number(storageDays) || 0,
+        terminal_storage_cost: terminalStorageCost,
+        surveyor_cost: finalSurveyorCost,
+        inland_cost: finalInlandCost,
+        customs_cost: finalCustomsCost,
+        terminalStorageCost: terminalStorageCost,
+        surveyorCost: finalSurveyorCost,
+        inlandCost: finalInlandCost,
+        customsCost: finalCustomsCost,
       },
       financial_summary: {
         estimated_total_cost_eur: parseFloat(estimatedCost) || 0,
@@ -1487,6 +1555,125 @@ export function ForwarderWorkspace() {
                     value={heavyLiftCrane}
                     onChange={setHeavyLiftCrane}
                   />
+                </div>
+              </section>
+
+              {/* ==================================================== */}
+              {/* SECCIÓN 4: Logística Terrestre y Terminal            */}
+              {/* ==================================================== */}
+              <section className="pt-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>4. LOGÍSTICA TERRESTRE Y TERMINAL (PRE-CARRIAGE & PORT)</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Gastos periféricos y servicios complementarios de almacenaje en terminal, peritaje, acarreo terrestre y aduanas.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {/* Campo 1: Días de Almacenaje en Puerto */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+                    <div className="mb-2">
+                      <label htmlFor="input-storage-days" className="block text-xs font-bold text-slate-200 tracking-wide">
+                        Días de Almacenaje en Puerto
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Se facturará en base a {totals.m2.toFixed(2)} m² ocupados
+                      </p>
+                    </div>
+                    <div className="relative mt-2">
+                      <input
+                        id="input-storage-days"
+                        type="number"
+                        min={0}
+                        step="1"
+                        value={storageDays}
+                        onChange={(e) => setStorageDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="0"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-mono font-semibold">DÍAS</span>
+                    </div>
+                  </div>
+
+                  {/* Campo 2: Marine Warranty Surveyor (€) */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+                    <div className="mb-2">
+                      <label htmlFor="input-surveyor-cost" className="block text-xs font-bold text-slate-200 tracking-wide">
+                        Marine Warranty Surveyor (€)
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Inspección y certificación técnica de carga pesada
+                      </p>
+                    </div>
+                    <div className="relative mt-2">
+                      <input
+                        id="input-surveyor-cost"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={surveyorCost}
+                        onChange={(e) => {
+                          userEditedSurveyor.current = true;
+                          setSurveyorCost(Math.max(0, parseFloat(e.target.value) || 0));
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="0.00"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    </div>
+                  </div>
+
+                  {/* Campo 3: Transporte Terrestre Especial (€) */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+                    <div className="mb-2">
+                      <label htmlFor="input-inland-cost" className="block text-xs font-bold text-slate-200 tracking-wide">
+                        Transporte Terrestre Especial (€)
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Góndola rebajada / transporte especial hasta puerto
+                      </p>
+                    </div>
+                    <div className="relative mt-2">
+                      <input
+                        id="input-inland-cost"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={inlandCost}
+                        onChange={(e) => setInlandCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="0.00"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    </div>
+                  </div>
+
+                  {/* Campo 4: Despacho de Aduanas (€) */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+                    <div className="mb-2">
+                      <label htmlFor="input-customs-cost" className="block text-xs font-bold text-slate-200 tracking-wide">
+                        Despacho de Aduanas (€)
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Trámites DUA de exportación y aranceles documentales
+                      </p>
+                    </div>
+                    <div className="relative mt-2">
+                      <input
+                        id="input-customs-cost"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={customsCost}
+                        onChange={(e) => setCustomsCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="0.00"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    </div>
+                  </div>
                 </div>
               </section>
             </div>
