@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { parsePackingListFile } from '../utils/packingListParser.js';
 
 /**
  * Componente contador numérico con botones [+] y [-] para materiales y personal.
@@ -72,7 +73,12 @@ export function ForwarderWorkspace() {
 
   // Estado del Modal Project Cargo Builder
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
+  const [editingLineItemId, setEditingLineItemId] = useState(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+
+  // Estado para la importación asistida por IA (Packing List)
+  const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
+  const fileInputRef = useRef(null);
 
   // =========================================================================
   // Sección 1: Lista de Empaque (Tabla Dinámica de Geometría)
@@ -175,6 +181,256 @@ export function ForwarderWorkspace() {
     }
   };
 
+  // Importación asistida por IA desde documentos (PDF/Excel/CSV/TXT)
+  const handleTriggerImport = () => {
+    if (fileInputRef.current && !isAnalyzingFile) {
+      fileInputRef.current.click();
+    }
+  };
+
+  /**
+   * Parser inteligente de Packing List capaz de analizar texto estructurado o tabular,
+   * reconociendo cantidades, descripciones de maquinaria (Planta Desaladora, bombas, vehículos),
+   * dimensiones LxWxH y pesos.
+   */
+  const parsePackingListText = (rawText) => {
+    if (!rawText || typeof rawText !== 'string') return [];
+
+    const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    const parsedPieces = [];
+
+    // Patrón 1: Detección de dimensiones LxWxH (ej. 12.2 x 2.4 x 2.6 m o 12.2x2.4x2.6 o 12,2 * 2,4 * 2,6)
+    const dimRegex = /(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)(?:\s*(?:m|mts|metros))?/i;
+
+    // Patrón 2: Peso en kg o toneladas (ej. 28000 kg, 28 tn, 28.5 t, 4500kg)
+    const weightRegex = /(\d+(?:[.,]\d+)?)\s*(?:kilos?|kg|tons?|tn|t)\b/i;
+
+    // Patrón 3: Cantidad al inicio (ej. 1x, 2 un, 4 pzas, 3)
+    const qtyRegex = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|\.)?\s+)/i;
+
+    lines.forEach((line, index) => {
+      // Ignorar cabeceras típicas
+      if (/^(item|n[ºo]|descrip|qty|cant|largo|ancho|alto|peso|weight|dimensiones)/i.test(line)) {
+        return;
+      }
+
+      // Soporte CSV / Tabulación
+      const separator = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : (line.includes(',') && !line.match(/\d,\d/) ? ',' : null));
+      if (separator) {
+        const parts = line.split(separator).map((p) => p.trim());
+        if (parts.length >= 4) {
+          const firstNum = parseInt(parts[0], 10);
+          const hasQtyFirst = !isNaN(firstNum) && firstNum > 0 && firstNum < 500;
+          const qty = hasQtyFirst ? firstNum : 1;
+          const desc = hasQtyFirst ? (parts[1] || `Pieza ${index + 1}`) : parts[0];
+          
+          // Buscar dimensiones en columnas posteriores
+          const dimPart = parts.find((p) => dimRegex.test(p));
+          let l = 0, w = 0, h = 0;
+          if (dimPart) {
+            const m = dimPart.match(dimRegex);
+            if (m) {
+              l = parseFloat(m[1].replace(',', '.')) || 0;
+              w = parseFloat(m[2].replace(',', '.')) || 0;
+              h = parseFloat(m[3].replace(',', '.')) || 0;
+            }
+          } else {
+            // columnas consecutivas L, W, H
+            const nums = parts.map((p) => parseFloat(p.replace(',', '.'))).filter((n) => !isNaN(n) && n > 0);
+            if (nums.length >= 3) {
+              l = nums[0];
+              w = nums[1];
+              h = nums[2];
+            }
+          }
+
+          // Peso
+          let wt = 0;
+          const wtPart = parts.find((p) => weightRegex.test(p));
+          if (wtPart) {
+            const wm = wtPart.match(weightRegex);
+            if (wm) {
+              const val = parseFloat(wm[1].replace(',', '.'));
+              wt = /t|tn|ton/i.test(wm[0]) ? val * 1000 : val;
+            }
+          }
+
+          if (desc && (l > 0 || wt > 0)) {
+            parsedPieces.push({
+              id: Date.now() + index + Math.random(),
+              quantity: qty,
+              type: desc,
+              length: l || 1,
+              width: w || 1,
+              height: h || 1,
+              weight: wt || 1000,
+            });
+            return;
+          }
+        }
+      }
+
+      // Análisis por expresiones regulares en línea de texto libre
+      const dimMatch = line.match(dimRegex);
+      const wtMatch = line.match(weightRegex);
+      const qtyMatch = line.match(qtyRegex);
+
+      if (dimMatch || wtMatch || /bomba|bastidor|ósmosis|osmosis|camión|cabeza|góndola|furgoneta|skid|transformador|filtro|módulo/i.test(line)) {
+        let qty = 1;
+        if (qtyMatch) {
+          qty = parseInt(qtyMatch[1], 10) || 1;
+        }
+
+        let l = 1, w = 1, h = 1;
+        if (dimMatch) {
+          l = parseFloat(dimMatch[1].replace(',', '.')) || 1;
+          w = parseFloat(dimMatch[2].replace(',', '.')) || 1;
+          h = parseFloat(dimMatch[3].replace(',', '.')) || 1;
+        }
+
+        let wt = 1000;
+        if (wtMatch) {
+          const val = parseFloat(wtMatch[1].replace(',', '.'));
+          wt = /t|tn|ton/i.test(wtMatch[0]) ? val * 1000 : val;
+        }
+
+        // Limpiar descripción quitando cantidades iniciales, dimensiones y pesos
+        let desc = line
+          .replace(qtyRegex, '')
+          .replace(dimRegex, '')
+          .replace(weightRegex, '')
+          .replace(/[-–—|]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (!desc || desc.length < 2) {
+          desc = `Bulto Proyecto #${index + 1}`;
+        }
+
+        parsedPieces.push({
+          id: Date.now() + index + Math.random(),
+          quantity: qty,
+          type: desc,
+          length: l,
+          width: w,
+          height: h,
+          weight: wt,
+        });
+      }
+    });
+
+    return parsedPieces;
+  };
+
+  /**
+   * Catálogo completo de referencia para proyectos de gran envergadura
+   * como la Planta Desaladora (ósmosis inversa, bombas alta presión, vehículos pesados).
+   */
+  const getDesalinationPlantFullPackingList = () => [
+    {
+      id: Date.now(),
+      quantity: 4,
+      type: 'Bastidor Osmosis Inversa SWRO (Rack 12m)',
+      length: 12.2,
+      width: 2.45,
+      height: 2.8,
+      weight: 18500,
+    },
+    {
+      id: Date.now() + 1,
+      quantity: 6,
+      type: 'Bomba Alta Presión FEDCO / Danfoss con Motor',
+      length: 3.8,
+      width: 1.6,
+      height: 1.9,
+      weight: 6200,
+    },
+    {
+      id: Date.now() + 2,
+      quantity: 2,
+      type: 'Camión Cabeza Tractora 6x4 Heavy Duty',
+      length: 7.1,
+      width: 2.55,
+      height: 3.4,
+      weight: 9800,
+    },
+    {
+      id: Date.now() + 3,
+      quantity: 2,
+      type: 'Góndola Cama Baja Extensible (Lowbed Trailer)',
+      length: 16.5,
+      width: 3.0,
+      height: 1.4,
+      weight: 13500,
+    },
+    {
+      id: Date.now() + 4,
+      quantity: 3,
+      type: 'Furgoneta Taller y Mantenimiento Técnico',
+      length: 5.9,
+      width: 2.05,
+      height: 2.5,
+      weight: 3100,
+    },
+    {
+      id: Date.now() + 5,
+      quantity: 8,
+      type: 'Skid Filtración de Arena y Cartuchos Autolimpiantes',
+      length: 6.2,
+      width: 2.3,
+      height: 2.7,
+      weight: 8900,
+    },
+    {
+      id: Date.now() + 6,
+      quantity: 2,
+      type: 'Transformador Eléctrico de Potencia 33/11 kV',
+      length: 4.5,
+      width: 2.8,
+      height: 3.2,
+      weight: 24000,
+    },
+  ];
+
+  const handleFileUpload = async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    setIsAnalyzingFile(true);
+
+    try {
+      // Parser real en el cliente con ArrayBuffer para Excel (.xlsx, .xls), PDF (.pdf) y texto
+      const parsedItems = await parsePackingListFile(file);
+
+      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+        const formattedItems = parsedItems.map((it, idx) => ({
+          id: it.id || Date.now() + idx,
+          quantity: it.quantity != null ? it.quantity : 1,
+          type: it.type || it.description || 'Pieza Proyecto',
+          length: it.length_m != null ? it.length_m : (it.length != null ? it.length : 1),
+          width: it.width_m != null ? it.width_m : (it.width != null ? it.width : 1),
+          height: it.height_m != null ? it.height_m : (it.height != null ? it.height : 1),
+          weight: it.unit_weight_kg != null ? it.unit_weight_kg : (it.weight != null ? it.weight : 1000),
+        }));
+
+        setCargoItems(formattedItems);
+      } else {
+        // En caso de que no se detecten filas estructuradas en el documento
+        console.warn('[Project Cargo Builder] No se detectaron líneas de carga estructuradas en el documento.');
+      }
+    } catch (err) {
+      console.error('[Project Cargo Builder] Error al procesar documento con packingListParser:', err);
+    } finally {
+      setIsAnalyzingFile(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      if (event?.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
   // Manejo de la lista de piezas de carga de proyecto
   const handleAddCargoPiece = () => {
     setCargoItems((prev) => [
@@ -225,7 +481,103 @@ export function ForwarderWorkspace() {
     { quantity: 0, m2: 0, m3: 0, weight: 0 }
   );
 
-  // Guardado del Flete y Estiba
+  // Abrir modal para crear un nuevo servicio
+  const handleOpenCreateService = () => {
+    setEditingLineItemId(null);
+    setCargoItems([]);
+    setDunnageWood(0);
+    setHighCapacitySlings(0);
+    setChainsBinders(0);
+    setShackles(0);
+    setStevedoreGangs(0);
+    setLashingTeam(0);
+    setHeavyLiftCrane(0);
+    setEstimatedCost('');
+    setSalePrice('');
+    setIsCargoModalOpen(true);
+  };
+
+  // Abrir modal para editar un servicio existente del expediente
+  const handleEditService = (item) => {
+    if (!item) return;
+    setEditingLineItemId(item.id);
+
+    const payload = item.payload_data;
+    if (payload) {
+      if (Array.isArray(payload.cargo_items)) {
+        setCargoItems(
+          payload.cargo_items.map((ci) => ({
+            id: ci.id || `item-${Date.now()}-${Math.random()}`,
+            quantity: ci.quantity || 1,
+            type: ci.type || '',
+            length: ci.length_m ?? ci.length ?? '',
+            width: ci.width_m ?? ci.width ?? '',
+            height: ci.height_m ?? ci.height ?? '',
+            weight: ci.unit_weight_kg ?? ci.weight ?? '',
+          }))
+        );
+      } else {
+        setCargoItems([]);
+      }
+
+      const mats = payload.lashing_and_dunnage_materials || {};
+      setDunnageWood(mats.dunnage_wood || 0);
+      setHighCapacitySlings(mats.high_capacity_slings || 0);
+      setChainsBinders(mats.chains_and_binders || 0);
+      setShackles(mats.shackles || 0);
+
+      const labor = payload.port_labor_and_equipment || {};
+      setStevedoreGangs(labor.stevedore_gangs_shifts || 0);
+      setLashingTeam(labor.lashing_team || 0);
+      setHeavyLiftCrane(labor.heavy_lift_crane || 0);
+
+      const fin = payload.financial_summary || {};
+      setEstimatedCost(fin.estimated_total_cost_eur != null ? String(fin.estimated_total_cost_eur) : (item.cost_eur != null ? String(item.cost_eur) : ''));
+      setSalePrice(fin.customer_sale_price_eur != null ? String(fin.customer_sale_price_eur) : (item.sale_price_eur != null ? String(item.sale_price_eur) : ''));
+    } else {
+      setCargoItems([]);
+      setDunnageWood(0);
+      setHighCapacitySlings(0);
+      setChainsBinders(0);
+      setShackles(0);
+      setStevedoreGangs(0);
+      setLashingTeam(0);
+      setHeavyLiftCrane(0);
+      setEstimatedCost(item.cost_eur != null ? String(item.cost_eur) : '');
+      setSalePrice(item.sale_price_eur != null ? String(item.sale_price_eur) : '');
+    }
+
+    setIsCargoModalOpen(true);
+  };
+
+  // Eliminar un servicio existente del expediente
+  const handleDeleteService = (itemId) => {
+    if (!activeProject) return;
+    const confirmDelete = window.confirm('¿Seguro que deseas eliminar este servicio del expediente?');
+    if (!confirmDelete) return;
+
+    const existingItems = activeProject.line_items || activeProject.services || [];
+    const updatedLineItems = existingItems.filter((line) => line.id !== itemId);
+    const updatedProject = {
+      ...activeProject,
+      line_items: updatedLineItems,
+      services: updatedLineItems,
+    };
+
+    setActiveProject(updatedProject);
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === activeProject.id || p.project_ref === activeProject.project_ref ? updatedProject : p
+      )
+    );
+
+    setSaveSuccessMessage('Servicio eliminado del expediente.');
+    setTimeout(() => {
+      setSaveSuccessMessage(null);
+    }, 3500);
+  };
+
+  // Guardado del Flete y Estiba (Crear o Actualizar)
   const handleSaveProjectCargo = () => {
     const payload = {
       project_id: activeProject?.id,
@@ -280,7 +632,51 @@ export function ForwarderWorkspace() {
     // Requerimiento: "haz un console.log del objeto completo (mercancía, materiales, personal y costes)"
     console.log('[Project Cargo Builder] Guardar Flete y Estiba en Proyecto:', payload);
 
+    // Persistencia del line item en el proyecto activo
+    const lineItemCost = parseFloat(estimatedCost) || 0;
+    const lineItemPrice = parseFloat(salePrice) || 0;
+    const lineItemMargin = lineItemPrice - lineItemCost;
+    const lineItemDescription = `Flete y Estiba Project Cargo (${totals.quantity} piezas, ${totals.m3.toFixed(2)} m³, ${totals.weight.toLocaleString('es-ES')} kg)`;
+
+    const savedLineItem = {
+      id: editingLineItemId || `item-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      service_type: 'PROJECT_CARGO',
+      description: lineItemDescription,
+      category: 'Breakbulk / Ro-Ro (Project Cargo)',
+      cost_eur: lineItemCost,
+      sale_price_eur: lineItemPrice,
+      margin_eur: lineItemMargin,
+      payload_data: payload,
+    };
+
+    if (activeProject) {
+      const existingItems = activeProject.line_items || activeProject.services || [];
+      let updatedLineItems;
+      if (editingLineItemId) {
+        updatedLineItems = existingItems.map((li) =>
+          li.id === editingLineItemId ? savedLineItem : li
+        );
+      } else {
+        updatedLineItems = [...existingItems, savedLineItem];
+      }
+
+      const updatedProject = {
+        ...activeProject,
+        line_items: updatedLineItems,
+        services: updatedLineItems,
+      };
+
+      setActiveProject(updatedProject);
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === activeProject.id || p.project_ref === activeProject.project_ref ? updatedProject : p
+        )
+      );
+    }
+
     // Requerimiento: "limpia los estados locales"
+    setEditingLineItemId(null);
     setCargoItems([]);
     setDunnageWood(0);
     setHighCapacitySlings(0);
@@ -295,7 +691,11 @@ export function ForwarderWorkspace() {
     // Requerimiento: "y cierra el modal"
     setIsCargoModalOpen(false);
 
-    setSaveSuccessMessage('¡Flete y estiba de Project Cargo guardados correctamente!');
+    setSaveSuccessMessage(
+      editingLineItemId
+        ? '¡Servicio de Project Cargo actualizado correctamente!'
+        : '¡Flete y estiba de Project Cargo guardados correctamente en el expediente!'
+    );
     setTimeout(() => {
       setSaveSuccessMessage(null);
     }, 4500);
@@ -455,9 +855,9 @@ export function ForwarderWorkspace() {
       {/* ======================================================== */}
       {/* LIENZO CENTRAL (Main Area - flex-1)                     */}
       {/* ======================================================== */}
-      <main className="flex-1 bg-slate-950 flex flex-col h-full overflow-y-auto">
+      <main className="flex-1 bg-slate-50 flex flex-col h-full overflow-y-auto">
         {saveSuccessMessage && (
-          <div className="m-4 mb-0 p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl flex items-center justify-between text-emerald-200 text-xs font-semibold shadow-lg">
+          <div className="m-4 mb-0 p-3 bg-emerald-100 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-xs font-semibold shadow-sm">
             <div className="flex items-center gap-2">
               <span className="text-base" aria-hidden="true">✅</span>
               <span>{saveSuccessMessage}</span>
@@ -465,7 +865,7 @@ export function ForwarderWorkspace() {
             <button
               type="button"
               onClick={() => setSaveSuccessMessage(null)}
-              className="text-emerald-400 hover:text-emerald-200 px-2 py-0.5 rounded cursor-pointer"
+              className="text-emerald-700 hover:text-emerald-900 px-2 py-0.5 rounded cursor-pointer"
             >
               ✕
             </button>
@@ -474,58 +874,158 @@ export function ForwarderWorkspace() {
 
         {!activeProject ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl mb-4 shadow-inner" aria-hidden="true">
+            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-3xl mb-4 shadow-sm" aria-hidden="true">
               💼
             </div>
-            <h3 className="text-xl font-black text-slate-200 tracking-tight">Expediente de Transitario</h3>
-            <p className="mt-2 max-w-md text-xs leading-relaxed text-slate-400 font-medium">
-              Selecciona un proyecto de la lista lateral o crea un nuevo expediente pulsando el botón <strong className="text-sky-400 font-bold">+ Nuevo Proyecto</strong> para gestionar servicios logísticos y tarifas multimodales.
+            <h3 className="text-xl font-black text-slate-800 tracking-tight">Expediente de Transitario</h3>
+            <p className="mt-2 max-w-md text-xs leading-relaxed text-slate-600 font-medium">
+              Selecciona un proyecto de la lista lateral o crea un nuevo expediente pulsando el botón <strong className="text-blue-600 font-bold">+ Nuevo Proyecto</strong> para gestionar servicios logísticos y tarifas multimodales.
             </p>
           </div>
         ) : (
           <div className="flex-1 flex flex-col p-6 md:p-8 space-y-6">
             {/* Cabecera limpia con client_name grande, project_ref y status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="font-mono text-xs font-bold text-sky-400 bg-sky-950/70 px-2.5 py-0.5 rounded border border-sky-800/60">
+                  <span className="font-mono text-xs font-bold text-slate-600 bg-slate-200/80 px-2.5 py-0.5 rounded border border-slate-300">
                     {activeProject.project_ref || 'EXP-SIN-REF'}
                   </span>
                   {renderStatusBadge(activeProject.status)}
                 </div>
-                <h1 className="text-2xl md:text-3xl font-black text-slate-100 tracking-tight">
+                <h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                   {activeProject.client_name || 'Cliente sin nombre'}
                 </h1>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="text-left sm:text-right text-[11px] text-slate-400 font-mono">
-                  <span className="block text-[9px] uppercase tracking-wider text-slate-500 font-bold">Fecha Apertura</span>
-                  <span className="font-bold text-slate-300">{formatCreationDate(activeProject)}</span>
+                <div className="text-left sm:text-right text-[11px] text-slate-600 font-mono">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-600 font-bold">Fecha Apertura</span>
+                  <span className="font-bold text-slate-600">{formatCreationDate(activeProject)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Área de servicios logísticos con diseño de bordes discontinuos */}
-            <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 rounded-2xl p-10 md:p-14 flex flex-col items-center justify-center text-center bg-slate-900/30 transition-all">
-              <div className="w-14 h-14 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-center text-2xl mb-4 text-slate-400 shadow-inner" aria-hidden="true">
-                📦
+            {/* Área de servicios logísticos: Tabla de servicios guardados o placeholder con diseño de bordes discontinuos */}
+            {activeProject.line_items && activeProject.line_items.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Servicios y Líneas del Expediente ({activeProject.line_items.length})
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Partidas logísticas contratadas y calculadas para este proyecto comercial.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateService}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
+                  >
+                    <span>➕ Añadir Servicio</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-100 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th scope="col" className="px-4 py-3">Servicio / Descripción</th>
+                        <th scope="col" className="px-4 py-3">Categoría</th>
+                        <th scope="col" className="px-4 py-3 text-right">Coste (€)</th>
+                        <th scope="col" className="px-4 py-3 text-right">Venta (€)</th>
+                        <th scope="col" className="px-4 py-3 text-right">Margen (€)</th>
+                        <th scope="col" className="px-4 py-3 text-center w-24">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {activeProject.line_items.map((item, idx) => (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/80 transition">
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <span className="text-blue-600">📦</span>
+                              <span>{item.description || 'Servicio de Carga'}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 font-mono text-[11px]">
+                            {item.category || item.service_type || 'Project Cargo'}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-rose-600">
+                            {Number(item.cost_eur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">
+                            {Number(item.sale_price_eur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-sky-700">
+                            {Number(item.margin_eur || (item.sale_price_eur - item.cost_eur) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleEditService(item)}
+                                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                                title="Editar servicio"
+                                aria-label="Editar servicio"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteService(item.id)}
+                                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                title="Eliminar servicio"
+                                aria-label="Eliminar servicio"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-900 text-xs">
+                      <tr>
+                        <td colSpan={2} className="px-4 py-3 text-right uppercase tracking-wider text-[11px] text-slate-500">
+                          Totales del Expediente:
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-rose-700 font-black">
+                          {activeProject.line_items.reduce((sum, item) => sum + (Number(item.cost_eur) || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-emerald-700 font-black">
+                          {activeProject.line_items.reduce((sum, item) => sum + (Number(item.sale_price_eur) || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-sky-800 font-black">
+                          {activeProject.line_items.reduce((sum, item) => sum + (Number(item.margin_eur || (item.sale_price_eur - item.cost_eur)) || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-              <h4 className="text-base font-bold text-slate-200 mb-1">
-                No hay servicios logísticos añadidos a este proyecto
-              </h4>
-              <p className="text-xs text-slate-400 max-w-lg mb-6 leading-relaxed">
-                Configura transporte marítimo especializado para piezas Breakbulk / Ro-Ro, lista de empaque con dimensiones y cubicaje, trincaje de bodega y medios de elevación portuaria.
-              </p>
-              <button
-                type="button"
-                id="btn-add-forwarder-service"
-                onClick={() => setIsCargoModalOpen(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md hover:shadow-blue-500/25 transition-all cursor-pointer"
-              >
-                <span>➕ Añadir Servicio</span>
-              </button>
-            </div>
+            ) : (
+              <div className="border-2 border-dashed border-slate-300 hover:border-slate-400 rounded-2xl p-10 md:p-14 flex flex-col items-center justify-center text-center bg-white shadow-sm transition-all">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-2xl mb-4 text-slate-500 shadow-inner" aria-hidden="true">
+                  📦
+                </div>
+                <h4 className="text-base font-bold text-slate-800 mb-1">
+                  No hay servicios logísticos añadidos a este proyecto
+                </h4>
+                <p className="text-xs text-slate-600 max-w-lg mb-6 leading-relaxed">
+                  Configura transporte marítimo especializado para piezas Breakbulk / Ro-Ro, lista de empaque con dimensiones y cubicaje, trincaje de bodega y medios de elevación portuaria.
+                </p>
+                <button
+                  type="button"
+                  id="btn-add-forwarder-service"
+                  onClick={handleOpenCreateService}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md hover:shadow-blue-500/25 transition-all cursor-pointer"
+                >
+                  <span>➕ Añadir Servicio</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -588,13 +1088,40 @@ export function ForwarderWorkspace() {
                       Tabla de dimensiones y cubicaje dinámico para carga heterogénea (Camión, Tráiler, MAFI, piezas de proyecto).
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddCargoPiece}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition shadow cursor-pointer self-start sm:self-auto"
-                  >
-                    <span>➕ Añadir Pieza</span>
-                  </button>
+                  <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.txt"
+                      style={{ display: 'none' }}
+                      onChange={handleFileUpload}
+                      disabled={isAnalyzingFile}
+                    />
+                    <button
+                      type="button"
+                      id="btn-import-packing-list"
+                      onClick={handleTriggerImport}
+                      disabled={isAnalyzingFile}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-violet-950/70 hover:bg-violet-900/80 active:bg-violet-800 text-violet-200 border border-violet-500/60 hover:border-violet-400 text-xs font-bold rounded-lg transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isAnalyzingFile ? (
+                        <>
+                          <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-violet-300 border-t-transparent rounded-full" aria-hidden="true"></span>
+                          <span>Extrayendo datos del documento...</span>
+                        </>
+                      ) : (
+                        <span>🤖 Importar desde PDF/Excel</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCargoPiece}
+                      disabled={isAnalyzingFile}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition shadow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed self-start sm:self-auto"
+                    >
+                      <span>➕ Añadir Pieza</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Tabla de Piezas */}
@@ -748,14 +1275,32 @@ export function ForwarderWorkspace() {
                   </table>
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={handleAddCargoPiece}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition cursor-pointer shadow-sm"
-                  >
-                    <span>+ Añadir Pieza</span>
-                  </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddCargoPiece}
+                      disabled={isAnalyzingFile}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>+ Añadir Pieza</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTriggerImport}
+                      disabled={isAnalyzingFile}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-violet-950/70 hover:bg-violet-900/80 active:bg-violet-800 text-violet-200 border border-violet-500/60 hover:border-violet-400 text-xs font-bold rounded-lg transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isAnalyzingFile ? (
+                        <>
+                          <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-violet-300 border-t-transparent rounded-full" aria-hidden="true"></span>
+                          <span>Extrayendo datos del documento...</span>
+                        </>
+                      ) : (
+                        <span>🤖 Importar desde PDF/Excel</span>
+                      )}
+                    </button>
+                  </div>
                   <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
                     <span>Total Piezas: <strong className="text-slate-200">{totals.quantity}</strong></span>
                     <span>Peso Total: <strong className="text-amber-300 font-bold">{totals.weight.toLocaleString('es-ES')} kg</strong></span>
@@ -860,9 +1405,9 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={estimatedCost}
                       onChange={(e) => setEstimatedCost(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-rose-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
-                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">EUR</span>
+                    <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
                 </div>
 
@@ -880,9 +1425,9 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={salePrice}
                       onChange={(e) => setSalePrice(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                     />
-                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">EUR</span>
+                    <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
                 </div>
               </div>
