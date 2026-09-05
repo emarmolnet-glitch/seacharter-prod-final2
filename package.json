@@ -29,6 +29,7 @@
     "netlify-database-client": "npm:@netlify/database@^1.1.0",
     "openai": "^6.45.0",
     "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.624",
     "pg": "^8.22.0",
     "postcss": "^8.4.35",
     "puppeteer": "^24.43.1",
