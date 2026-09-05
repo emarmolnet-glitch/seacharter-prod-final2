@@ -106,6 +106,13 @@ export function ForwarderWorkspace() {
   const [estimatedCost, setEstimatedCost] = useState('');
   const [salePrice, setSalePrice] = useState('');
 
+  // Alias para el Motor Algorítmico de Cotización (compatibilidad semántica)
+  const setDunnage = setDunnageWood;
+  const setChains = setChainsBinders;
+  const setSlings = setHighCapacitySlings;
+  const setGangs = setStevedoreGangs;
+  const setHeavyLift = setHeavyLiftCrane;
+
   const fetchProjects = async () => {
     setIsLoading(true);
     setError(null);
@@ -480,6 +487,104 @@ export function ForwarderWorkspace() {
     },
     { quantity: 0, m2: 0, m3: 0, weight: 0 }
   );
+
+  /**
+   * Motor Algorítmico de Cotización (Revenue Ton & Heurísticas Portuarias)
+   * Autocalcula los materiales de trincaje, turnos de estibadores, grúa auxiliar Heavy Lift
+   * y los costes estimados y precios de venta al cliente basándose en la volumetría y el peso del Packing List.
+   */
+  const autoCalculateEstimates = (items) => {
+    // Si el array está vacío, resetea todos los contadores a 0
+    if (!items || items.length === 0) {
+      setDunnage(0);
+      setChains(0);
+      setSlings(0);
+      setShackles(0);
+      setGangs(0);
+      setHeavyLift(0);
+      setEstimatedCost('');
+      setSalePrice('');
+      return;
+    }
+
+    // Totales operativos
+    let totalPieces = 0;
+    let totalWeightKg = 0;
+    let totalVolumeM3 = 0;
+    let maxPieceWeight = 0;
+    let roRoItems = 0;
+
+    const roRoRegex = /camion|vehiculo|trailer|tractor|coche|furgoneta/i;
+
+    items.forEach((item) => {
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      const l = Math.max(0, parseFloat(String(item.length ?? item.length_m ?? 0).replace(',', '.')) || 0);
+      const w = Math.max(0, parseFloat(String(item.width ?? item.width_m ?? 0).replace(',', '.')) || 0);
+      const h = Math.max(0, parseFloat(String(item.height ?? item.height_m ?? 0).replace(',', '.')) || 0);
+      const pieceWeight = Math.max(0, parseFloat(String(item.weight ?? item.unit_weight_kg ?? 0).replace(',', '.')) || 0);
+
+      totalPieces += qty;
+      totalWeightKg += qty * pieceWeight;
+      totalVolumeM3 += qty * (l * w * h);
+
+      if (pieceWeight > maxPieceWeight) {
+        maxPieceWeight = pieceWeight;
+      }
+
+      const rawType = String(item.type || item.description || '');
+      const normalizedType = rawType.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (roRoRegex.test(rawType) || roRoRegex.test(normalizedType)) {
+        roRoItems += qty;
+      }
+    });
+
+    // totalWeightTons: Suma de pesos / 1000
+    const totalWeightTons = totalWeightKg / 1000;
+
+    // Reglas de Asignación Automática (Heurísticas Portuarias)
+    // Maderas de Estiba (Dunnage): Math.ceil(totalWeightTons / 5) (1 lote de madera por cada 5 toneladas)
+    const Dunnage = Math.ceil(totalWeightTons / 5);
+    // Cadenas y Tensores: roRoItems * 4 (4 cadenas por cada vehículo rodado)
+    const Cadenas = roRoItems * 4;
+    // Eslingas de Alta Capacidad: Math.ceil(totalPieces / 2) (1 juego por cada 2 bultos estáticos)
+    const Eslingas = Math.ceil(totalPieces / 2);
+    // Grilletes: (Eslingas * 2) + (Cadenas * 2)
+    const Grilletes = (Eslingas * 2) + (Cadenas * 2);
+    // Cuadrillas de Estibadores (Turnos): Math.ceil(totalPieces / 15) (Asumimos que una mano de obra carga/trinca 15 piezas complejas por turno)
+    const Gangs = Math.ceil(totalPieces / 15);
+    // Grúa Auxiliar (Heavy Lift): Si maxPieceWeight > 35000 (más de 35 toneladas excede la capacidad de grúas estándar de muchos buques), asigna 1, si no 0
+    const HeavyLift = maxPieceWeight > 35000 ? 1 : 0;
+
+    // Actualiza los estados correspondientes con estos valores autocalculados
+    setDunnage(Dunnage);
+    setChains(Cadenas);
+    setSlings(Eslingas);
+    setShackles(Grilletes);
+    setGangs(Gangs);
+    setHeavyLift(HeavyLift);
+
+    // Cálculo de Costes (Revenue Ton y TCE MPP)
+    // Revenue Ton (RT): Math.max(totalWeightTons, totalVolumeM3). En carga de proyecto, el flete se cobra por lo que ocupe más espacio o peso
+    const RT = Math.max(totalWeightTons, totalVolumeM3);
+    // freightCost: RT * 65 (65€ por RT como flete base de un buque Multi-Purpose)
+    const freightCost = RT * 65;
+    // lashingCost: (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15)
+    const lashingCost = (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15);
+    // stevedoringCost: (Gangs * 1200) + (HeavyLift * 2500)
+    const stevedoringCost = (Gangs * 1200) + (HeavyLift * 2500);
+    // totalEstimatedCost: Suma del flete, trincaje y estiba
+    const totalEstimatedCost = freightCost + lashingCost + stevedoringCost;
+
+    // Actualiza el estado del input "Coste Total Estimado" con el valor de totalEstimatedCost redondeado y formateado
+    setEstimatedCost(totalEstimatedCost.toFixed(2));
+    // Actualiza el input "Precio Venta a Cliente" aplicando un margen automático del 15% (totalEstimatedCost * 1.15)
+    setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
+  };
+
+  // Ciclo de Vida: Re-cálculo automático continuo cada vez que cambie cargoItems
+  useEffect(() => {
+    autoCalculateEstimates(cargoItems);
+  }, [cargoItems]);
 
   // Abrir modal para crear un nuevo servicio
   const handleOpenCreateService = () => {
