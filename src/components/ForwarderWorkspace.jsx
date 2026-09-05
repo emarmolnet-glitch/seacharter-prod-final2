@@ -132,6 +132,7 @@ export function ForwarderWorkspace() {
   const setGangs = setStevedoreGangs;
   const setHeavyLift = setHeavyLiftCrane;
   const setMafi = setMafiPlatforms;
+  const setLashingTeams = setLashingTeam;
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -523,6 +524,7 @@ export function ForwarderWorkspace() {
       setGangs(0);
       setHeavyLift(0);
       setMafiPlatforms(0);
+      setLashingTeams(0);
       setShippingMode('Lo-Lo');
       setVesselType('Geared Breakbulk (Lo-Lo)');
       setEstimatedCost('');
@@ -627,6 +629,7 @@ export function ForwarderWorkspace() {
     setGangs(Gangs);
     setHeavyLift(HeavyLift);
     setMafiPlatforms(MAFIs);
+    setLashingTeams(cargoItems.length > 0 ? Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)) : 0);
 
     // Asignación Inteligente de Surveyor: En la lógica donde evaluabas si hay piezas de más de 35 toneladas (maxPieceWeight > 35000),
     // haz que si esa condición se cumple, el surveyorCost se establezca automáticamente en 1500 (si estaba en 0).
@@ -1569,14 +1572,10 @@ export function ForwarderWorkspace() {
                   id="logistic-engine-banner"
                   role="status"
                   aria-live="polite"
-                  className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium transition-all shadow-sm flex items-center gap-2.5 ${
-                    shippingMode === 'Ro-Ro'
-                      ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200'
-                      : 'bg-sky-950/40 border-sky-500/30 text-sky-200'
-                  }`}
+                  className="bg-indigo-950 text-indigo-100 border border-indigo-700/50 p-4 rounded-lg shadow-inner flex items-center font-medium text-sm mb-6"
                 >
                   <span>
-                    🤖 Motor Logístico: Operativa <strong className="font-bold text-white">{shippingMode}</strong> autodetectada. Buque recomendado: <strong className="font-bold text-white">{vesselType}</strong>
+                    🤖 Motor Logístico: Operativa <strong className="text-white font-bold">{shippingMode}</strong> autodetectada. Buque recomendado: <strong className="text-white font-bold">{vesselType}</strong>
                   </span>
                 </div>
 
@@ -1788,9 +1787,9 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={estimatedCost}
                       onChange={(e) => setEstimatedCost(e.target.value)}
-                      className="w-full bg-white text-slate-900 font-bold border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500"
                     />
-                    <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-semibold pointer-events-none">EUR</span>
                   </div>
                 </div>
 
@@ -1808,9 +1807,9 @@ export function ForwarderWorkspace() {
                       placeholder="0.00"
                       value={salePrice}
                       onChange={(e) => setSalePrice(e.target.value)}
-                      className="w-full bg-white text-slate-900 font-bold border border-slate-300 rounded-xl px-3.5 py-2.5 text-lg font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      className="bg-slate-800 text-white font-bold text-2xl placeholder-slate-500 border border-slate-600 rounded-md px-4 py-2 w-full text-right outline-none focus:border-blue-500"
                     />
-                    <span className="absolute right-3.5 top-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-semibold pointer-events-none">EUR</span>
                   </div>
                 </div>
               </div>

@@ -18,7 +18,7 @@ if (pdfjsLib.GlobalWorkerOptions) {
  * - Cantidad inicial: números al comienzo de línea o columna
  */
 export const DIMENSION_REGEX = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/;
-export const WEIGHT_REGEX = /(\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)\b/i;
+export const WEIGHT_REGEX = /(?:(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)\b|(?:\s+|^)(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d{3,})\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)?\s*$)/i;
 export const QTY_REGEX = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|\.)?\s+)/i;
 
 /**
@@ -60,8 +60,20 @@ export function parseLinesWithRegex(lines) {
 
       let wt = 1000;
       if (wtMatch) {
-        const val = parseFloat(wtMatch[1].replace(',', '.'));
-        wt = /t|tn|ton/i.test(wtMatch[0]) ? val * 1000 : val;
+        const rawWeightStr = (wtMatch[1] || wtMatch[2] || wtMatch[0] || '').trim();
+        const isTons = /t|tn|ton/i.test(wtMatch[0]);
+        // Limpiar comas antes de convertir a número: parseFloat(string.replace(',', ''))
+        const cleanedStr = rawWeightStr.replace(/,/g, '');
+        let val = parseFloat(rawWeightStr.replace(',', ''));
+        if (!isNaN(parseFloat(cleanedStr))) {
+          val = parseFloat(cleanedStr);
+        }
+        if (!isTons && /^\d{1,3}\.\d{3}$/.test(rawWeightStr)) {
+          val = parseFloat(rawWeightStr.replace(/\./g, ''));
+        }
+        if (!isNaN(val) && val > 0) {
+          wt = isTons ? val * 1000 : val;
+        }
       }
 
       let desc = line
@@ -181,10 +193,18 @@ export function parseExcelBuffer(arrayBuffer) {
 
       let wt = 1000;
       if (colMap.weight !== -1 && row[colMap.weight] != null) {
-        const wtStr = String(row[colMap.weight]);
-        const wtNum = parseFloat(wtStr.replace(/[^\d.,]/g, '').replace(',', '.'));
-        if (!isNaN(wtNum)) {
-          wt = /t|tn|ton/i.test(wtStr) ? wtNum * 1000 : wtNum;
+        const wtStr = String(row[colMap.weight]).trim();
+        const isTons = /t|tn|ton/i.test(wtStr);
+        const cleanedStr = wtStr.replace(/[^\d.,]/g, '').replace(/,/g, '');
+        let wtNum = parseFloat(wtStr.replace(',', ''));
+        if (!isNaN(parseFloat(cleanedStr))) {
+          wtNum = parseFloat(cleanedStr);
+        }
+        if (!isTons && /^\d{1,3}\.\d{3}$/.test(wtStr)) {
+          wtNum = parseFloat(wtStr.replace(/\./g, ''));
+        }
+        if (!isNaN(wtNum) && wtNum > 0) {
+          wt = isTons ? wtNum * 1000 : wtNum;
         }
       }
 
