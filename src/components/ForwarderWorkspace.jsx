@@ -1,9 +1,67 @@
 import React, { useState, useEffect } from 'react';
 
 /**
+ * Componente contador numérico con botones [+] y [-] para materiales y personal.
+ */
+function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
+  const numValue = Number(value) || 0;
+
+  const handleDecrement = () => {
+    if (numValue > min) {
+      onChange(numValue - 1);
+    }
+  };
+
+  const handleIncrement = () => {
+    onChange(numValue + 1);
+  };
+
+  return (
+    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+      <div className="mb-2">
+        <span className="block text-xs font-bold text-slate-200 tracking-wide">{label}</span>
+        {subtitle && <span className="block text-[11px] text-slate-400 mt-0.5">{subtitle}</span>}
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+        <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">Unidades</span>
+        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg p-1">
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={numValue <= min}
+            className="w-7 h-7 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 disabled:opacity-30 disabled:hover:bg-slate-800 text-base font-black transition cursor-pointer"
+            aria-label={`Disminuir ${label}`}
+          >
+            -
+          </button>
+          <input
+            type="number"
+            min={min}
+            value={numValue}
+            onChange={(e) => {
+              const parsed = parseInt(e.target.value, 10);
+              onChange(isNaN(parsed) ? 0 : Math.max(min, parsed));
+            }}
+            className="w-14 text-center bg-transparent text-sm font-mono font-bold text-sky-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <button
+            type="button"
+            onClick={handleIncrement}
+            className="w-7 h-7 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-base font-black transition cursor-pointer"
+            aria-label={`Aumentar ${label}`}
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * ForwarderWorkspace - Módulo B2B para Transitarios (Forwarders).
  * Permite gestionar expedientes comerciales, listar proyectos desde Neon DB
- * y preparar servicios logísticos multimodales.
+ * y preparar servicios logísticos multimodales (Breakbulk / Ro-Ro / Project Cargo).
  */
 export function ForwarderWorkspace() {
   const [projects, setProjects] = useState([]);
@@ -11,6 +69,36 @@ export function ForwarderWorkspace() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
   const [activeProject, setActiveProject] = useState(null);
+
+  // Estado del Modal Project Cargo Builder
+  const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+
+  // =========================================================================
+  // Sección 1: Lista de Empaque (Tabla Dinámica de Geometría)
+  // =========================================================================
+  const [cargoItems, setCargoItems] = useState([]);
+
+  // =========================================================================
+  // Sección 2: Materiales de Estiba y Trincaje (Dunnage & Lashing)
+  // =========================================================================
+  const [dunnageWood, setDunnageWood] = useState(0);
+  const [highCapacitySlings, setHighCapacitySlings] = useState(0);
+  const [chainsBinders, setChainsBinders] = useState(0);
+  const [shackles, setShackles] = useState(0);
+
+  // =========================================================================
+  // Sección 3: Subcontratación de Estiba y Medios (Mano de Obra Portuaria)
+  // =========================================================================
+  const [stevedoreGangs, setStevedoreGangs] = useState(0);
+  const [lashingTeam, setLashingTeam] = useState(0);
+  const [heavyLiftCrane, setHeavyLiftCrane] = useState(0);
+
+  // =========================================================================
+  // Resumen Financiero y Acción de Guardado
+  // =========================================================================
+  const [estimatedCost, setEstimatedCost] = useState('');
+  const [salePrice, setSalePrice] = useState('');
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -87,6 +175,132 @@ export function ForwarderWorkspace() {
     }
   };
 
+  // Manejo de la lista de piezas de carga de proyecto
+  const handleAddCargoPiece = () => {
+    setCargoItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        quantity: 1,
+        type: '',
+        length: '',
+        width: '',
+        height: '',
+        weight: '',
+      },
+    ]);
+  };
+
+  const handleUpdateCargoItem = (id, field, value) => {
+    setCargoItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          [field]: value,
+        };
+      })
+    );
+  };
+
+  const handleRemoveCargoItem = (id) => {
+    setCargoItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  // Cálculo de totales dinámicos de la lista de empaque
+  const totals = cargoItems.reduce(
+    (acc, item) => {
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      const l = Math.max(0, parseFloat(item.length) || 0);
+      const w = Math.max(0, parseFloat(item.width) || 0);
+      const h = Math.max(0, parseFloat(item.height) || 0);
+      const wt = Math.max(0, parseFloat(item.weight) || 0);
+
+      acc.quantity += qty;
+      acc.m2 += qty * (l * w);
+      acc.m3 += qty * (l * w * h);
+      acc.weight += qty * wt;
+      return acc;
+    },
+    { quantity: 0, m2: 0, m3: 0, weight: 0 }
+  );
+
+  // Guardado del Flete y Estiba
+  const handleSaveProjectCargo = () => {
+    const payload = {
+      project_id: activeProject?.id,
+      project_ref: activeProject?.project_ref,
+      client_name: activeProject?.client_name,
+      cargo_category: 'Breakbulk / Ro-Ro (Project Cargo)',
+      cargo_items: cargoItems.map((item) => {
+        const l = parseFloat(item.length) || 0;
+        const w = parseFloat(item.width) || 0;
+        const h = parseFloat(item.height) || 0;
+        const wt = parseFloat(item.weight) || 0;
+        const qty = parseInt(item.quantity, 10) || 1;
+        return {
+          id: item.id,
+          quantity: qty,
+          type: item.type || 'Sin especificar',
+          length_m: l,
+          width_m: w,
+          height_m: h,
+          unit_weight_kg: wt,
+          unit_m2: l * w,
+          unit_m3: l * w * h,
+          total_m2: qty * (l * w),
+          total_m3: qty * (l * w * h),
+          total_weight_kg: qty * wt,
+        };
+      }),
+      lashing_and_dunnage_materials: {
+        dunnage_wood: Number(dunnageWood) || 0,
+        high_capacity_slings: Number(highCapacitySlings) || 0,
+        chains_and_binders: Number(chainsBinders) || 0,
+        shackles: Number(shackles) || 0,
+      },
+      port_labor_and_equipment: {
+        stevedore_gangs_shifts: Number(stevedoreGangs) || 0,
+        lashing_team: Number(lashingTeam) || 0,
+        heavy_lift_crane: Number(heavyLiftCrane) || 0,
+      },
+      financial_summary: {
+        estimated_total_cost_eur: parseFloat(estimatedCost) || 0,
+        customer_sale_price_eur: parseFloat(salePrice) || 0,
+        estimated_margin_eur: (parseFloat(salePrice) || 0) - (parseFloat(estimatedCost) || 0),
+      },
+      aggregated_totals: {
+        total_pieces: totals.quantity,
+        total_m2: totals.m2,
+        total_m3: totals.m3,
+        total_weight_kg: totals.weight,
+      },
+    };
+
+    // Requerimiento: "haz un console.log del objeto completo (mercancía, materiales, personal y costes)"
+    console.log('[Project Cargo Builder] Guardar Flete y Estiba en Proyecto:', payload);
+
+    // Requerimiento: "limpia los estados locales"
+    setCargoItems([]);
+    setDunnageWood(0);
+    setHighCapacitySlings(0);
+    setChainsBinders(0);
+    setShackles(0);
+    setStevedoreGangs(0);
+    setLashingTeam(0);
+    setHeavyLiftCrane(0);
+    setEstimatedCost('');
+    setSalePrice('');
+
+    // Requerimiento: "y cierra el modal"
+    setIsCargoModalOpen(false);
+
+    setSaveSuccessMessage('¡Flete y estiba de Project Cargo guardados correctamente!');
+    setTimeout(() => {
+      setSaveSuccessMessage(null);
+    }, 4500);
+  };
+
   const renderStatusBadge = (status) => {
     const rawStatus = String(status || 'BORRADOR').toUpperCase();
     let badgeClasses = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
@@ -121,7 +335,7 @@ export function ForwarderWorkspace() {
   };
 
   return (
-    <div className="w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans">
+    <div className="w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative">
       {/* ======================================================== */}
       {/* COLUMNA IZQUIERDA (Sidebar - ancho fijo w-80)           */}
       {/* ======================================================== */}
@@ -242,6 +456,22 @@ export function ForwarderWorkspace() {
       {/* LIENZO CENTRAL (Main Area - flex-1)                     */}
       {/* ======================================================== */}
       <main className="flex-1 bg-slate-950 flex flex-col h-full overflow-y-auto">
+        {saveSuccessMessage && (
+          <div className="m-4 mb-0 p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl flex items-center justify-between text-emerald-200 text-xs font-semibold shadow-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-base" aria-hidden="true">✅</span>
+              <span>{saveSuccessMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveSuccessMessage(null)}
+              className="text-emerald-400 hover:text-emerald-200 px-2 py-0.5 rounded cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {!activeProject ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl mb-4 shadow-inner" aria-hidden="true">
@@ -277,22 +507,20 @@ export function ForwarderWorkspace() {
             </div>
 
             {/* Área de servicios logísticos con diseño de bordes discontinuos */}
-            <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 rounded-2xl p-12 md:p-16 flex flex-col items-center justify-center text-center bg-slate-900/30 transition-all">
+            <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 rounded-2xl p-10 md:p-14 flex flex-col items-center justify-center text-center bg-slate-900/30 transition-all">
               <div className="w-14 h-14 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-center text-2xl mb-4 text-slate-400 shadow-inner" aria-hidden="true">
                 📦
               </div>
               <h4 className="text-base font-bold text-slate-200 mb-1">
                 No hay servicios logísticos añadidos a este proyecto
               </h4>
-              <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                Comienza agregando fletes marítimos, transporte terrestre, despachos de aduana o servicios de almacenamiento para estructurar la cotización.
+              <p className="text-xs text-slate-400 max-w-lg mb-6 leading-relaxed">
+                Configura transporte marítimo especializado para piezas Breakbulk / Ro-Ro, lista de empaque con dimensiones y cubicaje, trincaje de bodega y medios de elevación portuaria.
               </p>
               <button
                 type="button"
                 id="btn-add-forwarder-service"
-                onClick={() => {
-                  window.alert?.('El módulo de adición de servicios logísticos se habilitará en la siguiente fase de desarrollo.');
-                }}
+                onClick={() => setIsCargoModalOpen(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md hover:shadow-blue-500/25 transition-all cursor-pointer"
               >
                 <span>➕ Añadir Servicio</span>
@@ -301,9 +529,389 @@ export function ForwarderWorkspace() {
           </div>
         )}
       </main>
+
+      {/* ======================================================== */}
+      {/* MODAL: PROJECT CARGO BUILDER (Breakbulk / Ro-Ro)        */}
+      {/* ======================================================== */}
+      {isCargoModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="project-cargo-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto animate-fade-in"
+        >
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100 ring-1 ring-white/10 my-auto">
+            {/* Header del Modal */}
+            <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-xl text-blue-400" aria-hidden="true">
+                  🏗️
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded">
+                      Breakbulk / Ro-Ro
+                    </span>
+                    {activeProject && (
+                      <span className="text-[11px] font-mono text-slate-400">
+                        Expediente: <strong className="text-slate-200">{activeProject.project_ref}</strong>
+                      </span>
+                    )}
+                  </div>
+                  <h2 id="project-cargo-modal-title" className="text-lg font-black text-slate-100 tracking-tight">
+                    Project Cargo Builder
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCargoModalOpen(false)}
+                className="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-100 flex items-center justify-center text-base transition cursor-pointer"
+                aria-label="Cerrar modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Contenido en 3 Secciones Verticales Limpias (Escroleable) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-800/70">
+              {/* ==================================================== */}
+              {/* SECCIÓN 1: Lista de Empaque (Packing List)           */}
+              {/* ==================================================== */}
+              <section className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                      <span>1. Lista de Empaque (Packing List)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Tabla de dimensiones y cubicaje dinámico para carga heterogénea (Camión, Tráiler, MAFI, piezas de proyecto).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddCargoPiece}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition shadow cursor-pointer self-start sm:self-auto"
+                  >
+                    <span>➕ Añadir Pieza</span>
+                  </button>
+                </div>
+
+                {/* Tabla de Piezas */}
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60 shadow-inner">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900/90 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                      <tr>
+                        <th scope="col" className="px-3 py-2.5 w-20">Cantidad</th>
+                        <th scope="col" className="px-3 py-2.5 min-w-[180px]">Tipo/Modelo</th>
+                        <th scope="col" className="px-3 py-2.5 w-24">Largo (m)</th>
+                        <th scope="col" className="px-3 py-2.5 w-24">Ancho (m)</th>
+                        <th scope="col" className="px-3 py-2.5 w-24">Alto (m)</th>
+                        <th scope="col" className="px-3 py-2.5 w-28">Peso Unitario (kg)</th>
+                        <th scope="col" className="px-3 py-2.5 w-24 text-right bg-slate-900/40 text-sky-400 font-mono">M2</th>
+                        <th scope="col" className="px-3 py-2.5 w-24 text-right bg-slate-900/40 text-emerald-400 font-mono">M3</th>
+                        <th scope="col" className="px-3 py-2.5 w-14 text-center">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-sans">
+                      {cargoItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-8 text-center text-slate-500 italic">
+                            No hay piezas registradas en el packing list. Pulsa{' '}
+                            <strong className="text-sky-400 not-italic font-bold cursor-pointer" onClick={handleAddCargoPiece}>
+                              "+ Añadir Pieza"
+                            </strong>{' '}
+                            para comenzar.
+                          </td>
+                        </tr>
+                      ) : (
+                        cargoItems.map((item, idx) => {
+                          const l = parseFloat(item.length) || 0;
+                          const w = parseFloat(item.width) || 0;
+                          const h = parseFloat(item.height) || 0;
+                          const rowM2 = (l * w).toFixed(2);
+                          const rowM3 = (l * w * h).toFixed(2);
+
+                          return (
+                            <tr key={item.id} className="hover:bg-slate-900/40 transition">
+                              {/* Cantidad */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  placeholder="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs font-mono font-bold text-slate-100 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Tipo / Modelo */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="text"
+                                  placeholder="Ej: Camión, Tráiler, MAFI..."
+                                  value={item.type}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Largo (m) */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  placeholder="0.00"
+                                  value={item.length}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Ancho (m) */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  placeholder="0.00"
+                                  value={item.width}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Alto (m) */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  placeholder="0.00"
+                                  value={item.height}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Peso Unitario (kg) */}
+                              <td className="px-2.5 py-2">
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min={0}
+                                  placeholder="0"
+                                  value={item.weight}
+                                  onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                                />
+                              </td>
+                              {/* Columna autocalculada M2 (Largo x Ancho) */}
+                              <td className="px-3 py-2 text-right font-mono font-bold text-sky-400 bg-slate-900/30">
+                                {rowM2}
+                              </td>
+                              {/* Columna autocalculada M3 (Largo x Ancho x Alto) */}
+                              <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400 bg-slate-900/30">
+                                {rowM3}
+                              </td>
+                              {/* Botón Eliminar fila */}
+                              <td className="px-2 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCargoItem(item.id)}
+                                  className="w-7 h-7 inline-flex items-center justify-center rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition cursor-pointer"
+                                  title="Eliminar fila"
+                                  aria-label={`Eliminar fila ${idx + 1}`}
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {/* Al pie de la tabla: suma total dinámica de M2, M3 y Peso */}
+                    <tfoot className="bg-slate-900 border-t-2 border-slate-750 font-bold text-slate-200 text-xs">
+                      <tr>
+                        <td colSpan={6} className="px-4 py-3 text-right uppercase tracking-wider text-[11px] text-slate-400">
+                          Totales de la Lista de Empaque:
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-sky-400 font-black">
+                          {totals.m2.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-400 font-black">
+                          {totals.m3.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                        </td>
+                        <td className="px-3 py-3 text-center text-[11px] font-mono text-amber-300 font-black whitespace-nowrap">
+                          {totals.weight.toLocaleString('es-ES')} kg
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddCargoPiece}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition cursor-pointer shadow-sm"
+                  >
+                    <span>+ Añadir Pieza</span>
+                  </button>
+                  <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
+                    <span>Total Piezas: <strong className="text-slate-200">{totals.quantity}</strong></span>
+                    <span>Peso Total: <strong className="text-amber-300 font-bold">{totals.weight.toLocaleString('es-ES')} kg</strong></span>
+                    <span>Cubicaje Total: <strong className="text-emerald-300 font-bold">{totals.m3.toFixed(2)} m³</strong></span>
+                  </div>
+                </div>
+              </section>
+
+              {/* ==================================================== */}
+              {/* SECCIÓN 2: Trincaje y Materiales                     */}
+              {/* ==================================================== */}
+              <section className="pt-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>2. Trincaje y Materiales</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Materiales y consumibles de aseguramiento para la estiba y trincado seguro (Dunnage & Lashing).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  <NumericCounter
+                    label="Maderas de Estiba (Dunnage)"
+                    subtitle="Tablones y cunas de madera certificada"
+                    value={dunnageWood}
+                    onChange={setDunnageWood}
+                  />
+                  <NumericCounter
+                    label="Eslingas de alta capacidad"
+                    subtitle="Eslingas textiles y sintéticas homologadas"
+                    value={highCapacitySlings}
+                    onChange={setHighCapacitySlings}
+                  />
+                  <NumericCounter
+                    label="Cadenas y Tensores"
+                    subtitle="Cadenas de trincaje pesado con tensores rachet"
+                    value={chainsBinders}
+                    onChange={setChainsBinders}
+                  />
+                  <NumericCounter
+                    label="Grilletes"
+                    subtitle="Grilletes de unión de alta resistencia"
+                    value={shackles}
+                    onChange={setShackles}
+                  />
+                </div>
+              </section>
+
+              {/* ==================================================== */}
+              {/* SECCIÓN 3: Mano de Obra Portuaria                    */}
+              {/* ==================================================== */}
+              <section className="pt-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>3. Mano de Obra Portuaria</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Subcontratación de cuadrillas especializadas y medios mecánicos de elevación portuaria.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <NumericCounter
+                    label="Cuadrillas de Estibadores (Turnos)"
+                    subtitle="Turnos completos de estiba portuaria"
+                    value={stevedoreGangs}
+                    onChange={setStevedoreGangs}
+                  />
+                  <NumericCounter
+                    label="Equipo de Trincadores"
+                    subtitle="Especialistas en trincaje y aseguramiento marino"
+                    value={lashingTeam}
+                    onChange={setLashingTeam}
+                  />
+                  <NumericCounter
+                    label="Grúa Auxiliar de Tierra (Heavy Lift)"
+                    subtitle="Grúa móvil portuaria para piezas de gran tonelaje"
+                    value={heavyLiftCrane}
+                    onChange={setHeavyLiftCrane}
+                  />
+                </div>
+              </section>
+            </div>
+
+            {/* ==================================================== */}
+            {/* FOOTER DEL MODAL: Resumen Financiero y Guardado      */}
+            {/* ==================================================== */}
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/90 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 max-w-xl">
+                {/* Input: Coste Total Estimado (€) */}
+                <div>
+                  <label htmlFor="input-estimated-cost" className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Coste Total Estimado (€)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="input-estimated-cost"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      placeholder="0.00"
+                      value={estimatedCost}
+                      onChange={(e) => setEstimatedCost(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-rose-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">EUR</span>
+                  </div>
+                </div>
+
+                {/* Input: Precio Venta a Cliente (€) */}
+                <div>
+                  <label htmlFor="input-sale-price" className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Precio Venta a Cliente (€)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="input-sale-price"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      placeholder="0.00"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">EUR</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex items-center gap-3 justify-end pt-2 md:pt-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCargoModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  id="btn-save-project-cargo"
+                  onClick={handleSaveProjectCargo}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <span>💾</span>
+                  <span>Guardar Flete y Estiba en Proyecto</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default ForwarderWorkspace;
-

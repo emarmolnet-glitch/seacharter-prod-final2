@@ -92,3 +92,67 @@ test('8. forwarder-workspace-entry.jsx mounts ForwarderWorkspace to DOM containe
   assert.match(entrySource, /mountForwarderWorkspace/);
   assert.match(entrySource, /<ForwarderWorkspace \/>/);
 });
+
+test('9. Project Cargo Builder modal opens on "Añadir Servicio" with large overlay layout', () => {
+  assert.match(forwarderComponentSource, /isCargoModalOpen/);
+  assert.match(forwarderComponentSource, /setIsCargoModalOpen\(true\)/);
+  assert.match(forwarderComponentSource, /max-w-6xl/);
+  assert.match(forwarderComponentSource, /Project Cargo Builder/);
+  // Contains the 3 clear vertical sections
+  assert.match(forwarderComponentSource, /1\.\s*Lista de Empaque\s*\(Packing List\)/);
+  assert.match(forwarderComponentSource, /2\.\s*Trincaje y Materiales/);
+  assert.match(forwarderComponentSource, /3\.\s*Mano de Obra Portuaria/);
+});
+
+test('10. Section 1 implements dynamic Packing List table with cargoItems state, auto-calculations, and totals', () => {
+  assert.match(forwarderComponentSource, /const\s*\[cargoItems,\s*setCargoItems\]\s*=\s*useState\(\[\]\)/);
+  assert.match(forwarderComponentSource, /\+ Añadir Pieza/);
+  // Editable columns
+  assert.match(forwarderComponentSource, /Cantidad/);
+  assert.match(forwarderComponentSource, /Tipo\/Modelo/);
+  assert.match(forwarderComponentSource, /Largo \(m\)/);
+  assert.match(forwarderComponentSource, /Ancho \(m\)/);
+  assert.match(forwarderComponentSource, /Alto \(m\)/);
+  assert.match(forwarderComponentSource, /Peso Unitario \(kg\)/);
+  // Auto-calculated columns
+  assert.match(forwarderComponentSource, /M2/);
+  assert.match(forwarderComponentSource, /M3/);
+  // Table footer totals for M2, M3 and Peso
+  assert.match(forwarderComponentSource, /<tfoot/);
+  assert.match(forwarderComponentSource, /totals\.m2/);
+  assert.match(forwarderComponentSource, /totals\.m3/);
+  assert.match(forwarderComponentSource, /totals\.weight/);
+});
+
+test('11. Section 2 implements Dunnage & Lashing materials numeric counters with +/- buttons', () => {
+  assert.match(forwarderComponentSource, /Maderas de Estiba \(Dunnage\)/);
+  assert.match(forwarderComponentSource, /Eslingas de alta capacidad/);
+  assert.match(forwarderComponentSource, /Cadenas y Tensores/);
+  assert.match(forwarderComponentSource, /Grilletes/);
+  assert.match(forwarderComponentSource, /dunnageWood/);
+  assert.match(forwarderComponentSource, /highCapacitySlings/);
+  assert.match(forwarderComponentSource, /chainsBinders/);
+  assert.match(forwarderComponentSource, /shackles/);
+});
+
+test('12. Section 3 implements Port Labor and Heavy Lift numeric counters with +/- buttons', () => {
+  assert.match(forwarderComponentSource, /Cuadrillas de Estibadores \(Turnos\)/);
+  assert.match(forwarderComponentSource, /Equipo de Trincadores/);
+  assert.match(forwarderComponentSource, /Grúa Auxiliar de Tierra \(Heavy Lift\)/);
+  assert.match(forwarderComponentSource, /stevedoreGangs/);
+  assert.match(forwarderComponentSource, /lashingTeam/);
+  assert.match(forwarderComponentSource, /heavyLiftCrane/);
+});
+
+test('13. Modal Footer implements financial inputs and "Guardar Flete y Estiba en Proyecto" save handler', () => {
+  assert.match(forwarderComponentSource, /Coste Total Estimado \(€\)/);
+  assert.match(forwarderComponentSource, /Precio Venta a Cliente \(€\)/);
+  assert.match(forwarderComponentSource, /Guardar Flete y Estiba en Proyecto/);
+  // Console.log complete object
+  assert.match(forwarderComponentSource, /console\.log\(/);
+  // State cleanup
+  assert.match(forwarderComponentSource, /setCargoItems\(\[\]\)/);
+  // Modal close
+  assert.match(forwarderComponentSource, /setIsCargoModalOpen\(false\)/);
+});
+
