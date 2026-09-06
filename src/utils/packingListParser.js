@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -8,144 +9,156 @@ export const parsePackingListFile = async (file) => {
   const fileName = file.name.toLowerCase();
 
   try {
+    let extractedLines = [];
+
+    // CAPA 1: Enrutamiento estricto por extensión (Evita leer binarios como texto)
     if (fileName.endsWith('.pdf')) {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = "";
       
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         
         let lastY;
-        let text = '';
+        let lineText = '';
         
-        // Reconstrucción geométrica: evita que columnas separadas se fusionen
+        // Reconstrucción geométrica por coordenadas Y (mantiene orden de filas)
         for (let item of content.items) {
           if (lastY !== item.transform[5] && lastY !== undefined) {
-            text += '\n';
+            if (lineText.trim()) extractedLines.push(lineText.trim());
+            lineText = '';
           }
-          text += item.str + ' ';
+          lineText += item.str + ' ';
           lastY = item.transform[5];
         }
-        fullText += text + '\n';
+        if (lineText.trim()) extractedLines.push(lineText.trim());
       }
-      return parseText(fullText);
-      
-    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+    } 
+    else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-      return parseText(json.map(row => row.join(" ")).join("\n"));
       
-    } else {
+      extractedLines = json.map(row => row.filter(Boolean).join(" \t ")).filter(Boolean);
+    } 
+    else if (fileName.endsWith('.docx')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      if (result && result.value) {
+        extractedLines = result.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      }
+    } 
+    else {
+      // Archivos de texto plano estrictos (TXT)
       const text = await file.text();
-      // Cortafuegos: Abortar si el archivo leído como texto es en realidad un binario PDF
       if (text.startsWith('%PDF-')) {
-        console.warn("[Project Cargo Parser] Bloqueo de seguridad: Evitada lectura de binario PDF como texto plano.");
+        console.error("[Parser] Error: Se intentó procesar un PDF binario como texto plano.");
         return [];
       }
-      return parseText(text);
+      extractedLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     }
+
+    return processHeuristicLines(extractedLines);
+
   } catch (error) {
-    console.error("[Project Cargo Parser] Error leyendo el archivo:", error);
+    console.error("[Project Cargo Parser] Error crítico procesando el archivo:", error);
     return [];
   }
 };
 
-const parseText = (text) => {
+/**
+ * Motor heurístico universal para interpretar cualquier formato de línea
+ */
+const processHeuristicLines = (lines) => {
   const parsedPieces = [];
-  
-  // Regex calibrada para formatos estándar, con barras (L/100xW/100xH/100) o prefijo (dim 100x100x100)
-  const dimRegex = /(?:dim\s*|L\/?\s*)?(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|x?\s*L\/?\/?\s*)(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|x?\s*H\/?\s*)(\d+(?:[.,]\d+)?)/gi;
-  
-  let match;
-  let lastIndex = 0;
-  
-  const categoriesList = ["Equipos de Proceso", "Maquinaria y Talleres", "Utillaje y Herramientas", "Flota de Vehículos"];
-  const projectKeywords = /bomba|bastidor|ósmosis|camión|cabeza|góndola|furgoneta|skid|transformador|concasseur|broyeur|crible|groupe mobile|contenneur|flat/i;
-  
-  while ((match = dimRegex.exec(text)) !== null) {
-      let l = parseFloat(match[1].replace(',', '.'));
-      let w = parseFloat(match[2].replace(',', '.'));
-      let h = parseFloat(match[3].replace(',', '.'));
-      
-      // Conversión automática de milímetros a metros
-      if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
-      
-      let chunk = text.substring(lastIndex, match.index);
-      
-      let detectedCategory = "Equipos de Proceso";
-      for (const cat of categoriesList) {
-          if (chunk.includes(cat)) {
-              detectedCategory = cat;
-              chunk = chunk.substring(chunk.indexOf(cat) + cat.length);
-              break;
-          }
-      }
 
-      // Extraer Cantidad (retrocediendo desde las dimensiones)
-      const nums = chunk.match(/\b(\d+)\b/g);
-      let qty = 1;
-      if (nums && nums.length > 0) {
-          const possibleQty = parseInt(nums[nums.length - 1], 10);
-          if (possibleQty > 0 && possibleQty < 500) qty = possibleQty; 
-      }
-      
-      // Limpieza de descripción
-      let desc = chunk.replace(qty.toString(), '').replace(/[-–—|()]/g, ' ').replace(/\s+/g, ' ').trim();
-      desc = desc.substring(Math.max(0, desc.length - 80)).trim();
-      desc = desc.replace(/^[\d.,]+\s*/, '');
-      if (!desc || desc.length < 3) desc = "Pieza Proyecto";
+  // Exclusión estricta de cabeceras comerciales y legales internacionales
+  const headerFilterRegex = /^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide|shippers|consignees|notify|port|vessel|captain|date|incoterms)/i;
 
-      // Capturar pesos y modo de envío en los siguientes 100 caracteres
-      const lookAhead = text.substring(match.index + match[0].length, match.index + match[0].length + 100);
-      const weightMatches = lookAhead.match(/(\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|tons?|tn|t)\b/i);
-      
-      let unitWt = 1000;
-      
-      if (weightMatches) {
-          const val = parseFloat(weightMatches[1].replace(/,/g, ''));
-          unitWt = /t|tn|ton/i.test(weightMatches[0]) ? val * 1000 : val;
-          lastIndex = match.index + match[0].length + lookAhead.indexOf(weightMatches[0]) + weightMatches[0].length;
-      } else {
-          // Si no hay unidad (Kgs), buscar el primer número grande aislado
-          const fallbackWeight = lookAhead.match(/\b(\d{3,}(?:[.,]\d+)?)\b/);
-          if (fallbackWeight) {
-              unitWt = parseFloat(fallbackWeight[1].replace(/,/g, ''));
-              lastIndex = match.index + match[0].length + lookAhead.indexOf(fallbackWeight[0]) + fallbackWeight[0].length;
-          } else {
-              unitWt = projectKeywords.test(desc) ? 5000 : 1000;
-              lastIndex = dimRegex.lastIndex;
-          }
-      }
+  lines.forEach((line, index) => {
+    if (headerFilterRegex.test(line)) return;
+    if (line.length < 4) return; // Ignorar líneas con muy pocos caracteres
 
-      // Determinar el Modo de Envío sugerido
-      let shippingModeSop = "40' HC Contenedor";
-      if (l > 11.9 || w > 2.3 || unitWt > 30000 || /ro-ro|carga proyecto|camion|tractor|groupe mobile|concasseur/i.test(desc)) {
-          shippingModeSop = "Ro-Ro / Carga Proyecto";
-      } else if (/flat rack|ot\b|contenneur|flat/i.test(lookAhead) || /flat rack|ot\b|contenneur|flat/i.test(desc)) {
-          shippingModeSop = "40' Flat Rack / OT";
-      } else if (/20' st|iso 20/i.test(lookAhead)) {
-          shippingModeSop = "20' ST Contenedor";
-      }
+    // Extraer todos los números decimales o enteros de la línea
+    const tokens = line.match(/-?\d+(?:[.,]\d+)?/g);
+    
+    // Si la línea no contiene al menos un número (para dimensiones o pesos), se descarta como texto plano irrelevante
+    if (!tokens || tokens.length === 0) return;
 
-      parsedPieces.push({
-          id: Date.now() + Math.random(),
-          category: detectedCategory,
-          quantity: qty,
-          type: desc,
-          length: parseFloat(l.toFixed(2)),
-          width: parseFloat(w.toFixed(2)),
-          height: parseFloat(h.toFixed(2)),
-          weight: parseFloat(unitWt.toFixed(2)),
-          length_m: parseFloat(l.toFixed(2)),
-          width_m: parseFloat(w.toFixed(2)),
-          height_m: parseFloat(h.toFixed(2)),
-          unit_weight_kg: parseFloat(unitWt.toFixed(2)),
-          shipping_mode_supported: shippingModeSop
-      });
-  }
+    let l = 1, w = 1, h = 1, wt = 1000, qty = 1;
+
+    // Búsqueda heurística de dimensiones (patrón de 3 números consecutivos razonables para carga)
+    let foundDims = false;
+    for (let i = 0; i <= tokens.length - 3; i++) {
+      const n1 = parseFloat(tokens[i].replace(',', '.'));
+      const n2 = parseFloat(tokens[i+1].replace(',', '.'));
+      const n3 = parseFloat(tokens[i+2].replace(',', '.'));
+
+      // Criterio físico: dimensiones lógicas de piezas industriales o contenedores en metros o mm
+      if (n1 > 0 && n2 > 0 && n3 > 0 && n1 < 50000 && n2 < 50000 && n3 < 50000) {
+        l = n1; w = n2; h = n3;
+        if (l > 50) { l /= 1000; w /= 1000; h /= 1000; } // Conversión mm a metros
+        foundDims = true;
+        break;
+      }
+    }
+
+    // Búsqueda heurística de peso (el número más alto de la línea o el que esté cerca de unidades de peso)
+    const numericTokens = tokens.map(t => parseFloat(t.replace(',', '.')));
+    const potentialWeights = numericTokens.filter(n => n > 50); // Criterio: un bulto pesa más de 50 kg
+    
+    if (potentialWeights.length > 0) {
+      // Por lo general, el peso total o unitario de la línea es el número más alto significativo
+      wt = Math.max(...potentialWeights);
+      // Si el peso viene expresado en toneladas explícitamente y es pequeño, convertir a kg
+      if (wt < 100 && /t\b|tn\b|tons?\b/i.test(line)) {
+        wt *= 1000;
+      }
+    }
+
+    // Búsqueda heurística de cantidad (números enteros pequeños al inicio de línea)
+    const smallInts = numericTokens.filter(n => n > 0 && n < 100 && Number.isInteger(n));
+    if (smallInts.length > 0 && smallInts[0] !== l && smallInts[0] !== w) {
+      qty = smallInts[0];
+    }
+
+    // Limpieza de la descripción (eliminando números y símbolos aislados)
+    let desc = line
+      .replace(/-?\d+(?:[.,]\d+)?/g, '') // Quitar números
+      .replace(/[/\\|#*_,;()\[\]]/g, ' ') // Quitar caracteres especiales
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!desc || desc.length < 2) {
+      desc = `Componente Industrial #${index + 1}`;
+    }
+
+    // Evaluación automática del modo de transporte basado en gálibo
+    let shippingModeSop = "40' HC Contenedor";
+    if (l > 11.9 || w > 2.3 || wt > 30000 || /ro-ro|project|camion|trailer|concasseur|groupe|mobile/i.test(line)) {
+      shippingModeSop = "Ro-Ro / Carga Proyecto";
+    } else if (l > 6 || w > 2.2 || wt > 15000) {
+      shippingModeSop = "40' Flat Rack / OT";
+    }
+
+    parsedPieces.push({
+      id: Date.now() + index + Math.random(),
+      category: /camión|cabeza|góndola|furgoneta/i.test(desc) ? "Flota de Vehículos" : "Equipos de Proceso",
+      quantity: qty,
+      type: desc,
+      length: parseFloat(l.toFixed(2)),
+      width: parseFloat(w.toFixed(2)),
+      height: parseFloat(h.toFixed(2)),
+      weight: parseFloat(wt.toFixed(2)),
+      length_m: parseFloat(l.toFixed(2)),
+      width_m: parseFloat(w.toFixed(2)),
+      height_m: parseFloat(h.toFixed(2)),
+      unit_weight_kg: parseFloat(wt.toFixed(2)),
+      shipping_mode_supported: shippingModeSop
+    });
+  });
+
   return parsedPieces;
 };
