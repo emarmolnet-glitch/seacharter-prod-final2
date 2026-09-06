@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { parsePackingList } from '../utils/packingListParser.js';
+import AgenteProyectosWidget from './AgenteProyectosWidget';
 
 function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   const numValue = Number(value) || 0;
@@ -239,17 +240,46 @@ export function ForwarderWorkspace() {
     setEstimatedCost(totalEstimatedCost.toFixed(2)); setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
-  useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
+  const useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
+
+  // Función para inyectar los datos calculados por el Agente de Proyectos en los inputs
+  const handleApplyProjectPayload = (payload) => {
+    if (!payload) return;
+    if (payload.category !== undefined) {
+      if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
+        setCargoItems(payload.cargo_items.map((ci, idx) => ({
+          id: ci.id || `item-${Date.now()}-${idx}`,
+          category: ci.category || 'Equipos de Proceso',
+          quantity: ci.quantity || 1,
+          type: ci.type || '',
+          length: ci.length_m ?? ci.length ?? '',
+          width: ci.width_m ?? ci.width ?? '',
+          height: ci.height_m ?? ci.height ?? '',
+          weight: ci.unit_weight_kg ?? ci.weight ?? '',
+          shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
+        })));
+      }
+    }
+    if (payload.dunnageUnits !== undefined) setDunnageWood(payload.dunnageUnits);
+    if (payload.slingsUnits !== undefined) setHighCapacitySlings(payload.slingsUnits);
+    if (payload.lashingChains !== undefined) setChainsBinders(payload.lashingChains);
+    if (payload.stevedoringShifts !== undefined) setStevedoreGangs(payload.stevedoringShifts);
+    if (payload.lashingTeams !== undefined) setLashingTeam(payload.lashingTeams);
+    if (payload.heavyLiftCranes !== undefined) setHeavyLiftCrane(payload.heavyLiftCranes);
+    if (payload.mafiPlatforms !== undefined) setMafiPlatforms(payload.mafiPlatforms);
+    if (payload.storageDays !== undefined) setStorageDays(payload.storageDays);
+    if (payload.surveyorCost !== undefined) {
+      userEditedSurveyor.current = true;
+      setSurveyorCost(payload.surveyorCost);
+    }
+    if (payload.inlandTrucksCount !== undefined) setInlandCost(payload.inlandTrucksCount);
+    if (payload.customsCost !== undefined) setCustomsCost(payload.customsCost);
+  };
 
   const handleOpenCreateService = () => {
     setEditingLineItemId(null); setCargoItems([]);
     setDunnageWood(0); setHighCapacitySlings(0); setChainsBinders(0); setShackles(0);
-    setStevedoreGangs(0); setLashingTeam(0); setHeavyLiftCrane(0); setMafiPlatforms(0);
-    setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
-    setStorageDays(0); setSurveyorCost(0); setInlandCost(0); setCustomsCost(0);
-    userEditedSurveyor.current = false; setEstimatedCost(''); setSalePrice('');
-    setIsCargoModalOpen(true);
-  };
+...
 
   const handleEditService = (item) => {
     if (!item) return;
