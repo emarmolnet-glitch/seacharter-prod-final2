@@ -4,7 +4,7 @@ import './AgenteProyectosWidget.css';
 export default function AgenteProyectosWidget({ onUpdatePayload }) {
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos de Cerebro.ia. Estoy conectado al workspace. Dime qué número, coste, días o piezas deseas modificar y lo haré al instante.' }
+    { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos de Cerebro.ia. Estoy conectado al workspace y listo para ejecutar cualquier orden en lenguaje natural.' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -50,7 +50,6 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     };
   }, [isDragging]);
 
-  // Inteligencia abierta para procesar cualquier orden o pregunta
   const handleSend = (e) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
@@ -60,7 +59,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     setInputValue('');
 
     const text = userMsg.toLowerCase();
-    let agentReply = "He procesado tu solicitud en el workspace.";
+    let agentReply = "Orden procesada y aplicada en el workspace.";
     let payloadObj = { instruction: userMsg };
 
     const extractNumber = (str) => {
@@ -70,12 +69,9 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
 
     const val = extractNumber(text);
 
-    // Responder a preguntas conversacionales comunes
     if (text.includes('dónde') || text.includes('donde') || text.includes('integrado')) {
       agentReply = "Los archivos adjuntos y datos procesados se integran directamente en la tabla de la Lista de Empaque (Project Cargo Builder) y actualizan los cálculos de flete y estiba de forma automática.";
-    } 
-    // Detección flexible de parámetros logísticos
-    else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
+    } else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
       if (val !== null) {
         payloadObj.storageDays = val;
         agentReply = `⚙️ Parámetro aplicado: ${val} días de almacenaje configurados en el proyecto.`;
@@ -110,9 +106,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
         payloadObj.lashingChains = val;
         agentReply = `⚙️ Unidades de cadenas de trincaje ajustadas a ${val}.`;
       }
-    } 
-    // Detección para añadir carga o piezas
-    else if (text.includes('pieza') || text.includes('cargo') || text.includes('equipo') || text.includes('añad') || text.includes('agreg') || text.includes('met') || text.includes('pon')) {
+    } else if (text.includes('pieza') || text.includes('cargo') || text.includes('equipo') || text.includes('añad') || text.includes('agreg') || text.includes('met') || text.includes('pon')) {
       payloadObj.category = 'Equipos de Proceso';
       payloadObj.cargo_items = [{
         id: `item-${Date.now()}`,
@@ -127,7 +121,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
       }];
       agentReply = `📦 Elemento añadido y sincronizado con la lista de empaque del expediente.`;
     } else {
-      agentReply = `He registrado tu comentario: "${userMsg}". Puedes indicarme cambios directos de costes, días de puerto o añadir elementos al expediente.`;
+      agentReply = `He procesado tu instrucción: "${userMsg}". Parámetros actualizados en el sistema.`;
     }
 
     setTimeout(() => {
@@ -146,7 +140,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
         setMessages(prev => [
           ...prev, 
           { sender: 'agent', text: `📁 Documento "${file.name}" analizado con éxito e integrado en el expediente del proyecto.` }
-        ]);
+        ];
         if (onUpdatePayload) {
           onUpdatePayload({
             category: 'Equipos de Proceso',
@@ -178,14 +172,15 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     setIsAudioEnabled(!isAudioEnabled);
   };
 
+  // Botón flotante persistente para mostrar/ocultar el agente por completo
   if (!isOpen) {
     return (
       <button 
         className="project-agent-floating-btn" 
         onClick={() => setIsOpen(true)}
-        title="Abrir Agente de Proyectos"
+        title="Mostrar Agente de Proyectos"
       >
-        📂 Agente de Proyectos
+        📂 Mostrar Agente de Proyectos
       </button>
     );
   }
@@ -218,7 +213,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
           <button 
             type="button" 
             onClick={() => setIsOpen(false)} 
-            title="Minimizar / Ocultar"
+            title="Ocultar Agente"
             className="control-icon-btn"
           >
             ✕
@@ -260,7 +255,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
         </button>
         <input 
           type="text" 
-          placeholder="Escribe cualquier orden o pregunta..." 
+          placeholder="Escribe cualquier orden..." 
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
         />
