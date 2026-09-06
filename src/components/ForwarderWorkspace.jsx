@@ -242,9 +242,15 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
-  // Función para inyectar los datos calculados u órdenes de texto del Agente de Proyectos
+ // Función para inyectar y procesar las órdenes del Agente de Proyectos de forma inteligente
   const handleApplyProjectPayload = (payload) => {
     if (!payload) return;
+
+    // Validación quirúrgica: si no hay un proyecto seleccionado, avisar al usuario
+    if (!activeProject) {
+      window.alert('⚠️ Por favor, selecciona o crea un proyecto en la barra lateral antes de pedirle cambios al agente.');
+      return;
+    }
 
     if (payload.instruction) {
       const text = payload.instruction.toLowerCase();
@@ -272,14 +278,15 @@ export function ForwarderWorkspace() {
         const val = matchNumber(text);
         if (val !== null) setCustomsCost(val);
       }
-      if (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza')) {
+      // Detectar palabras clave amplias para añadir piezas o cargas
+      if (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza') || text.includes('añad') || text.includes('agreg') || text.includes('met')) {
         setCargoItems(prev => [
           ...prev,
           {
             id: `item-${Date.now()}`,
             category: 'Equipos de Proceso',
             quantity: 1,
-            type: 'Transformador / Skid Industrial',
+            type: 'Transformador / Skid Industrial (IA)',
             length: '6.2',
             width: '2.8',
             height: '3.4',
@@ -288,6 +295,9 @@ export function ForwarderWorkspace() {
           }
         ]);
       }
+
+      // Abrir automáticamente el modal de carga para que el usuario vea los cambios reflejados al instante
+      setIsCargoModalOpen(true);
     }
 
     if (payload.category !== undefined) {
@@ -303,6 +313,7 @@ export function ForwarderWorkspace() {
           weight: ci.unit_weight_kg ?? ci.weight ?? '',
           shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
         })));
+        setIsCargoModalOpen(true);
       }
     }
     if (payload.dunnageUnits !== undefined) setDunnageWood(payload.dunnageUnits);
