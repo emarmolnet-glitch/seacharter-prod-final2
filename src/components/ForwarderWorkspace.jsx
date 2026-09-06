@@ -707,7 +707,6 @@ export function ForwarderWorkspace() {
         );
       })()}
 
-      {/* Widget flotante integrado dentro del fragmento principal */}
       <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
 
     </>
