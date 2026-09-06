@@ -699,15 +699,19 @@ export function ForwarderWorkspace() {
               </div>
 
               <div className="grid grid-cols-2 gap-16 pt-12 text-center">
-                <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Firma Transitario</p></div>
-                <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Aceptación Cliente</p></div>
-              </div>
+              <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Firma Transitario</p></div>
+              <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Aceptación Cliente</p></div>
             </div>
           </div>
-        );
-      })()}
-    </>
-  );
+        </div>
+      );
+    })()}
+
+    {/* El widget flotante debe ir aquí, dentro del fragmento principal */}
+    <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
+
+  </>
+);
 }
 
 export default ForwarderWorkspace;
