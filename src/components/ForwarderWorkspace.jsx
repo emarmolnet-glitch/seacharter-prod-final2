@@ -118,94 +118,32 @@ export function ForwarderWorkspace() {
     setIsAnalyzingFile(true);
     try {
       let allNewItems = [];
-
       for (const file of files) {
-        const fileName = (file.name || '').toLowerCase();
-        const fileType = (file.type || '').toLowerCase();
-        const isPdf = fileName.endsWith('.pdf') || fileType === 'application/pdf';
-
-        // 1. Si es PDF, PROHIBIDO leer como texto plano; procesar exclusivamente en cliente con pdfjs-dist
-        if (isPdf) {
-          try {
-            const result = await parsePackingList(file);
-            if (result && Array.isArray(result.items) && result.items.length > 0) {
-              const formattedItems = result.items.map((it, idx) => ({
-                id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
-                category: it.category || 'Equipos de Proceso',
-                quantity: it.quantity ?? 1,
-                type: it.type || it.description || 'Pieza Proyecto',
-                length: it.length_m ?? it.length ?? 1,
-                width: it.width_m ?? it.width ?? 1,
-                height: it.height_m ?? it.height ?? 1,
-                weight: it.unit_weight_kg ?? it.weight ?? 1000,
-                shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
-              }));
-              allNewItems = [...allNewItems, ...formattedItems];
-            }
-          } catch (pdfErr) {
-            console.error('Error parseando PDF con pdfjs-dist en cliente:', pdfErr);
-          }
-          continue;
-        }
-
-        // 2. Para otros archivos (Excel, Word, etc.), procesar preferentemente en cliente
-        try {
-          const clientResult = await parsePackingList(file);
-          if (clientResult && Array.isArray(clientResult.items) && clientResult.items.length > 0) {
-            const formattedItems = clientResult.items.map((it, idx) => ({
-              id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
-              category: it.category || 'Equipos de Proceso',
-              quantity: it.quantity ?? 1,
-              type: it.type || it.description || 'Pieza Proyecto',
-              length: it.length_m ?? it.length ?? 1,
-              width: it.width_m ?? it.width ?? 1,
-              height: it.height_m ?? it.height ?? 1,
-              weight: it.unit_weight_kg ?? it.weight ?? 1000,
-              shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
-            }));
-            allNewItems = [...allNewItems, ...formattedItems];
-            continue;
-          }
-        } catch (_) {}
-
-        // Fallback a Netlify Function parse-packing-list para otros tipos de archivo
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/.netlify/functions/parse-packing-list', {
+        const response = await fetch('/.netlify/functions/project-parser', {
           method: 'POST',
-          body: formData,
+          body: formData
         });
-
-        if (!response.ok) {
-          console.error(`Error en servidor al subir ${file.name}:`, response.statusText);
-          continue;
-        }
-
         const data = await response.json();
 
-        if (data.success && Array.isArray(data.items) && data.items.length > 0) {
+        if (data.success && Array.isArray(data.items)) {
           const formattedItems = data.items.map((it, idx) => ({
             id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
-            category: it.category || 'Equipos de Proceso',
-            quantity: it.quantity ?? 1,
-            type: it.type || it.description || 'Pieza Proyecto',
-            length: it.length_m ?? it.length ?? 1,
-            width: it.width_m ?? it.width ?? 1,
-            height: it.height_m ?? it.height ?? 1,
-            weight: it.unit_weight_kg ?? it.weight ?? 1000,
-            shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
+            ...it
           }));
-
-          allNewItems = [...allNewItems, ...formattedItems];
+          allNewItems.push(...formattedItems);
+        } else {
+          console.error('Error en el parser backend:', data.error);
         }
       }
 
       if (allNewItems.length > 0) {
-        setCargoItems((prev) => [...prev, ...allNewItems]);
+        setCargoItems(prev => [...prev, ...allNewItems]);
       }
     } catch (err) {
-      console.error("Error al procesar packing list:", err);
+      console.error('Error de red al procesar el archivo:', err);
     } finally {
       setIsAnalyzingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
