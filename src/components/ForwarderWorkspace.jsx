@@ -352,26 +352,26 @@ export function ForwarderWorkspace() {
   const getStowageAscii = () => {
     if (shippingMode === 'Ro-Ro') {
       return `+========================================================================================+
-| [PROA / BOW]            PERFIL OPERATIVO CUBIERTA RODANTE RO-RO           [POPA/STERN] |
+| [PROA / BOW]         PERFIL OPERATIVO CUBIERTA RODANTE RO-RO            [POPA/STERN] |
 |                                                                    [RAMPA POPA 75T SWL]|
 |----------------------------------------------------------------------------------------|
 |  CUBIERTA SUPERIOR / WEATHER DECK (VEHÍCULOS Y CARGA RODANTE INTEMPERIE)               |
 |  [ Acceso por rampa fija | Trincaje con cinchas de poliéster 5T | SWL: 2.50 t/m² ]     |
 |----------------------------------------------------------------------------------------|
-|  CUBIERTA PRINCIPAL / MAIN GARAGE DECK (GÁLIBO LIBRE VERTICAL: 5.20 METROS)            |
+|  CUBIERTA PRINCIPAL / MAIN GARAGE DECK (GÁLIBO LIBRE VERTICAL: 5.20 METROS)             |
 |   +-------------------+  +-------------------+  +-------------------+                  |
-|   | CARRIL 1 (BABOR): |  | CARRIL 2 (CRUJÍA):|  | CARRIL 3 (ESTRIBOR):|                |
+|   | CARRIL 1 (BABOR): |  | CARRIL 2 (CRUJÍA):|  | CARRIL 3 (ESTRIBOR):|                  |
 |   | Plataformas MAFI  |  | Cabezas tractoras |  | Carga estática    |                  |
 |   | con piezas pesadas|  | y remolques       |  | sobre Roll-Trailers |                  |
 |   +-------------------+  +-------------------+  +-------------------+                  |
 |   Trincaje D-Rings estructurales cada 2.5m | Cadenas de tracción bidireccional MBL>1.5 |
 |----------------------------------------------------------------------------------------|
 |  CUBIERTA INFERIOR / LOWER HOLD (ACCESO MEDIANTE RAMPA INTERNA ELEVABLE)               |
-|  [ Vehículos ligeros / Maquinaria rodante compacta | Calzos de seguridad y cinchas   ] |
+|  [ Vehículos ligeros / Maquinaria rodante compacta | Calzos de seguridad y cinchas    ] |
 +========================================================================================+`;
     }
     return `+========================================================================================+
-| [PROA / BOW]            SECCIÓN LONGITUDINAL Y BODEGA PROYECTO            [POPA/STERN] |
+| [PROA / BOW]          SECCIÓN LONGITUDINAL Y BODEGA PROYECTO           [POPA/STERN] |
 |                                                                                        |
 |             GRÚA 1 [SWL 60t]                      GRÚA 2 [SWL 60t]                     |
 |                 /                                     /                                |
@@ -381,7 +381,7 @@ export function ForwarderWorkspace() {
 | [ Piezas sobre cubierta izadas por gancho directo | Capacidad admisible: 3.50 t/m² ]   |
 |----------------------------------------------------------------------------------------|
 | ENTREPUENTE / TWEEN DECK (PONTÓN DESMONTABLE PARA REGULACIÓN DE ALTURA LIBRE)          |
-|  [ CAJA MAQUINARIA - 4.2x2.4m]      [ SKID INDUSTRIAL]      [ CAJA GENERADOR AUXILIAR] |
+|  [ CAJA MAQUINARIA - 4.2x2.4m]       [ SKID INDUSTRIAL]       [ CAJA GENERADOR AUXILIAR] |
 |  Trincaje: Cables de acero 16mm + Tensores MBL > 1.5 | Apoyo sobre maderas dunnage     |
 |----------------------------------------------------------------------------------------|
 | FONDO DE BODEGA / TANKTOP (MÁXIMA CAPACIDAD PORTANTE ESTRUCTURAL: 15.0 - 20.0 t/m²)    |
@@ -713,6 +713,7 @@ export function ForwarderWorkspace() {
         );
       })()}
 
+      {/* Agente de Proyectos exclusivo y quirúrgico */}
       <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
 
     </>
