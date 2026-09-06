@@ -406,7 +406,6 @@ export function ForwarderWorkspace() {
                     </div>
                   </div>
 
-                  {/* TABLA DE EMPAQUE FULL WIDTH (Anchos porcentuales para estirar la tabla) */}
                   <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                     <table className="w-full table-fixed text-left text-[11px] text-slate-700">
                       <thead className="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
@@ -449,7 +448,6 @@ export function ForwarderWorkspace() {
                     <div className="text-2xl">⚙️</div>
                     <div className="flex flex-col"><span className="text-blue-800 font-black text-xs uppercase">Motor de Decisión Operativa IA</span><span className="text-slate-700 mt-1 text-[11px]">Modalidad detectada: <strong className="bg-white text-blue-900 border border-blue-200 px-2 py-0.5 rounded mx-1">{shippingMode}</strong> Buque: <strong>{vesselType}</strong></span></div>
                   </div>
-                  {/* SECCIÓN DE BOTONES DE TRINCAJE (AHORA EN UNA FILA) */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <NumericCounter label="Maderas" subtitle="Dunnage" value={dunnageWood} onChange={setDunnageWood} />
                     <NumericCounter label="Eslingas" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
@@ -457,7 +455,6 @@ export function ForwarderWorkspace() {
                   </div>
                 </section>
 
-                {/* SECCIÓN 3 DE MANO DE OBRA PORTUARIA RECUPERADA */}
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Mano de Obra Portuaria</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -495,17 +492,19 @@ export function ForwarderWorkspace() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA REPORTE EJECUTIVO LIMPÍA (HEADER COMPACTO) */}
+      {/* VISTA REPORTE EJECUTIVO LIMPÍA (HEADER COMPACTO Y TARIFA POR RT)        */}
       {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
         const totalVolumeM3 = totals.m3 || 0;
+        const reportRT = Math.max(totalWeightTons, totalVolumeM3);
         const finalTotalCost = parseFloat(estimatedCost) || 0;
         const finalTotalSale = parseFloat(salePrice) || 0;
         const finalTotalMargin = finalTotalSale - finalTotalCost;
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
         const totalMetricUnits = cargoItems.reduce((sum, item) => sum + ((Number(item.quantity) || 1) * (parseFloat(item.weight) || 1000)), 0) || 1;
+        const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
 
         return (
           <div className="fixed inset-0 bg-slate-200 z-[999999] overflow-y-auto pt-28 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
@@ -589,9 +588,22 @@ export function ForwarderWorkspace() {
                 </table>
               </section>
 
+              {/* BLOQUE FINAL CON TARIFA POR TONELADA (RT / W/M) */}
               <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
-                <div><span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">Importe Total Cotización</span><h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA</h2></div>
-                <div className="text-right"><div className="text-4xl font-black font-mono text-blue-700">{formatCurrency(finalTotalSale)}</div><div className="text-xs text-slate-500 mt-1 font-bold">Margen comercial ({formatCurrency(finalTotalMargin)})</div></div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">Importe Total Cotización (All-In)</span>
+                  <h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA</h2>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1 rounded text-xs font-bold font-mono">
+                      Tarifa: {formatCurrency(unitRateSale)} / RT (W/M)
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">Cálculo sobre {reportRT.toFixed(2)} Revenue Tons</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-4xl font-black font-mono text-blue-700">{formatCurrency(finalTotalSale)}</div>
+                  <div className="text-xs text-slate-500 mt-1 font-bold">Margen comercial ({formatCurrency(finalTotalMargin)})</div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-16 pt-12 text-center">
