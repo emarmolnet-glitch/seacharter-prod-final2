@@ -406,7 +406,6 @@ export function ForwarderWorkspace() {
                     </div>
                   </div>
 
-                  {/* TABLA DE EMPAQUE FULL WIDTH CON COLUMNAS CLAVADAS AL PDF */}
                   <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
                     <table className="w-full text-left text-[11px] text-slate-700">
                       <thead className="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
@@ -435,7 +434,7 @@ export function ForwarderWorkspace() {
                             </td>
                             <td className="p-1.5"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-right font-mono" /></td>
                             <td className="p-1.5"><input type="text" value={item.shipping_mode_supported || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'shipping_mode_supported', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-600 text-[10px]" placeholder="Modo..." /></td>
-                            <td className="p-1.5 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full">✕</button></td>
+                            <td className="p-1.5 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full cursor-pointer">✕</button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -474,8 +473,8 @@ export function ForwarderWorkspace() {
                   <div className="w-full"><label className="block text-blue-600 font-bold text-[10px] uppercase mb-1">VENTA CLIENTE</label><input type="number" readOnly value={salePrice} className="bg-white text-blue-900 font-black text-xl border-blue-300 rounded p-2 w-full text-right shadow-inner" /></div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm">📄 Generar Reporte</button>
-                  <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded shadow font-bold text-sm">💾 GUARDAR PROYECTO</button>
+                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte</button>
+                  <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">💾 GUARDAR PROYECTO</button>
                 </div>
               </div>
             </div>
@@ -484,7 +483,7 @@ export function ForwarderWorkspace() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA REPORTE EJECUTIVO LIMPÍA (SIN UNIVERSAL FORWARDING Y PT-28 PARA NAVBAR) */}
+      {/* VISTA REPORTE EJECUTIVO LIMPÍA (HEADER COMPACTO) */}
       {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
@@ -520,15 +519,20 @@ export function ForwarderWorkspace() {
 
             <div id="printable-a4-sheet" className="max-w-[1100px] mx-auto p-12 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
               
-              {/* HEADER LIMPIO CENTRADO */}
-              <header className="border-b-4 border-slate-900 pb-6 mb-8">
-                <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-blue-900 text-center">
-                  OFERTA COMERCIAL - PROJECT CARGO
-                </h1>
-                <div className="flex justify-center items-center gap-4 sm:gap-8 mt-4 text-[11px] font-bold text-slate-600 uppercase tracking-widest">
-                  <span>Ref: {activeProject?.project_ref}</span>
-                  <span>Cliente: {activeProject?.client_name}</span>
-                  <span>Fecha: {new Date().toLocaleDateString('es-ES')}</span>
+              {/* HEADER LIMPIO Y CORPORATIVO (Sin títulos gigantes) */}
+              <header className="border-b-2 border-slate-200 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
+                    UNIVERSAL FORWARDING / B2B
+                  </h1>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                    División Especializada de Fletamentos y Carga de Proyecto
+                  </p>
+                </div>
+                <div className="text-right text-[11px] text-slate-600 font-mono">
+                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Fecha:</span>{new Date().toLocaleDateString('es-ES')}</div>
+                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Ref:</span>{activeProject?.project_ref || 'EXP-SIN-REF'}</div>
+                  <div><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Cliente:</span><span className="font-bold text-blue-700">{activeProject?.client_name || 'Sin Cliente'}</span></div>
                 </div>
               </header>
 
