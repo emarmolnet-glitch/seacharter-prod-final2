@@ -28,6 +28,7 @@ export function ForwarderWorkspace() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
   const [activeProject, setActiveProject] = useState(null);
+  const [isAgentVisible, setIsAgentVisible] = useState(true);
 
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
   const [editingLineItemId, setEditingLineItemId] = useState(null);
@@ -252,35 +253,178 @@ export function ForwarderWorkspace() {
       return;
     }
 
-    if (payload.instruction) {
+    let structuralModified = false;
+
+    // 1. Días de almacenaje
+    if (payload.storageDays !== undefined && payload.storageDays !== null) {
+      setStorageDays(Number(payload.storageDays));
+    }
+
+    // 2. Coste de Surveyor (marcando que el usuario editó el surveyor)
+    if (payload.surveyorCost !== undefined && payload.surveyorCost !== null) {
+      userEditedSurveyor.current = true;
+      setSurveyorCost(Number(payload.surveyorCost));
+    }
+
+    // 3. Transporte interior Inland
+    if (payload.inlandCost !== undefined && payload.inlandCost !== null) {
+      setInlandCost(Number(payload.inlandCost));
+    } else if (payload.inlandTrucksCount !== undefined && payload.inlandTrucksCount !== null) {
+      setInlandCost(Number(payload.inlandTrucksCount));
+    }
+
+    // 4. Costes aduaneros
+    if (payload.customsCost !== undefined && payload.customsCost !== null) {
+      setCustomsCost(Number(payload.customsCost));
+    }
+
+    // 5. Elementos estructurales de trincaje y operativa portuaria
+    if (payload.dunnageWood !== undefined && payload.dunnageWood !== null) {
+      setDunnageWood(Number(payload.dunnageWood));
+      structuralModified = true;
+    } else if (payload.dunnageUnits !== undefined && payload.dunnageUnits !== null) {
+      setDunnageWood(Number(payload.dunnageUnits));
+      structuralModified = true;
+    }
+
+    if (payload.highCapacitySlings !== undefined && payload.highCapacitySlings !== null) {
+      setHighCapacitySlings(Number(payload.highCapacitySlings));
+      structuralModified = true;
+    } else if (payload.slingsUnits !== undefined && payload.slingsUnits !== null) {
+      setHighCapacitySlings(Number(payload.slingsUnits));
+      structuralModified = true;
+    }
+
+    if (payload.chainsBinders !== undefined && payload.chainsBinders !== null) {
+      setChainsBinders(Number(payload.chainsBinders));
+      structuralModified = true;
+    } else if (payload.lashingChains !== undefined && payload.lashingChains !== null) {
+      setChainsBinders(Number(payload.lashingChains));
+      structuralModified = true;
+    }
+
+    if (payload.shackles !== undefined && payload.shackles !== null) {
+      setShackles(Number(payload.shackles));
+      structuralModified = true;
+    }
+
+    if (payload.stevedoreGangs !== undefined && payload.stevedoreGangs !== null) {
+      setStevedoreGangs(Number(payload.stevedoreGangs));
+      structuralModified = true;
+    } else if (payload.stevedoringShifts !== undefined && payload.stevedoringShifts !== null) {
+      setStevedoreGangs(Number(payload.stevedoringShifts));
+      structuralModified = true;
+    }
+
+    if (payload.lashingTeam !== undefined && payload.lashingTeam !== null) {
+      setLashingTeam(Number(payload.lashingTeam));
+      structuralModified = true;
+    } else if (payload.lashingTeams !== undefined && payload.lashingTeams !== null) {
+      setLashingTeam(Number(payload.lashingTeams));
+      structuralModified = true;
+    }
+
+    if (payload.heavyLiftCrane !== undefined && payload.heavyLiftCrane !== null) {
+      setHeavyLiftCrane(Number(payload.heavyLiftCrane));
+      structuralModified = true;
+    } else if (payload.heavyLiftCranes !== undefined && payload.heavyLiftCranes !== null) {
+      setHeavyLiftCrane(Number(payload.heavyLiftCranes));
+      structuralModified = true;
+    }
+
+    if (payload.mafiPlatforms !== undefined && payload.mafiPlatforms !== null) {
+      setMafiPlatforms(Number(payload.mafiPlatforms));
+      structuralModified = true;
+    }
+
+    if (payload.shippingMode) {
+      setShippingMode(payload.shippingMode);
+      structuralModified = true;
+    }
+
+    if (payload.vesselType) {
+      setVesselType(payload.vesselType);
+      structuralModified = true;
+    }
+
+    // 6. Añadir piezas o reemplazar lista de carga
+    if (payload.newPiece) {
+      const piece = {
+        id: payload.newPiece.id || `item-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        category: payload.newPiece.category || 'Equipos de Proceso',
+        quantity: Number(payload.newPiece.quantity) || 1,
+        type: payload.newPiece.type || 'Transformador / Skid Industrial (IA)',
+        length: String(payload.newPiece.length ?? '6.2'),
+        width: String(payload.newPiece.width ?? '2.8'),
+        height: String(payload.newPiece.height ?? '3.4'),
+        weight: String(payload.newPiece.weight ?? '34000'),
+        shipping_mode_supported: payload.newPiece.shipping_mode_supported || "40' Flat Rack"
+      };
+      setCargoItems((prev) => [...prev, piece]);
+      structuralModified = true;
+    } else if (payload.addPiece) {
+      const defaultPiece = {
+        id: `item-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        category: 'Equipos de Proceso',
+        quantity: 1,
+        type: 'Transformador / Skid Industrial (IA)',
+        length: '6.2',
+        width: '2.8',
+        height: '3.4',
+        weight: '34000',
+        shipping_mode_supported: "40' Flat Rack"
+      };
+      setCargoItems((prev) => [...prev, defaultPiece]);
+      structuralModified = true;
+    }
+
+    if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
+      setCargoItems(payload.cargo_items.map((ci, idx) => ({
+        id: ci.id || `item-${Date.now()}-${idx}`,
+        category: ci.category || 'Equipos de Proceso',
+        quantity: Number(ci.quantity) || 1,
+        type: ci.type || '',
+        length: String(ci.length_m ?? ci.length ?? ''),
+        width: String(ci.width_m ?? ci.width ?? ''),
+        height: String(ci.height_m ?? ci.height ?? ''),
+        weight: String(ci.unit_weight_kg ?? ci.weight ?? ''),
+        shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
+      })));
+      structuralModified = true;
+    } else if (Array.isArray(payload.cargoItems) && payload.cargoItems.length > 0) {
+      setCargoItems(payload.cargoItems);
+      structuralModified = true;
+    }
+
+    // 7. Compatibilidad retroactiva si se envía texto directo sin procesar en payload.instruction
+    if (payload.instruction && typeof payload.instruction === 'string') {
       const text = payload.instruction.toLowerCase();
       const matchNumber = (str) => {
         const m = str.match(/\d+/);
         return m ? parseInt(m[0], 10) : null;
       };
 
-      if (text.includes('almacenaje') || text.includes('días')) {
+      if (payload.storageDays === undefined && (text.includes('almacenaje') || text.includes('días') || text.includes('dias'))) {
         const val = matchNumber(text);
         if (val !== null) setStorageDays(val);
       }
-      if (text.includes('surveyor') || text.includes('perito')) {
+      if (payload.surveyorCost === undefined && (text.includes('surveyor') || text.includes('perito'))) {
         const val = matchNumber(text);
         if (val !== null) {
           userEditedSurveyor.current = true;
           setSurveyorCost(val);
         }
       }
-      if (text.includes('inland') || text.includes('transporte')) {
+      if (payload.inlandCost === undefined && (text.includes('inland') || text.includes('transporte'))) {
         const val = matchNumber(text);
         if (val !== null) setInlandCost(val);
       }
-      if (text.includes('aduanas')) {
+      if (payload.customsCost === undefined && text.includes('aduanas')) {
         const val = matchNumber(text);
         if (val !== null) setCustomsCost(val);
       }
-      // Detectar palabras clave amplias para añadir piezas o cargas
-      if (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza') || text.includes('añad') || text.includes('agreg') || text.includes('met')) {
-        setCargoItems(prev => [
+      if (!structuralModified && (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza') || text.includes('añad') || text.includes('agreg') || text.includes('met'))) {
+        setCargoItems((prev) => [
           ...prev,
           {
             id: `item-${Date.now()}`,
@@ -294,42 +438,14 @@ export function ForwarderWorkspace() {
             shipping_mode_supported: "40' Flat Rack"
           }
         ]);
+        structuralModified = true;
       }
+    }
 
-      // Abrir automáticamente el modal de carga para que el usuario vea los cambios reflejados al instante
+    // 8. Forzar la apertura del modal de carga cuando se modifiquen elementos estructurales o se añadan piezas
+    if (structuralModified || payload.forceOpenModal) {
       setIsCargoModalOpen(true);
     }
-
-    if (payload.category !== undefined) {
-      if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
-        setCargoItems(payload.cargo_items.map((ci, idx) => ({
-          id: ci.id || `item-${Date.now()}-${idx}`,
-          category: ci.category || 'Equipos de Proceso',
-          quantity: ci.quantity || 1,
-          type: ci.type || '',
-          length: ci.length_m ?? ci.length ?? '',
-          width: ci.width_m ?? ci.width ?? '',
-          height: ci.height_m ?? ci.height ?? '',
-          weight: ci.unit_weight_kg ?? ci.weight ?? '',
-          shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
-        })));
-        setIsCargoModalOpen(true);
-      }
-    }
-    if (payload.dunnageUnits !== undefined) setDunnageWood(payload.dunnageUnits);
-    if (payload.slingsUnits !== undefined) setHighCapacitySlings(payload.slingsUnits);
-    if (payload.lashingChains !== undefined) setChainsBinders(payload.lashingChains);
-    if (payload.stevedoringShifts !== undefined) setStevedoreGangs(payload.stevedoringShifts);
-    if (payload.lashingTeams !== undefined) setLashingTeam(payload.lashingTeams);
-    if (payload.heavyLiftCranes !== undefined) setHeavyLiftCrane(payload.heavyLiftCranes);
-    if (payload.mafiPlatforms !== undefined) setMafiPlatforms(payload.mafiPlatforms);
-    if (payload.storageDays !== undefined) setStorageDays(payload.storageDays);
-    if (payload.surveyorCost !== undefined) {
-      userEditedSurveyor.current = true;
-      setSurveyorCost(payload.surveyorCost);
-    }
-    if (payload.inlandTrucksCount !== undefined) setInlandCost(payload.inlandTrucksCount);
-    if (payload.customsCost !== undefined) setCustomsCost(payload.customsCost);
   };
 
   const handleOpenCreateService = () => {
@@ -490,7 +606,16 @@ export function ForwarderWorkspace() {
                     {activeProject.status || 'Borrador'}
                   </span>
                 </div>
-                <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
+                <h1 className="text-3xl font-bold text-slate-900 flex-1">{activeProject.client_name}</h1>
+                <button
+                  type="button"
+                  onClick={() => setIsAgentVisible((prev) => !prev)}
+                  className="bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 hover:border-slate-400 px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0 ml-auto"
+                  title={isAgentVisible ? "Ocultar Agente de Proyectos" : "Mostrar Agente de Proyectos"}
+                >
+                  <span>📂</span>
+                  <span>{isAgentVisible ? 'Ocultar Agente' : 'Agente Proyectos'}</span>
+                </button>
               </header>
               {activeProject.line_items?.length > 0 ? (
                 <div className="space-y-4">
@@ -770,7 +895,11 @@ export function ForwarderWorkspace() {
       })()}
 
       {/* Agente de Proyectos exclusivo y quirúrgico */}
-      <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
+      <AgenteProyectosWidget 
+        onUpdatePayload={handleApplyProjectPayload} 
+        isOpen={isAgentVisible}
+        onToggleOpen={setIsAgentVisible}
+      />
 
     </>
   );
