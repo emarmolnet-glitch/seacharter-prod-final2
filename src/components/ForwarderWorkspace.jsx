@@ -240,7 +240,7 @@ export function ForwarderWorkspace() {
     setEstimatedCost(totalEstimatedCost.toFixed(2)); setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
-  const useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
+  useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
   // Función para inyectar los datos calculados por el Agente de Proyectos en los inputs
   const handleApplyProjectPayload = (payload) => {
