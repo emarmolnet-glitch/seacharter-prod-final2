@@ -1,11 +1,75 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsDist from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
+
+const pdfjsLib = (typeof window !== 'undefined' && window.pdfjsLib) ? window.pdfjsLib : pdfjsDist;
 
 if (typeof window !== 'undefined' && pdfjsLib?.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
   try {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '5.4.624'}/pdf.worker.min.mjs`;
   } catch (_) {}
+}
+
+export const DIMENSION_REGEX = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/;
+
+export const WEIGHT_REGEX = /(?:(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)\b|(?:\s+|^)(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d{3,})\s*(?:kilos?|kgs?|kg|tons?|tns?|tn|t)?\s*$)/i;
+
+export function extractWeightFromLine(line, wtMatch = null) {
+  const match = wtMatch || (typeof line === 'string' ? line.match(WEIGHT_REGEX) : null);
+  let wt = null;
+
+  if (match) {
+    const rawWeightStr = (match[1] || match[2] || match[0] || '').trim();
+    const isTons = /t|tn|ton/i.test(match[0]);
+    const cleanedStr = rawWeightStr.replace(/,/g, '');
+    let val = parseFloat(rawWeightStr.replace(',', ''));
+    if (!isNaN(parseFloat(cleanedStr))) {
+      val = parseFloat(cleanedStr);
+    }
+    if (!isTons && /^\d{1,3}\.\d{3}$/.test(rawWeightStr)) {
+      val = parseFloat(rawWeightStr.replace(/\./g, ''));
+    }
+    if (!isNaN(val) && val > 0) {
+      wt = isTons ? val * 1000 : val;
+    }
+  }
+
+  if (!wt || wt <= 0) {
+    const kgPrecedingMatch = typeof line === 'string' ? line.match(/(\d{1,3}(?:,\d{3})+|\d{4,}|\d+)\s*(?:kilos?|kgs?|kg)\b/i) : null;
+    if (kgPrecedingMatch) {
+      const parsedKg = parseFloat(kgPrecedingMatch[1].replace(/,/g, ''));
+      if (!isNaN(parsedKg) && parsedKg > 0) {
+        wt = parsedKg;
+      }
+    }
+  }
+
+  if (!wt || wt <= 0) {
+    const fourDigitMatches = typeof line === 'string' ? [...line.matchAll(/\b(\d{1,3}(?:,\d{3})+|\d{4,})(?:\.\d+)?\b/g)] : [];
+    if (fourDigitMatches.length > 0) {
+      const lastFourDigit = fourDigitMatches[fourDigitMatches.length - 1][1];
+      const parsedVal = parseFloat(lastFourDigit.replace(/,/g, ''));
+      if (!isNaN(parsedVal) && parsedVal > 0) {
+        wt = parsedVal;
+      }
+    }
+  }
+
+  if (!wt || wt <= 0) {
+    const anyNumberMatches = typeof line === 'string' ? [...line.matchAll(/\b(\d+(?:,\d{3})*(?:\.\d+)?)\b/g)] : [];
+    const validCandidates = [];
+    for (const m of anyNumberMatches) {
+      const numVal = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(numVal) && numVal > 100) {
+        validCandidates.push(numVal);
+      }
+    }
+    if (validCandidates.length > 0) {
+      wt = validCandidates[validCandidates.length - 1];
+    }
+  }
+
+  return (wt && wt > 0) ? wt : 0;
 }
 
 const CATEGORY_MAP = [
@@ -76,7 +140,7 @@ function sanitizeLine(line) {
   let cleaned = line.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!cleaned) return null;
 
-  // Rechazar líneas con alta densidad de caracteres extraños/no legibles
+  // Rechazar líneas con alta densidad de caracteres extraños/no legibles (típicos de stream binario comprimido de PDF)
   const validChars = cleaned.replace(/[0-9A-Za-z\u00C0-\u024F\s.,;:\/\\()\-%|°×"“”‘’&#_+=?¡¿]/g, '');
   if ((validChars.length / cleaned.length) > 0.15) {
     return null; // Demasiado ruido o texto binario mal decodificado
@@ -110,16 +174,15 @@ function interpretRow(line, rowIndex) {
     return null;
   }
 
-  const dimRegex = /(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)(?:\s*(mm|cm|m))?/i;
-  const dimMatch = cleanLine.match(dimRegex);
-
+  const dimMatch = cleanLine.match(DIMENSION_REGEX);
   let l = 1.0, w = 1.0, h = 1.0;
 
   if (dimMatch) {
     const lRaw = parseMeasuredNumber(dimMatch[1]);
     const wRaw = parseMeasuredNumber(dimMatch[2]);
     const hRaw = parseMeasuredNumber(dimMatch[3]);
-    const unit = dimMatch[4] ? dimMatch[4].toLowerCase() : null;
+    const unitMatch = cleanLine.match(/(?:mm|cm|mts?|metros?|m)\b/i);
+    const unit = unitMatch ? unitMatch[0].toLowerCase() : null;
 
     if (Number.isFinite(lRaw) && Number.isFinite(wRaw) && Number.isFinite(hRaw)) {
       l = lRaw; w = wRaw; h = hRaw;
@@ -131,21 +194,16 @@ function interpretRow(line, rowIndex) {
     }
   }
 
-  // SANITY CHECK ESTRICTO (Hard Limits): Descartar valores dimensionales absurdos (> 40 metros)
+  // SANITY CHECK ESTRICTO (Hard Limits): Descartar valores dimensionales absurdos (> 40 metros o no positivos)
+  // Previene inyección de números desmedidos por decodificación binaria errónea
   if (l > 40 || w > 40 || h > 40 || l <= 0 || w <= 0 || h <= 0) {
     return null;
   }
 
   let weightKg = 1000;
-  const tonMatch = cleanLine.match(/(\d+(?:[.,]\d+)?)\s*(t|tn|ton)\b/i);
-  const kgMatch = cleanLine.match(/(\d+(?:[.,]\d+)?)\s*(kg|kgs|kilogramos)\b/i);
-
-  if (tonMatch) {
-    const val = parseMeasuredNumber(tonMatch[1]);
-    if (Number.isFinite(val)) weightKg = val * 1000;
-  } else if (kgMatch) {
-    const val = parseMeasuredNumber(kgMatch[1]);
-    if (Number.isFinite(val)) weightKg = val;
+  const extractedWeight = extractWeightFromLine(cleanLine);
+  if (extractedWeight > 0) {
+    weightKg = extractedWeight;
   } else {
     const allNums = cleanLine.match(/-?\d+(?:[.,]\d+)?/g) || [];
     const cleanNums = allNums.map(n => parseMeasuredNumber(n)).filter(n => Number.isFinite(n) && n > 0);
@@ -164,7 +222,7 @@ function interpretRow(line, rowIndex) {
   }
 
   let description = cleanLine
-    .replace(dimRegex, '')
+    .replace(DIMENSION_REGEX, '')
     .replace(/(\d+(?:[.,]\d+)?)\s*(t|tn|ton|kg|kgs|kilogramos)\b/gi, '')
     .replace(/[|]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -184,7 +242,6 @@ function interpretRow(line, rowIndex) {
   const { category, hsCode } = classifyItem(`${description} ${cleanLine}`);
   const shipping_mode_supported = determineShippingMode(length_m, width_m, height_m, unit_weight_kg);
 
-  // Contrato híbrido completo con todas las aliases legacy que la UI espera
   return {
     id: `item-${Date.now()}-${rowIndex}-${Math.random().toString(36).substring(2, 7)}`,
     description: description,
@@ -207,8 +264,14 @@ function interpretRow(line, rowIndex) {
   };
 }
 
-async function extractLinesFromPdf(arrayBuffer) {
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+export async function extractLinesFromPdf(arrayBuffer) {
+  // Procesa el archivo exclusivamente mediante pdfjsLib.getDocument({ data: arrayBuffer }).promise y extrae el texto real con page.getTextContent()
+  const loadingTask = pdfjsLib.getDocument(
+    arrayBuffer instanceof ArrayBuffer || arrayBuffer instanceof Uint8Array
+      ? { data: arrayBuffer }
+      : { data: new Uint8Array(arrayBuffer) }
+  );
+  const pdf = await loadingTask.promise;
   const rawFragments = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
@@ -270,7 +333,7 @@ async function extractLinesFromPdf(arrayBuffer) {
   return logicalRows;
 }
 
-async function extractLinesFromSpreadsheet(arrayBuffer) {
+export async function extractLinesFromSpreadsheet(arrayBuffer) {
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) return [];
@@ -279,7 +342,7 @@ async function extractLinesFromSpreadsheet(arrayBuffer) {
   return rows.filter(r => Array.isArray(r) && r.length > 0).map(r => r.map(c => c !== null && c !== undefined ? String(c).trim() : '').filter(Boolean).join(' | ')).filter(Boolean);
 }
 
-async function extractLinesFromWord(arrayBuffer) {
+export async function extractLinesFromWord(arrayBuffer) {
   const result = await mammoth.extractRawText({ arrayBuffer });
   return (result?.value || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 }
@@ -294,12 +357,26 @@ export async function parsePackingList(file) {
 
   const fileName = (file.name || '').toLowerCase();
   const fileType = (file.type || '').toLowerCase();
+  const isPdf = fileName.endsWith('.pdf') || fileType === 'application/pdf';
   let rawLines = [];
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
-      rawLines = await extractLinesFromPdf(arrayBuffer);
+
+    // Detección estricta de PDF por extensión, mime-type o magic bytes (%PDF)
+    const headerBytes = new Uint8Array(arrayBuffer.slice(0, 5));
+    const isPdfMagic = String.fromCharCode(...headerBytes).startsWith('%PDF');
+    const isPdfFile = isPdf || isPdfMagic;
+
+    if (isPdfFile) {
+      // PROHIBICIÓN ESTRICTA: Prohibido terminantemente leer PDFs como texto plano / string / new TextDecoder()
+      // Procesa el archivo exclusivamente mediante pdfjsLib.getDocument({ data: arrayBuffer }).promise y extrae el texto real con page.getTextContent()
+      try {
+        rawLines = await extractLinesFromPdf(arrayBuffer);
+      } catch (pdfErr) {
+        warnings.push(`Error al extraer texto del documento PDF: ${pdfErr?.message || pdfErr}`);
+        return { success: false, items: [], warnings, stats };
+      }
     } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv') || fileType.includes('spreadsheet')) {
       rawLines = await extractLinesFromSpreadsheet(arrayBuffer);
     } else if (fileName.endsWith('.docx')) {
@@ -325,5 +402,15 @@ export async function parsePackingList(file) {
 
   return { success: true, items: validItems, warnings, stats };
 }
+
+export const parsePackingListFile = parsePackingList;
+
+export {
+  classifyItem,
+  determineShippingMode,
+  sanitizeLine,
+  parseMeasuredNumber,
+  interpretRow
+};
 
 export default parsePackingList;

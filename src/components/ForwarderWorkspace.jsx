@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { parsePackingList } from '../utils/packingListParser.js';
 
 function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   const numValue = Number(value) || 0;
@@ -118,12 +119,59 @@ export function ForwarderWorkspace() {
     try {
       let allNewItems = [];
 
-      // Procesar cada archivo enviándolo a la Netlify Function
       for (const file of files) {
+        const fileName = (file.name || '').toLowerCase();
+        const fileType = (file.type || '').toLowerCase();
+        const isPdf = fileName.endsWith('.pdf') || fileType === 'application/pdf';
+
+        // 1. Si es PDF, PROHIBIDO leer como texto plano; procesar exclusivamente en cliente con pdfjs-dist
+        if (isPdf) {
+          try {
+            const result = await parsePackingList(file);
+            if (result && Array.isArray(result.items) && result.items.length > 0) {
+              const formattedItems = result.items.map((it, idx) => ({
+                id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
+                category: it.category || 'Equipos de Proceso',
+                quantity: it.quantity ?? 1,
+                type: it.type || it.description || 'Pieza Proyecto',
+                length: it.length_m ?? it.length ?? 1,
+                width: it.width_m ?? it.width ?? 1,
+                height: it.height_m ?? it.height ?? 1,
+                weight: it.unit_weight_kg ?? it.weight ?? 1000,
+                shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
+              }));
+              allNewItems = [...allNewItems, ...formattedItems];
+            }
+          } catch (pdfErr) {
+            console.error('Error parseando PDF con pdfjs-dist en cliente:', pdfErr);
+          }
+          continue;
+        }
+
+        // 2. Para otros archivos (Excel, Word, etc.), procesar preferentemente en cliente
+        try {
+          const clientResult = await parsePackingList(file);
+          if (clientResult && Array.isArray(clientResult.items) && clientResult.items.length > 0) {
+            const formattedItems = clientResult.items.map((it, idx) => ({
+              id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
+              category: it.category || 'Equipos de Proceso',
+              quantity: it.quantity ?? 1,
+              type: it.type || it.description || 'Pieza Proyecto',
+              length: it.length_m ?? it.length ?? 1,
+              width: it.width_m ?? it.width ?? 1,
+              height: it.height_m ?? it.height ?? 1,
+              weight: it.unit_weight_kg ?? it.weight ?? 1000,
+              shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
+            }));
+            allNewItems = [...allNewItems, ...formattedItems];
+            continue;
+          }
+        } catch (_) {}
+
+        // Fallback a Netlify Function parse-packing-list para otros tipos de archivo
         const formData = new FormData();
         formData.append('file', file);
 
-        // Hacemos la llamada al backend donde está tu parse-packing-list.js
         const response = await fetch('/.netlify/functions/parse-packing-list', {
           method: 'POST',
           body: formData,
@@ -131,12 +179,11 @@ export function ForwarderWorkspace() {
 
         if (!response.ok) {
           console.error(`Error en servidor al subir ${file.name}:`, response.statusText);
-          continue; // Si un archivo falla, continuamos con el siguiente
+          continue;
         }
 
         const data = await response.json();
 
-        // Extraer los items si la respuesta es exitosa
         if (data.success && Array.isArray(data.items) && data.items.length > 0) {
           const formattedItems = data.items.map((it, idx) => ({
             id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
@@ -147,20 +194,18 @@ export function ForwarderWorkspace() {
             width: it.width_m ?? it.width ?? 1,
             height: it.height_m ?? it.height ?? 1,
             weight: it.unit_weight_kg ?? it.weight ?? 1000,
-            shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor"
+            shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor",
           }));
 
           allNewItems = [...allNewItems, ...formattedItems];
         }
       }
 
-      // Actualizar el estado de React con todas las piezas procesadas
       if (allNewItems.length > 0) {
         setCargoItems((prev) => [...prev, ...allNewItems]);
       }
-
     } catch (err) {
-      console.error("Error de red al conectar con el backend:", err);
+      console.error("Error al procesar packing list:", err);
     } finally {
       setIsAnalyzingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -226,14 +271,22 @@ export function ForwarderWorkspace() {
 
     let HeavyLift = 0; let MAFIs = 0; let Gangs = 0;
     if (autoMode === 'Ro-Ro') {
-      HeavyLift = 0; MAFIs = staticItems.reduce((acc, it) => acc + (it.pieceWeight > 5000 ? it.qty : 0), 0); Gangs = Math.ceil(totalPieces / 25);
+      HeavyLift = 0;
+      MAFIs = staticItems.reduce((acc, it) => {
+        const wt = Math.max(0, parseFloat(String(it.pieceWeight ?? it.weight ?? it.unit_weight_kg ?? 0).replace(',', '.')) || 0);
+        const q = Math.max(1, Number(it.qty ?? it.quantity) || 1);
+        return acc + (wt > 5000 ? q : 0);
+      }, 0);
+      Gangs = Math.ceil(totalPieces / 25);
     } else {
-      MAFIs = 0; HeavyLift = maxPieceWeight >= 8000 ? 1 : 0; Gangs = Math.ceil(totalPieces / 15);
+      MAFIs = 0;
+      HeavyLift = maxPieceWeight > 8000 ? 1 : 0;
+      Gangs = Math.ceil(totalPieces / 15);
     }
 
     setDunnage(Dunnage); setChains(Cadenas); setSlings(Eslingas); setShackles(Grilletes);
     setGangs(Gangs); setHeavyLift(HeavyLift); setMafiPlatforms(MAFIs);
-    setLashingTeams(Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)));
+    setLashingTeams(cargoItems.length > 0 ? Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)) : 0);
 
     let currentSurveyorCost = Number(surveyorCost) || 0;
     if (maxPieceWeight > 35000 && Number(surveyorCost) === 0 && !userEditedSurveyor.current) { currentSurveyorCost = 1500; setSurveyorCost(1500); }
@@ -389,17 +442,25 @@ export function ForwarderWorkspace() {
 
         <main className="flex-1 bg-slate-50 flex flex-col h-full overflow-y-auto print:hidden">
           {!activeProject ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600"><h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3><p className="mt-2 text-xs">Selecciona un proyecto para comenzar.</p></div>
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600"><h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3><p className="mt-2 text-xs">Selecciona un proyecto de la lista lateral para comenzar.</p></div>
           ) : (
             <div className="flex-1 flex flex-col p-6 space-y-6">
               <header className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <button
                   type="button"
                   onClick={() => setActiveProject(null)}
-                  className="self-start px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg shadow-sm cursor-pointer transition flex items-center gap-1.5"
+                  className="bg-white text-slate-800 border px-3 py-1.5 rounded-lg hover:bg-slate-100 font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-1.5"
                 >
                   ← Volver a Proyectos
                 </button>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-sky-700 bg-sky-100 px-2.5 py-1 rounded border border-sky-300">
+                    # REF: {activeProject.project_ref || 'RDM/2026-001'}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 border border-slate-300 uppercase">
+                    {activeProject.status || 'Borrador'}
+                  </span>
+                </div>
                 <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
               </header>
               {activeProject.line_items?.length > 0 ? (
@@ -481,9 +542,15 @@ export function ForwarderWorkspace() {
 
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Operativa</h3>
-                  <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 p-4 rounded-lg flex items-center gap-4 mb-4">
+                  <div id="logistic-engine-banner" role="status" aria-live="polite" className="bg-slate-900 border-l-4 border-cyan-500 p-4 rounded shadow-lg flex items-center gap-4 mb-6">
                     <div className="text-2xl">⚙️</div>
-                    <div className="flex flex-col"><span className="text-blue-800 font-black text-xs uppercase">Motor de Decisión Operativa IA</span><span className="text-slate-700 mt-1 text-[11px]">Modalidad detectada: <strong className="bg-white text-blue-900 border border-blue-200 px-2 py-0.5 rounded mx-1">{shippingMode}</strong> Buque: <strong>{vesselType}</strong></span></div>
+                    <div className="flex flex-col">
+                      <span className="text-cyan-400 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
+                      <span className="text-slate-200 mt-1 text-[11px]">
+                        Modalidad detectada: <strong className="text-white ml-1 mr-3">{shippingMode}</strong>
+                        Buque recomendado: <strong className="text-white ml-1">{vesselType}</strong>
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <NumericCounter label="Maderas" subtitle="Dunnage" value={dunnageWood} onChange={setDunnageWood} />
@@ -515,8 +582,16 @@ export function ForwarderWorkspace() {
 
               <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">
                 <div className="flex gap-6 w-1/2">
-                  <div className="w-full"><label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">COSTE EST.</label><input type="number" readOnly value={estimatedCost} className="bg-white text-slate-900 font-black text-xl border-slate-300 rounded p-2 w-full text-right" /></div>
-                  <div className="w-full"><label className="block text-blue-600 font-bold text-[10px] uppercase mb-1">VENTA CLIENTE</label><input type="number" readOnly value={salePrice} className="bg-white text-blue-900 font-black text-xl border-blue-300 rounded p-2 w-full text-right shadow-inner" /></div>
+                  <div className="w-full relative">
+                    <label htmlFor="input-estimated-cost" className="block text-slate-500 font-bold text-[10px] uppercase mb-1">COSTE TOTAL ESTIMADO (€)</label>
+                    <input id="input-estimated-cost" type="number" readOnly value={estimatedCost} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
+                    <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                  </div>
+                  <div className="w-full relative">
+                    <label htmlFor="input-sale-price" className="block text-blue-600 font-bold text-[10px] uppercase mb-1">PRECIO VENTA CLIENTE (€)</label>
+                    <input id="input-sale-price" type="number" readOnly value={salePrice} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
+                    <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte</button>

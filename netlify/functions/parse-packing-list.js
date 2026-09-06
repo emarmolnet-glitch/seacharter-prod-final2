@@ -90,6 +90,11 @@ function parsePackingListLines(lines) {
     const line = String(rawLine || '').trim();
     if (!line) return;
 
+    // Descartar líneas con caracteres binarios corruptos o ruido de compresión PDF
+    if (/[\x00-\x08\x0E-\x1F\x7F-\x9F]/.test(line)) {
+      return;
+    }
+
     // Ignorar encabezados en varios idiomas (Poids, Designation, Quant, Colis, etc.)
     if (/^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide)/i.test(line)) {
       return;
@@ -211,6 +216,11 @@ function parsePackingListLines(lines) {
 
       if (!desc || desc.length < 2) {
         desc = `Pieza Proyecto #${index + 1}`;
+      }
+
+      // Hard limit dimensional: descartar artefactos binarios con dimensiones absurdas
+      if (l > 40 || w > 40 || h > 40 || l <= 0 || w <= 0 || h <= 0) {
+        return;
       }
 
       parsedPieces.push({
@@ -397,24 +407,32 @@ exports.handler = async (event) => {
           }
         }
         // 3. PDF (.pdf)
-        else if (lowerName.endsWith('.pdf') && PDFParseClass) {
-          try {
-            const parser = new PDFParseClass({ data: buffer, verbosity: 0 });
-            const pdfData = await parser.getText();
-            if (pdfData && pdfData.text) {
-              extractedLines = pdfData.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        else if (lowerName.endsWith('.pdf') || (buffer.length >= 5 && buffer.slice(0, 5).toString('ascii').startsWith('%PDF'))) {
+          if (PDFParseClass) {
+            try {
+              const parser = new PDFParseClass({ data: buffer, verbosity: 0 });
+              const pdfData = await parser.getText();
+              if (pdfData && pdfData.text) {
+                extractedLines = pdfData.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+              }
+              if (typeof parser.destroy === 'function') {
+                await parser.destroy();
+              }
+            } catch (e) {
+              console.error('Error parseando PDF en serverless:', e);
             }
-            if (typeof parser.destroy === 'function') {
-              await parser.destroy();
-            }
-          } catch (e) {
-            console.error('Error parseando PDF:', e);
           }
+          // PROHIBICIÓN ESTRICTA: Jamás leer ni decodificar el buffer de un archivo PDF como texto plano utf-8
         }
         // 4. Texto plano / CSV / etc.
         else {
-          const text = buffer.toString('utf8');
-          extractedLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+          const header = buffer.slice(0, 5).toString('ascii');
+          if (header.startsWith('%PDF')) {
+            console.warn('Detectado buffer binario de PDF en flujo genérico; prohibido parsear como texto plano.');
+          } else {
+            const text = buffer.toString('utf8');
+            extractedLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+          }
         }
       }
     } else {
