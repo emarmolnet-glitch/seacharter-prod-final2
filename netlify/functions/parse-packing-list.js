@@ -91,7 +91,7 @@ function parsePackingListLines(lines) {
     if (!line) return;
 
     // Ignorar encabezados en varios idiomas (Poids, Designation, Quant, Colis, etc.)
-    if (/^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list)/i.test(line)) {
+    if (/^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide)/i.test(line)) {
       return;
     }
 
