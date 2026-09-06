@@ -1,4 +1,4 @@
-import { parsePackingList } from './packing-list-parsers.js';
+import { parsePackingList } from '../packing-list-parsers.js';
 
 export async function handler(event, context) {
   if (event.httpMethod !== 'POST') {
