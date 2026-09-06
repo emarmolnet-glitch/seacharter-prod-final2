@@ -22,6 +22,15 @@ function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   );
 }
 
+const readFileAsDataURL = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+};
+
 export function ForwarderWorkspace() {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,7 +102,6 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { fetchProjects(); }, []);
 
-  // Sincronizar documentos y estado cuando cambia el proyecto activo
   useEffect(() => {
     if (activeProject) {
       setprojectDocuments(activeProject.documents || activeProject.files || []);
@@ -102,7 +110,6 @@ export function ForwarderWorkspace() {
     }
   }, [activeProject]);
 
-  // Función para persistir cambios del proyecto en la Base de Datos (Neon / PostgreSQL vía Netlify Function)
   const persistProjectToDatabase = async (projectToSave) => {
     try {
       const res = await fetch('/.netlify/functions/forwarder-projects', {
@@ -111,7 +118,6 @@ export function ForwarderWorkspace() {
         body: JSON.stringify(projectToSave)
       });
       if (!res.ok) {
-        // Fallback a POST si el backend utiliza POST para upsert/update
         await fetch('/.netlify/functions/forwarder-projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -147,7 +153,6 @@ export function ForwarderWorkspace() {
 
   const handleTriggerImport = () => { if (fileInputRef.current && !isAnalyzingFile) fileInputRef.current.click(); };
 
-  // Guardar documento persistentemente en el proyecto activo
   const handleSaveDocumentToProject = async (docMeta) => {
     if (!activeProject) {
       window.alert('⚠️ Selecciona o crea un proyecto activo antes de adjuntar y guardar documentos.');
@@ -162,10 +167,6 @@ export function ForwarderWorkspace() {
       itemsCount: docMeta.itemsCount || 1,
       payload: docMeta
     };
-
-    // Evitar duplicados exactos por nombre de archivo
-    const isDuplicate = projectDocuments.some(d => d.name === newDoc.name);
-    if (isDuplicate) return;
 
     const updatedDocs = [...projectDocuments, newDoc];
     setprojectDocuments(updatedDocs);
@@ -193,6 +194,11 @@ export function ForwarderWorkspace() {
     try {
       let allNewItems = [];
       for (const file of files) {
+        let dataBase64 = null;
+        try {
+          dataBase64 = await readFileAsDataURL(file);
+        } catch (e) {}
+
         const formData = new FormData();
         formData.append('file', file);
 
@@ -210,12 +216,12 @@ export function ForwarderWorkspace() {
           allNewItems.push(...formattedItems);
         }
 
-        // Guardar documento persistentemente en la base de datos asociado al proyecto
         await handleSaveDocumentToProject({
           name: file.name,
           size: file.size,
           itemsCount: data.items ? data.items.length : 1,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          dataBase64: dataBase64
         });
       }
 
@@ -336,7 +342,6 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
-  // Función para procesar y sincronizar las órdenes y documentos del Agente de Proyectos
   const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
 
@@ -397,10 +402,9 @@ export function ForwarderWorkspace() {
       }
     }
 
-    // CAPTURA CRÍTICA: Guardar persistentemente el documento enviado por el agente en Neon
     if (payload.documentMeta) {
       await handleSaveDocumentToProject(payload.documentMeta);
-      return; // handleSaveDocumentToProject ya actualiza el estado y persiste en BD
+      return;
     }
 
     if (payload.dunnageUnits !== undefined) { setDunnageWood(payload.dunnageUnits); hasChanges = true; }
@@ -589,7 +593,7 @@ export function ForwarderWorkspace() {
                 <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
               </header>
 
-              {/* SECCIÓN DE DOCUMENTOS PERSISTIDOS Y CONSULTA */}
+              {/* SECCIÓN DE DOCUMENTOS PERSISTIDOS Y VISOR FUNCIONAL */}
               <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">📁 Documentos y Packing Lists Guardados (Base de Datos)</h3>
@@ -616,10 +620,34 @@ export function ForwarderWorkspace() {
                         <div className="flex items-center gap-2">
                           <button 
                             type="button"
-                            onClick={() => window.alert(`Consulta de Archivo Guardado:\nNombre: ${doc.name}\nFecha: ${doc.date}\nÍtems asociados: ${doc.itemsCount}`)}
-                            className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded cursor-pointer shadow-sm"
+                            onClick={() => {
+                              const base64Data = doc.payload?.dataBase64 || doc.dataBase64;
+                              if (base64Data) {
+                                const win = window.open();
+                                if (win) {
+                                  win.document.write(`
+                                    <html>
+                                      <head><title>Visor de Documento - ${doc.name}</title></head>
+                                      <body style="margin:0; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; overflow:hidden;">
+                                        <div style="background:#1e293b; color:#fff; padding:12px 24px; width:100%; display:flex; justify-content:space-between; align-items:center; box-sizing:border-box; font-family:sans-serif; border-bottom:1px solid #334155;">
+                                          <span style="font-weight:bold; font-size:14px;">📄 ${doc.name}</span>
+                                          <a href="${base64Data}" download="${doc.name}" style="background:#2563eb; color:#fff; padding:8px 16px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">⬇️ Descargar Archivo Original</a>
+                                        </div>
+                                        <iframe src="${base64Data}" style="width:100%; height:calc(100vh - 55px); border:none; background:#ffffff;"></iframe>
+                                      </body>
+                                    </html>
+                                  `);
+                                  win.document.close();
+                                } else {
+                                  window.alert('El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio.');
+                                }
+                              } else {
+                                window.alert(`Información del Documento:\nNombre: ${doc.name}\nFecha: ${doc.date}\nÍtems asociados: ${doc.itemsCount || 1}\n(Nota: Este documento fue guardado en un registro anterior sin contenido binario incrustado).`);
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded cursor-pointer shadow-sm flex items-center gap-1"
                           >
-                            🔍 Consultar
+                            <span>🔍</span> Consultar / Abrir
                           </button>
                           <button 
                             type="button"
@@ -789,9 +817,6 @@ export function ForwarderWorkspace() {
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* VISTA REPORTE EJECUTIVO LIMPÍA (HEADER COMPACTO Y TARIFA POR RT)        */}
-      {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
         const totalVolumeM3 = totals.m3 || 0;
@@ -886,7 +911,6 @@ export function ForwarderWorkspace() {
                 </table>
               </section>
 
-              {/* BLOQUE FINAL CON TARIFA POR TONELADA (RT / W/M) */}
               <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">Importe Total Cotización (All-In)</span>
@@ -913,9 +937,7 @@ export function ForwarderWorkspace() {
         );
       })()}
 
-      {/* Agente de Proyectos exclusivo y quirúrgico */}
       <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
-
     </>
   );
 }
