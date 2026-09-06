@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { Buffer } from "node:buffer";
-import * as xlsx from "xlsx";
-import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 // Polyfill indispensable para entornos Node.js (Netlify Functions)
@@ -36,14 +34,23 @@ export async function handler(event, context) {
   }
 
   try {
-    const bodyBuffer = Buffer.from(event.body || '', event.isBase64Encoded ? 'base64' : 'utf8');
-    
-    // Extracción de texto según formato (PDF, Excel, Word o texto plano)
+    const rawBody = event.body || "";
+    const buffer = Buffer.from(rawBody, event.isBase64Encoded ? 'base64' : 'utf8');
+
+    // Extraer contenido de texto del PDF adjunto
     let extractedText = "";
     try {
-      extractedText = await extractTextFromPDF(bodyBuffer);
+      extractedText = await extractTextFromPDF(buffer);
     } catch (e) {
-      extractedText = bodyBuffer.toString('utf8');
+      extractedText = buffer.toString('utf8');
+    }
+
+    // Si el texto binario es multipart, limpiamos los encabezados HTTP residuales para quedarnos con el texto puro
+    if (extractedText.includes("Content-Disposition")) {
+      const parts = extractedText.split("\r\n\r\n");
+      if (parts.length > 1) {
+        extractedText = parts.slice(1).join("\n").replace(/\r\n--[\s\S]*$/, "");
+      }
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -58,11 +65,11 @@ export async function handler(event, context) {
       "- category: Categoría del equipo (ej: Equipos de Proceso, Maquinaria y Talleres, Utillaje y Herramientas, Flota de Vehículos)",
       "- type: Descripción detallada de la pieza o equipo",
       "- quantity: Cantidad numérica (entero)",
-      "- length: Longitud en metros (número o string)",
-      "- width: Anchura en metros (número o string)",
-      "- height: Altura en metros (número o string)",
+      "- length: Longitud en metros (string o número)",
+      "- width: Anchura en metros (string o número)",
+      "- height: Altura en metros (string o número)",
       "- weight: Peso unitario en kilogramos (número)",
-      "- shipping_mode_supported: Modo de envío soportado (ej: 40' Flat Rack, 40' HC Contenedor, Ro-Ro)",
+      "- shipping_mode_supported: Modo de envío soportado (ej: 40' Flat Rack, 40' HC Contenedor, 20' ST Contenedor)",
       "",
       "FORMATO DE SALIDA JSON ESTRICTO:",
       "{",
