@@ -157,11 +157,15 @@ export function ForwarderWorkspace() {
     const newDoc = {
       id: docMeta.id || `doc-${Date.now()}-${Math.random()}`,
       name: docMeta.name || 'Documento_Proyecto.pdf',
-      size: docMeta.size ? `${Math.round(docMeta.size / 1024)} KB` : '120 KB',
-      date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      size: docMeta.size ? (typeof docMeta.size === 'string' ? docMeta.size : `${Math.round(docMeta.size / 1024)} KB`) : '120 KB',
+      date: docMeta.uploadedAt ? new Date(docMeta.uploadedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       itemsCount: docMeta.itemsCount || 1,
       payload: docMeta
     };
+
+    // Evitar duplicados exactos por nombre de archivo
+    const isDuplicate = projectDocuments.some(d => d.name === newDoc.name);
+    if (isDuplicate) return;
 
     const updatedDocs = [...projectDocuments, newDoc];
     setprojectDocuments(updatedDocs);
@@ -210,7 +214,8 @@ export function ForwarderWorkspace() {
         await handleSaveDocumentToProject({
           name: file.name,
           size: file.size,
-          itemsCount: data.items ? data.items.length : 1
+          itemsCount: data.items ? data.items.length : 1,
+          uploadedAt: new Date().toISOString()
         });
       }
 
@@ -331,7 +336,7 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
-  // Función para procesar y sincronizar las órdenes del Agente de Proyectos
+  // Función para procesar y sincronizar las órdenes y documentos del Agente de Proyectos
   const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
 
@@ -339,6 +344,9 @@ export function ForwarderWorkspace() {
       window.alert('⚠️ Por favor, selecciona o crea un proyecto en la barra lateral antes de pedirle cambios al agente.');
       return;
     }
+
+    let updatedProject = { ...activeProject };
+    let hasChanges = false;
 
     if (payload.instruction) {
       const text = payload.instruction.toLowerCase();
@@ -349,28 +357,29 @@ export function ForwarderWorkspace() {
 
       if (text.includes('almacen') || text.includes('días') || text.includes('dias')) {
         const val = matchNumber(text);
-        if (val !== null) setStorageDays(val);
+        if (val !== null) { setStorageDays(val); hasChanges = true; }
       }
       if (text.includes('surveyor') || text.includes('perito')) {
         const val = matchNumber(text);
         if (val !== null) {
           userEditedSurveyor.current = true;
           setSurveyorCost(val);
+          hasChanges = true;
         }
       }
       if (text.includes('inland') || text.includes('transporte')) {
         const val = matchNumber(text);
-        if (val !== null) setInlandCost(val);
+        if (val !== null) { setInlandCost(val); hasChanges = true; }
       }
       if (text.includes('aduana')) {
         const val = matchNumber(text);
-        if (val !== null) setCustomsCost(val);
+        if (val !== null) { setCustomsCost(val); hasChanges = true; }
       }
     }
 
     if (payload.category !== undefined) {
       if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
-        setCargoItems(payload.cargo_items.map((ci, idx) => ({
+        const mappedItems = payload.cargo_items.map((ci, idx) => ({
           id: ci.id || `item-${Date.now()}-${idx}`,
           category: ci.category || 'Equipos de Proceso',
           quantity: ci.quantity || 1,
@@ -380,30 +389,41 @@ export function ForwarderWorkspace() {
           height: ci.height_m ?? ci.height ?? '',
           weight: ci.unit_weight_kg ?? ci.weight ?? '',
           shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
-        })));
+        }));
+        setCargoItems(mappedItems);
+        updatedProject.items = mappedItems;
+        hasChanges = true;
         setIsCargoModalOpen(true);
       }
     }
 
-    // Si el agente adjunta un documento directamente, guardarlo de forma persistente en BD
+    // CAPTURA CRÍTICA: Guardar persistentemente el documento enviado por el agente en Neon
     if (payload.documentMeta) {
       await handleSaveDocumentToProject(payload.documentMeta);
+      return; // handleSaveDocumentToProject ya actualiza el estado y persiste en BD
     }
 
-    if (payload.dunnageUnits !== undefined) setDunnageWood(payload.dunnageUnits);
-    if (payload.slingsUnits !== undefined) setHighCapacitySlings(payload.slingsUnits);
-    if (payload.lashingChains !== undefined) setChainsBinders(payload.lashingChains);
-    if (payload.stevedoringShifts !== undefined) setStevedoreGangs(payload.stevedoringShifts);
-    if (payload.lashingTeams !== undefined) setLashingTeam(payload.lashingTeams);
-    if (payload.heavyLiftCranes !== undefined) setHeavyLiftCrane(payload.heavyLiftCranes);
-    if (payload.mafiPlatforms !== undefined) setMafiPlatforms(payload.mafiPlatforms);
-    if (payload.storageDays !== undefined) setStorageDays(payload.storageDays);
+    if (payload.dunnageUnits !== undefined) { setDunnageWood(payload.dunnageUnits); hasChanges = true; }
+    if (payload.slingsUnits !== undefined) { setHighCapacitySlings(payload.slingsUnits); hasChanges = true; }
+    if (payload.lashingChains !== undefined) { setChainsBinders(payload.lashingChains); hasChanges = true; }
+    if (payload.stevedoringShifts !== undefined) { setStevedoreGangs(payload.stevedoringShifts); hasChanges = true; }
+    if (payload.lashingTeams !== undefined) { setLashingTeam(payload.lashingTeams); hasChanges = true; }
+    if (payload.heavyLiftCranes !== undefined) { setHeavyLiftCrane(payload.heavyLiftCranes); hasChanges = true; }
+    if (payload.mafiPlatforms !== undefined) { setMafiPlatforms(payload.mafiPlatforms); hasChanges = true; }
+    if (payload.storageDays !== undefined) { setStorageDays(payload.storageDays); hasChanges = true; }
     if (payload.surveyorCost !== undefined) {
       userEditedSurveyor.current = true;
       setSurveyorCost(payload.surveyorCost);
+      hasChanges = true;
     }
-    if (payload.inlandTrucksCount !== undefined) setInlandCost(payload.inlandTrucksCount);
-    if (payload.customsCost !== undefined) setCustomsCost(payload.customsCost);
+    if (payload.inlandTrucksCount !== undefined) { setInlandCost(payload.inlandTrucksCount); hasChanges = true; }
+    if (payload.customsCost !== undefined) { setCustomsCost(payload.customsCost); hasChanges = true; }
+
+    if (hasChanges) {
+      setActiveProject(updatedProject);
+      setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
+      await persistProjectToDatabase(updatedProject);
+    }
   };
 
   const handleOpenCreateService = () => {
@@ -484,8 +504,8 @@ export function ForwarderWorkspace() {
   const getStowageAscii = () => {
     if (shippingMode === 'Ro-Ro') {
       return `+========================================================================================+
-| [PROA / BOW]         PERFIL OPERATIVO CUBIERTA RODANTE RO-RO            [POPA/STERN] |
-|                                                                    [RAMPA POPA 75T SWL]|
+| [PROA / BOW]         PERFIL OPERATIVO CUBIERTA RODANTE RO-RO             [POPA/STERN] |
+|                                                                   [RAMPA POPA 75T SWL]|
 |----------------------------------------------------------------------------------------|
 |  CUBIERTA SUPERIOR / WEATHER DECK (VEHÍCULOS Y CARGA RODANTE INTEMPERIE)               |
 |  [ Acceso por rampa fija | Trincaje con cinchas de poliéster 5T | SWL: 2.50 t/m² ]     |
@@ -503,25 +523,25 @@ export function ForwarderWorkspace() {
 +========================================================================================+`;
     }
     return `+========================================================================================+
-| [PROA / BOW]          SECCIÓN LONGITUDINAL Y BODEGA PROYECTO           [POPA/STERN] |
+| [PROA / BOW]          SECCIÓN LONGITUDINAL Y BODEGA PROYECTO            [POPA/STERN] |
 |                                                                                        |
-|             GRÚA 1 [SWL 60t]                      GRÚA 2 [SWL 60t]                     |
-|                 /                                     /                                |
-|             ___/                                  ___/                                 |
+|              GRÚA 1 [SWL 60t]                           GRÚA 2 [SWL 60t]               |
+|                /                                          /                            |
+|              ___/                                       ___/                           |
 |========================================================================================|
-| CUBIERTA PRINCIPAL / WEATHER DECK (DESPEJADA / OPERACIÓN EN TÁNDEM HASTA 120t SWL)     |
+| CUBIERTA PRINCIPAL / WEATHER DECK (DESPEJADA / OPERACIÓN EN TÁNDEM HASTA 120t SWL)      |
 | [ Piezas sobre cubierta izadas por gancho directo | Capacidad admisible: 3.50 t/m² ]   |
 |----------------------------------------------------------------------------------------|
 | ENTREPUENTE / TWEEN DECK (PONTÓN DESMONTABLE PARA REGULACIÓN DE ALTURA LIBRE)          |
 |  [ CAJA MAQUINARIA - 4.2x2.4m]       [ SKID INDUSTRIAL]       [ CAJA GENERADOR AUXILIAR] |
-|  Trincaje: Cables de acero 16mm + Tensores MBL > 1.5 | Apoyo sobre maderas dunnage     |
+|  Trincaje: Cables de acero 16mm + Tensores MBL > 1.5 | Apoyo sobre maderas dunnage      |
 |----------------------------------------------------------------------------------------|
-| FONDO DE BODEGA / TANKTOP (MÁXIMA CAPACIDAD PORTANTE ESTRUCTURAL: 15.0 - 20.0 t/m²)    |
-|   +-------------------------+     +--------------------------+                         |
-|   | ⚡ TRANSFORMADOR ELÉCTRICO |     | ⚙️ EJE PROPULSOR INDUSTRIAL |                         |
-|   | (Sobre cunas y durmientes)|     | (Fijación base reforzada)|                         |
-|   +-------------------------+     +--------------------------+                         |
-|   Reparto de presiones con durmientes certificados (*Dunnage*) y cadenas cruzadas G80  |
+| FONDO DE BODEGA / TANKTOP (MÁXIMA CAPACIDAD PORTANTE ESTRUCTURAL: 15.0 - 20.0 t/m²)      |
+|    +-------------------------+      +--------------------------+                       |
+|    | ⚡ TRANSFORMADOR ELÉCTRICO |      | ⚙️ EJE PROPULSOR INDUSTRIAL |                       |
+|    | (Sobre cunas y durmientes)|      | (Fijación base reforzada)|                       |
+|    +-------------------------+      +--------------------------+                       |
+|    Reparto de presiones con durmientes certificados (*Dunnage*) y cadenas cruzadas G80  |
 +========================================================================================+`;
   };
 
