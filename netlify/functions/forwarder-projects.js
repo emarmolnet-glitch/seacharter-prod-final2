@@ -13,21 +13,20 @@ exports.handler = async (event) => {
     if (httpMethod === 'POST') {
       const data = JSON.parse(body || '{}');
       
-      // Si la petición POST trae un ID o project_ref, actúa como actualización (upsert)
       if (data.id || data.project_ref) {
         const updateQuery = `
           UPDATE forwarder_projects 
-          SET documents = COALESCE($1, documents),
-              items = COALESCE($2, items),
+          SET documents = $1::jsonb,
+              items = $2::jsonb,
               client_name = COALESCE($3, client_name)
           WHERE id = $4 OR project_ref = $5
           RETURNING *;
         `;
         const updateValues = [
           JSON.stringify(data.documents || []),
-          JSON.stringify(data.items || data.line_items || []),
-          data.client_name,
-          data.id || null,
+          JSON.stringify(data.items || data.line_items || data.services || []),
+          data.client_name || null,
+          data.id ? parseInt(data.id, 10) : null,
           data.project_ref || null
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
@@ -41,11 +40,16 @@ exports.handler = async (event) => {
       const projectRef = `EXP-${Date.now().toString().slice(-6)}`;
 
       const insertQuery = `
-        INSERT INTO forwarder_projects (project_ref, client_name, status, documents)
-        VALUES ($1, $2, 'BORRADOR', $3)
+        INSERT INTO forwarder_projects (project_ref, client_name, status, documents, items)
+        VALUES ($1, $2, 'BORRADOR', $3::jsonb, $4::jsonb)
         RETURNING *;
       `;
-      const insertValues = [projectRef, client_name, JSON.stringify(documents || [])];
+      const insertValues = [
+        projectRef, 
+        client_name || 'Nuevo Cliente', 
+        JSON.stringify(documents || []),
+        JSON.stringify([])
+      ];
       const result = await pool.query(insertQuery, insertValues);
 
       return {
@@ -60,22 +64,31 @@ exports.handler = async (event) => {
     // 2. ACTUALIZAR EXPEDIENTE (PUT)
     if (httpMethod === 'PUT') {
       const data = JSON.parse(body || '{}');
+      
       const query = `
         UPDATE forwarder_projects 
-        SET documents = $1,
-            items = COALESCE($2, items),
+        SET documents = $1::jsonb,
+            items = $2::jsonb,
             client_name = COALESCE($3, client_name)
         WHERE id = $4 OR project_ref = $5
         RETURNING *;
       `;
       const values = [
         JSON.stringify(data.documents || []),
-        JSON.stringify(data.items || data.line_items || []),
-        data.client_name,
-        data.id || null,
+        JSON.stringify(data.items || data.line_items || data.services || []),
+        data.client_name || null,
+        data.id ? parseInt(data.id, 10) : null,
         data.project_ref || null
       ];
+      
       const result = await pool.query(query, values);
+
+      if (result.rows.length === 0) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Proyecto no encontrado para actualizar' })
+        };
+      }
 
       return {
         statusCode: 200,
@@ -105,10 +118,10 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
 
   } catch (error) {
-    console.error('Error en forwarder-projects:', error);
+    console.error('Error crítico en forwarder-projects:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Error interno del servidor al procesar el expediente' }),
+      body: JSON.stringify({ error: error.message || 'Error interno del servidor' }),
     };
   }
 };
