@@ -279,7 +279,6 @@ export function ForwarderWorkspace() {
   const handleOpenCreateService = () => {
     setEditingLineItemId(null); setCargoItems([]);
     setDunnageWood(0); setHighCapacitySlings(0); setChainsBinders(0); setShackles(0);
-...
 
   const handleEditService = (item) => {
     if (!item) return;
