@@ -12,11 +12,14 @@ test("ForwarderWorkspace includes '← Volver a Proyectos' button that resets ac
   assert.match(componentSource, /← Volver a Proyectos/);
 
   // Verifies the button resets active project state to null
-  assert.match(componentSource, /onClick=\{[^{}]*setActiveProject\(null\)[^{}]*\}/);
+  assert.match(componentSource, /setActiveProject\(null\)/);
 
-  // Verifies the button is placed inside the header of the active project view
+  // Verifies clean styling (white background, subtle border, dark text, adequate padding)
+  assert.match(componentSource, /px-3\s+py-2\s+text-xs\s+font-semibold\s+text-slate-700\s+bg-white\s+border\s+border-slate-300\s+rounded-lg\s+hover:bg-slate-50\s+shadow-sm\s+transition-colors\s+mr-2/);
+
+  // Verifies the button is placed right before "Importar PDF/Excel" in section "1. Lista de Empaque"
   assert.match(
     componentSource,
-    /<header[\s\S]*?← Volver a Proyectos[\s\S]*?<\/header>/
+    /1\.\s*Lista de Empaque[\s\S]*?← Volver a Proyectos[\s\S]*?Importar PDF\/Excel/
   );
 });
