@@ -140,10 +140,25 @@ function sanitizeLine(line) {
   let cleaned = line.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!cleaned) return null;
 
-  // Rechazar líneas con alta densidad de caracteres extraños/no legibles (típicos de stream binario comprimido de PDF)
+  const lower = cleaned.toLowerCase();
+
+  // FILTRO DE BLOQUEO: Descarta automáticamente líneas que pertenezcan a facturas, bancos, direcciones o metadatos fiscales
+  const nonCargoKeywords = [
+    'fatura', 'invoice', 'factura', 'banco', 'iban', 'swift', 'contribuinte', 
+    'rua ', 'avenue', 'blida', 'amarante', 'capital social', 'c.r.c.', 
+    'data vencimento', 'pagamento', 'expedição', 'total iva', 'desconto', 
+    'isento artigo', 'software phc', 'página', 'telefs', 'fax', 'e-mail',
+    'contribuinte', 'nif', 'nis', 'atcud', 'incoterm', 'port de', 'lieu de'
+  ];
+
+  if (nonCargoKeywords.some(keyword => lower.includes(keyword))) {
+    return null; // Ignora por completo esta línea y evita que entre en la tabla
+  }
+
+  // Rechazar líneas con alta densidad de caracteres extraños
   const validChars = cleaned.replace(/[0-9A-Za-z\u00C0-\u024F\s.,;:\/\\()\-%|°×"“”‘’&#_+=?¡¿]/g, '');
   if ((validChars.length / cleaned.length) > 0.15) {
-    return null; // Demasiado ruido o texto binario mal decodificado
+    return null;
   }
 
   return cleaned;
