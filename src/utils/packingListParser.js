@@ -144,11 +144,27 @@ function sanitizeLine(line) {
 
   // FILTRO DE BLOQUEO: Descarta automáticamente líneas que pertenezcan a facturas, bancos, direcciones o metadatos fiscales
   const nonCargoKeywords = [
+    // Facturación y fiscal
     'fatura', 'invoice', 'factura', 'banco', 'iban', 'swift', 'contribuinte', 
     'rua ', 'avenue', 'blida', 'amarante', 'capital social', 'c.r.c.', 
     'data vencimento', 'pagamento', 'expedição', 'total iva', 'desconto', 
     'isento artigo', 'software phc', 'página', 'telefs', 'fax', 'e-mail',
-    'contribuinte', 'nif', 'nis', 'atcud', 'incoterm', 'port de', 'lieu de'
+    'contribuinte', 'nif', 'nis', 'atcud', 'incoterm', 'port de', 'lieu de',
+    'total a pagar', 'condiciones de pago', 'vencimiento', 'subtotal', 'net total',
+
+    // Direcciones y Empresa
+    'address', 'dirección', 'direccao', 'c/', 'calle', 'avda', 'avenida', 'plaza', 
+    'poligono', 'polígono', 's.a.', 's.l.', 'ltd', 'inc', 'corp', 'company', 'empresa',
+
+    // Emails y Web
+    'email', 'correo', '@', 'www.', 'http', 'https',
+
+    // Crédito Documentario
+    'credit', 'crédito', 'documentary credit', 'letter of credit', 'carta de credito', 'l/c',
+
+    // Viaje, Barco, Puerto y Flete
+    'voyage', 'viaje', 'vessel', 'barco', 'buque', 'm/v', 'mv ', 'port', 'puerto', 
+    'pol', 'pod', 'freight', 'flete', 'demurrage', 'laycan', 'eta', 'etd'
   ];
 
   if (nonCargoKeywords.some(keyword => lower.includes(keyword))) {
