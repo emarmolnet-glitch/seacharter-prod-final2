@@ -11,19 +11,42 @@ exports.handler = async (event) => {
   try {
     // 1. CREAR UN NUEVO EXPEDIENTE (POST)
     if (httpMethod === 'POST') {
-      const data = JSON.parse(body);
-      const { client_name } = data;
+      const data = JSON.parse(body || '{}');
       
-      // Generamos una referencia única simple (Ej: EXP-172554...)
+      // Si la petición POST trae un ID o project_ref, actúa como actualización (upsert)
+      if (data.id || data.project_ref) {
+        const updateQuery = `
+          UPDATE forwarder_projects 
+          SET documents = COALESCE($1, documents),
+              items = COALESCE($2, items),
+              client_name = COALESCE($3, client_name)
+          WHERE id = $4 OR project_ref = $5
+          RETURNING *;
+        `;
+        const updateValues = [
+          JSON.stringify(data.documents || []),
+          JSON.stringify(data.items || data.line_items || []),
+          data.client_name,
+          data.id || null,
+          data.project_ref || null
+        ];
+        const updateResult = await pool.query(updateQuery, updateValues);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: updateResult.rows[0] })
+        };
+      }
+
+      const { client_name, documents } = data;
       const projectRef = `EXP-${Date.now().toString().slice(-6)}`;
 
-      const query = `
-        INSERT INTO forwarder_projects (project_ref, client_name, status)
-        VALUES ($1, $2, 'BORRADOR')
+      const insertQuery = `
+        INSERT INTO forwarder_projects (project_ref, client_name, status, documents)
+        VALUES ($1, $2, 'BORRADOR', $3)
         RETURNING *;
       `;
-      const values = [projectRef, client_name];
-      const result = await pool.query(query, values);
+      const insertValues = [projectRef, client_name, JSON.stringify(documents || [])];
+      const result = await pool.query(insertQuery, insertValues);
 
       return {
         statusCode: 201,
@@ -34,10 +57,39 @@ exports.handler = async (event) => {
       };
     }
 
-    // 2. LISTAR TODOS LOS EXPEDIENTES (GET)
+    // 2. ACTUALIZAR EXPEDIENTE (PUT)
+    if (httpMethod === 'PUT') {
+      const data = JSON.parse(body || '{}');
+      const query = `
+        UPDATE forwarder_projects 
+        SET documents = $1,
+            items = COALESCE($2, items),
+            client_name = COALESCE($3, client_name)
+        WHERE id = $4 OR project_ref = $5
+        RETURNING *;
+      `;
+      const values = [
+        JSON.stringify(data.documents || []),
+        JSON.stringify(data.items || data.line_items || []),
+        data.client_name,
+        data.id || null,
+        data.project_ref || null
+      ];
+      const result = await pool.query(query, values);
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: 'Expediente actualizado con éxito',
+          project: result.rows[0]
+        }),
+      };
+    }
+
+    // 3. LISTAR TODOS LOS EXPEDIENTES (GET)
     if (httpMethod === 'GET') {
       const query = `
-        SELECT id, project_ref, client_name, status, global_margin_percentage, 
+        SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
                TO_CHAR(created_at, 'DD/MM/YYYY') as date 
         FROM forwarder_projects 
         ORDER BY created_at DESC;
@@ -50,7 +102,6 @@ exports.handler = async (event) => {
       };
     }
 
-    // Método no soportado
     return { statusCode: 405, body: 'Method Not Allowed' };
 
   } catch (error) {
