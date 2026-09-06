@@ -242,9 +242,54 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
-  // Función para inyectar los datos calculados por el Agente de Proyectos en los inputs
+  // Función para inyectar los datos calculados u órdenes de texto del Agente de Proyectos
   const handleApplyProjectPayload = (payload) => {
     if (!payload) return;
+
+    if (payload.instruction) {
+      const text = payload.instruction.toLowerCase();
+      const matchNumber = (str) => {
+        const m = str.match(/\d+/);
+        return m ? parseInt(m[0], 10) : null;
+      };
+
+      if (text.includes('almacenaje') || text.includes('días')) {
+        const val = matchNumber(text);
+        if (val !== null) setStorageDays(val);
+      }
+      if (text.includes('surveyor') || text.includes('perito')) {
+        const val = matchNumber(text);
+        if (val !== null) {
+          userEditedSurveyor.current = true;
+          setSurveyorCost(val);
+        }
+      }
+      if (text.includes('inland') || text.includes('transporte')) {
+        const val = matchNumber(text);
+        if (val !== null) setInlandCost(val);
+      }
+      if (text.includes('aduanas')) {
+        const val = matchNumber(text);
+        if (val !== null) setCustomsCost(val);
+      }
+      if (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza')) {
+        setCargoItems(prev => [
+          ...prev,
+          {
+            id: `item-${Date.now()}`,
+            category: 'Equipos de Proceso',
+            quantity: 1,
+            type: 'Transformador / Skid Industrial',
+            length: '6.2',
+            width: '2.8',
+            height: '3.4',
+            weight: '34000',
+            shipping_mode_supported: "40' Flat Rack"
+          }
+        ]);
+      }
+    }
+
     if (payload.category !== undefined) {
       if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
         setCargoItems(payload.cargo_items.map((ci, idx) => ({
