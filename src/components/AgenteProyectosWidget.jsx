@@ -1,8 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './AgenteProyectosWidget.css';
 
-export default function AgenteProyectosWidget({ onUpdatePayload }) {
-  const [isOpen, setIsOpen] = useState(true);
+export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: controlledIsOpen, onToggleOpen }) {
+  const [internalIsOpen, setInternalIsOpen] = useState(true);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  const effectiveIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+
+  const setIsOpen = (val) => {
+    setInternalIsOpen(val);
+    if (onToggleOpen) onToggleOpen(val);
+  };
+
   const [messages, setMessages] = useState([
     { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos de Cerebro.ia. Estoy conectado al workspace y listo para ejecutar cualquier orden en lenguaje natural.' }
   ]);
@@ -10,10 +19,12 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
   const [isListening, setIsListening] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const [position, setPosition] = useState({ 
-    x: typeof window !== 'undefined' ? window.innerWidth - 420 : 100, 
-    y: typeof window !== 'undefined' ? window.innerHeight - 560 : 100 
+    x: typeof window !== 'undefined' ? Math.max(10, window.innerWidth - 420) : 100, 
+    y: typeof window !== 'undefined' ? Math.max(10, window.innerHeight - 560) : 100 
   });
   const [isDragging, setIsDragging] = useState(false);
   const offsetRef = useRef({ x: 0, y: 0 });
@@ -50,17 +61,35 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     };
   }, [isDragging]);
 
-  const handleSend = (e) => {
-    e.preventDefault();
-    if (!inputValue.trim()) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-    const userMsg = inputValue;
-    setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+  const speakText = (text) => {
+    if (!isAudioEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const clean = text.replace(/[✅📂📎🎙️🔊🔇●✕🗕•]/g, '').trim();
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = 'es-ES';
+      utterance.rate = 1.05;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Ignorar fallos de síntesis de voz
+    }
+  };
+
+  const handleSend = (e) => {
+    if (e) e.preventDefault();
+    const raw = inputValue.trim();
+    if (!raw) return;
+
+    setMessages(prev => [...prev, { sender: 'user', text: raw }]);
     setInputValue('');
 
-    const text = userMsg.toLowerCase();
+    const text = raw.toLowerCase();
     let agentReply = "Orden procesada y aplicada en el workspace.";
-    let payloadObj = { instruction: userMsg };
+    let payloadObj = { instruction: raw };
 
     const extractNumber = (str) => {
       const match = str.match(/(\d+([.,]\d+)?)/);
@@ -112,7 +141,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
         id: `item-${Date.now()}`,
         category: 'Equipos de Proceso',
         quantity: val !== null && val < 50 ? val : 1,
-        type: userMsg.length > 5 ? userMsg : 'Pieza Industrial Asistida por IA',
+        type: raw.length > 5 ? raw : 'Pieza Industrial Asistida por IA',
         length: '5.5',
         width: '2.5',
         height: '3.0',
@@ -121,11 +150,12 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
       }];
       agentReply = `📦 Elemento añadido y sincronizado con la lista de empaque del expediente.`;
     } else {
-      agentReply = `He procesado tu instrucción: "${userMsg}". Parámetros actualizados en el sistema.`;
+      agentReply = `He procesado tu instrucción: "${raw}". Parámetros actualizados en el sistema.`;
     }
 
     setTimeout(() => {
       setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
+      speakText(agentReply);
       if (onUpdatePayload) {
         onUpdatePayload(payloadObj);
       }
@@ -133,14 +163,13 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
   };
 
   const handleFileAttach = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       setMessages(prev => [...prev, { sender: 'user', text: `📎 Archivo adjunto: ${file.name}` }]);
       setTimeout(() => {
-        setMessages(prev => [
-          ...prev, 
-          { sender: 'agent', text: `📁 Documento "${file.name}" analizado con éxito e integrado en el expediente del proyecto.` }
-        ];
+        const text = `📁 Documento "${file.name}" analizado con éxito e integrado en el expediente del proyecto.`;
+        setMessages(prev => [...prev, { sender: 'agent', text }]);
+        speakText(text);
         if (onUpdatePayload) {
           onUpdatePayload({
             category: 'Equipos de Proceso',
@@ -162,9 +191,42 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
   };
 
   const toggleMic = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      setMessages(prev => [...prev, { sender: 'agent', text: '🎙️ Escuchando instrucción...' }]);
+    if (typeof window === 'undefined' || !('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      setIsListening(!isListening);
+      if (!isListening) {
+        setMessages(prev => [...prev, { sender: 'agent', text: '🎙️ Dictado por voz: Escribe tu orden directamente en el campo de texto si tu navegador no soporta SpeechRecognition.' }]);
+      }
+      return;
+    }
+
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!recognitionRef.current) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.lang = 'es-ES';
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+
+        recognitionRef.current.onresult = (event) => {
+          const transcript = event.results?.[0]?.[0]?.transcript;
+          if (transcript) {
+            setInputValue(transcript);
+          }
+          setIsListening(false);
+        };
+        recognitionRef.current.onerror = () => { setIsListening(false); };
+        recognitionRef.current.onend = () => { setIsListening(false); };
+      }
+
+      if (isListening) {
+        recognitionRef.current.stop();
+        setIsListening(false);
+      } else {
+        recognitionRef.current.start();
+        setIsListening(true);
+      }
+    } catch {
+      setIsListening(!isListening);
     }
   };
 
@@ -172,15 +234,33 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     setIsAudioEnabled(!isAudioEnabled);
   };
 
-  // Botón flotante persistente para mostrar/ocultar el agente por completo
-  if (!isOpen) {
+  const handleMinimize = () => {
+    setIsMinimized(true);
+    if (onToggleOpen) onToggleOpen(false);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setIsMinimized(false);
+    if (onToggleOpen) onToggleOpen(false);
+  };
+
+  const handleRestore = () => {
+    setIsOpen(true);
+    setIsMinimized(false);
+    if (onToggleOpen) onToggleOpen(true);
+  };
+
+  if (!effectiveIsOpen || isMinimized) {
     return (
       <button 
+        type="button"
         className="project-agent-floating-btn" 
-        onClick={() => setIsOpen(true)}
-        title="Mostrar Agente de Proyectos"
+        onClick={handleRestore}
+        title="Restaurar Agente de Proyectos"
       >
-        📂 Mostrar Agente de Proyectos
+        <span className="floating-badge">📂</span>
+        <span>Agente de Proyectos</span>
       </button>
     );
   }
@@ -207,14 +287,25 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
             onClick={toggleAudio} 
             title={isAudioEnabled ? "Altavoz activado" : "Altavoz silenciado"}
             className={`control-icon-btn ${isAudioEnabled ? 'active' : ''}`}
+            aria-label="Alternar audio"
           >
             {isAudioEnabled ? '🔊' : '🔇'}
           </button>
           <button 
             type="button" 
-            onClick={() => setIsOpen(false)} 
-            title="Ocultar Agente"
+            onClick={handleMinimize} 
+            title="Minimizar agente"
             className="control-icon-btn"
+            aria-label="Minimizar agente"
+          >
+            🗕
+          </button>
+          <button 
+            type="button" 
+            onClick={handleClose} 
+            title="Ocultar agente"
+            className="control-icon-btn"
+            aria-label="Ocultar agente"
           >
             ✕
           </button>
@@ -228,6 +319,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
             <div className="pa-bubble-text">{msg.text}</div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSend} className="project-agent-input-bar">
