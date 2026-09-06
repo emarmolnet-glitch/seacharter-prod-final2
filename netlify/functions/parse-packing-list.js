@@ -74,25 +74,28 @@ function extractMultipartFile(event) {
 function parsePackingListLines(lines) {
   const parsedPieces = [];
 
-  // Patrón dimensiones LxWxH (ej. 12.2 x 2.45 x 2.8 o 12.2x2.45x2.8)
-  const dimRegex = /(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|\s+x\s+)(\d+(?:[.,]\d+)?)(?:\s*(?:m|mts|metros))?/i;
+  // 1. Regex ampliado para formatos irregulares (ej. L/5470xL/2440xH/2965, L13200xL//2900xH/4550 o 12.2 x 2.45 x 2.8)
+  const dimRegex = /(?:L\/?\s*)?(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|x?\s*L\/?\/?\s*)(\d+(?:[.,]\d+)?)\s*(?:[xX*×]\s*|x?\s*H\/?\s*)(\d+(?:[.,]\d+)?)(?:\s*(?:m|mts|metros|mm))?/i;
 
-  // Patrón peso (kg, kilos, ton, tn, t)
-  const weightRegex = /(\d+(?:[.,]\d+)?)\s*(?:kilos?|kg|tons?|tn|t)\b/i;
+  // 2. Regex de peso con soporte para kgs y formatos internacionales
+  const weightRegex = /(\d+(?:[.,]\d+)?)\s*(?:kilos?|kgs?|tons?|tn|t)\b/i;
 
-  // Patrón cantidad inicial (ej. 4x, 2 un, 6 pzas, 3.)
-  const qtyRegex = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|\.)?\s+)/i;
+  // 3. Regex de cantidad con soporte para "colis" (bultos en francés)
+  const qtyRegex = /^(?:(\d+)\s*(?:x|unids?|un|piezas?|pzas?|pcs?|uds?|colis|\.)?\s+)/i;
+
+  // 4. Diccionario de equipos ampliado a Francés/Portugués (convoyeur, groupe, crible, concasseur, etc.)
+  const projectKeywords = /bomba|bastidor|ósmosis|osmosis|camión|cabeza|góndola|furgoneta|skid|transformador|filtro|módulo|excavadora|generador|convoyeur|groupe|mobile|cavalete|passerele|tr[èe]mie|crible|concasseur|contenneur|ch[âa]ssis/i;
 
   lines.forEach((rawLine, index) => {
     const line = String(rawLine || '').trim();
     if (!line) return;
 
-    // Ignorar encabezados comunes
-    if (/^(item|n[ºo]|descrip|qty|cant|largo|ancho|alto|peso|weight|dimensiones|packing list)/i.test(line)) {
+    // Ignorar encabezados en varios idiomas (Poids, Designation, Quant, Colis, etc.)
+    if (/^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list)/i.test(line)) {
       return;
     }
 
-    // Comprobar si es línea estructurada separada por tabulación, punto y coma o coma
+    // Lógica para archivos TSV/CSV / Texto tabulado
     const sep = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : (line.includes(',') && !line.match(/\d,\d/) ? ',' : null));
     if (sep) {
       const parts = line.split(sep).map((p) => p.trim());
@@ -101,7 +104,6 @@ function parsePackingListLines(lines) {
         let desc = '';
         let remainingCols = [];
 
-        // Determinar si la primera o segunda columna es la cantidad
         const num0 = parseInt(parts[0], 10);
         const num1 = parseInt(parts[1], 10);
 
@@ -110,7 +112,6 @@ function parsePackingListLines(lines) {
           desc = parts[1];
           remainingCols = parts.slice(2);
         } else if (!isNaN(num0) && !isNaN(num1) && num1 > 0 && num1 < 500 && parts[2] && isNaN(Number(parts[2]))) {
-          // caso [itemIndex, quantity, description, ...]
           qty = num1;
           desc = parts[2];
           remainingCols = parts.slice(3);
@@ -121,7 +122,6 @@ function parsePackingListLines(lines) {
 
         let l = 0, w = 0, h = 0, wt = 0;
 
-        // Buscar primero una celda compuesta LxWxH
         const dimPart = remainingCols.find((p) => dimRegex.test(p));
         if (dimPart) {
           const m = dimPart.match(dimRegex);
@@ -129,10 +129,11 @@ function parsePackingListLines(lines) {
             l = parseFloat(m[1].replace(',', '.')) || 0;
             w = parseFloat(m[2].replace(',', '.')) || 0;
             h = parseFloat(m[3].replace(',', '.')) || 0;
+            // Conversión automática de milímetros a metros si el valor extraído es muy alto (> 50)
+            if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
           }
         }
 
-        // Buscar peso explícito con unidad
         const wtPart = remainingCols.find((p) => weightRegex.test(p));
         if (wtPart) {
           const wm = wtPart.match(weightRegex);
@@ -142,25 +143,21 @@ function parsePackingListLines(lines) {
           }
         }
 
-        // Si no se encontraron por regex compuesto, leer los números consecutivos restantes
         if (l === 0 || wt === 0) {
           const numericValues = remainingCols
             .map((p) => parseFloat(p.replace(/[^\d.,]/g, '').replace(',', '.')))
             .filter((n) => !isNaN(n) && n > 0);
 
           if (numericValues.length >= 4) {
-            l = numericValues[0];
-            w = numericValues[1];
-            h = numericValues[2];
-            wt = numericValues[3];
+            l = numericValues[0]; w = numericValues[1]; h = numericValues[2]; wt = numericValues[3];
+            if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
           } else if (numericValues.length === 3) {
-            l = numericValues[0];
-            w = numericValues[1];
-            h = numericValues[2];
+            l = numericValues[0]; w = numericValues[1]; h = numericValues[2];
+            if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
           }
         }
 
-        if (desc && (l > 0 || wt > 0 || /bomba|bastidor|ósmosis|osmosis|camión|cabeza|góndola|furgoneta|skid|transformador/i.test(desc))) {
+        if (desc && (l > 0 || wt > 0 || projectKeywords.test(desc))) {
           parsedPieces.push({
             id: Date.now() + index + Math.random(),
             quantity: qty || 1,
@@ -179,11 +176,12 @@ function parsePackingListLines(lines) {
       }
     }
 
+    // Lógica para líneas de texto plano (PDF parseado sin separadores claros)
     const dimMatch = line.match(dimRegex);
     const wtMatch = line.match(weightRegex);
     const qtyMatch = line.match(qtyRegex);
 
-    if (dimMatch || wtMatch || /bomba|bastidor|ósmosis|osmosis|camión|cabeza|góndola|furgoneta|skid|transformador|filtro|módulo|excavadora|generador/i.test(line)) {
+    if (dimMatch || wtMatch || projectKeywords.test(line)) {
       let qty = 1;
       if (qtyMatch) {
         qty = parseInt(qtyMatch[1], 10) || 1;
@@ -194,6 +192,7 @@ function parsePackingListLines(lines) {
         l = parseFloat(dimMatch[1].replace(',', '.')) || 1;
         w = parseFloat(dimMatch[2].replace(',', '.')) || 1;
         h = parseFloat(dimMatch[3].replace(',', '.')) || 1;
+        if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
       }
 
       let wt = 1000;
