@@ -149,12 +149,12 @@ function sanitizeLine(line) {
     'rua ', 'avenue', 'blida', 'amarante', 'capital social', 'c.r.c.', 
     'data vencimento', 'pagamento', 'expedição', 'total iva', 'desconto', 
     'isento artigo', 'software phc', 'página', 'telefs', 'fax', 'e-mail',
-    'contribuinte', 'nif', 'nis', 'atcud', 'incoterm', 'port de', 'lieu de',
+    'nif', 'nis', 'atcud', 'incoterm', 'port de', 'lieu de',
     'total a pagar', 'condiciones de pago', 'vencimiento', 'subtotal', 'net total',
 
     // Direcciones y Empresa
-    'address', 'dirección', 'direccao', 'c/', 'calle', 'avda', 'avenida', 'plaza', 
-    'poligono', 'polígono', 's.a.', 's.l.', 'ltd', 'inc', 'corp', 'company', 'empresa',
+    'address', 'dirección', 'direccao', 'calle', 'avda', 'avenida', 'plaza', 
+    'poligono', 'polígono', 's.a.', 's.l.', 'ltd', 'inc', 'corp', 'company',
 
     // Emails y Web
     'email', 'correo', '@', 'www.', 'http', 'https',

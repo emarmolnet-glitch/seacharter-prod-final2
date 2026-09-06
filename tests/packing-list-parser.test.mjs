@@ -136,3 +136,109 @@ test('8. extractWeightFromLine extracts numbers > 100 from description without d
   const w3 = extractWeightFromLine('Filtro de Arena 2.5 x 2.5 x 3.0 peso 12,600 kg', null);
   assert.equal(w3, 12600);
 });
+
+test('9. currentBuffer is eliminated from packingListParser.js source code', () => {
+  assert.equal(parserSource.includes('currentBuffer'), false, 'currentBuffer must not exist in packingListParser.js');
+});
+
+test('10. interpretRow extracts accurate quantity, dimensions, and unit weight without column fusion in description', async () => {
+  // Extract interpretRow and helper functions from source
+  const interpretFnMatch = parserSource.match(/function\s+interpretRow\([\s\S]*?^export\s+async\s+function\s+extractLinesFromPdf/m);
+  assert.ok(interpretFnMatch, 'interpretRow function must be present');
+
+  // Test row 1: 4 bastidores with 8,500 unit weight and 34,000 total weight
+  const line1 = "Equipos de Proceso | Bastidores / Racks de Ósmosis Inversa (Módulos) | 4 | 12.00x2.30x2.50 | 8,500 | 34,000 | 40' Flat Rack / OT";
+  
+  // Test row with furgonetas (must not be blocked by 'eta' keyword)
+  const lineFurgoneta = "Flota de Vehículos | Furgonetas de Taller / Servicio (L2H2) | 4 | 5.55x2.05x2.50 | 2,300 | 9,200 | Ro-Ro / Contenedor";
+
+  // Evaluate interpretRow in test context
+  const cleanSource = parserSource
+    .replace(/import\s+\*\s+as\s+pdfjsDist\s+from\s+[^;]+;/g, 'const pdfjsDist = {};')
+    .replace(/import\s+\*\s+as\s+XLSX\s+from\s+[^;]+;/g, 'const XLSX = {};')
+    .replace(/import\s+mammoth\s+from\s+[^;]+;/g, 'const mammoth = {};')
+    .replace(/export\s+default\s+[^;]+;/g, '')
+    .replace(/export\s+{[^}]+};/g, '')
+    .replace(/export\s+/g, '');
+
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  const contextFn = await new AsyncFunction(`${cleanSource}; return { interpretRow, sanitizeLine };`)();
+  const res1 = contextFn.interpretRow(line1, 0);
+  assert.ok(res1, 'Row 1 must be interpreted successfully');
+  assert.equal(res1.quantity, 4, 'Quantity must be 4');
+  assert.equal(res1.length_m, 12, 'Length must be 12');
+  assert.equal(res1.width_m, 2.3, 'Width must be 2.3');
+  assert.equal(res1.height_m, 2.5, 'Height must be 2.5');
+  assert.equal(res1.unit_weight_kg, 8500, 'Unit weight must be 8500 kg, not total 34000');
+  assert.equal(res1.description, 'Bastidores / Racks de Ósmosis Inversa (Módulos)', 'Description must not contain other columns');
+  assert.equal(res1.category, 'Equipos de Proceso', 'Category must be Equipos de Proceso');
+
+  const resFurgoneta = contextFn.interpretRow(lineFurgoneta, 13);
+  assert.ok(resFurgoneta, 'Furgonetas row must not be blocked by keyword filtering');
+  assert.equal(resFurgoneta.quantity, 4, 'Quantity must be 4');
+  assert.equal(resFurgoneta.unit_weight_kg, 2300, 'Unit weight must be 2300');
+  assert.equal(resFurgoneta.description, 'Furgonetas de Taller / Servicio (L2H2)');
+});
+
+test('11. Extraction from 15 simulated packing list lines sums to 116.35 Toneladas', async () => {
+  const cleanSource = parserSource
+    .replace(/import\s+\*\s+as\s+pdfjsDist\s+from\s+[^;]+;/g, 'const pdfjsDist = {};')
+    .replace(/import\s+\*\s+as\s+XLSX\s+from\s+[^;]+;/g, 'const XLSX = {};')
+    .replace(/import\s+mammoth\s+from\s+[^;]+;/g, 'const mammoth = {};')
+    .replace(/export\s+default\s+[^;]+;/g, '')
+    .replace(/export\s+{[^}]+};/g, '')
+    .replace(/export\s+/g, '');
+
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  const contextFn = await new AsyncFunction(`${cleanSource}; return { interpretRow };`)();
+
+  const lines = [
+    "Equipos de Proceso | Bastidores / Racks de Ósmosis Inversa (Módulos) | 4 | 12.00x2.30x2.50 | 8,500 | 34,000 | 40' Flat Rack / OT",
+    "Equipos de Proceso | Bombas de Alta Presión con Motor Eléctrico | 3 | 3.20x1.40x1.60 | 4,200 | 12,600 | 40' HC Contenedor",
+    "Equipos de Proceso | Sistemas de Recuperación de Energía (Skid ERI) | 1 | 2.10x1.20x1.50 | 2,800 | 2,800 | 40' HC Contenedor",
+    "Equipos de Proceso | Skid de Dosificación de Químicos | 2 | 5.80x2.20x2.40 | 3,500 | 7,000 | 20' ST Contenedor",
+    "Maquinaria y Talleres | Máquina de Termofusión Automática (>1000mm) | 1 | 2.40x1.80x1.70 | 1,950 | 1,950 | 20' ST Contenedor",
+    "Maquinaria y Talleres | Equipos de Soldadura Orbital (Cajas) | 2 | 1.20x0.80x1.00 | 320 | 640 | 20' ST Contenedor",
+    "Maquinaria y Talleres | Planta Piloto / Contenedor Laboratorio ISO | 1 | 6.06x2.44x2.59 | 4,500 | 4,500 | Contenedor ISO 20'",
+    "Utillaje y Herramientas | Caja 01: Utillaje Inserción de Membranas | 1 | 1.80x1.00x0.90 | 450 | 450 | 20' ST Contenedor",
+    "Utillaje y Herramientas | Caja 02: Alineadores e Hidráulica de Acero | 1 | 1.20x1.20x1.10 | 850 | 850 | 20' ST Contenedor",
+    "Utillaje y Herramientas | Caja 03: Llaves Dinamométricas Hidráulicas | 1 | 1.20x0.80x0.85 | 380 | 380 | 20' ST Contenedor",
+    "Utillaje y Herramientas | Caja 04: Equipos Ensayos No Destructivos | 1 | 1.00x0.80x0.75 | 180 | 180 | 20' ST Contenedor",
+    "Flota de Vehículos | Camión Cabeza Tractora (6x4) | 2 | 6.90x2.55x3.60 | 9,200 | 18,400 | Ro-Ro / Carga Proyecto",
+    "Flota de Vehículos | Semirremolque Plataforma (Góndola) | 2 | 13.60x2.55x1.50 | 7,500 | 15,000 | Ro-Ro / Carga Proyecto",
+    "Flota de Vehículos | Furgonetas de Taller / Servicio (L2H2) | 4 | 5.55x2.05x2.50 | 2,300 | 9,200 | Ro-Ro / Contenedor",
+    "Flota de Vehículos | Coches de Servicio / Pick-up 4x4 | 4 | 5.35x1.85x1.80 | 2,100 | 8,400 | Ro-Ro / Contenedor"
+  ];
+
+  const items = lines.map((l, i) => contextFn.interpretRow(l, i)).filter(Boolean);
+  assert.equal(items.length, 15, 'All 15 lines must parse successfully');
+  const totalWeight = items.reduce((acc, it) => acc + (it.quantity * it.unit_weight_kg), 0);
+  assert.equal(totalWeight, 116350, 'Total weight must equal 116,350 kg (116.35 Toneladas)');
+});
+
+test('12. extractLinesFromPdf correctly extracts all 15 cargo lines from packing_list_desaladora-v2.pdf', async () => {
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const cleanSource = parserSource
+    .replace(/import\s+\*\s+as\s+pdfjsDist\s+from\s+[^;]+;/g, '')
+    .replace(/import\s+\*\s+as\s+XLSX\s+from\s+[^;]+;/g, 'const XLSX = {};')
+    .replace(/import\s+mammoth\s+from\s+[^;]+;/g, 'const mammoth = {};')
+    .replace(/export\s+default\s+[^;]+;/g, '')
+    .replace(/export\s+{[^}]+};/g, '')
+    .replace(/export\s+/g, '');
+
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  const contextFn = await new AsyncFunction('pdfjsDist', `${cleanSource}; return { extractLinesFromPdf, interpretRow };`)(pdfjsLib);
+
+  const pdfPath = new URL('../.netlify/assets/6a9d85d6be30eeb6caeffe16/packing_list_desaladora-v2.pdf', import.meta.url);
+  const buf = readFileSync(pdfPath);
+  const lines = await contextFn.extractLinesFromPdf(buf);
+  assert.equal(lines.length, 15, 'Must extract exactly 15 cargo lines');
+
+  const items = lines.map((l, i) => contextFn.interpretRow(l, i)).filter(Boolean);
+  assert.equal(items.length, 15, 'All 15 lines must parse into valid cargo items');
+
+  const totalWeight = items.reduce((acc, it) => acc + (it.quantity * it.unit_weight_kg), 0);
+  assert.equal(totalWeight, 116350, 'Total weight across 15 items must be 116,350 kg (116.35 Toneladas)');
+});
+
+
