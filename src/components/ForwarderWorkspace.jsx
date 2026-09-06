@@ -13,19 +13,19 @@ function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   };
 
   return (
-    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm">
+    <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-blue-300 transition shadow-sm">
       <div className="mb-2">
-        <span className="block text-xs font-bold text-slate-200 tracking-wide">{label}</span>
-        {subtitle && <span className="block text-[11px] text-slate-400 mt-0.5">{subtitle}</span>}
+        <span className="block text-xs font-bold text-slate-800 tracking-wide">{label}</span>
+        {subtitle && <span className="block text-[11px] text-slate-500 mt-0.5">{subtitle}</span>}
       </div>
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
-        <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">Unidades</span>
-        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg p-1">
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Unidades</span>
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-1">
           <button
             type="button"
             onClick={handleDecrement}
             disabled={numValue <= min}
-            className="w-7 h-7 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-30 text-base font-black transition cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded bg-white hover:bg-slate-200 border border-slate-200 text-slate-700 disabled:opacity-30 text-base font-black transition cursor-pointer shadow-sm"
           >
             -
           </button>
@@ -37,12 +37,12 @@ function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
               const parsed = parseInt(e.target.value, 10);
               onChange(isNaN(parsed) ? 0 : Math.max(min, parsed));
             }}
-            className="w-14 text-center bg-transparent text-sm font-mono font-bold text-sky-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-14 text-center bg-transparent text-sm font-mono font-bold text-blue-600 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <button
             type="button"
             onClick={handleIncrement}
-            className="w-7 h-7 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-base font-black transition cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded bg-white hover:bg-slate-200 border border-slate-200 text-slate-700 text-base font-black transition cursor-pointer shadow-sm"
           >
             +
           </button>
@@ -167,12 +167,14 @@ export function ForwarderWorkspace() {
       if (Array.isArray(parsedItems) && parsedItems.length > 0) {
         const formattedItems = parsedItems.map((it, idx) => ({
           id: it.id || Date.now() + idx,
+          category: it.category || 'Equipos de Proceso',
           quantity: it.quantity ?? 1,
           type: it.type || it.description || 'Pieza Proyecto',
           length: it.length_m ?? it.length ?? 1,
           width: it.width_m ?? it.width ?? 1,
           height: it.height_m ?? it.height ?? 1,
           weight: it.unit_weight_kg ?? it.weight ?? 1000,
+          shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor"
         }));
         setCargoItems(formattedItems);
       }
@@ -187,7 +189,7 @@ export function ForwarderWorkspace() {
   const handleAddCargoPiece = () => {
     setCargoItems((prev) => [
       ...prev,
-      { id: `item-${Date.now()}-${Math.random()}`, quantity: 1, type: '', length: '', width: '', height: '', weight: '' },
+      { id: `item-${Date.now()}-${Math.random()}`, category: 'Equipos de Proceso', quantity: 1, type: '', length: '', width: '', height: '', weight: '', shipping_mode_supported: "40' HC Contenedor" },
     ]);
   };
 
@@ -313,12 +315,14 @@ export function ForwarderWorkspace() {
       if (Array.isArray(payload.cargo_items)) {
         setCargoItems(payload.cargo_items.map((ci) => ({
           id: ci.id || `item-${Date.now()}`,
+          category: ci.category || 'Equipos de Proceso',
           quantity: ci.quantity || 1,
           type: ci.type || '',
           length: ci.length_m ?? '',
           width: ci.width_m ?? '',
           height: ci.height_m ?? '',
           weight: ci.unit_weight_kg ?? '',
+          shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
         })));
       }
       const mats = payload.lashing_and_dunnage_materials || {};
@@ -358,12 +362,14 @@ export function ForwarderWorkspace() {
     const payload = {
       project_ref: activeProject?.project_ref,
       cargo_items: cargoItems.map((item) => ({
+        category: item.category || 'Equipos de Proceso',
         quantity: parseInt(item.quantity, 10) || 1,
         type: item.type || 'Sin especificar',
         length_m: parseFloat(item.length) || 0,
         width_m: parseFloat(item.width) || 0,
         height_m: parseFloat(item.height) || 0,
         unit_weight_kg: parseFloat(item.weight) || 0,
+        shipping_mode_supported: item.shipping_mode_supported || "40' HC Contenedor"
       })),
       financial_summary: {
         estimated_total_cost_eur: parseFloat(estimatedCost) || 0,
@@ -397,7 +403,7 @@ export function ForwarderWorkspace() {
 
   return (
     <>
-      <div className={`w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
+      <div className={`w-full h-full flex overflow-hidden bg-slate-900 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
         <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
           <div className="p-4 border-b border-slate-800">
             <button
@@ -444,11 +450,11 @@ export function ForwarderWorkspace() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-base font-bold text-slate-900">Servicios</h3>
-                    <button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg">➕ Añadir Servicio</button>
+                    <button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button>
                   </div>
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <table className="w-full text-xs">
-                      <thead className="bg-slate-100 font-bold border-b border-slate-200">
+                      <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700">
                         <tr>
                           <th className="px-4 py-3 text-left">Servicio</th>
                           <th className="px-4 py-3 text-right">Coste (€)</th>
@@ -456,15 +462,15 @@ export function ForwarderWorkspace() {
                           <th className="px-4 py-3 text-center">Acciones</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
                         {activeProject.line_items.map((item) => (
                           <tr key={item.id} className="border-b border-slate-100">
                             <td className="px-4 py-3 font-semibold">{item.description}</td>
                             <td className="px-4 py-3 text-right text-rose-600 font-bold">{Number(item.cost_eur).toLocaleString('es-ES')} €</td>
                             <td className="px-4 py-3 text-right text-emerald-600 font-bold">{Number(item.sale_price_eur).toLocaleString('es-ES')} €</td>
                             <td className="px-4 py-3 text-center">
-                              <button onClick={() => handleEditService(item)} className="mx-1">✏️</button>
-                              <button onClick={() => handleDeleteService(item.id)} className="mx-1">🗑️</button>
+                              <button onClick={() => handleEditService(item)} className="mx-1 cursor-pointer hover:scale-110">✏️</button>
+                              <button onClick={() => handleDeleteService(item.id)} className="mx-1 cursor-pointer hover:scale-110">🗑️</button>
                             </td>
                           </tr>
                         ))}
@@ -474,7 +480,7 @@ export function ForwarderWorkspace() {
                 </div>
               ) : (
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center bg-white">
-                  <button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg">➕ Añadir Servicio</button>
+                  <button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button>
                 </div>
               )}
             </div>
@@ -482,53 +488,68 @@ export function ForwarderWorkspace() {
         </main>
 
         {/* ==================================================== */}
-        {/* MODAL PRINCIPAL: Ancho expandido para descripciones */}
+        {/* MODAL PRINCIPAL: TEMA CLARO Y FULL-WIDTH             */}
         {/* ==================================================== */}
         {isCargoModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 sm:p-6 overflow-y-auto print:hidden">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100 mt-12">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto print:hidden">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-[95%] max-h-[96vh] flex flex-col overflow-hidden text-slate-900 mt-6">
               
-              <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
-                <h2 className="text-lg font-black text-slate-100">Project Cargo Builder</h2>
-                <button onClick={() => setIsCargoModalOpen(false)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 cursor-pointer">✕</button>
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Project Cargo Builder</h2>
+                <button onClick={() => setIsCargoModalOpen(false)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer flex items-center justify-center font-bold">✕</button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-800/70">
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-100">
                 
-                {/* SECCIÓN 1: Packing List con bloques ultra anchos */}
+                {/* SECCIÓN 1: Packing List a Pantalla Completa */}
                 <section className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black text-sky-400 uppercase">1. Lista de Empaque</h3>
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">1. Lista de Empaque</h3>
                     <div className="flex gap-2">
                       <input ref={fileInputRef} type="file" accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
-                      <button onClick={handleTriggerImport} className="px-3 py-1.5 bg-violet-900 text-white text-xs font-bold rounded-lg cursor-pointer">🤖 PDF/Excel</button>
-                      <button onClick={handleAddCargoPiece} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg cursor-pointer">➕ Pieza</button>
+                      <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm transition">🤖 Importar Documento</button>
+                      <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm transition">➕ Añadir Pieza</button>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60 shadow-inner">
-                    <table className="w-full text-left text-xs text-slate-300">
-                      <thead className="bg-slate-900 font-bold text-slate-400 border-b border-slate-800">
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    {/* Al remover w-full de los <th> de descripción y modos, estos absorben todo el espacio horizontal */}
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 font-bold text-slate-600 border-b border-slate-200 uppercase tracking-wider text-[10px]">
                         <tr>
-                          <th className="px-3 py-2.5 w-16">Cant.</th>
-                          <th className="px-3 py-2.5 w-[50%]">Tipo / Modelo (Descripción completa)</th>
-                          <th className="px-3 py-2.5 w-20">L (m)</th>
-                          <th className="px-3 py-2.5 w-20">W (m)</th>
-                          <th className="px-3 py-2.5 w-20">H (m)</th>
-                          <th className="px-3 py-2.5 w-28">Peso (kg)</th>
-                          <th className="px-3 py-2.5 w-12 text-center">🗑️</th>
+                          <th className="px-3 py-3 text-center w-16">Cant.</th>
+                          <th className="px-3 py-3">Tipo / Modelo (Descripción completa)</th>
+                          <th className="px-3 py-3 w-20 text-center">L (m)</th>
+                          <th className="px-3 py-3 w-20 text-center">W (m)</th>
+                          <th className="px-3 py-3 w-20 text-center">H (m)</th>
+                          <th className="px-3 py-3 w-28 text-right">Peso (kg)</th>
+                          <th className="px-3 py-3 w-12 text-center">🗑️</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
+                      <tbody className="divide-y divide-slate-100">
                         {cargoItems.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-2 py-2"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2 w-[50%]"><input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-3 py-1.5 text-slate-100 rounded text-xs" /></td>
-                            <td className="px-2 py-2"><input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2"><input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2"><input type="number" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-slate-950 border border-slate-700 px-2 py-1 text-slate-100 rounded" /></td>
-                            <td className="px-2 py-2 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 font-bold cursor-pointer">✕</button></td>
+                          <tr key={item.id} className="hover:bg-slate-50/50">
+                            <td className="px-2 py-2">
+                              <input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-2 py-1.5 text-slate-900 rounded text-center shadow-sm" />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input type="text" value={item.type} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-3 py-1.5 text-slate-900 font-semibold rounded shadow-sm" />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-2 py-1.5 text-slate-900 rounded text-center shadow-sm" />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-2 py-1.5 text-slate-900 rounded text-center shadow-sm" />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input type="number" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-2 py-1.5 text-slate-900 rounded text-center shadow-sm" />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-2 py-1.5 text-slate-900 rounded text-right shadow-sm font-mono" />
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-1.5 rounded transition cursor-pointer font-bold">✕</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -538,75 +559,77 @@ export function ForwarderWorkspace() {
 
                 {/* SECCIÓN 2: Trincaje */}
                 <section className="pt-6 space-y-4">
-                  <h3 className="text-sm font-black text-sky-400 uppercase">2. Trincaje y Materiales</h3>
-                  <div className="bg-white border border-slate-200 border-l-4 border-l-cyan-500 p-4 rounded shadow-sm flex items-center gap-4 mb-6">
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Materiales</h3>
+                  
+                  <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 p-4 rounded-lg shadow-sm flex items-center gap-4 mb-6">
                     <div className="text-2xl">⚙️</div>
                     <div className="flex flex-col">
-                      <span className="text-cyan-600 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
-                      <span className="text-slate-600 mt-1 text-xs">
-                        Modalidad detectada: <strong className="text-slate-900 px-1 font-black">{shippingMode}</strong>
-                        Buque recomendado: <strong className="text-slate-900">{vesselType}</strong>
+                      <span className="text-blue-800 font-black text-xs tracking-wide uppercase">Motor de Decisión Operativa IA</span>
+                      <span className="text-slate-700 mt-1 text-[11px]">
+                        Modalidad detectada: <strong className="bg-white text-blue-900 border border-blue-200 px-2 py-0.5 rounded shadow-sm mx-1">{shippingMode}</strong>
+                        Buque recomendado: <strong className="text-slate-900 font-bold">{vesselType}</strong>
                       </span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    <NumericCounter label="Maderas" value={dunnageWood} onChange={setDunnageWood} />
-                    <NumericCounter label="Eslingas" value={highCapacitySlings} onChange={setHighCapacitySlings} />
-                    <NumericCounter label="Cadenas" value={chainsBinders} onChange={setChainsBinders} />
-                    <NumericCounter label="Grilletes" value={shackles} onChange={setShackles} />
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <NumericCounter label="Maderas" subtitle="Durmientes y Cuñas" value={dunnageWood} onChange={setDunnageWood} />
+                    <NumericCounter label="Eslingas" subtitle="Textiles Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
+                    <NumericCounter label="Cadenas" subtitle="Acero y Tensores" value={chainsBinders} onChange={setChainsBinders} />
+                    <NumericCounter label="Grilletes" subtitle="Unión de Resistencia" value={shackles} onChange={setShackles} />
                   </div>
                 </section>
 
                 {/* SECCIÓN 3: Mano de Obra */}
                 <section className="pt-6 space-y-4">
-                  <h3 className="text-sm font-black text-sky-400 uppercase">3. Mano de Obra Portuaria</h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    <NumericCounter label="Turnos Estiba" value={stevedoreGangs} onChange={setStevedoreGangs} />
-                    <NumericCounter label="Eq. Trincadores" value={lashingTeam} onChange={setLashingTeam} />
-                    <NumericCounter label="Grúas Heavy Lift" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
-                    <NumericCounter label="Plataformas MAFI" value={mafiPlatforms} onChange={setMafiPlatforms} />
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Mano de Obra Portuaria</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <NumericCounter label="Turnos Estiba" subtitle="Cuadrillas completas" value={stevedoreGangs} onChange={setStevedoreGangs} />
+                    <NumericCounter label="Eq. Trincadores" subtitle="Especialistas" value={lashingTeam} onChange={setLashingTeam} />
+                    <NumericCounter label="Grúas Heavy Lift" subtitle="Móvil Portuaria" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
+                    <NumericCounter label="Plataformas MAFI" subtitle="Roll Trailers" value={mafiPlatforms} onChange={setMafiPlatforms} />
                   </div>
                 </section>
 
                 {/* SECCIÓN 4: Periféricos */}
                 <section className="pt-6 space-y-4">
-                  <h3 className="text-sm font-black text-sky-400 uppercase">4. Pre-Carriage & Port</h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <label className="text-xs font-bold text-slate-200 block mb-2">Días Almacenaje</label>
-                      <input type="number" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white" />
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">4. Pre-Carriage & Port</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-800 block mb-2">Días Almacenaje</label>
+                      <input type="number" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 rounded px-3 py-2 text-slate-900 text-sm shadow-inner" />
                     </div>
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <label className="text-xs font-bold text-slate-200 block mb-2">Surveyor (€)</label>
-                      <input type="number" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current = true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white" />
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-800 block mb-2">Surveyor (€)</label>
+                      <input type="number" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current = true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 rounded px-3 py-2 text-slate-900 text-sm shadow-inner" />
                     </div>
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <label className="text-xs font-bold text-slate-200 block mb-2">Transporte Inland (€)</label>
-                      <input type="number" value={inlandCost} onChange={(e) => setInlandCost(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white" />
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-800 block mb-2">Transporte Inland (€)</label>
+                      <input type="number" value={inlandCost} onChange={(e) => setInlandCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 rounded px-3 py-2 text-slate-900 text-sm shadow-inner" />
                     </div>
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                      <label className="text-xs font-bold text-slate-200 block mb-2">Aduanas (€)</label>
-                      <input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white" />
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-800 block mb-2">Aduanas (€)</label>
+                      <input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 rounded px-3 py-2 text-slate-900 text-sm shadow-inner" />
                     </div>
                   </div>
                 </section>
               </div>
 
-              {/* FOOTER DEL MODAL */}
-              <div className="bg-slate-900 p-6 rounded-b-lg border-t border-slate-700 flex justify-between items-end mt-6 shrink-0">
+              {/* FOOTER DEL MODAL TEMA CLARO */}
+              <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">
                 <div className="flex gap-6 w-2/3">
                   <div className="w-1/2">
-                    <label className="block text-cyan-400 font-bold text-xs mb-1">COSTE TOTAL ESTIMADO (€)</label>
-                    <input type="number" readOnly value={estimatedCost} className="!bg-slate-900 !text-white !font-bold !text-2xl !border-slate-600 rounded p-3 w-full text-right outline-none border" />
+                    <label className="block text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">COSTE TOTAL ESTIMADO (€)</label>
+                    <input type="number" readOnly value={estimatedCost} className="bg-white text-slate-900 font-black text-2xl border-slate-300 rounded-lg p-3 w-full text-right outline-none border shadow-inner" />
                   </div>
                   <div className="w-1/2">
-                    <label className="block text-cyan-400 font-bold text-xs mb-1">PRECIO VENTA A CLIENTE (€)</label>
-                    <input type="number" readOnly value={salePrice} className="!bg-slate-900 !text-white !font-bold !text-2xl !border-slate-600 rounded p-3 w-full text-right outline-none border" />
+                    <label className="block text-blue-600 font-bold text-[10px] uppercase tracking-wider mb-1">PRECIO VENTA A CLIENTE (€)</label>
+                    <input type="number" readOnly value={salePrice} className="bg-white text-slate-900 font-black text-2xl border-blue-300 focus:border-blue-500 rounded-lg p-3 w-full text-right outline-none border shadow-inner" />
                   </div>
                 </div>
                 <div className="flex flex-col gap-3">
-                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded font-bold cursor-pointer">📄 Reporte Ejecutivo</button>
-                  <button onClick={handleSaveProjectCargo} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded font-bold cursor-pointer">💾 GUARDAR PROYECTO</button>
+                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded-lg shadow font-bold cursor-pointer text-sm">📄 Generar Reporte</button>
+                  <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow font-bold cursor-pointer text-sm">💾 GUARDAR PROYECTO</button>
                 </div>
               </div>
             </div>
@@ -615,7 +638,7 @@ export function ForwarderWorkspace() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA DEL REPORTE EJECUTIVO (CORREGIDO: Botones visibles y costes ponderados) */}
+      {/* VISTA DEL REPORTE EJECUTIVO (CROQUIS DE ESTIBA INTEGRADO Y FORMATO A4)    */}
       {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
@@ -627,18 +650,14 @@ export function ForwarderWorkspace() {
 
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
-        // Cálculo métrico total para ponderación proporcional de costes por pieza
         const totalMetricUnits = cargoItems.reduce((sum, item) => {
           const qty = Number(item.quantity) || 1;
-          const l = parseFloat(item.length) || 1;
-          const w = parseFloat(item.width) || 1;
-          const h = parseFloat(item.height) || 1;
           const wt = parseFloat(item.weight) || 1000;
-          return sum + (qty * Math.max(wt, l * w * h * 100));
+          return sum + (qty * wt);
         }, 0) || 1;
 
         return (
-          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[2147483647] overflow-y-auto pt-28 pb-16 px-4 sm:px-12 text-slate-900">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[2147483647] overflow-y-auto pt-24 pb-20 px-4 sm:px-12 text-slate-900">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -649,18 +668,18 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA FIJA SUPERIOR CON MARGEN SUFICIENTE PARA NO QUEDAR OCULTA */}
-            <div className="max-w-4xl mx-auto flex justify-end gap-4 mb-6 print-hidden">
+            {/* BOTONERA FIJA CLARAMENTE SEPARADA DEL HEADER SUPERIOR */}
+            <div className="max-w-[1200px] mx-auto flex justify-end gap-4 mb-6 print-hidden">
               <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-2 cursor-pointer border border-blue-400">
                 🖨️ Imprimir / Guardar PDF
               </button>
-              <button onClick={() => setShowExecutiveReport(false)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-2 cursor-pointer border border-slate-600">
+              <button onClick={() => setShowExecutiveReport(false)} className="bg-white hover:bg-slate-50 text-slate-800 px-6 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-2 cursor-pointer border border-slate-300">
                 ✖ Cerrar Reporte
               </button>
             </div>
 
-            {/* FOLIO A4 BLANCO */}
-            <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-12 bg-white text-slate-900 shadow-2xl border border-slate-200 rounded-xl">
+            {/* FOLIO A4 EXPANDIDO PARA APROVECHAR PANTALLA */}
+            <div id="printable-a4-sheet" className="max-w-[1200px] mx-auto p-12 bg-white text-slate-900 shadow-2xl border border-slate-200 rounded-xl">
               <header className="border-b-2 border-slate-900 pb-6 mb-8">
                 <div className="flex justify-between items-start gap-4 mb-4">
                   <div>
@@ -673,42 +692,102 @@ export function ForwarderWorkspace() {
                     <p><strong className="text-slate-800">Cliente:</strong> {activeProject?.client_name}</p>
                   </div>
                 </div>
-                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900">OFERTA COMERCIAL - PROJECT CARGO</h2>
+                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900 text-center">OFERTA COMERCIAL - PROJECT CARGO</h2>
               </header>
 
               {/* Resumen Operativo */}
               <section className="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-8">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">📊 Resumen Operativo</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-2"><span>📊</span> Resumen Operativo</h3>
                 <div className="grid grid-cols-4 gap-4 text-center">
-                  <div className="bg-white p-3 rounded-lg border border-slate-200">
-                    <span className="block text-[10px] uppercase font-bold text-slate-500">Volumen Total</span>
-                    <span className="text-base font-black text-slate-900 font-mono">{totals.m3.toFixed(2)} m³</span>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Volumen Total</span>
+                    <span className="text-lg font-black text-slate-900 font-mono">{totals.m3.toFixed(2)} m³</span>
                   </div>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200">
-                    <span className="block text-[10px] uppercase font-bold text-slate-500">Peso Total</span>
-                    <span className="text-base font-black text-slate-900 font-mono">{totalWeightTons.toFixed(2)} Tons</span>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Peso Total</span>
+                    <span className="text-lg font-black text-slate-900 font-mono">{totalWeightTons.toFixed(2)} Tons</span>
                   </div>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200">
-                    <span className="block text-[10px] uppercase font-bold text-slate-500">Modalidad</span>
-                    <span className="text-base font-black text-sky-700 font-mono">{shippingMode}</span>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Modalidad</span>
+                    <span className="text-lg font-black text-blue-700 font-mono">{shippingMode}</span>
                   </div>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200">
-                    <span className="block text-[10px] uppercase font-bold text-slate-500">Buque</span>
-                    <span className="text-xs font-black text-slate-900 block mt-1">{vesselType}</span>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Buque</span>
+                    <span className="text-sm font-black text-slate-900 block mt-1">{vesselType}</span>
                   </div>
                 </div>
               </section>
 
-              {/* Detalle Ponderado de Partidas Reales del Proyecto */}
+              {/* CROQUIS TÉCNICO DE ESTIBA NATIVO Y CLARO */}
+              <section className="mb-8 print-exact">
+                <div className="border border-slate-300 rounded-xl p-5 bg-white shadow-sm">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                        <span>🚢</span>
+                        <span>Esquema Técnico de Estiba y Aseguramiento (Stowage & Lashing Plan)</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Distribución geométrica en bodega y cubierta principal para buque tipo <strong className="text-slate-800">{vesselType}</strong>
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-bold">
+                      MODALIDAD: {shippingMode.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 font-mono text-xs">
+                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                      <span className="text-blue-700 font-bold block mb-1">▶ ZONA 1: CUBIERTA PRINCIPAL / RODANTE (MAIN DECK / RO-RO)</span>
+                      <p className="text-slate-600 text-[11px] leading-relaxed font-sans">
+                        {shippingMode === 'Ro-Ro' 
+                          ? 'Asignado para vehículos autopropulsados y plataformas MAFI. Trincaje bidireccional mediante cadenas de alta resistencia fijadas a los puntos D-Rings estructurales del buque con un factor de seguridad MBL > 1.5.' 
+                          : 'Cubierta despejada para operaciones de izado directo mediante grúas de abordo (Geared Hook Operations).'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                      <span className="text-emerald-700 font-bold block mb-1">▶ ZONA 2: BODEGA Y BLOQUES ESTÁTICOS (HEAVY LIFT / BREAKBULK)</span>
+                      <p className="text-slate-600 text-[11px] leading-relaxed font-sans">
+                        Estiba de bultos pesados sobre cunas y durmientes de madera certificada (*Dunnage*) para optimizar el reparto de cargas por metro cuadrado (t/m²) y evitar esfuerzos cortantes en la estructura del fondo de bodega.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                      <span className="text-slate-800 font-bold block mb-1">▶ ZONA 3: PARAMETRIZACIÓN DE SEGURIDAD (MWS)</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px] text-slate-600 font-sans">
+                        <div className="bg-white p-2 rounded border border-slate-200 shadow-sm">
+                          <span className="block text-[10px] uppercase">Maderas (Dunnage):</span>
+                          <strong className="text-slate-900">{dunnageWood} lotes</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-slate-200 shadow-sm">
+                          <span className="block text-[10px] uppercase">Eslingas / Cadenas:</span>
+                          <strong className="text-slate-900">{highCapacitySlings} / {chainsBinders} un</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-slate-200 shadow-sm">
+                          <span className="block text-[10px] uppercase">Cuadrillas Estiba:</span>
+                          <strong className="text-slate-900">{stevedoreGangs} turnos</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-slate-200 shadow-sm">
+                          <span className="block text-[10px] uppercase">Plataformas MAFI:</span>
+                          <strong className="text-slate-900">{mafiPlatforms} unidades</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Detalle Ponderado de Partidas */}
               <section className="mb-8">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">📋 Desglose de Partidas y Servicios del Proyecto</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-2"><span>📋</span> Desglose de Partidas y Servicios del Proyecto</h3>
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300">
-                      <th className="py-2.5 px-3 text-left">Concepto / Partida</th>
-                      <th className="py-2.5 px-3 text-center">Piezas</th>
-                      <th className="py-2.5 px-3 text-right">Coste Estimado (€)</th>
-                      <th className="py-2.5 px-3 text-right">Precio Venta (€)</th>
+                      <th className="py-3 px-3 text-left">Concepto / Partida</th>
+                      <th className="py-3 px-3 text-center">Piezas</th>
+                      <th className="py-3 px-3 text-right">Coste Estimado (€)</th>
+                      <th className="py-3 px-3 text-right">Precio Venta (€)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -725,11 +804,11 @@ export function ForwarderWorkspace() {
                       const itemShareSale = finalTotalSale * ratio;
 
                       return (
-                        <tr key={idx}>
+                        <tr key={idx} className="hover:bg-slate-50 transition">
                           <td className="py-3 px-3 font-semibold text-slate-900">{item.type || 'Pieza de Proyecto'} ({l}x{w}x{h}m)</td>
                           <td className="py-3 px-3 text-center font-mono">{qty}</td>
-                          <td className="py-3 px-3 text-right font-mono">{formatCurrency(itemShareCost)}</td>
-                          <td className="py-3 px-3 text-right font-mono font-bold">{formatCurrency(itemShareSale)}</td>
+                          <td className="py-3 px-3 text-right font-mono text-slate-600">{formatCurrency(itemShareCost)}</td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(itemShareSale)}</td>
                         </tr>
                       );
                     })}
@@ -738,14 +817,14 @@ export function ForwarderWorkspace() {
               </section>
 
               {/* Bloque Total de Venta */}
-              <div className="bg-slate-900 text-white p-6 rounded-2xl mb-8 flex justify-between items-center">
+              <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl mb-8 flex justify-between items-center shadow-sm">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider block">Importe Total Cotización</span>
-                  <h2 className="text-xl font-black uppercase">PRECIO TOTAL DE VENTA</h2>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Importe Total Cotización</span>
+                  <h2 className="text-xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA</h2>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-black font-mono text-emerald-400">{formatCurrency(finalTotalSale)}</div>
-                  <div className="text-[11px] text-slate-300 mt-0.5">Margen comercial incluido ({formatCurrency(finalTotalMargin)})</div>
+                  <div className="text-3xl font-black font-mono text-blue-700">{formatCurrency(finalTotalSale)}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 font-semibold">Margen comercial incluido ({formatCurrency(finalTotalMargin)})</div>
                 </div>
               </div>
 
