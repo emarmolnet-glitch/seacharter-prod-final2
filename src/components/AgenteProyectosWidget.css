@@ -1,21 +1,24 @@
 .agente-proyectos-widget {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 360px;
+    bottom: 85px; /* Sube el widget para despegarlo del footer y del globo global de Cerebro.ia */
+    right: 24px;
+    width: 380px;
+    height: 480px; /* Altura fija controlada para evitar cortes */
     background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
-    z-index: 9999;
+    z-index: 99999;
     font-family: inherit;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
 }
+
 .agente-proyectos-widget.minimized {
-    height: 48px;
+    height: 48px !important;
     overflow: hidden;
 }
+
 .widget-header {
     background: #0f172a;
     color: #ffffff;
@@ -25,7 +28,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 }
+
 .widget-title-area {
     display: flex;
     align-items: center;
@@ -33,16 +38,19 @@
     font-size: 14px;
     font-weight: 600;
 }
+
 .status-dot {
     width: 8px;
     height: 8px;
     background-color: #22c55e;
     border-radius: 50%;
 }
+
 .widget-controls {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
+
 .control-btn {
     background: transparent;
     border: none;
@@ -51,19 +59,21 @@
     padding: 4px;
     font-size: 12px;
 }
+
 .control-btn:hover {
     color: #ffffff;
 }
+
 .widget-messages {
     padding: 16px;
-    max-height: 300px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 10px;
     background: #f8fafc;
-    flex-grow: 1;
+    flex-grow: 1; /* Ocupa todo el espacio central sin desbordarse */
 }
+
 .message-bubble {
     padding: 10px 14px;
     border-radius: 8px;
@@ -71,17 +81,20 @@
     line-height: 1.4;
     max-width: 85%;
 }
+
 .message-bubble.agent {
     background: #ffffff;
     color: #1e293b;
     border: 1px solid #e2e8f0;
     align-self: flex-start;
 }
+
 .message-bubble.user {
     background: #2563eb;
     color: #ffffff;
     align-self: flex-end;
 }
+
 .widget-input-area {
     display: flex;
     align-items: center;
@@ -90,15 +103,19 @@
     border-top: 1px solid #e2e8f0;
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;
-    gap: 6px;
+    gap: 8px;
+    flex-shrink: 0; /* Mantiene la barra de texto siempre fija abajo sin cortarse */
 }
+
 .widget-input-area input {
     flex-grow: 1;
     border: none;
     outline: none;
     font-size: 13px;
     padding: 6px;
+    color: #1e293b;
 }
+
 .input-action-btn, .send-btn {
     background: transparent;
     border: none;
@@ -107,9 +124,11 @@
     padding: 6px;
     font-size: 14px;
 }
+
 .send-btn {
     color: #2563eb;
 }
+
 .send-btn:hover {
     color: #1d4ed8;
 }
