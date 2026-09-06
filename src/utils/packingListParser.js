@@ -4,6 +4,47 @@ import mammoth from 'mammoth';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
+// Matriz de clasificación multisectorial ampliada para Project Cargo y Logística Industrial
+const CATEGORY_DICTIONARY = [
+  {
+    category: "Flota de Vehículos",
+    pattern: /camión|cabeza|tractor|góndola|remolque|semirremolque|furgoneta|coche|pick-up|vehículos|vehículo|auto|autobús|trailer|chasis rodante/i
+  },
+  {
+    category: "Maquinaria y Talleres",
+    pattern: /maquinaria|máquina|planta|soldadura|bomba|compresor|motor|trituradora|molino|crible|concasseur|broyeur|generador|grupo móvil|crane|grúa|trituración/i
+  },
+  {
+    category: "Estructuras Metálicas",
+    pattern: /convoyeur|transportador|pasarela|estructura|tolva|silo|cabalete|escalera|barandilla|perfil|poutre|chasis|goulotte|cangilón|placa de impacto|blindaje|tr[èe]mie/i
+  },
+  {
+    category: "Material Eléctrico y Control",
+    pattern: /transformador|cuadro eléctrico|panel|inversor|cable|automático|electricidad|climatizador|batería|detector|imán|motor eléctrico|armario eléctrico/i
+  },
+  {
+    category: "Tuberías y Accesorios",
+    pattern: /tubo|tubería|válvula|brida|codo|spool|fitting|manguera|flexible|acople|colector/i
+  },
+  {
+    category: "Utillaje y Herramientas",
+    pattern: /utillaje|herramienta|caja|alineadores|llaves|ensayos|maletín|consumible|bulón|tuerca|arandela|perno|tornillo|grillete|pasador|bague/i
+  },
+  {
+    category: "Equipos de Proceso",
+    pattern: /bastidor|ósmosis|osmosis|skid|reactor|intercambiador|columna|tanque|recipiente|separador|filtro|decantador/i
+  }
+];
+
+const resolveCategory = (description) => {
+  for (const entry of CATEGORY_DICTIONARY) {
+    if (entry.pattern.test(description)) {
+      return entry.category;
+    }
+  }
+  return "Equipos de Proceso";
+};
+
 export const parsePackingListFile = async (file) => {
   if (!file) return [];
   const fileName = file.name.toLowerCase();
@@ -19,12 +60,11 @@ export const parsePackingListFile = async (file) => {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         
-        // ORDENAMIENTO GEOMÉTRICO ESTRICTO (Agrupa por Y y ordena por X de izquierda a derecha)
         const linesMap = [];
         content.items.forEach(item => {
           const x = item.transform[4];
           const y = item.transform[5];
-          let line = linesMap.find(l => Math.abs(l.y - y) < 6); // Tolerancia vertical de línea
+          let line = linesMap.find(l => Math.abs(l.y - y) < 6);
           if (!line) {
             line = { y: y, items: [] };
             linesMap.push(line);
@@ -32,10 +72,8 @@ export const parsePackingListFile = async (file) => {
           line.items.push({ x: x, str: item.str });
         });
 
-        // Ordenar las líneas de arriba a abajo (Coordenada Y descendente en PDF)
         linesMap.sort((a, b) => b.y - a.y);
 
-        // Ordenar los elementos de cada línea de izquierda a derecha (Coordenada X ascendente)
         linesMap.forEach(line => {
           line.items.sort((a, b) => a.x - b.x);
           const lineStr = line.items.map(i => i.str).join(' ').trim();
@@ -75,14 +113,10 @@ export const parsePackingListFile = async (file) => {
   }
 };
 
-/**
- * Procesador inteligente optimizado para tablas de packing list y formato estructurado
- */
 const processStructuredTable = (lines) => {
   const parsedPieces = [];
 
   const headerFilterRegex = /^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide|proyecto|origen|peso total|categoría|description)/i;
-  // Regex específica para dimensiones tipo 12.00x2.30x2.50 o 12.00 x 2.30 x 2.50
   const dimRegex = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/i;
 
   lines.forEach((line, index) => {
@@ -90,39 +124,33 @@ const processStructuredTable = (lines) => {
     if (line.length < 5) return;
 
     const dimMatch = line.match(dimRegex);
-    if (!dimMatch) return; // Si no hay dimensiones métricas en la línea, no es una partida de carga válida
+    if (!dimMatch) return;
 
     let l = parseFloat(dimMatch[1].replace(',', '.'));
     let w = parseFloat(dimMatch[2].replace(',', '.'));
     let h = parseFloat(dimMatch[3].replace(',', '.'));
 
-    if (l > 50) { l /= 1000; w /= 1000; h /= 1000; } // Conversión milímetros a metros si procede
+    if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
 
-    // Extraer todos los números de la línea para aislar cantidad y pesos
     const numericTokens = line.match(/-?\d+(?:[.,]\d+)?/g) || [];
     const cleanNumbers = numericTokens.map(n => parseFloat(n.replace(',', '.')));
 
-    // Heurística de Cantidad: Buscar un número entero pequeño (< 100) que suela preceder a las dimensiones
     let qty = 1;
     const smallInts = cleanNumbers.filter(n => n > 0 && n < 100 && Number.isInteger(n) && n !== l && n !== w && n !== h);
     if (smallInts.length > 0) {
       qty = smallInts[0];
     }
 
-    // Heurística de Peso Unitario: Buscar el número más lógico para el peso unitario (generalmente entre 100 y 100000)
     let unitWt = 1000;
     const potentialWeights = cleanNumbers.filter(n => n >= 100 && n !== l && n !== w && n !== h && n !== qty);
     if (potentialWeights.length > 0) {
-      // Si hay varios pesos (ej. unitario y total), cogemos el menor de los grandes o el que tenga sentido unitario
       unitWt = Math.min(...potentialWeights);
       if (unitWt > 50000 && potentialWeights.length > 1) {
-        // Si el menor seguía siendo muy alto, buscamos el valor que actúe como unitario
         const reasonableWeights = potentialWeights.filter(n => n <= 30000);
         if (reasonableWeights.length > 0) unitWt = Math.min(...reasonableWeights);
       }
     }
 
-    // Limpieza de Descripción (todo el texto que no sean las dimensiones o números puros de peso/cantidad)
     let desc = line
       .replace(dimRegex, '')
       .replace(/-?\d+(?:[.,]\d+)?/g, ' ')
@@ -134,13 +162,8 @@ const processStructuredTable = (lines) => {
       desc = `Partida Industrial #${index + 1}`;
     }
 
-    // Categorización inteligente por palabras clave
-    let category = "Equipos de Proceso";
-    if (/maquinaria|máquina|planta|soldadura/i.test(desc)) category = "Maquinaria y Talleres";
-    else if (/utillaje|caja|alineadores|llaves|ensayos/i.test(desc)) category = "Utillaje y Herramientas";
-    else if (/camión|semirremolque|furgoneta|coche|pick-up|vehículos/i.test(desc)) category = "Flota de Vehículos";
+    let category = resolveCategory(desc);
 
-    // Modo de envío soportado según gálibo
     let shippingModeSop = "40' HC Contenedor";
     if (l > 11.9 || w > 2.3 || unitWt > 30000 || /ro-ro|proyecto|camión|semirremolque/i.test(desc)) {
       shippingModeSop = "Ro-Ro / Carga Proyecto";
