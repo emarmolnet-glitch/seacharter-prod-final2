@@ -445,11 +445,11 @@ export function ForwarderWorkspace() {
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600"><h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3><p className="mt-2 text-xs">Selecciona un proyecto de la lista lateral para comenzar.</p></div>
           ) : (
             <div className="flex-1 flex flex-col p-6 space-y-6">
-              <header className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <header className="flex flex-col sm:flex-row sm:items-center gap-4 pb-4 border-b border-slate-200">
                 <button
                   type="button"
                   onClick={() => setActiveProject(null)}
-                  className="bg-white text-slate-800 border px-3 py-1.5 rounded-lg hover:bg-slate-100 font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-1.5"
+                  className="bg-white text-slate-800 border border-slate-300 hover:bg-slate-100 hover:border-slate-400 px-4 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0"
                 >
                   ← Volver a Proyectos
                 </button>
@@ -478,7 +478,10 @@ export function ForwarderWorkspace() {
                   </div>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center bg-white"><button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button></div>
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center bg-white text-center">
+                  <p className="text-slate-600 font-bold mb-3">No hay servicios logísticos añadidos a este proyecto</p>
+                  <button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-blue-700 transition cursor-pointer">➕ Añadir Servicio</button>
+                </div>
               )}
             </div>
           )}
@@ -497,7 +500,17 @@ export function ForwarderWorkspace() {
                 <section className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">1. Lista de Empaque</h3>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCargoModalOpen(false);
+                          setActiveProject(null);
+                        }}
+                        className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors mr-2 cursor-pointer"
+                      >
+                        ← Volver a Proyectos
+                      </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
                       <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">➕ Añadir Pieza</button>
