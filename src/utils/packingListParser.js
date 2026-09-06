@@ -4,35 +4,39 @@ import mammoth from 'mammoth';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-// Matriz de clasificación multisectorial ampliada para Project Cargo y Logística Industrial
+// Diccionario multilingüe ampliado (Español, Inglés, Francés, Portugués) para Project Cargo y Logística Global
 const CATEGORY_DICTIONARY = [
   {
+    category: "Contenedores y Embalajes",
+    pattern: /contenneur|container|contenedor|contentor|dry|hc\b|flat rack|open top|reefer|iso\b|box|caja|cajón|caisse|caixote|palet|pallet|palete|skid|bulto|colis|package/i
+  },
+  {
     category: "Flota de Vehículos",
-    pattern: /camión|cabeza|tractor|góndola|remolque|semirremolque|furgoneta|coche|pick-up|vehículos|vehículo|auto|autobús|trailer|chasis rodante/i
+    pattern: /camión|cabeza|tractor|truck|lorry|góndola|remolque|semirremolque|trailer|furgoneta|van|coche|car|pick-up|vehículos|vehículo|auto|autobús|chasis rodante|véhicule|camion|remorque/i
   },
   {
-    category: "Maquinaria y Talleres",
-    pattern: /maquinaria|máquina|planta|soldadura|bomba|compresor|motor|trituradora|molino|crible|concasseur|broyeur|generador|grupo móvil|crane|grúa|trituración/i
+    category: "Maquinaria y Equipos",
+    pattern: /maquinaria|machinery|machine|máquina|planta|plant|soldadura|welding|bomba|pump|pompe|compresor|compressor|motor|engine|moteur|trituradora|crusher|concasseur|molino|mill|crible|screen|generador|generator|générateur|grupo móvil|crane|grúa|grue/i
   },
   {
-    category: "Estructuras Metálicas",
-    pattern: /convoyeur|transportador|pasarela|estructura|tolva|silo|cabalete|escalera|barandilla|perfil|poutre|chasis|goulotte|cangilón|placa de impacto|blindaje|tr[èe]mie/i
+    category: "Estructuras y Calderería",
+    pattern: /convoyeur|conveyor|transportador|pasarela|walkway|passerelle|estructura|structure|tolva|hopper|tr[èe]mie|silo|cabalete|escalera|ladder|échell?e|barandilla|perfil|poutre|chasis|goulotte|cangilón|placa de impacto|blindaje|armored/i
   },
   {
     category: "Material Eléctrico y Control",
-    pattern: /transformador|cuadro eléctrico|panel|inversor|cable|automático|electricidad|climatizador|batería|detector|imán|motor eléctrico|armario eléctrico/i
+    pattern: /transformador|transformer|transformateur|cuadro eléctrico|electrical panel|tableau|inversor|inverter|cable|automático|electricidad|climatizador|batería|battery|detector|imán|magnet|motor eléctrico/i
   },
   {
     category: "Tuberías y Accesorios",
-    pattern: /tubo|tubería|válvula|brida|codo|spool|fitting|manguera|flexible|acople|colector/i
+    pattern: /tubo|pipe|tuyau|tubería|piping|válvula|valve|soupape|brida|flange|bride|codo|elbow|spool|fitting|manguera|hose|flexible|acople|colector|manifold/i
   },
   {
     category: "Utillaje y Herramientas",
-    pattern: /utillaje|herramienta|caja|alineadores|llaves|ensayos|maletín|consumible|bulón|tuerca|arandela|perno|tornillo|grillete|pasador|bague/i
+    pattern: /utillaje|tools|outillage|herramienta|alineadores|llaves|wrench|spanner|ensayos|testing|maletín|consumible|bulón|bolt|boulon|tuerca|nut|écrou|arandela|washer|perno|tornillo|grillete|shackle|pasador/i
   },
   {
     category: "Equipos de Proceso",
-    pattern: /bastidor|ósmosis|osmosis|skid|reactor|intercambiador|columna|tanque|recipiente|separador|filtro|decantador/i
+    pattern: /bastidor|rack|ósmosis|osmosis|skid|reactor|intercambiador|heat exchanger|columna|column|tanque|tank|cuve|recipiente|vessel|separador|filtro|filter|decantador/i
   }
 ];
 
@@ -105,7 +109,7 @@ export const parsePackingListFile = async (file) => {
       extractedLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     }
 
-    return processStructuredTable(extractedLines);
+    return processUniversalTable(extractedLines);
 
   } catch (error) {
     console.error("[Project Cargo Parser] Error crítico procesando el archivo:", error);
@@ -113,36 +117,53 @@ export const parsePackingListFile = async (file) => {
   }
 };
 
-const processStructuredTable = (lines) => {
+/**
+ * Procesador heurístico universal optimizado para proyectos industriales, marítimos y logísticos multilingües
+ */
+const processUniversalTable = (lines) => {
   const parsedPieces = [];
 
-  const headerFilterRegex = /^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide|proyecto|origen|peso total|categoría|description)/i;
-  const dimRegex = /(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/i;
+  // Filtro de cabeceras en español, inglés, francés y portugués
+  const headerFilterRegex = /^(item|n[ºo]|descrip|designation|designaç|qty|cant|quant|colis|largo|ancho|alto|peso|poids|weight|dimension|packing list|brute|liquide|proyecto|origen|peso total|categoría|description|shippers|consignees|notify|port|vessel|captain|date|incoterms)/i;
+  
+  // Soporte para dimensiones métricas estándar y formatos con prefijos (dim, L/...)
+  const dimRegex = /(?:dim\s*|L\/?\s*)?(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)\s*[xX*×]\s*(\d+(?:[.,]\d+)?)/i;
 
   lines.forEach((line, index) => {
     if (headerFilterRegex.test(line)) return;
-    if (line.length < 5) return;
+    if (line.length < 4) return;
 
     const dimMatch = line.match(dimRegex);
-    if (!dimMatch) return;
+    const hasContainerKeyword = /contenneur|container|contenedor|contentor|dry\b|hc\b|flat rack|open top/i.test(line);
 
-    let l = parseFloat(dimMatch[1].replace(',', '.'));
-    let w = parseFloat(dimMatch[2].replace(',', '.'));
-    let h = parseFloat(dimMatch[3].replace(',', '.'));
+    // Si la línea no tiene dimensiones ni palabra clave de contenedor, se evalúa si aporta valor o se omite
+    if (!dimMatch && !hasContainerKeyword) return;
 
-    if (l > 50) { l /= 1000; w /= 1000; h /= 1000; }
+    let l = 2.4, w = 2.3, h = 2.6; // Valores por defecto orientativos para contenedores si faltan cotas
+    if (dimMatch) {
+      l = parseFloat(dimMatch[1].replace(',', '.'));
+      w = parseFloat(dimMatch[2].replace(',', '.'));
+      h = parseFloat(dimMatch[3].replace(',', '.'));
+      if (l > 50) { l /= 1000; w /= 1000; h /= 1000; } // Conversión milímetros a metros
+    } else if (/40'/i.test(line)) {
+      l = 12.19; w = 2.44; h = 2.59;
+    } else if (/20'/i.test(line)) {
+      l = 6.06; w = 2.44; h = 2.59;
+    }
 
     const numericTokens = line.match(/-?\d+(?:[.,]\d+)?/g) || [];
     const cleanNumbers = numericTokens.map(n => parseFloat(n.replace(',', '.')));
 
+    // Extracción inteligente de cantidad (busca enteros pequeños)
     let qty = 1;
     const smallInts = cleanNumbers.filter(n => n > 0 && n < 100 && Number.isInteger(n) && n !== l && n !== w && n !== h);
     if (smallInts.length > 0) {
       qty = smallInts[0];
     }
 
+    // Extracción inteligente de peso unitario
     let unitWt = 1000;
-    const potentialWeights = cleanNumbers.filter(n => n >= 100 && n !== l && n !== w && n !== h && n !== qty);
+    const potentialWeights = cleanNumbers.filter(n => n >= 50 && n !== l && n !== w && n !== h && n !== qty);
     if (potentialWeights.length > 0) {
       unitWt = Math.min(...potentialWeights);
       if (unitWt > 50000 && potentialWeights.length > 1) {
@@ -151,6 +172,7 @@ const processStructuredTable = (lines) => {
       }
     }
 
+    // Limpieza profunda de la descripción del artículo
     let desc = line
       .replace(dimRegex, '')
       .replace(/-?\d+(?:[.,]\d+)?/g, ' ')
@@ -159,17 +181,19 @@ const processStructuredTable = (lines) => {
       .trim();
 
     if (!desc || desc.length < 2) {
-      desc = `Partida Industrial #${index + 1}`;
+      desc = `Partida / Bulto Industrial #${index + 1}`;
     }
 
+    // Resolución de categoría mediante el diccionario ampliado
     let category = resolveCategory(desc);
 
+    // Asignación inteligente del modo de transporte y estiba
     let shippingModeSop = "40' HC Contenedor";
-    if (l > 11.9 || w > 2.3 || unitWt > 30000 || /ro-ro|proyecto|camión|semirremolque/i.test(desc)) {
+    if (l > 11.9 || w > 2.3 || unitWt > 30000 || /ro-ro|proyecto|camión|semirremolque|trailer/i.test(desc)) {
       shippingModeSop = "Ro-Ro / Carga Proyecto";
-    } else if (l > 6 || w > 2.2 || unitWt > 12000) {
+    } else if (l > 6 || w > 2.2 || unitWt > 12000 || /flat rack/i.test(desc)) {
       shippingModeSop = "40' Flat Rack / OT";
-    } else if (/20'|iso 20/i.test(line)) {
+    } else if (/20'|iso 20|st\b/i.test(line)) {
       shippingModeSop = "20' ST Contenedor";
     }
 
