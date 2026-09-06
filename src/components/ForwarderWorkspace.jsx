@@ -392,7 +392,16 @@ export function ForwarderWorkspace() {
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600"><h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3><p className="mt-2 text-xs">Selecciona un proyecto para comenzar.</p></div>
           ) : (
             <div className="flex-1 flex flex-col p-6 space-y-6">
-              <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
+              <header className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setActiveProject(null)}
+                  className="self-start px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg shadow-sm cursor-pointer transition flex items-center gap-1.5"
+                >
+                  ← Volver a Proyectos
+                </button>
+                <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
+              </header>
               {activeProject.line_items?.length > 0 ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center"><h3 className="text-base font-bold text-slate-900">Servicios</h3><button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button></div>
