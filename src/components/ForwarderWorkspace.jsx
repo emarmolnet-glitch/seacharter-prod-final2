@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { parsePackingListFile } from '../utils/packingListParser.js';
 
 function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   const numValue = Number(value) || 0;
