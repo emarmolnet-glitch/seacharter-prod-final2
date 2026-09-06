@@ -279,6 +279,12 @@ export function ForwarderWorkspace() {
   const handleOpenCreateService = () => {
     setEditingLineItemId(null); setCargoItems([]);
     setDunnageWood(0); setHighCapacitySlings(0); setChainsBinders(0); setShackles(0);
+    setStevedoreGangs(0); setLashingTeam(0); setHeavyLiftCrane(0); setMafiPlatforms(0);
+    setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
+    setStorageDays(0); setSurveyorCost(0); setInlandCost(0); setCustomsCost(0);
+    userEditedSurveyor.current = false; setEstimatedCost(''); setSalePrice('');
+    setIsCargoModalOpen(true);
+  };
 
   const handleEditService = (item) => {
     if (!item) return;
