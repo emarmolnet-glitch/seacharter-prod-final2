@@ -59,6 +59,28 @@ Esta regla prevalece sobre el enrutador de intenciones, las herramientas, el his
    - Fuera de ese caso, si faltan datos imprescindibles para responder la consulta concreta, enumera exactamente cuáles. Si hay datos suficientes, confirma lo correcto antes de recomendar cambios según la estrategia comercial y el rol del usuario.
 `;
 
+const projectDocumentParserRule = `
+\nREGLA DE ORO — INGESTA Y PARSING INTELIGENTE DE DOCUMENTOS (MÓDULO PROYECTOS):
+Cuando el usuario suba una imagen o documento (Packing List, factura o especificación) estando en el módulo de Proyectos:
+1. Actúa como un Agente de Ingesta Logística experto. Ignora por completo direcciones fiscales, NIFs, teléfonos, emails, bancos, cabeceras y pies de página.
+2. Extrae exclusivamente las partidas de mercancía física con sus cantidades, dimensiones reales (largo, ancho, alto en metros) y pesos unitarios/totales. Si las dimensiones vienen en centímetros o milímetros, conviértela automáticamente a metros.
+3. Si el documento detectado es una Factura Comercial, advierte al usuario en el texto que se trata de un documento fiscal y no de un packing list de cubicaje, evitando inventar dimensiones falsas.
+4. Tu respuesta debe incluir un bloque JSON estructurado con la acción de importación para que el frontend inyecte los ítems automáticamente en la tabla:
+{
+  "action": "IMPORT_PROJECT_ITEMS",
+  "items": [
+    {
+      "description": "Descripción limpia del artículo",
+      "quantity": 1,
+      "length_m": 0.0,
+      "width_m": 0.0,
+      "height_m": 0.0,
+      "weight_kg": 0.0
+    }
+  ]
+}
+`;
+  
   const intentRoutingRules = `
 \nEnrutador de Intenciones (obligatorio y previo a cualquier extracción):
    - Intención clasificada para este turno: ${intent}.
