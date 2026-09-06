@@ -295,7 +295,6 @@ export function ForwarderWorkspace() {
     setTimeout(() => setSaveSuccessMessage(null), 3500);
   };
 
-  // Dibujador ASCII del Croquis
   const getStowageAscii = () => {
     if (shippingMode === 'Ro-Ro') {
       return `+========================================================================================+
@@ -485,7 +484,7 @@ export function ForwarderWorkspace() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA REPORTE EJECUTIVO (Z-INDEX EXTREMO, BOTONERA FIJA INFERIOR, ASCII)   */}
+      {/* VISTA REPORTE EJECUTIVO LIMPÍA (SIN UNIVERSAL FORWARDING Y PT-28 PARA NAVBAR) */}
       {/* ========================================================================= */}
       {showExecutiveReport && (() => {
         const totalWeightTons = (totals.weight || 0) / 1000;
@@ -498,7 +497,7 @@ export function ForwarderWorkspace() {
         const totalMetricUnits = cargoItems.reduce((sum, item) => sum + ((Number(item.quantity) || 1) * (parseFloat(item.weight) || 1000)), 0) || 1;
 
         return (
-          <div className="fixed inset-0 bg-slate-200 z-[999999] overflow-y-auto p-4 sm:p-10 text-slate-900 print:bg-white print:p-0">
+          <div className="fixed inset-0 bg-slate-200 z-[999999] overflow-y-auto pt-28 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -520,19 +519,17 @@ export function ForwarderWorkspace() {
             </div>
 
             <div id="printable-a4-sheet" className="max-w-[1100px] mx-auto p-12 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
+              
+              {/* HEADER LIMPIO CENTRADO */}
               <header className="border-b-4 border-slate-900 pb-6 mb-8">
-                <div className="flex justify-between items-start gap-4 mb-4">
-                  <div>
-                    <h1 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">Universal Forwarding / B2B</h1>
-                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">División Carga de Proyecto</p>
-                  </div>
-                  <div className="text-right text-xs">
-                    <p><strong className="text-slate-900">Fecha:</strong> {new Date().toLocaleDateString('es-ES')}</p>
-                    <p><strong className="text-slate-900">Ref:</strong> {activeProject?.project_ref}</p>
-                    <p><strong className="text-slate-900">Cliente:</strong> {activeProject?.client_name}</p>
-                  </div>
+                <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-blue-900 text-center">
+                  OFERTA COMERCIAL - PROJECT CARGO
+                </h1>
+                <div className="flex justify-center items-center gap-4 sm:gap-8 mt-4 text-[11px] font-bold text-slate-600 uppercase tracking-widest">
+                  <span>Ref: {activeProject?.project_ref}</span>
+                  <span>Cliente: {activeProject?.client_name}</span>
+                  <span>Fecha: {new Date().toLocaleDateString('es-ES')}</span>
                 </div>
-                <h2 className="text-3xl font-black uppercase tracking-tight text-blue-900 text-center mt-6">OFERTA COMERCIAL - PROJECT CARGO</h2>
               </header>
 
               <section className="bg-slate-50 p-6 rounded-lg border border-slate-200 mb-8">
