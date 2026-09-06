@@ -1,12 +1,55 @@
-import React, { useState } from 'react';
+// src/components/AgenteProyectosWidget.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import './AgenteProyectosWidget.css';
 
 export default function AgenteProyectosWidget({ onUpdatePayload }) {
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { sender: 'agent', text: '¡Hola! Soy tu asistente de proyectos de Cerebro.ia. ¿En qué te puedo ayudar hoy con este despacho o cotización?' }
+    { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos especializado en este workspace. ¿Qué deseas gestionar o ajustar?' }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const fileInputRef = useRef(null);
+
+  const [position, setPosition] = useState({ 
+    x: typeof window !== 'undefined' ? window.innerWidth - 420 : 100, 
+    y: typeof window !== 'undefined' ? window.innerHeight - 560 : 100 
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const offsetRef = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e) => {
+    if (e.target.closest('.widget-controls') || e.target.closest('button')) return;
+    setIsDragging(true);
+    offsetRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      setPosition({
+        x: Math.max(10, Math.min(window.innerWidth - 380, e.clientX - offsetRef.current.x)),
+        y: Math.max(10, Math.min(window.innerHeight - 100, e.clientY - offsetRef.current.y))
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -16,69 +59,126 @@ export default function AgenteProyectosWidget({ onUpdatePayload }) {
     setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setInputValue('');
 
-    // Simulación de respuesta inteligente de Cerebro.ia
     setTimeout(() => {
       setMessages(prev => [
         ...prev,
-        { sender: 'agent', text: `Entendido. Procesando solicitud para: "${userMsg}". Aplicando cambios al workspace...` }
+        { sender: 'agent', text: `Procesando orden para proyectos: "${userMsg}". Aplicando cambios en el workspace...` }
       ]);
-      // Ejemplo de llamada opcional si se requiere actualizar el payload
       if (onUpdatePayload) {
-        onUpdatePayload({ note: userMsg });
+        onUpdatePayload({ instruction: userMsg });
       }
     }, 1000);
   };
 
+  const handleFileAttach = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setMessages(prev => [...prev, { sender: 'user', text: `📎 Archivo adjunto: ${file.name}` }]);
+      setTimeout(() => {
+        setMessages(prev => [...prev, { sender: 'agent', text: `Documento ${file.name} integrado con éxito al dossier del proyecto.` }]);
+      }, 1000);
+    }
+  };
+
+  const toggleMic = () => {
+    setIsListening(!isListening);
+    if (!isListening) {
+      setMessages(prev => [...prev, { sender: 'agent', text: '🎙️ Escuchando comando de voz para el proyecto...' }]);
+    }
+  };
+
+  const toggleAudio = () => {
+    setIsAudioEnabled(!isAudioEnabled);
+  };
+
   if (!isOpen) {
     return (
-      <button className="cerebro-floating-trigger" onClick={() => setIsOpen(true)} title="Abrir Agente Cerebro.ia">
-        <span className="cerebro-icon">🧠</span>
-        <span className="cerebro-trigger-text">Cerebro.ia Asistente</span>
+      <button 
+        className="project-agent-floating-btn" 
+        onClick={() => setIsOpen(true)}
+        title="Abrir Agente de Proyectos"
+      >
+        📂 Agente de Proyectos
       </button>
     );
   }
 
   return (
-    <div className="cerebro-widget-container">
-      {/* Header oficial Cerebro.ia */}
-      <div className="cerebro-widget-header">
-        <div className="cerebro-header-title">
-          <div className="cerebro-brain-icon">🧠</div>
+    <div 
+      className="project-agent-container" 
+      style={{ left: `${position.x}px`, top: `${position.y}px`, position: 'fixed' }}
+    >
+      <div 
+        className="project-agent-header"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="project-agent-title-group">
+          <span className="project-agent-badge">📂</span>
           <div>
-            <span className="cerebro-brand-name">Cerebro.ia</span>
-            <span className="cerebro-agent-subtitle">Agente de Proyectos</span>
+            <h4 className="project-agent-title">Agente de Proyectos</h4>
+            <span className="project-agent-status">● Activo (Arrastrable)</span>
           </div>
         </div>
-        <div className="cerebro-header-actions">
-          <button className="cerebro-action-btn" onClick={() => setIsOpen(false)} title="Minimizar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 12H6"/></svg>
+        <div className="widget-controls">
+          <button 
+            type="button" 
+            onClick={toggleAudio} 
+            title={isAudioEnabled ? "Altavoz activado" : "Altavoz silenciado"}
+            className={`control-icon-btn ${isAudioEnabled ? 'active' : ''}`}
+          >
+            {isAudioEnabled ? '🔊' : '🔇'}
           </button>
-          <button className="cerebro-action-btn" onClick={() => setIsOpen(false)} title="Cerrar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          <button 
+            type="button" 
+            onClick={() => setIsOpen(false)} 
+            title="Minimizar"
+            className="control-icon-btn"
+          >
+            ✕
           </button>
         </div>
       </div>
 
-      {/* Cuerpo de Mensajes */}
-      <div className="cerebro-widget-messages">
+      <div className="project-agent-messages">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`cerebro-bubble ${msg.sender}`}>
-            {msg.sender === 'agent' && <div className="bubble-avatar">🧠</div>}
-            <div className="bubble-content">{msg.text}</div>
+          <div key={idx} className={`pa-bubble ${msg.sender}`}>
+            {msg.sender === 'agent' && <span className="pa-avatar">📂</span>}
+            <div className="pa-bubble-text">{msg.text}</div>
           </div>
         ))}
       </div>
 
-      {/* Input de chat inferior */}
-      <form onSubmit={handleSend} className="cerebro-widget-input-box">
+      <form onSubmit={handleSend} className="project-agent-input-bar">
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          style={{ display: 'none' }} 
+          onChange={handleFileAttach} 
+        />
+        <button 
+          type="button" 
+          className="pa-tool-btn" 
+          onClick={() => fileInputRef.current?.click()}
+          title="Adjuntar archivo o plano"
+        >
+          📎
+        </button>
+        <button 
+          type="button" 
+          className={`pa-tool-btn ${isListening ? 'listening' : ''}`} 
+          onClick={toggleMic}
+          title="Dictado por voz"
+        >
+          🎙️
+        </button>
         <input 
           type="text" 
-          placeholder="Escribe una instrucción para Cerebro.ia..." 
+          placeholder="Escribe una instrucción para el proyecto..." 
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
         />
-        <button type="submit" className="cerebro-send-btn" title="Enviar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        <button type="submit" className="pa-send-btn" title="Enviar orden">
+          ➤
         </button>
       </form>
     </div>
