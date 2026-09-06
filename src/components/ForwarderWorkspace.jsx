@@ -28,7 +28,6 @@ export function ForwarderWorkspace() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
   const [activeProject, setActiveProject] = useState(null);
-  const [isAgentVisible, setIsAgentVisible] = useState(true);
 
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
   const [editingLineItemId, setEditingLineItemId] = useState(null);
@@ -39,6 +38,7 @@ export function ForwarderWorkspace() {
   const fileInputRef = useRef(null);
 
   const [cargoItems, setCargoItems] = useState([]);
+  const [projectDocuments, setprojectDocuments] = useState([]);
 
   const [dunnageWood, setDunnageWood] = useState(0);
   const [highCapacitySlings, setHighCapacitySlings] = useState(0);
@@ -79,7 +79,10 @@ export function ForwarderWorkspace() {
       setProjects(list);
       if (activeProject) {
         const updated = list.find((p) => p.id === activeProject.id || p.project_ref === activeProject.project_ref);
-        if (updated) setActiveProject(updated);
+        if (updated) {
+          setActiveProject(updated);
+          setprojectDocuments(updated.documents || updated.files || []);
+        }
       }
     } catch (err) {
       console.error(err); setError(err?.message || 'Error de conexión');
@@ -90,6 +93,36 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { fetchProjects(); }, []);
 
+  // Sincronizar documentos y estado cuando cambia el proyecto activo
+  useEffect(() => {
+    if (activeProject) {
+      setprojectDocuments(activeProject.documents || activeProject.files || []);
+    } else {
+      setprojectDocuments([]);
+    }
+  }, [activeProject]);
+
+  // Función para persistir cambios del proyecto en la Base de Datos (Neon / PostgreSQL vía Netlify Function)
+  const persistProjectToDatabase = async (projectToSave) => {
+    try {
+      const res = await fetch('/.netlify/functions/forwarder-projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(projectToSave)
+      });
+      if (!res.ok) {
+        // Fallback a POST si el backend utiliza POST para upsert/update
+        await fetch('/.netlify/functions/forwarder-projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(projectToSave)
+        });
+      }
+    } catch (err) {
+      console.error('Error al guardar en base de datos:', err);
+    }
+  };
+
   const handleCreateProject = async () => {
     const input = window.prompt('Introduce el nombre del cliente para el nuevo proyecto:');
     if (!input || !input.trim()) return;
@@ -97,13 +130,14 @@ export function ForwarderWorkspace() {
     try {
       const res = await fetch('/.netlify/functions/forwarder-projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ client_name: input.trim() }),
+        body: JSON.stringify({ client_name: input.trim(), documents: [] }),
       });
       if (!res.ok) throw new Error();
       const payload = await res.json();
       const createdProject = payload.project || payload;
       setProjects((prev) => [createdProject, ...prev]);
       setActiveProject(createdProject);
+      setprojectDocuments([]);
     } catch (err) {
       window.alert('No se pudo crear el proyecto.');
     } finally {
@@ -113,9 +147,43 @@ export function ForwarderWorkspace() {
 
   const handleTriggerImport = () => { if (fileInputRef.current && !isAnalyzingFile) fileInputRef.current.click(); };
 
+  // Guardar documento persistentemente en el proyecto activo
+  const handleSaveDocumentToProject = async (docMeta) => {
+    if (!activeProject) {
+      window.alert('⚠️ Selecciona o crea un proyecto activo antes de adjuntar y guardar documentos.');
+      return;
+    }
+
+    const newDoc = {
+      id: docMeta.id || `doc-${Date.now()}-${Math.random()}`,
+      name: docMeta.name || 'Documento_Proyecto.pdf',
+      size: docMeta.size ? `${Math.round(docMeta.size / 1024)} KB` : '120 KB',
+      date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      itemsCount: docMeta.itemsCount || 1,
+      payload: docMeta
+    };
+
+    const updatedDocs = [...projectDocuments, newDoc];
+    setprojectDocuments(updatedDocs);
+
+    const updatedProject = {
+      ...activeProject,
+      documents: updatedDocs
+    };
+    setActiveProject(updatedProject);
+    setProjects(prev => prev.map(p => p.id === activeProject.id ? updatedProject : p));
+
+    await persistProjectToDatabase(updatedProject);
+  };
+
   const handleFileUpload = async (event) => {
     const files = Array.from(event?.target?.files || []);
     if (files.length === 0) return;
+
+    if (!activeProject) {
+      window.alert('⚠️ Por favor, selecciona un proyecto en la barra lateral antes de subir archivos.');
+      return;
+    }
 
     setIsAnalyzingFile(true);
     try {
@@ -136,9 +204,14 @@ export function ForwarderWorkspace() {
             ...it
           }));
           allNewItems.push(...formattedItems);
-        } else {
-          console.error('Error en el parser backend:', data.error);
         }
+
+        // Guardar documento persistentemente en la base de datos asociado al proyecto
+        await handleSaveDocumentToProject({
+          name: file.name,
+          size: file.size,
+          itemsCount: data.items ? data.items.length : 1
+        });
       }
 
       if (allNewItems.length > 0) {
@@ -162,6 +235,21 @@ export function ForwarderWorkspace() {
 
   const handleRemoveCargoItem = (id) => {
     setCargoItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleDeletePersistentDocument = async (docId) => {
+    if (!activeProject || !window.confirm('¿Deseas eliminar este documento del proyecto?')) return;
+    const updatedDocs = projectDocuments.filter(d => d.id !== docId);
+    setprojectDocuments(updatedDocs);
+
+    const updatedProject = {
+      ...activeProject,
+      documents: updatedDocs
+    };
+    setActiveProject(updatedProject);
+    setProjects(prev => prev.map(p => p.id === activeProject.id ? updatedProject : p));
+
+    await persistProjectToDatabase(updatedProject);
   };
 
   const totals = cargoItems.reduce((acc, item) => {
@@ -243,209 +331,79 @@ export function ForwarderWorkspace() {
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
 
- // Función para inyectar y procesar las órdenes del Agente de Proyectos de forma inteligente
-  const handleApplyProjectPayload = (payload) => {
+  // Función para procesar y sincronizar las órdenes del Agente de Proyectos
+  const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
 
-    // Validación quirúrgica: si no hay un proyecto seleccionado, avisar al usuario
     if (!activeProject) {
       window.alert('⚠️ Por favor, selecciona o crea un proyecto en la barra lateral antes de pedirle cambios al agente.');
       return;
     }
 
-    let structuralModified = false;
-
-    // 1. Días de almacenaje
-    if (payload.storageDays !== undefined && payload.storageDays !== null) {
-      setStorageDays(Number(payload.storageDays));
-    }
-
-    // 2. Coste de Surveyor (marcando que el usuario editó el surveyor)
-    if (payload.surveyorCost !== undefined && payload.surveyorCost !== null) {
-      userEditedSurveyor.current = true;
-      setSurveyorCost(Number(payload.surveyorCost));
-    }
-
-    // 3. Transporte interior Inland
-    if (payload.inlandCost !== undefined && payload.inlandCost !== null) {
-      setInlandCost(Number(payload.inlandCost));
-    } else if (payload.inlandTrucksCount !== undefined && payload.inlandTrucksCount !== null) {
-      setInlandCost(Number(payload.inlandTrucksCount));
-    }
-
-    // 4. Costes aduaneros
-    if (payload.customsCost !== undefined && payload.customsCost !== null) {
-      setCustomsCost(Number(payload.customsCost));
-    }
-
-    // 5. Elementos estructurales de trincaje y operativa portuaria
-    if (payload.dunnageWood !== undefined && payload.dunnageWood !== null) {
-      setDunnageWood(Number(payload.dunnageWood));
-      structuralModified = true;
-    } else if (payload.dunnageUnits !== undefined && payload.dunnageUnits !== null) {
-      setDunnageWood(Number(payload.dunnageUnits));
-      structuralModified = true;
-    }
-
-    if (payload.highCapacitySlings !== undefined && payload.highCapacitySlings !== null) {
-      setHighCapacitySlings(Number(payload.highCapacitySlings));
-      structuralModified = true;
-    } else if (payload.slingsUnits !== undefined && payload.slingsUnits !== null) {
-      setHighCapacitySlings(Number(payload.slingsUnits));
-      structuralModified = true;
-    }
-
-    if (payload.chainsBinders !== undefined && payload.chainsBinders !== null) {
-      setChainsBinders(Number(payload.chainsBinders));
-      structuralModified = true;
-    } else if (payload.lashingChains !== undefined && payload.lashingChains !== null) {
-      setChainsBinders(Number(payload.lashingChains));
-      structuralModified = true;
-    }
-
-    if (payload.shackles !== undefined && payload.shackles !== null) {
-      setShackles(Number(payload.shackles));
-      structuralModified = true;
-    }
-
-    if (payload.stevedoreGangs !== undefined && payload.stevedoreGangs !== null) {
-      setStevedoreGangs(Number(payload.stevedoreGangs));
-      structuralModified = true;
-    } else if (payload.stevedoringShifts !== undefined && payload.stevedoringShifts !== null) {
-      setStevedoreGangs(Number(payload.stevedoringShifts));
-      structuralModified = true;
-    }
-
-    if (payload.lashingTeam !== undefined && payload.lashingTeam !== null) {
-      setLashingTeam(Number(payload.lashingTeam));
-      structuralModified = true;
-    } else if (payload.lashingTeams !== undefined && payload.lashingTeams !== null) {
-      setLashingTeam(Number(payload.lashingTeams));
-      structuralModified = true;
-    }
-
-    if (payload.heavyLiftCrane !== undefined && payload.heavyLiftCrane !== null) {
-      setHeavyLiftCrane(Number(payload.heavyLiftCrane));
-      structuralModified = true;
-    } else if (payload.heavyLiftCranes !== undefined && payload.heavyLiftCranes !== null) {
-      setHeavyLiftCrane(Number(payload.heavyLiftCranes));
-      structuralModified = true;
-    }
-
-    if (payload.mafiPlatforms !== undefined && payload.mafiPlatforms !== null) {
-      setMafiPlatforms(Number(payload.mafiPlatforms));
-      structuralModified = true;
-    }
-
-    if (payload.shippingMode) {
-      setShippingMode(payload.shippingMode);
-      structuralModified = true;
-    }
-
-    if (payload.vesselType) {
-      setVesselType(payload.vesselType);
-      structuralModified = true;
-    }
-
-    // 6. Añadir piezas o reemplazar lista de carga
-    if (payload.newPiece) {
-      const piece = {
-        id: payload.newPiece.id || `item-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        category: payload.newPiece.category || 'Equipos de Proceso',
-        quantity: Number(payload.newPiece.quantity) || 1,
-        type: payload.newPiece.type || 'Transformador / Skid Industrial (IA)',
-        length: String(payload.newPiece.length ?? '6.2'),
-        width: String(payload.newPiece.width ?? '2.8'),
-        height: String(payload.newPiece.height ?? '3.4'),
-        weight: String(payload.newPiece.weight ?? '34000'),
-        shipping_mode_supported: payload.newPiece.shipping_mode_supported || "40' Flat Rack"
-      };
-      setCargoItems((prev) => [...prev, piece]);
-      structuralModified = true;
-    } else if (payload.addPiece) {
-      const defaultPiece = {
-        id: `item-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        category: 'Equipos de Proceso',
-        quantity: 1,
-        type: 'Transformador / Skid Industrial (IA)',
-        length: '6.2',
-        width: '2.8',
-        height: '3.4',
-        weight: '34000',
-        shipping_mode_supported: "40' Flat Rack"
-      };
-      setCargoItems((prev) => [...prev, defaultPiece]);
-      structuralModified = true;
-    }
-
-    if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
-      setCargoItems(payload.cargo_items.map((ci, idx) => ({
-        id: ci.id || `item-${Date.now()}-${idx}`,
-        category: ci.category || 'Equipos de Proceso',
-        quantity: Number(ci.quantity) || 1,
-        type: ci.type || '',
-        length: String(ci.length_m ?? ci.length ?? ''),
-        width: String(ci.width_m ?? ci.width ?? ''),
-        height: String(ci.height_m ?? ci.height ?? ''),
-        weight: String(ci.unit_weight_kg ?? ci.weight ?? ''),
-        shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
-      })));
-      structuralModified = true;
-    } else if (Array.isArray(payload.cargoItems) && payload.cargoItems.length > 0) {
-      setCargoItems(payload.cargoItems);
-      structuralModified = true;
-    }
-
-    // 7. Compatibilidad retroactiva si se envía texto directo sin procesar en payload.instruction
-    if (payload.instruction && typeof payload.instruction === 'string') {
+    if (payload.instruction) {
       const text = payload.instruction.toLowerCase();
       const matchNumber = (str) => {
-        const m = str.match(/\d+/);
-        return m ? parseInt(m[0], 10) : null;
+        const m = str.match(/(\d+([.,]\d+)?)/);
+        return m ? parseFloat(m[0].replace(',', '.')) : null;
       };
 
-      if (payload.storageDays === undefined && (text.includes('almacenaje') || text.includes('días') || text.includes('dias'))) {
+      if (text.includes('almacen') || text.includes('días') || text.includes('dias')) {
         const val = matchNumber(text);
         if (val !== null) setStorageDays(val);
       }
-      if (payload.surveyorCost === undefined && (text.includes('surveyor') || text.includes('perito'))) {
+      if (text.includes('surveyor') || text.includes('perito')) {
         const val = matchNumber(text);
         if (val !== null) {
           userEditedSurveyor.current = true;
           setSurveyorCost(val);
         }
       }
-      if (payload.inlandCost === undefined && (text.includes('inland') || text.includes('transporte'))) {
+      if (text.includes('inland') || text.includes('transporte')) {
         const val = matchNumber(text);
         if (val !== null) setInlandCost(val);
       }
-      if (payload.customsCost === undefined && text.includes('aduanas')) {
+      if (text.includes('aduana')) {
         const val = matchNumber(text);
         if (val !== null) setCustomsCost(val);
       }
-      if (!structuralModified && (text.includes('pieza') || text.includes('equipo') || text.includes('integralo') || text.includes('analiza') || text.includes('añad') || text.includes('agreg') || text.includes('met'))) {
-        setCargoItems((prev) => [
-          ...prev,
-          {
-            id: `item-${Date.now()}`,
-            category: 'Equipos de Proceso',
-            quantity: 1,
-            type: 'Transformador / Skid Industrial (IA)',
-            length: '6.2',
-            width: '2.8',
-            height: '3.4',
-            weight: '34000',
-            shipping_mode_supported: "40' Flat Rack"
-          }
-        ]);
-        structuralModified = true;
+    }
+
+    if (payload.category !== undefined) {
+      if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
+        setCargoItems(payload.cargo_items.map((ci, idx) => ({
+          id: ci.id || `item-${Date.now()}-${idx}`,
+          category: ci.category || 'Equipos de Proceso',
+          quantity: ci.quantity || 1,
+          type: ci.type || '',
+          length: ci.length_m ?? ci.length ?? '',
+          width: ci.width_m ?? ci.width ?? '',
+          height: ci.height_m ?? ci.height ?? '',
+          weight: ci.unit_weight_kg ?? ci.weight ?? '',
+          shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
+        })));
+        setIsCargoModalOpen(true);
       }
     }
 
-    // 8. Forzar la apertura del modal de carga cuando se modifiquen elementos estructurales o se añadan piezas
-    if (structuralModified || payload.forceOpenModal) {
-      setIsCargoModalOpen(true);
+    // Si el agente adjunta un documento directamente, guardarlo de forma persistente en BD
+    if (payload.documentMeta) {
+      await handleSaveDocumentToProject(payload.documentMeta);
     }
+
+    if (payload.dunnageUnits !== undefined) setDunnageWood(payload.dunnageUnits);
+    if (payload.slingsUnits !== undefined) setHighCapacitySlings(payload.slingsUnits);
+    if (payload.lashingChains !== undefined) setChainsBinders(payload.lashingChains);
+    if (payload.stevedoringShifts !== undefined) setStevedoreGangs(payload.stevedoringShifts);
+    if (payload.lashingTeams !== undefined) setLashingTeam(payload.lashingTeams);
+    if (payload.heavyLiftCranes !== undefined) setHeavyLiftCrane(payload.heavyLiftCranes);
+    if (payload.mafiPlatforms !== undefined) setMafiPlatforms(payload.mafiPlatforms);
+    if (payload.storageDays !== undefined) setStorageDays(payload.storageDays);
+    if (payload.surveyorCost !== undefined) {
+      userEditedSurveyor.current = true;
+      setSurveyorCost(payload.surveyorCost);
+    }
+    if (payload.inlandTrucksCount !== undefined) setInlandCost(payload.inlandTrucksCount);
+    if (payload.customsCost !== undefined) setCustomsCost(payload.customsCost);
   };
 
   const handleOpenCreateService = () => {
@@ -491,9 +449,10 @@ export function ForwarderWorkspace() {
     const updatedProject = { ...activeProject, line_items: updatedLineItems, services: updatedLineItems };
     setActiveProject(updatedProject);
     setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
+    persistProjectToDatabase(updatedProject);
   };
 
-  const handleSaveProjectCargo = () => {
+  const handleSaveProjectCargo = async () => {
     const payload = {
       project_ref: activeProject?.project_ref,
       cargo_items: cargoItems.map((item) => ({
@@ -515,6 +474,7 @@ export function ForwarderWorkspace() {
       const updatedProject = { ...activeProject, line_items: updatedLineItems, services: updatedLineItems };
       setActiveProject(updatedProject);
       setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
+      await persistProjectToDatabase(updatedProject);
     }
     setIsCargoModalOpen(false);
     setSaveSuccessMessage('¡Flete y estiba guardados correctamente!');
@@ -606,17 +566,56 @@ export function ForwarderWorkspace() {
                     {activeProject.status || 'Borrador'}
                   </span>
                 </div>
-                <h1 className="text-3xl font-bold text-slate-900 flex-1">{activeProject.client_name}</h1>
-                <button
-                  type="button"
-                  onClick={() => setIsAgentVisible((prev) => !prev)}
-                  className="bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 hover:border-slate-400 px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0 ml-auto"
-                  title={isAgentVisible ? "Ocultar Agente de Proyectos" : "Mostrar Agente de Proyectos"}
-                >
-                  <span>📂</span>
-                  <span>{isAgentVisible ? 'Ocultar Agente' : 'Agente Proyectos'}</span>
-                </button>
+                <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
               </header>
+
+              {/* SECCIÓN DE DOCUMENTOS PERSISTIDOS Y CONSULTA */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">📁 Documentos y Packing Lists Guardados (Base de Datos)</h3>
+                  <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+                    {projectDocuments.length} archivo(s) persistido(s)
+                  </span>
+                </div>
+
+                {projectDocuments.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-3 text-center border border-dashed border-slate-200 rounded-lg">
+                    No hay documentos adjuntos en este proyecto. Sube un archivo mediante el Agente de Proyectos o el botón de importación para guardarlo permanentemente en la base de datos.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {projectDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-blue-300 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">📄</span>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 truncate max-w-[200px]">{doc.name}</h4>
+                            <span className="text-[10px] text-slate-500 font-mono">Guardado: {doc.date} | Ítems: {doc.itemsCount || 1}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            type="button"
+                            onClick={() => window.alert(`Consulta de Archivo Guardado:\nNombre: ${doc.name}\nFecha: ${doc.date}\nÍtems asociados: ${doc.itemsCount}`)}
+                            className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded cursor-pointer shadow-sm"
+                          >
+                            🔍 Consultar
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeletePersistentDocument(doc.id)}
+                            className="px-2 py-1 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 text-[11px] font-bold rounded cursor-pointer"
+                            title="Eliminar documento"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {activeProject.line_items?.length > 0 ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center"><h3 className="text-base font-bold text-slate-900">Servicios</h3><button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button></div>
@@ -895,11 +894,7 @@ export function ForwarderWorkspace() {
       })()}
 
       {/* Agente de Proyectos exclusivo y quirúrgico */}
-      <AgenteProyectosWidget 
-        onUpdatePayload={handleApplyProjectPayload} 
-        isOpen={isAgentVisible}
-        onToggleOpen={setIsAgentVisible}
-      />
+      <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
 
     </>
   );
