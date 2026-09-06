@@ -191,15 +191,24 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor"
         }));
 
+        const documentMeta = {
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/pdf',
+          itemsCount: formattedItems.length,
+          uploadedAt: new Date().toISOString()
+        };
+
         const count = formattedItems.length;
-        const text = `📁 Documento "${file.name}" analizado con éxito. Se han extraído e integrado ${count} ítems al expediente del proyecto.[cite: 1]`;
+        const text = `📁 Documento "${file.name}" analizado con éxito. Se han extraído e integrado ${count} ítems al expediente del proyecto.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
         speakText(text);
 
         if (onUpdatePayload) {
           onUpdatePayload({
             category: 'Equipos de Proceso',
-            cargo_items: formattedItems
+            cargo_items: formattedItems,
+            documentMeta: documentMeta
           });
         }
       } else {
@@ -214,13 +223,24 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           weight: '30000',
           shipping_mode_supported: "40' Open Top"
         };
+
+        const documentMeta = {
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/pdf',
+          itemsCount: 1,
+          uploadedAt: new Date().toISOString()
+        };
+
         const text = `📁 Documento "${file.name}" procesado, pero no se detectaron filas tabulares estructuradas. Se añadió como ítem base.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
         speakText(text);
+
         if (onUpdatePayload) {
           onUpdatePayload({
             category: 'Equipos de Proceso',
-            cargo_items: [fallbackItem]
+            cargo_items: [fallbackItem],
+            documentMeta: documentMeta
           });
         }
       }
