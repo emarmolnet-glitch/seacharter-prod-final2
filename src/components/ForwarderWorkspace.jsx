@@ -406,35 +406,36 @@ export function ForwarderWorkspace() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
-                    <table className="w-full text-left text-[11px] text-slate-700">
+                  {/* TABLA DE EMPAQUE FULL WIDTH (Anchos porcentuales para estirar la tabla) */}
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <table className="w-full table-fixed text-left text-[11px] text-slate-700">
                       <thead className="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
                         <tr>
-                          <th className="px-2 py-3 w-40">Categoría</th>
-                          <th className="px-2 py-3">Descripción</th>
-                          <th className="px-2 py-3 w-16 text-center">Cant.</th>
-                          <th className="px-2 py-3 w-32 text-center">Dimensiones (m)</th>
-                          <th className="px-2 py-3 w-28 text-right">Peso U. (kg)</th>
-                          <th className="px-2 py-3 w-44">Modo Envío</th>
-                          <th className="px-2 py-3 w-10 text-center">🗑️</th>
+                          <th className="px-2 py-3 w-[15%]">Categoría</th>
+                          <th className="px-2 py-3 w-[35%]">Descripción</th>
+                          <th className="px-2 py-3 w-[6%] text-center">Cant.</th>
+                          <th className="px-2 py-3 w-[17%] text-center">Dimensiones (m)</th>
+                          <th className="px-2 py-3 w-[9%] text-right">Peso U. (kg)</th>
+                          <th className="px-2 py-3 w-[14%]">Modo Envío</th>
+                          <th className="px-2 py-3 w-[4%] text-center">🗑️</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {cargoItems.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50/80">
-                            <td className="p-1.5"><input type="text" value={item.category || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'category', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-800" placeholder="Ej: Equipos..." /></td>
-                            <td className="p-1.5"><input type="text" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold" placeholder="Descripción de pieza..." /></td>
-                            <td className="p-1.5"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-1 py-1.5 text-center text-slate-900" /></td>
-                            <td className="p-1.5">
-                              <div className="flex items-center gap-1">
-                                <input type="number" placeholder="L" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
-                                <input type="number" placeholder="W" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
-                                <input type="number" placeholder="H" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />
+                            <td className="p-1"><input type="text" value={item.category || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'category', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-800" placeholder="Ej: Equipos..." /></td>
+                            <td className="p-1"><input type="text" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold" placeholder="Descripción de pieza..." /></td>
+                            <td className="p-1"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-1 py-1.5 text-center text-slate-900" /></td>
+                            <td className="p-1">
+                              <div className="flex items-center gap-1 w-full">
+                                <input type="number" placeholder="L" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
+                                <input type="number" placeholder="W" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
+                                <input type="number" placeholder="H" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />
                               </div>
                             </td>
-                            <td className="p-1.5"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-right font-mono" /></td>
-                            <td className="p-1.5"><input type="text" value={item.shipping_mode_supported || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'shipping_mode_supported', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-600 text-[10px]" placeholder="Modo..." /></td>
-                            <td className="p-1.5 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full cursor-pointer">✕</button></td>
+                            <td className="p-1"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-right font-mono" /></td>
+                            <td className="p-1"><input type="text" value={item.shipping_mode_supported || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'shipping_mode_supported', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-600 text-[10px]" placeholder="Modo..." /></td>
+                            <td className="p-1 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full cursor-pointer">✕</button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -448,16 +449,27 @@ export function ForwarderWorkspace() {
                     <div className="text-2xl">⚙️</div>
                     <div className="flex flex-col"><span className="text-blue-800 font-black text-xs uppercase">Motor de Decisión Operativa IA</span><span className="text-slate-700 mt-1 text-[11px]">Modalidad detectada: <strong className="bg-white text-blue-900 border border-blue-200 px-2 py-0.5 rounded mx-1">{shippingMode}</strong> Buque: <strong>{vesselType}</strong></span></div>
                   </div>
+                  {/* SECCIÓN DE BOTONES DE TRINCAJE (AHORA EN UNA FILA) */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <NumericCounter label="Maderas" subtitle="Dunnage" value={dunnageWood} onChange={setDunnageWood} />
                     <NumericCounter label="Eslingas" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
                     <NumericCounter label="Cadenas" subtitle="Trincaje Pesado" value={chainsBinders} onChange={setChainsBinders} />
-                    <NumericCounter label="Turnos Estiba" subtitle="Portuaria" value={stevedoreGangs} onChange={setStevedoreGangs} />
+                  </div>
+                </section>
+
+                {/* SECCIÓN 3 DE MANO DE OBRA PORTUARIA RECUPERADA */}
+                <section className="pt-6 space-y-4">
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Mano de Obra Portuaria</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <NumericCounter label="Turnos Estiba" subtitle="Cuadrillas completas" value={stevedoreGangs} onChange={setStevedoreGangs} />
+                    <NumericCounter label="Eq. Trincadores" subtitle="Especialistas" value={lashingTeam} onChange={setLashingTeam} />
+                    <NumericCounter label="Grúas Heavy Lift" subtitle="Móvil Portuaria" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
+                    <NumericCounter label="Plataformas MAFI" subtitle="Roll Trailers" value={mafiPlatforms} onChange={setMafiPlatforms} />
                   </div>
                 </section>
 
                 <section className="pt-6 space-y-4">
-                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Logística Periférica</h3>
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">4. Logística Periférica</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Días Almacenaje</label><input type="number" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Surveyor (€)</label><input type="number" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current=true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
@@ -507,7 +519,6 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            {/* BOTONERA FIJA EN LA ESQUINA INFERIOR DERECHA (INMUNE AL SCROLL) */}
             <div className="fixed bottom-8 right-8 flex flex-col sm:flex-row gap-4 z-[9999999] print-hidden">
               <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
                 🖨️ IMPRIMIR / PDF
@@ -519,7 +530,6 @@ export function ForwarderWorkspace() {
 
             <div id="printable-a4-sheet" className="max-w-[1100px] mx-auto p-12 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
               
-              {/* HEADER LIMPIO Y CORPORATIVO (Sin títulos gigantes) */}
               <header className="border-b-2 border-slate-200 pb-4 mb-6 flex justify-between items-end">
                 <div>
                   <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
@@ -545,7 +555,6 @@ export function ForwarderWorkspace() {
                 </div>
               </section>
 
-              {/* CROQUIS DE ESTIBA EN FORMATO ASCII */}
               <section className="mb-8 print-exact">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">🚢 Croquis Esquemático de Estiba (Stowage Plan)</h3>
                 <div className="bg-slate-50 border border-slate-300 p-4 rounded overflow-x-auto text-[10px] leading-tight font-mono whitespace-pre text-slate-800">
@@ -553,7 +562,6 @@ export function ForwarderWorkspace() {
                 </div>
               </section>
 
-              {/* TABLA DE COSTES */}
               <section className="mb-8">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">📋 Desglose de Partidas y Servicios del Proyecto</h3>
                 <table className="w-full text-[11px] border-collapse">
