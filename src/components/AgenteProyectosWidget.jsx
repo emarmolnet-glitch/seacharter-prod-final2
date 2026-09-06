@@ -13,7 +13,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
   };
 
   const [messages, setMessages] = useState([
-    { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos de Cerebro.ia. Estoy conectado al workspace y listo para ejecutar cualquier orden en lenguaje natural.' }
+    { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos. Estoy conectado al workspace y listo para ejecutar cualquier orden en lenguaje natural.' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -192,7 +192,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         }));
 
         const count = formattedItems.length;
-        const text = `📁 Documento "${file.name}" analizado con éxito. Se han extraído e integrado ${count} ítems al expediente del proyecto.`;
+        const text = `📁 Documento "${file.name}" analizado con éxito. Se han extraído e integrado ${count} ítems al expediente del proyecto.[cite: 1]`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
         speakText(text);
 
