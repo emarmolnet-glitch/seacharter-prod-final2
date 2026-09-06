@@ -1,4 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as xlsx from "xlsx"; 
+import mammoth from "mammoth"; 
+import { Buffer } from "node:buffer";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
@@ -31,6 +35,28 @@ export function extractLocateVesselAction(message) {
   const vesselName = cleanRequestedVesselName(request?.[1]);
   if (!vesselName || /^(?:un|una|the)?\s*(?:buque|barco|vessel|ship)$/i.test(vesselName)) return null;
   return { action: "LOCATE_VESSEL", vessel_name: vesselName };
+}
+
+function resolvePdfDocumentLoader(pdfModule = pdfjsLib) {
+  const getDocument = pdfModule?.getDocument || pdfModule?.default?.getDocument;
+  if (typeof getDocument !== "function") throw new TypeError("pdfjs-dist no expone getDocument.");
+  return getDocument;
+}
+
+async function extractTextFromPDF(buffer) {
+  try {
+    const data = new Uint8Array(buffer);
+    const pdfDocument = await resolvePdfDocumentLoader()({ data }).promise;
+    let text = "";
+    for (let i = 1; i <= pdfDocument.numPages; i++) {
+      const page = await pdfDocument.getPage(i);
+      const textContent = await page.getTextContent();
+      text += textContent.items.map(item => item.str).join(" ") + "\n";
+    }
+    return text;
+  } catch (err) {
+    return "";
+  }
 }
 
 export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
@@ -180,7 +206,7 @@ Estimados [Cliente/Armador],\\n\\nNos ponemos en contacto en relación a las ope
 PLANTILLA 4: AUDITORÍA TÉCNICA Y DUE DILIGENCE
 Asunto: Auditoría y Compatibilidad Técnica — MV [Nombre Buque] para [Tipo de Carga]
 Cuerpo:
-Estimados,\\n\\nTras procesar la auditoría técnica del candidato MV [Nombre Buque] ([DWT] DWT, construido en [Año]) para la carga de [Tonelaje] MT de [Tipo de Carga] en la ruta [POL] ➔ [POD], detallamos las conclusiones:\\n\\n- Verificación de Calados: Calado máximo admisible validado. Margen bajo quilla (UKC) seguro con un calado previsto de [Calado Calculado] metros.\\n- Bodegas & Estiba: Factor de estiba compatible. Condición de bodegas apta (Grúas SWL [Capacidad Grúas] T).\\n- Restricciones Portuarias: Sin incidencias con LOA ([Eslora] m) ni manga ([Manga] m).\\n- Dictamen: Buque técnicamente aprobado para su contratación (Due Diligence Passed).\\n\\nQuedamos a la espera de su validación final para proceder.\\n\\nAtentamente,\\nTechnical Operations Desk — SeaCharter
+Estimados,\\n\\nTras procesar la auditoría técnica del candidato MV [Nombre Buque] ([DWT] DWT, construido en [Año]) para la carga de [Tonelaje] MT de [Tipo de Carga] en la ruta [POL] ➔ [POD], detallamos las conclusiones:\\n\\n- Verificación de Calados: Calado máximo admisible validado. Margen bajo quilla (UKC) seguro con un calado previsto de [Calado Calculado] metros.\\n- Bodegas & Estiba: Factor de estiba compatible. Condición de bodegas apta (Grúas SWL [Capacidad Grúas] T).\\n- Restricciones Portuarias: Sin incidencias con LOA ([Eslora] m) ni manga ([Manga] m).\\n- Dictamen: Buque técnicamente aprobado para su contratación (Due Diligence Passed).\\n\\nQuedamos a la espera de su finalización para proceder.\\n\\nAtentamente,\\nTechnical Operations Desk — SeaCharter
 
 PLANTILLA 5: PROJECT CARGO Y MEDIOS IDÓNEOS
 Asunto: Especificaciones Técnicas y Plan de Izado (Project Cargo) — MV [Nombre Buque]
@@ -266,13 +292,65 @@ export default async (req) => {
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
 
   try {
-    const body = await req.json();
-    const mensaje = body?.mensaje;
-    const rawContexto = body?.contexto || {};
-    const imagenData = body?.image; 
-    const apiKey = process.env.GEMINI_API_KEY;
+    let body = {};
+    let mensaje = "";
+    let rawContexto = {};
+    let imagenData = null;
+    const documentosExtraidos = [];
+    const multimodalParts = [];
 
-    if (typeof mensaje !== "string" && !imagenData?.data) {
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const bodyStr = formData.get("body") || formData.get("payload");
+      if (bodyStr) { try { body = JSON.parse(bodyStr); } catch (e) {} }
+
+      mensaje = body?.mensaje || body?.message || formData.get("mensaje") || formData.get("message") || "";
+      rawContexto = body?.contexto || body?.context || {};
+      
+      const contextStr = formData.get("contexto") || formData.get("context");
+      if (contextStr) { try { rawContexto = JSON.parse(contextStr); } catch (e) {} }
+
+      imagenData = body?.image || body?.imagen;
+
+      const uploadedFiles = Array.from(formData.values()).filter(value => value instanceof File && value.size > 0);
+      for (const value of uploadedFiles) {
+        const arrayBuffer = await value.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const fileNameLower = value.name.toLowerCase();
+
+        if (value.type === "application/pdf" || fileNameLower.endsWith(".pdf")) {
+          multimodalParts.push({ inlineData: { data: buffer.toString("base64"), mimeType: "application/pdf" } });
+          try {
+            const pdfText = await extractTextFromPDF(buffer);
+            if (pdfText) documentosExtraidos.push(`--- PDF (${value.name}): ---\n${pdfText}`);
+          } catch (pdfErr) {}
+        } else if (value.type.includes("excel") || fileNameLower.match(/\.(xlsx|xls|csv)$/)) {
+          try {
+            const workbook = xlsx.read(buffer, { type: "buffer" });
+            let excelText = `--- Excel: ${value.name} ---\n`;
+            workbook.SheetNames.slice(0, 8).forEach(sn => {
+              excelText += `\n[${sn}]\n` + xlsx.utils.sheet_to_csv(workbook.Sheets[sn]).substring(0, 5000); 
+            });
+            documentosExtraidos.push(excelText.substring(0, 30000));
+          } catch (err) {}
+        } else if (value.type.startsWith("image/")) {
+          multimodalParts.push({ inlineData: { data: buffer.toString("base64"), mimeType: value.type } });
+        }
+      }
+    } else {
+      body = await req.json();
+      mensaje = body?.mensaje;
+      rawContexto = body?.contexto || {};
+      imagenData = body?.image; 
+    }
+
+    if (documentosExtraidos.length > 0) {
+      mensaje = (mensaje || "") + `\n\n[DATOS EXTRAÍDOS DE ARCHIVOS ADJUNTOS PARA EL PROYECTO]:\n${documentosExtraidos.join("\n\n")}`;
+    }
+
+    if (typeof mensaje !== "string" && !imagenData?.data && multimodalParts.length === 0) {
       return jsonResponse(400, { success: false, error: "Mensaje o imagen requeridos" });
     }
     const locateVesselAction = extractLocateVesselAction(mensaje);
@@ -284,6 +362,7 @@ export default async (req) => {
         action: locateVesselAction,
       });
     }
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
     }
@@ -314,7 +393,7 @@ export default async (req) => {
 
     const chat = model.startChat();
 
-    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN OPCIONAL) ---
+    // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN/PDF OPCIONAL) ---
     let messagePayload = (mensaje || "").trim();
     if (imagenData?.data && imagenData?.mimeType) {
       messagePayload = [
@@ -326,6 +405,15 @@ export default async (req) => {
           },
         },
       ];
+    }
+
+    if (multimodalParts.length > 0) {
+      if (typeof messagePayload === "string") {
+        messagePayload = [messagePayload || "Analiza estos documentos adjuntos y extrae las partidas del proyecto:"];
+      }
+      if (Array.isArray(messagePayload)) {
+        messagePayload.push(...multimodalParts);
+      }
     }
     // -------------------------------------------------------------------
 
