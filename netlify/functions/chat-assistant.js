@@ -59,28 +59,6 @@ Esta regla prevalece sobre el enrutador de intenciones, las herramientas, el his
    - Fuera de ese caso, si faltan datos imprescindibles para responder la consulta concreta, enumera exactamente cuáles. Si hay datos suficientes, confirma lo correcto antes de recomendar cambios según la estrategia comercial y el rol del usuario.
 `;
 
-const projectDocumentParserRule = `
-\nREGLA DE ORO — INGESTA Y PARSING INTELIGENTE DE DOCUMENTOS (MÓDULO PROYECTOS):
-Cuando el usuario suba una imagen o documento (Packing List, factura o especificación) estando en el módulo de Proyectos:
-1. Actúa como un Agente de Ingesta Logística experto. Ignora por completo direcciones fiscales, NIFs, teléfonos, emails, bancos, cabeceras y pies de página.
-2. Extrae exclusivamente las partidas de mercancía física con sus cantidades, dimensiones reales (largo, ancho, alto en metros) y pesos unitarios/totales. Si las dimensiones vienen en centímetros o milímetros, conviértela automáticamente a metros.
-3. Si el documento detectado es una Factura Comercial, advierte al usuario en el texto que se trata de un documento fiscal y no de un packing list de cubicaje, evitando inventar dimensiones falsas.
-4. Tu respuesta debe incluir un bloque JSON estructurado con la acción de importación para que el frontend inyecte los ítems automáticamente en la tabla:
-{
-  "action": "IMPORT_PROJECT_ITEMS",
-  "items": [
-    {
-      "description": "Descripción limpia del artículo",
-      "quantity": 1,
-      "length_m": 0.0,
-      "width_m": 0.0,
-      "height_m": 0.0,
-      "weight_kg": 0.0
-    }
-  ]
-}
-`;
-  
   const intentRoutingRules = `
 \nEnrutador de Intenciones (obligatorio y previo a cualquier extracción):
    - Intención clasificada para este turno: ${intent}.
@@ -139,6 +117,28 @@ Cuando el usuario suba una imagen o documento (Packing List, factura o especific
    - Trata POL y POD como etiquetas marítimas, nunca como nombres de puerto por sí solas.
    - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
    - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
+`;
+
+  const projectDocumentParserRule = `
+\nREGLA DE ORO — INGESTA Y PARSING INTELIGENTE DE DOCUMENTOS (MÓDULO PROYECTOS):
+Cuando el usuario suba una imagen o documento (Packing List, factura o especificación) estando en el módulo de Proyectos:
+1. Actúa como un Agente de Ingesta Logística experto. Ignora por completo direcciones fiscales, NIFs, teléfonos, emails, bancos, cabeceras y pies de página.
+2. Extrae exclusivamente las partidas de mercancía física con sus cantidades, dimensiones reales (largo, ancho, alto en metros) y pesos unitarios/totales. Si las dimensiones vienen en centímetros o milímetros, conviértelas automáticamente a metros.
+3. Si el documento detectado es una Factura Comercial, advierte al usuario en el texto que se trata de un documento fiscal y no de un packing list de cubicaje, evitando inventar dimensiones falsas.
+4. Tu respuesta debe incluir un bloque JSON estructurado con la acción de importación para que el frontend inyecte los ítems automáticamente en la tabla:
+{
+  "action": "IMPORT_PROJECT_ITEMS",
+  "items": [
+    {
+      "description": "Descripción limpia del artículo",
+      "quantity": 1,
+      "length_m": 0.0,
+      "width_m": 0.0,
+      "height_m": 0.0,
+      "weight_kg": 0.0
+    }
+  ]
+}
 `;
 
   const actionExecutionDirective = `
@@ -245,7 +245,7 @@ Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
 
-  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${actionExecutionDirective}\n\n${vesselLocationInstruction}`;
+  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${projectDocumentParserRule}\n\n${actionExecutionDirective}\n\n${vesselLocationInstruction}`;
   return finalInstruction;
 }
 
@@ -344,7 +344,17 @@ export default async (req) => {
       result = await chat.sendMessage(functionResponses);
     }
 
-    return jsonResponse(200, { success: true, intent, respuesta: result.response.text(), action });
+    let responseText = result.response.text();
+    let parsedAction = action;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"IMPORT_PROJECT_ITEMS"[\s\S]*\}/);
+      if (jsonMatch) {
+        const extractedJson = JSON.parse(jsonMatch[0]);
+        parsedAction = extractedJson;
+      }
+    } catch (e) {}
+
+    return jsonResponse(200, { success: true, intent, respuesta: responseText, action: parsedAction });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);
