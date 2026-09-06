@@ -619,36 +619,42 @@ export function ForwarderWorkspace() {
                         </div>
                         <div className="flex items-center gap-2">
                           <button 
-                            type="button"
-                            onClick={() => {
-                              const base64Data = doc.payload?.dataBase64 || doc.dataBase64;
-                              if (base64Data) {
-                                const win = window.open();
-                                if (win) {
-                                  win.document.write(`
-                                    <html>
-                                      <head><title>Visor de Documento - ${doc.name}</title></head>
-                                      <body style="margin:0; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; overflow:hidden;">
-                                        <div style="background:#1e293b; color:#fff; padding:12px 24px; width:100%; display:flex; justify-content:space-between; align-items:center; box-sizing:border-box; font-family:sans-serif; border-bottom:1px solid #334155;">
-                                          <span style="font-weight:bold; font-size:14px;">📄 ${doc.name}</span>
-                                          <a href="${base64Data}" download="${doc.name}" style="background:#2563eb; color:#fff; padding:8px 16px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">⬇️ Descargar Archivo Original</a>
-                                        </div>
-                                        <iframe src="${base64Data}" style="width:100%; height:calc(100vh - 55px); border:none; background:#ffffff;"></iframe>
-                                      </body>
-                                    </html>
-                                  `);
-                                  win.document.close();
-                                } else {
-                                  window.alert('El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio.');
-                                }
-                              } else {
-                                window.alert(`Información del Documento:\nNombre: ${doc.name}\nFecha: ${doc.date}\nÍtems asociados: ${doc.itemsCount || 1}\n(Nota: Este documento fue guardado en un registro anterior sin contenido binario incrustado).`);
-                              }
-                            }}
-                            className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded cursor-pointer shadow-sm flex items-center gap-1"
-                          >
-                            <span>🔍</span> Consultar / Abrir
-                          </button>
+  type="button"
+  onClick={() => {
+    const base64Data = doc.payload?.dataBase64 || doc.dataBase64;
+    if (base64Data) {
+      try {
+        // Convertir el Base64 en un Blob nativo para evitar el bloqueo de seguridad de Chrome
+        const arr = base64Data.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Abrir la URL Blob directamente en una nueva pestaña de forma limpia
+        window.open(blobUrl, '_blank');
+      } catch (err) {
+        console.error('Error abriendo documento:', err);
+        window.alert('No se pudo renderizar el archivo directamente. Intentando descarga...');
+        const link = document.createElement('a');
+        link.href = base64Data;
+        link.download = doc.name;
+        link.click();
+      }
+    } else {
+      window.alert(`Información del Documento:\nNombre: ${doc.name}\nFecha: ${doc.date}\nÍtems asociados: ${doc.itemsCount || 1}\n(Nota: Este documento no tiene contenido binario asociado).`);
+    }
+  }}
+  className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded cursor-pointer shadow-sm flex items-center gap-1"
+>
+  <span>🔍</span> Consultar / Abrir
+</button>
                           <button 
                             type="button"
                             onClick={() => handleDeletePersistentDocument(doc.id)}
