@@ -111,27 +111,56 @@ export function ForwarderWorkspace() {
   const handleTriggerImport = () => { if (fileInputRef.current && !isAnalyzingFile) fileInputRef.current.click(); };
 
   const handleFileUpload = async (event) => {
-    const file = event?.target?.files?.[0];
-    if (!file) return;
+    const files = Array.from(event?.target?.files || []);
+    if (files.length === 0) return;
+
     setIsAnalyzingFile(true);
     try {
-      const parsedItems = await parsePackingListFile(file);
-      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
-        const formattedItems = parsedItems.map((it, idx) => ({
-          id: it.id || Date.now() + idx,
-          category: it.category || 'Equipos de Proceso',
-          quantity: it.quantity ?? 1,
-          type: it.type || it.description || 'Pieza Proyecto',
-          length: it.length_m ?? it.length ?? 1,
-          width: it.width_m ?? it.width ?? 1,
-          height: it.height_m ?? it.height ?? 1,
-          weight: it.unit_weight_kg ?? it.weight ?? 1000,
-          shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor"
-        }));
-        setCargoItems(formattedItems);
+      let allNewItems = [];
+
+      // Procesar cada archivo enviándolo a la Netlify Function
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Hacemos la llamada al backend donde está tu parse-packing-list.js
+        const response = await fetch('/.netlify/functions/parse-packing-list', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          console.error(`Error en servidor al subir ${file.name}:`, response.statusText);
+          continue; // Si un archivo falla, continuamos con el siguiente
+        }
+
+        const data = await response.json();
+
+        // Extraer los items si la respuesta es exitosa
+        if (data.success && Array.isArray(data.items) && data.items.length > 0) {
+          const formattedItems = data.items.map((it, idx) => ({
+            id: it.id || `item-${Date.now()}-${idx}-${Math.random()}`,
+            category: it.category || 'Equipos de Proceso',
+            quantity: it.quantity ?? 1,
+            type: it.type || it.description || 'Pieza Proyecto',
+            length: it.length_m ?? it.length ?? 1,
+            width: it.width_m ?? it.width ?? 1,
+            height: it.height_m ?? it.height ?? 1,
+            weight: it.unit_weight_kg ?? it.weight ?? 1000,
+            shipping_mode_supported: it.shipping_mode_supported || "40' HC Contenedor"
+          }));
+
+          allNewItems = [...allNewItems, ...formattedItems];
+        }
       }
+
+      // Actualizar el estado de React con todas las piezas procesadas
+      if (allNewItems.length > 0) {
+        setCargoItems((prev) => [...prev, ...allNewItems]);
+      }
+
     } catch (err) {
-      console.error(err);
+      console.error("Error de red al conectar con el backend:", err);
     } finally {
       setIsAnalyzingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
