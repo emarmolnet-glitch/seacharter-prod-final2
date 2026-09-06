@@ -2,106 +2,85 @@ import React, { useState } from 'react';
 import './AgenteProyectosWidget.css';
 
 export default function AgenteProyectosWidget({ onUpdatePayload }) {
-    const [isOpen, setIsOpen] = useState(true);
-    const [isMinimized, setIsMinimized] = useState(false);
-    const [messages, setMessages] = useState([
-        { 
-            sender: 'agent', 
-            text: '¡Hola! Veo que estás trabajando en Proyectos. ¿Analizamos la lista de empaque, el trincaje o la operativa portuaria?' 
-        }
-    ]);
-    const [inputMessage, setInputMessage] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  const [messages, setMessages] = useState([
+    { sender: 'agent', text: '¡Hola! Soy tu asistente de proyectos de Cerebro.ia. ¿En qué te puedo ayudar hoy con este despacho o cotización?' }
+  ]);
+  const [inputValue, setInputValue] = useState('');
 
-    const handleSendMessage = async (e) => {
-        e.preventDefault();
-        if (!inputMessage.trim() && !isLoading) return;
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
 
-        const userText = inputMessage;
-        setInputMessage('');
-        setMessages(prev => [...prev, { sender: 'user', text: userText }]);
-        setIsLoading(true);
+    const userMsg = inputValue;
+    setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+    setInputValue('');
 
-        try {
-            const response = await fetch('/api/agente-proyectos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo: 'proyectos',
-                    isProjectMode: true,
-                    message: userText
-                })
-            });
+    // Simulación de respuesta inteligente de Cerebro.ia
+    setTimeout(() => {
+      setMessages(prev => [
+        ...prev,
+        { sender: 'agent', text: `Entendido. Procesando solicitud para: "${userMsg}". Aplicando cambios al workspace...` }
+      ]);
+      // Ejemplo de llamada opcional si se requiere actualizar el payload
+      if (onUpdatePayload) {
+        onUpdatePayload({ note: userMsg });
+      }
+    }, 1000);
+  };
 
-            const data = await response.json();
-
-            if (data.reply) {
-                setMessages(prev => [...prev, { sender: 'agent', text: data.reply }]);
-            }
-
-            if (data.action === 'update_fields' && data.payload && onUpdatePayload) {
-                onUpdatePayload(data.payload);
-            }
-        } catch (error) {
-            setMessages(prev => [...prev, { sender: 'agent', text: 'Error de comunicación con el Agente de Proyectos.' }]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    if (!isOpen) return null;
-
+  if (!isOpen) {
     return (
-        <div className={`agente-proyectos-widget ${isMinimized ? 'minimized' : ''}`}>
-            <div className="widget-header">
-                <div className="widget-title-area">
-                    <span className="status-dot"></span>
-                    <span className="agent-name">🧠 Agente de Proyectos</span>
-                </div>
-                <div className="widget-controls">
-                    <button title="Minimizar" className="control-btn" onClick={() => setIsMinimized(!isMinimized)}>
-                        <i className={`fas ${isMinimized ? 'fa-window-maximize' : 'fa-minus'}`}></i>
-                    </button>
-                    <button title="Cerrar" className="control-btn" onClick={() => setIsOpen(false)}>
-                        <i className="fas fa-times"></i>
-                    </button>
-                </div>
-            </div>
-
-            {!isMinimized && (
-                <>
-                    <div className="widget-messages">
-                        {messages.map((msg, index) => (
-                            <div key={index} className={`message-bubble ${msg.sender}`}>
-                                <p>{msg.text}</p>
-                            </div>
-                        ))}
-                        {isLoading && (
-                            <div className="message-bubble agent loading">
-                                <p>⏳ Procesando cálculo operativo...</p>
-                            </div>
-                        )}
-                    </div>
-
-                    <form className="widget-input-area" onSubmit={handleSendMessage}>
-                        <button type="button" title="Adjuntar archivo" className="input-action-btn">
-                            <i className="fas fa-paperclip"></i>
-                        </button>
-                        <input 
-                            type="text" 
-                            placeholder="Describe la carga o los cambios..." 
-                            value={inputMessage}
-                            onChange={(e) => setInputMessage(e.target.value)}
-                        />
-                        <button type="button" title="Dictado" className="input-action-btn">
-                            <i className="fas fa-microphone"></i>
-                        </button>
-                        <button type="submit" title="Enviar" className="send-btn">
-                            <i className="fas fa-paper-plane"></i>
-                        </button>
-                    </form>
-                </>
-            )}
-        </div>
+      <button className="cerebro-floating-trigger" onClick={() => setIsOpen(true)} title="Abrir Agente Cerebro.ia">
+        <span className="cerebro-icon">🧠</span>
+        <span className="cerebro-trigger-text">Cerebro.ia Asistente</span>
+      </button>
     );
+  }
+
+  return (
+    <div className="cerebro-widget-container">
+      {/* Header oficial Cerebro.ia */}
+      <div className="cerebro-widget-header">
+        <div className="cerebro-header-title">
+          <div className="cerebro-brain-icon">🧠</div>
+          <div>
+            <span className="cerebro-brand-name">Cerebro.ia</span>
+            <span className="cerebro-agent-subtitle">Agente de Proyectos</span>
+          </div>
+        </div>
+        <div className="cerebro-header-actions">
+          <button className="cerebro-action-btn" onClick={() => setIsOpen(false)} title="Minimizar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 12H6"/></svg>
+          </button>
+          <button className="cerebro-action-btn" onClick={() => setIsOpen(false)} title="Cerrar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Cuerpo de Mensajes */}
+      <div className="cerebro-widget-messages">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`cerebro-bubble ${msg.sender}`}>
+            {msg.sender === 'agent' && <div className="bubble-avatar">🧠</div>}
+            <div className="bubble-content">{msg.text}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input de chat inferior */}
+      <form onSubmit={handleSend} className="cerebro-widget-input-box">
+        <input 
+          type="text" 
+          placeholder="Escribe una instrucción para Cerebro.ia..." 
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+        />
+        <button type="submit" className="cerebro-send-btn" title="Enviar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </form>
+    </div>
+  );
 }
