@@ -4,11 +4,10 @@ import { Buffer } from "node:buffer";
 export async function handler(event, context) {
   try {
     if (event.httpMethod !== 'POST') {
-      return { 
-        statusCode: 405, 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Method Not Allowed' }) 
-      };
+      return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+        status: 405,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const rawBody = event.body || "";
@@ -22,11 +21,10 @@ export async function handler(event, context) {
       const body = JSON.parse(rawBody);
       const rawData = body.fileBase64 || body.pdfBase64 || body.data || ''; 
       if (!rawData) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: false, error: 'No se encontró el archivo en el JSON' })
-        };
+        return new Response(JSON.stringify({ success: false, error: 'No se encontró el archivo en el JSON' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       fileName = body.fileName || fileName;
       fullDataUrl = rawData.startsWith('data:') ? rawData : `data:application/pdf;base64,${rawData}`;
@@ -41,11 +39,10 @@ export async function handler(event, context) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: false, error: "GEMINI_API_KEY no configurada en el servidor." })
-      };
+      return new Response(JSON.stringify({ success: false, error: "GEMINI_API_KEY no configurada en el servidor." }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -108,33 +105,31 @@ export async function handler(event, context) {
 
     const bufferFinal = Buffer.from(pdfBase64, 'base64');
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        success: true,
-        items: parsedData.items || [],
-        documentMeta: {
-          name: fileName,
-          size: bufferFinal.length,
-          itemsCount: (parsedData.items || []).length,
-          uploadedAt: new Date().toISOString(),
-          dataBase64: fullDataUrl
-        }
-      })
-    };
+    return new Response(JSON.stringify({
+      success: true,
+      items: parsedData.items || [],
+      documentMeta: {
+        name: fileName,
+        size: bufferFinal.length,
+        itemsCount: (parsedData.items || []).length,
+        uploadedAt: new Date().toISOString(),
+        dataBase64: fullDataUrl
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
-    console.error('Error crítico en project-parser (prevención status 0):', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Error interno del servidor', 
-        items: [] 
-      })
-    };
+    console.error('Error crítico en project-parser:', error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message || 'Error interno del servidor', 
+      items: [] 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 };
 
