@@ -1,7 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './AgenteProyectosWidget.css';
 
-export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: controlledIsOpen, onToggleOpen, cargoItems = [], financialData = null }) {
+export default function AgenteProyectosWidget({
+  onUpdatePayload,
+  isOpen: controlledIsOpen,
+  onToggleOpen,
+  cargoItems = [],
+  financialData = null,
+  charteringAssessment = null,
+  routeData = null,
+}) {
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -99,6 +107,14 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           text: raw,
           fileBase64: null,
           items: (Array.isArray(cargoItems) && cargoItems.length > 0) ? cargoItems : undefined,
+          pol: routeData?.pol,
+          pod: routeData?.pod,
+          loadingRate: routeData?.loadingRate,
+          dischargingRate: routeData?.dischargingRate,
+          distanceNm: routeData?.distanceNm,
+          actualLoadingDays: routeData?.actualLoadingDays,
+          actualDischargingDays: routeData?.actualDischargingDays,
+          demurrageDailyRateUsd: routeData?.demurrageDailyRateUsd,
         }),
       });
 
@@ -125,6 +141,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
             category: formattedItems[0]?.category || 'Maquinaria',
             orderTotals: data.orderTotals,
             charteringAssessment: data.charteringAssessment,
+            rotationBreakdown: data.charteringAssessment?.rotationBreakdown,
             operationalProfile: data.operationalProfile,
             financialBreakdown: data.financialBreakdown,
             forceOpenModal: true,
@@ -173,27 +190,48 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
 
         const polMatch = text.match(/(?:pol|puerto\s*de\s*(?:origen|carga)|cargar\s*en|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pod|\s+hasta|\s+a\s+|\s+ritmo|\s+demora|$)/i);
         if (polMatch && polMatch[1]) {
-          const p = polMatch[1].trim();
-          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(p.toLowerCase())) {
+          let p = polMatch[1].replace(/\s+(?:con|y|hacia|a|para|en)\b.*$/i, '').trim();
+          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas', 'días'].includes(p.toLowerCase())) {
             payloadObj.pol = p.charAt(0).toUpperCase() + p.slice(1);
           }
         }
         const podMatch = text.match(/(?:pod|puerto\s*de\s*(?:destino|descarga)|descargar\s*en|hasta|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pol|\s+ritmo|\s+demora|$)/i);
         if (podMatch && podMatch[1]) {
-          const p = podMatch[1].trim();
-          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(p.toLowerCase())) {
+          let p = podMatch[1].replace(/\s+(?:con|y|hacia|a|para|en)\b.*$/i, '').trim();
+          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas', 'días'].includes(p.toLowerCase())) {
             payloadObj.pod = p.charAt(0).toUpperCase() + p.slice(1);
           }
         }
         const loadMatch = text.match(/(?:ritmo\s*(?:de)?\s*carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
         if (loadMatch && loadMatch[1]) {
           const v = parseFloat(loadMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v > 0) payloadObj.loadingRate = v;
+          if (!isNaN(v) && v > 0) {
+            payloadObj.loadingRate = v;
+            payloadObj.loadingRateMtDay = v;
+          }
         }
         const dischMatch = text.match(/(?:ritmo\s*(?:de)?\s*descarga|discharging\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
         if (dischMatch && dischMatch[1]) {
           const v = parseFloat(dischMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v > 0) payloadObj.dischargingRate = v;
+          if (!isNaN(v) && v > 0) {
+            payloadObj.dischargingRate = v;
+            payloadObj.dischargingRateMtDay = v;
+          }
+        }
+        const distMatch = text.match(/(?:distancia(?:\s*n[aá]utica)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (distMatch && distMatch[1]) {
+          const v = parseFloat(distMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v) && v > 0) payloadObj.distanceNm = v;
+        }
+        const actualLoadMatch = text.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*carga|actual\s*loading\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (actualLoadMatch && actualLoadMatch[1]) {
+          const v = parseFloat(actualLoadMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v)) payloadObj.actualLoadingDays = v;
+        }
+        const actualDischMatch = text.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*descarga|actual\s*discharging\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (actualDischMatch && actualDischMatch[1]) {
+          const v = parseFloat(actualDischMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v)) payloadObj.actualDischargingDays = v;
         }
         const demMatch = text.match(/(?:demoras?|demurrage|retraso(?:\s*en\s*muelle)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
         if (demMatch && demMatch[1]) {
@@ -201,15 +239,47 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           if (!isNaN(v) && v >= 0) payloadObj.demurrageDays = v;
         }
 
+        // Conectar el charteringAssessment / rotationBreakdown del backend o sintetizarlo
+        if (data.charteringAssessment) {
+          payloadObj.charteringAssessment = data.charteringAssessment;
+          payloadObj.rotationBreakdown = data.charteringAssessment.rotationBreakdown || data.charteringAssessment.timeCharterEquivalent;
+          if (payloadObj.rotationBreakdown) {
+            if (payloadObj.rotationBreakdown.pol) payloadObj.pol = payloadObj.rotationBreakdown.pol;
+            if (payloadObj.rotationBreakdown.pod) payloadObj.pod = payloadObj.rotationBreakdown.pod;
+            if (payloadObj.rotationBreakdown.loadingRateMtDay) payloadObj.loadingRate = payloadObj.rotationBreakdown.loadingRateMtDay;
+            if (payloadObj.rotationBreakdown.dischargingRateMtDay) payloadObj.dischargingRate = payloadObj.rotationBreakdown.dischargingRateMtDay;
+            if (payloadObj.rotationBreakdown.distanceNm) payloadObj.distanceNm = payloadObj.rotationBreakdown.distanceNm;
+          }
+        } else if (payloadObj.pol || payloadObj.pod || payloadObj.loadingRate || payloadObj.dischargingRate || payloadObj.demurrageDays) {
+          const rot = {
+            pol: payloadObj.pol || routeData?.pol || 'Valencia',
+            pod: payloadObj.pod || routeData?.pod || 'Houston',
+            loadingRateMtDay: payloadObj.loadingRate || routeData?.loadingRate || 1200,
+            dischargingRateMtDay: payloadObj.dischargingRate || routeData?.dischargingRate || 1000,
+            distanceNm: payloadObj.distanceNm || routeData?.distanceNm || 4850,
+            actualLoadingDays: payloadObj.actualLoadingDays,
+            actualDischargingDays: payloadObj.actualDischargingDays,
+            demurrage: payloadObj.demurrageDays !== undefined ? { demurrageDays: payloadObj.demurrageDays } : undefined
+          };
+          payloadObj.rotationBreakdown = rot;
+          payloadObj.charteringAssessment = { rotationBreakdown: rot };
+        }
+
+        const hasRouteParams = payloadObj.pol || payloadObj.pod || payloadObj.loadingRate || payloadObj.dischargingRate || payloadObj.demurrageDays || payloadObj.distanceNm;
+        if (hasRouteParams) {
+          payloadObj.forceOpenModal = true;
+        }
         const agentReply = data.error
           ? `⚠️ ${data.error}`
           : payloadObj.breakdownReply
             ? payloadObj.breakdownReply
             : payloadObj.infoReply
               ? payloadObj.infoReply
-              : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
-                ? `⚙️ Parámetros actualizados en el proyecto.`
-                : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
+              : hasRouteParams
+                ? `🗺️ Ruta marítima y ritmos operativos actualizados: POL ${payloadObj.pol || 'mantenido'} → POD ${payloadObj.pod || 'mantenido'}${payloadObj.loadingRate ? `, Carga: ${payloadObj.loadingRate} MT/d` : ''}${payloadObj.dischargingRate ? `, Descarga: ${payloadObj.dischargingRate} MT/d` : ''}. Contadores sincronizados.`
+                : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
+                  ? `⚙️ Parámetros actualizados en el proyecto.`
+                  : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
 
         setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
         speakText(agentReply);

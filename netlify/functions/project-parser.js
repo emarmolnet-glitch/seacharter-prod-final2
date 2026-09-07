@@ -352,10 +352,34 @@ const WORLD_PORTS = {
   'jebel ali': { name: 'Jebel Ali, UAE', lat: 25.01, lon: 55.06 },
   dubai: { name: 'Dubai, UAE', lat: 25.27, lon: 55.30 },
   casablanca: { name: 'Casablanca, Morocco', lat: 33.60, lon: -7.60 },
-  dakar: { name: 'Dakar, Senegal', lat: 14.68, lon: -17.43 }
+  dakar: { name: 'Dakar, Senegal', lat: 14.68, lon: -17.43 },
+  bejaia: { name: 'Bejaia, Algeria', lat: 36.75, lon: 5.08 },
+  sfax: { name: 'Sfax, Tunisia', lat: 34.74, lon: 10.76 },
+  aveiro: { name: 'Aveiro, Portugal', lat: 40.64, lon: -8.65 },
+  bilbao: { name: 'Bilbao, Spain', lat: 43.35, lon: -3.05 },
+  barcelona: { name: 'Barcelona, Spain', lat: 41.35, lon: 2.17 },
+  algeciras: { name: 'Algeciras, Spain', lat: 36.13, lon: -5.44 },
+  lisbon: { name: 'Lisbon, Portugal', lat: 38.71, lon: -9.14 },
+  cadiz: { name: 'Cadiz, Spain', lat: 36.53, lon: -6.28 },
+  marseille: { name: 'Marseille, France', lat: 43.30, lon: 5.37 },
 };
 
 const KNOWN_PORT_DISTANCES_NM = {
+  // Rutas comunes del Mediterráneo y Atlántico (Respaldo / Fallback)
+  'bejaia-aveiro': 950,
+  'aveiro-bejaia': 950,
+  'sfax-aveiro': 1200,
+  'aveiro-sfax': 1200,
+  'sfax-dakar': 2500,
+  'dakar-sfax': 2500,
+  'bejaia-dakar': 2100,
+  'dakar-bejaia': 2100,
+  'sfax-rotterdam': 2250,
+  'rotterdam-sfax': 2250,
+  'sfax-valencia': 650,
+  'valencia-sfax': 650,
+  'bejaia-sfax': 380,
+  'sfax-bejaia': 380,
   'valencia-houston': 4850,
   'houston-valencia': 4850,
   'bilbao-rotterdam': 750,
@@ -371,8 +395,107 @@ const KNOWN_PORT_DISTANCES_NM = {
   'antwerp-houston': 4900,
   'houston-antwerp': 4900,
   'rotterdam-houston': 4920,
-  'houston-rotterdam': 4920
+  'houston-rotterdam': 4920,
+  'bejaia-rotterdam': 1980,
+  'rotterdam-bejaia': 1980,
+  'bejaia-valencia': 320,
+  'valencia-bejaia': 320,
+  'bejaia-marseille': 410,
+  'marseille-bejaia': 410,
+  'bejaia-genoa': 540,
+  'genoa-bejaia': 540,
+  'aveiro-rotterdam': 980,
+  'rotterdam-aveiro': 980,
+  'aveiro-bilbao': 420,
+  'bilbao-aveiro': 420,
+  'aveiro-houston': 4450,
+  'houston-aveiro': 4450,
+  'aveiro-antwerp': 960,
+  'antwerp-aveiro': 960,
+  'lisbon-rotterdam': 1050,
+  'rotterdam-lisbon': 1050,
+  'lisbon-houston': 4380,
+  'houston-lisbon': 4380,
+  'valencia-genoa': 520,
+  'genoa-valencia': 520,
+  'barcelona-genoa': 360,
+  'genoa-barcelona': 360,
+  'algeciras-rotterdam': 1350,
+  'rotterdam-algeciras': 1350,
+  'casablanca-rotterdam': 1420,
+  'rotterdam-casablanca': 1420,
+  'valencia-casablanca': 620,
+  'casablanca-valencia': 620,
+  'cadiz-aveiro': 350,
+  'aveiro-cadiz': 350,
 };
+
+const KNOWN_PORTS_MAP = {
+  bejaia: 'Bejaia',
+  béjaïa: 'Bejaia',
+  sfax: 'Sfax',
+  valencia: 'Valencia',
+  aveiro: 'Aveiro',
+  houston: 'Houston',
+  dakar: 'Dakar',
+  bilbao: 'Bilbao',
+  barcelona: 'Barcelona',
+  algeciras: 'Algeciras',
+  rotterdam: 'Rotterdam',
+  antwerp: 'Antwerp',
+  amberes: 'Antwerp',
+  hamburg: 'Hamburg',
+  hamburgo: 'Hamburg',
+  'new orleans': 'New Orleans',
+  'nueva orleans': 'New Orleans',
+  'new york': 'New York',
+  'nueva york': 'New York',
+  santos: 'Santos',
+  'buenos aires': 'Buenos Aires',
+  alexandria: 'Alexandria',
+  alejandria: 'Alexandria',
+  alejandría: 'Alexandria',
+  genoa: 'Genoa',
+  genova: 'Genoa',
+  génova: 'Genoa',
+  singapore: 'Singapore',
+  singapur: 'Singapore',
+  shanghai: 'Shanghai',
+  'jebel ali': 'Jebel Ali',
+  dubai: 'Dubai',
+  casablanca: 'Casablanca',
+  lisbon: 'Lisbon',
+  lisboa: 'Lisbon',
+  cadiz: 'Cadiz',
+  cádiz: 'Cadiz',
+  marseille: 'Marseille',
+  marsella: 'Marseille',
+  liverpool: 'Liverpool',
+  santander: 'Santander',
+  gijon: 'Gijon',
+  gijón: 'Gijon',
+  tarragona: 'Tarragona',
+  cartagena: 'Cartagena',
+  huelva: 'Huelva',
+  sevilla: 'Sevilla',
+  vigo: 'Vigo',
+  bremen: 'Bremen',
+  bremerhaven: 'Bremerhaven',
+  amsterdam: 'Amsterdam',
+  dunkerque: 'Dunkerque',
+  dunkirk: 'Dunkirk',
+  'le havre': 'Le Havre',
+  lehavre: 'Le Havre',
+};
+
+function normalizePortLookupKey(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 /**
  * Calcula la distancia náutica aproximada en millas náuticas (NM) entre dos puertos.
@@ -382,8 +505,8 @@ const KNOWN_PORT_DISTANCES_NM = {
  * @returns {number} Distancia en Millas Náuticas (NM)
  */
 function calculatePortDistanceNm(pol, pod) {
-  const normPol = String(pol || '').trim().toLowerCase();
-  const normPod = String(pod || '').trim().toLowerCase();
+  const normPol = normalizePortLookupKey(pol);
+  const normPod = normalizePortLookupKey(pod);
   if (!normPol || !normPod) return 1500;
   if (normPol === normPod) return 50;
 
@@ -417,6 +540,76 @@ function calculatePortDistanceNm(pol, pod) {
   }
 
   return 1500;
+}
+
+/**
+ * Consulta la API de Datalastic utilizando la variable de entorno DATALASTIC_API_KEY
+ * para obtener la distancia náutica real en millas náuticas (distanceNm) entre POL y POD.
+ * En caso de que la API no responda, no esté configurada la clave o falle la consulta,
+ * aplica el sistema de respaldo (fallback) con distancias predefinidas para rutas comunes
+ * del Mediterráneo y Atlántico (ej. Bejaia a Aveiro, Valencia a Houston).
+ *
+ * @param {string} pol Puerto de Carga (origen)
+ * @param {string} pod Puerto de Descarga (destino)
+ * @returns {Promise<number>} Distancia náutica real en NM
+ */
+async function fetchDatalasticDistanceNm(pol, pod) {
+  const cleanPol = String(pol || '').trim();
+  const cleanPod = String(pod || '').trim();
+  if (!cleanPol || !cleanPod) return 1500;
+  if (cleanPol.toLowerCase() === cleanPod.toLowerCase()) return 50;
+
+  const apiKey = (typeof Netlify !== 'undefined' && Netlify.env?.get?.('DATALASTIC_API_KEY'))
+    || process.env.DATALASTIC_API_KEY;
+
+  if (apiKey) {
+    try {
+      const baseUrl = ((typeof Netlify !== 'undefined' && Netlify.env?.get?.('DATALASTIC_API_BASE_URL'))
+        || process.env.DATALASTIC_API_BASE_URL
+        || 'https://api.datalastic.com/api/v0').replace(/\/+$/, '');
+
+      const url = new URL(`${baseUrl}/distance`);
+      url.searchParams.set('api-key', apiKey);
+      url.searchParams.set('from', cleanPol);
+      url.searchParams.set('to', cleanPod);
+      url.searchParams.set('port_from', cleanPol);
+      url.searchParams.set('port_to', cleanPod);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(url.toString(), {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        const distCandidate = payload?.data?.distance
+          ?? payload?.data?.distance_nm
+          ?? payload?.data?.distance_nautical_miles
+          ?? payload?.data?.[0]?.distance
+          ?? payload?.distance
+          ?? payload?.distance_nm
+          ?? payload?.distance_miles
+          ?? payload?.nautical_miles
+          ?? payload?.total_distance
+          ?? payload?.route?.distance
+          ?? payload?.route?.distance_nm;
+
+        const num = Number(distCandidate);
+        if (Number.isFinite(num) && num > 0) {
+          return Math.round(num);
+        }
+      }
+    } catch (err) {
+      console.warn('Datalastic distance API no disponible o timeout, aplicando fallback:', err?.message || err);
+    }
+  }
+
+  // Sistema de respaldo (fallback) con distancias predefinidas para rutas comunes del Mediterráneo y Atlántico
+  return calculatePortDistanceNm(cleanPol, cleanPod);
 }
 
 /**
@@ -558,6 +751,266 @@ function calculateDemurrage({
 }
 
 /**
+ * Limpia y normaliza el nombre de un puerto detectado en texto.
+ *
+ * @param {string} raw Nombre crudo capturado
+ * @returns {string|null} Nombre formateado o null
+ */
+function sanitizePortName(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let p = raw
+    .replace(/\s+(?:con|y|hacia|a|para|en|de)\b.*$/i, '')
+    .replace(/[^\w\sáéíóúÁÉÍÓÚñÑüÜ'-]/g, ' ')
+    .trim();
+  const lower = p.toLowerCase();
+  if (KNOWN_PORTS_MAP[lower]) return KNOWN_PORTS_MAP[lower];
+  // Palabras prohibidas que no representan un nombre de puerto
+  const forbidden = [
+    'dias', 'días', 'euros', 'turnos', 'toneladas', 'horas', 'nudos', 'millas',
+    'sacos', 'piezas', 'grúas', 'gruas', 'buque', 'flete', 'coste', 'orden',
+    'barco', 'muelle', 'terminal', 'puerto', 'origen', 'destino', 'carga', 'descarga',
+    'ritmo', 'demora', 'plancha', 'fletamento', 'tce'
+  ];
+  if (p.length <= 2 || forbidden.includes(lower)) return null;
+  return p.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+/**
+ * Extrae ritmos operativos (MT/día) buscando tanto prefijos ("ritmo de carga 1500")
+ * como números seguidos de unidades ("1500 t/d de carga", "1500 toneladas al día", etc.).
+ *
+ * @param {string} text Texto o mensaje conversacional
+ * @param {'load'|'discharge'} type Tipo de ritmo operativo
+ * @returns {number|null} Ritmo extraído en MT/día o null
+ */
+function parseOperationalRate(text, type = 'load') {
+  if (!text || typeof text !== 'string') return null;
+  const isLoad = type === 'load';
+
+  const patterns = isLoad ? [
+    // 1. "ritmo de carga 1500", "ritmo carga: 1500", "loading rate 1500"
+    /(?:ritmo\s*(?:de\s*)?carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i,
+    // 2. Número seguido de t/d, mt/d, toneladas día, etc. y "carga"
+    /(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*carga\b/i,
+    // 3. Número seguido de "t/d de carga", "t/día carga", "mt/d carga"
+    /(\d+[\d.,]*)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*carga\b/i,
+    // 4. Número seguido de "ritmo de carga"
+    /(\d+[\d.,]*)\s*(?:de\s+)?ritmo\s*(?:de\s+)?carga\b/i,
+    // 5. "carga de 1500 t/d", "carga: 1500 t/d", "carga 1500 toneladas al día", "carga 1500 mt/d"
+    /(?:carga|cargar)\s*(?:a\s*raz[oó]n\s*de|de|en)?\s*[:=]?\s*(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?/i,
+    // 6. "carga: 1500" o pares como "ritmos 1500 carga"
+    /(?:ritmos?\s*[:=]?\s*)?(\d+[\d.,]*)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?carga\b/i,
+    /(?:carga|cargar)\s*[:=]\s*(\d+[\d.,]*)/i,
+  ] : [
+    // 1. "ritmo de descarga 1200", "ritmo descarga: 1200", "discharging rate 1200", "discharge rate 1200"
+    /(?:ritmo\s*(?:de\s*)?descarga|discharging\s*rate|discharge\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i,
+    // 2. Número seguido de t/d, mt/d, toneladas día, etc. y "descarga"
+    /(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*descarga\b/i,
+    // 3. Número seguido de "t/d de descarga", "t/día descarga", "mt/d descarga"
+    /(\d+[\d.,]*)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*descarga\b/i,
+    // 4. Número seguido de "ritmo de descarga"
+    /(\d+[\d.,]*)\s*(?:de\s+)?ritmo\s*(?:de\s+)?descarga\b/i,
+    // 5. "descarga de 1200 t/d", "descarga: 1200 t/d", "descarga 1200 toneladas al día"
+    /(?:descarga|descargar)\s*(?:a\s*raz[oó]n\s*de|de|en)?\s*[:=]?\s*(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?/i,
+    // 6. "descarga: 1200" o pares como "... 1200 descarga"
+    /(?:ritmos?\s*[:=]?\s*)?(\d+[\d.,]*)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?descarga\b/i,
+    /(?:descarga|descargar)\s*[:=]\s*(\d+[\d.,]*)/i,
+  ];
+
+  for (const regex of patterns) {
+    const match = text.match(regex);
+    if (match && match[1]) {
+      const val = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(val) && val > 0) return val;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extrae parámetros operativos y de ruta marítima (POL, POD, ritmos, demoras) desde texto conversacional
+ * y los fusiona de manera transparente con las opciones explícitas.
+ *
+ * Si el texto del usuario u orden conversacional contiene un POL, POD o ritmos explícitos,
+ * sobrescribe obligatoriamente los valores predeterminados (Valencia/Houston/1200/1000).
+ * Si no se especifican, entonces y solo entonces aplica los valores por defecto.
+ *
+ * @param {string} text Texto o mensaje conversacional
+ * @param {Object} explicitOptions Opciones pasadas explícitamente en el cuerpo
+ * @returns {Object} Opciones consolidadas
+ */
+function extractRouteAndOperationalOptions(text, explicitOptions = {}) {
+  const result = { ...(explicitOptions || {}) };
+  if (!text || typeof text !== 'string') return result;
+
+  const lower = text.toLowerCase();
+  const rawClean = text.trim();
+
+  // 1. EXTRACCIÓN DINÁMICA DE POL Y POD
+  let extractedPol = null;
+  let extractedPod = null;
+
+  // Lista de patrones para POL:
+  // "POL [Puerto]", "puerto de carga [Puerto]", "puerto carga [Puerto]", "cargar en [Puerto]", "desde [Puerto]", etc.
+  const polRegexes = [
+    /\b(?:p\.?o\.?l\.?|puerto\s*(?:de\s*)?(?:origen|carga)|puerto\s*(?:origen|carga)|cargar?\s*(?:en)?|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bp\.?o\.?d\.?\b|\bpuerto\s*(?:de\s*)?(?:descarga|destino)\b|\bhasta\b|\ba\b|\bhacia\b|\bpara\b|\bdestino\b|\bdescargar?\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\bde\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)\s+(?:a|hasta|hacia|para)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|$))/i,
+    /\borigen\s*[:=]\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bdestino\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|$))/i,
+  ];
+
+  for (const regex of polRegexes) {
+    const match = rawClean.match(regex);
+    if (match && match[1]) {
+      const sanitized = sanitizePortName(match[1]);
+      if (sanitized) {
+        extractedPol = sanitized;
+        // Si el regex era "de [Puerto1] a [Puerto2]", capturamos también match[2] como POD
+        if (match[2] && !extractedPod) {
+          const sanitizedPod = sanitizePortName(match[2]);
+          if (sanitizedPod) extractedPod = sanitizedPod;
+        }
+        break;
+      }
+    }
+  }
+
+  // Lista de patrones para POD:
+  // "POD [Puerto]", "puerto de descarga [Puerto]", "puerto descarga [Puerto]", "descargar en [Puerto]", "hasta [Puerto]", "a [Puerto]", etc.
+  const podRegexes = [
+    /\b(?:p\.?o\.?d\.?|puerto\s*(?:de\s*)?(?:destino|descarga)|puerto\s*(?:destino|descarga)|descargar?\s*(?:en)?|con\s*destino\s*(?:a\s*)?|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\b(?:hasta|hacia)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\ba\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+  ];
+
+  if (!extractedPod) {
+    for (const regex of podRegexes) {
+      const match = rawClean.match(regex);
+      if (match && match[1]) {
+        const sanitized = sanitizePortName(match[1]);
+        if (sanitized) {
+          extractedPod = sanitized;
+          break;
+        }
+      }
+    }
+  }
+
+  // Menciones directas de puertos (ej. Bejaia, Sfax, Valencia, Aveiro, Houston, Dakar)
+  if (!extractedPol || !extractedPod) {
+    const directMatches = [];
+    for (const [key, canonical] of Object.entries(KNOWN_PORTS_MAP)) {
+      const regex = new RegExp(`\\b${key}\\b`, 'gi');
+      let m;
+      while ((m = regex.exec(lower)) !== null) {
+        directMatches.push({ key, canonical, index: m.index });
+      }
+    }
+    directMatches.sort((a, b) => a.index - b.index);
+
+    if (directMatches.length >= 2) {
+      if (!extractedPol) extractedPol = directMatches[0].canonical;
+      if (!extractedPod) extractedPod = directMatches[1].canonical;
+    } else if (directMatches.length === 1) {
+      const single = directMatches[0];
+      const beforeText = lower.slice(Math.max(0, single.index - 20), single.index);
+      const isDest = /(?:a|hasta|hacia|destino|pod|descarga)\s*$/i.test(beforeText.trim());
+      if (isDest && !extractedPod) {
+        extractedPod = single.canonical;
+      } else if (!extractedPol) {
+        extractedPol = single.canonical;
+      }
+    }
+  }
+
+  // 2. EXTRACCIÓN DE RITMOS OPERATIVOS (MT/DÍA)
+  const extractedLoadingRate = parseOperationalRate(text, 'load');
+  const extractedDischargingRate = parseOperationalRate(text, 'discharge');
+
+  // 3. EVITAR VALORES POR DEFECTO ESTÁTICOS
+  // Si el texto contiene POL, POD o ritmos explícitos, sobrescribe obligatoriamente
+  // cualquier valor predeterminado que viniera en explicitOptions
+  if (extractedPol) {
+    result.pol = extractedPol;
+    result.port_of_loading = extractedPol;
+    result.polPort = extractedPol;
+    result.explicitPol = true;
+  }
+
+  if (extractedPod) {
+    result.pod = extractedPod;
+    result.port_of_discharge = extractedPod;
+    result.podPort = extractedPod;
+    result.explicitPod = true;
+  }
+
+  if (extractedLoadingRate !== null) {
+    result.loadingRate = extractedLoadingRate;
+    result.loadingRateMtDay = extractedLoadingRate;
+    result.loadRate = extractedLoadingRate;
+    result.explicitLoadingRate = true;
+  }
+
+  if (extractedDischargingRate !== null) {
+    result.dischargingRate = extractedDischargingRate;
+    result.dischargingRateMtDay = extractedDischargingRate;
+    result.dischargeRate = extractedDischargingRate;
+    result.explicitDischargingRate = true;
+  }
+
+  // Distancia náutica (NM)
+  let extractedDistance = null;
+  const distMatch = lower.match(/(?:distancia(?:\s*n[aá]utica)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (distMatch && distMatch[1]) {
+    const v = parseFloat(distMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v) && v > 0) {
+      extractedDistance = v;
+      result.distanceNm = v;
+      result.voyageDistanceNm = v;
+      result.explicitDistance = true;
+    }
+  }
+
+  // Si se actualizaron POL o POD por texto y no se especificó distancia explícita,
+  // limpiamos la distancia previa heredada de los defaults (ej: 4850 de Valencia-Houston)
+  // para permitir que se calcule dinámicamente con la nueva ruta
+  if ((extractedPol || extractedPod) && !extractedDistance) {
+    delete result.distanceNm;
+    delete result.voyageDistanceNm;
+    delete result.distance;
+    result.explicitDistance = false;
+  }
+
+  // Demoras (días)
+  const demMatch = lower.match(/(?:demoras?|demurrage|retraso(?:\s*en\s*muelle)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (demMatch && demMatch[1]) {
+    const v = parseFloat(demMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v) && v >= 0) {
+      result.demurrageDays = v;
+    }
+  }
+
+  // Días reales de carga en POL
+  const actualLoadMatch = lower.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*carga|actual\s*loading\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (actualLoadMatch && actualLoadMatch[1]) {
+    const v = parseFloat(actualLoadMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v)) {
+      result.actualLoadingDays = v;
+    }
+  }
+
+  // Días reales de descarga en POD
+  const actualDischMatch = lower.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*descarga|actual\s*discharging\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (actualDischMatch && actualDischMatch[1]) {
+    const v = parseFloat(actualDischMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v)) {
+      result.actualDischargingDays = v;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Evalúa la modalidad de fletamento según el umbral de 40 toneladas:
  * - Si peso < 40t: Omite por completo el cálculo de TCE y fletamento completo.
  *                  Computa automáticamente costes bajo modalidad de grupaje LCL.
@@ -685,7 +1138,8 @@ function evaluateCharteringModel(orderTotals, items = [], options = {}) {
 
   // Distancia náutica POL-POD (calculada paramétricamente o provista)
   let voyageDistanceNm = Number(options.distanceNm || options.voyageDistanceNm || options.distance);
-  if (!voyageDistanceNm || isNaN(voyageDistanceNm) || voyageDistanceNm <= 0) {
+  const isDefaultRoute = pol.toLowerCase() === 'valencia' && pod.toLowerCase() === 'houston';
+  if (!voyageDistanceNm || isNaN(voyageDistanceNm) || voyageDistanceNm <= 0 || (!isDefaultRoute && voyageDistanceNm === 4850 && !options.explicitDistance)) {
     voyageDistanceNm = calculatePortDistanceNm(pol, pod);
   }
 
@@ -1706,6 +2160,7 @@ export async function handler(req, context) {
     let fileName = headerFileName || '';
     let mimeType = '';
     let isChatOrder = false;
+    let conversationalText = '';
 
     if (isJsonRequest || (body && typeof body === 'object')) {
       let rawData = body?.fileBase64 ?? body?.pdfBase64 ?? body?.data ?? body?.file ?? body?.document ?? '';
@@ -1715,7 +2170,7 @@ export async function handler(req, context) {
       fileName = body?.fileName || body?.name || headerFileName || '';
       mimeType = body?.mimeType || body?.type || '';
 
-      const conversationalText = (
+      conversationalText = (
         body?.text ||
         body?.message ||
         body?.prompt ||
@@ -1723,7 +2178,8 @@ export async function handler(req, context) {
         body?.order ||
         body?.query ||
         body?.content ||
-        body?.description
+        body?.description ||
+        ''
       );
 
       // Soporte directo prioritario para peticiones con lista de items ya estructurados
@@ -1766,9 +2222,15 @@ export async function handler(req, context) {
         });
 
         const orderTotals = calculateOrderTotals(items);
-        const charteringAssessment = evaluateCharteringModel(orderTotals, items, body || {});
+        const operationalOptions = extractRouteAndOperationalOptions(conversationalText, body || {});
+        if (!operationalOptions.distanceNm || isNaN(Number(operationalOptions.distanceNm)) || Number(operationalOptions.distanceNm) <= 0) {
+          const pLoad = operationalOptions.pol || 'Valencia';
+          const pDisch = operationalOptions.pod || 'Houston';
+          operationalOptions.distanceNm = await fetchDatalasticDistanceNm(pLoad, pDisch);
+        }
+        const charteringAssessment = evaluateCharteringModel(orderTotals, items, operationalOptions);
         const operationalProfile = buildOperationalProfile(items, orderTotals);
-        const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
+        const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, operationalOptions);
 
         return new Response(JSON.stringify({
           success: true,
@@ -1875,7 +2337,7 @@ export async function handler(req, context) {
               fileName = body.fileName || body.name || headerFileName || '';
               mimeType = body.mimeType || body.type || '';
 
-              const conversationalText = body?.text || body?.message || body?.prompt || body?.instruction || body?.order || body?.query || body?.content || body?.description;
+              conversationalText = body?.text || body?.message || body?.prompt || body?.instruction || body?.order || body?.query || body?.content || body?.description || '';
               if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && typeof conversationalText === 'string' && conversationalText.trim()) {
                 isChatOrder = true;
                 pureBase64 = Buffer.from(conversationalText.trim(), 'utf8').toString('base64');
@@ -1918,12 +2380,21 @@ export async function handler(req, context) {
           pureBase64 = fileBuffer.toString('base64');
           mimeType = 'text/plain';
           fileName = headerFileName || 'orden_conversacional.txt';
+          if (!conversationalText) {
+            conversationalText = fileBuffer.toString('utf8');
+          }
         } else {
           fileBuffer = rawBinaryBuffer;
           pureBase64 = fileBuffer.toString('base64');
           fileName = headerFileName || 'Documento_Proyecto.pdf';
         }
       }
+    }
+
+    if (isChatOrder && !conversationalText && fileBuffer) {
+      try {
+        conversationalText = fileBuffer.toString('utf8');
+      } catch (_) {}
     }
 
     if (!fileName) {
@@ -2102,9 +2573,15 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
     });
 
     const orderTotals = calculateOrderTotals(items);
-    const charteringAssessment = evaluateCharteringModel(orderTotals, items, body || {});
+    const operationalOptions = extractRouteAndOperationalOptions(conversationalText, body || {});
+    if (!operationalOptions.distanceNm || isNaN(Number(operationalOptions.distanceNm)) || Number(operationalOptions.distanceNm) <= 0) {
+      const pLoad = operationalOptions.pol || 'Valencia';
+      const pDisch = operationalOptions.pod || 'Houston';
+      operationalOptions.distanceNm = await fetchDatalasticDistanceNm(pLoad, pDisch);
+    }
+    const charteringAssessment = evaluateCharteringModel(orderTotals, items, operationalOptions);
     const operationalProfile = buildOperationalProfile(items, orderTotals);
-    const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
+    const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, operationalOptions);
 
     const fullDataUrl = `data:${mimeType};base64,${pureBase64}`;
 
@@ -2165,6 +2642,7 @@ handler.calculateFinancialBreakdown = calculateFinancialBreakdown;
 handler.WORLD_PORTS = WORLD_PORTS;
 handler.KNOWN_PORT_DISTANCES_NM = KNOWN_PORT_DISTANCES_NM;
 handler.calculatePortDistanceNm = calculatePortDistanceNm;
+handler.fetchDatalasticDistanceNm = fetchDatalasticDistanceNm;
 handler.calculateRotationAndTce = calculateRotationAndTce;
 handler.calculateDemurrage = calculateDemurrage;
 handler.detectFileMimeType = detectFileMimeType;
@@ -2172,5 +2650,9 @@ handler.isExcelFormat = isExcelFormat;
 handler.isWordFormat = isWordFormat;
 handler.extractTextFromSpreadsheet = extractTextFromSpreadsheet;
 handler.extractTextFromWord = extractTextFromWord;
+handler.extractRouteAndOperationalOptions = extractRouteAndOperationalOptions;
+handler.parseOperationalRate = parseOperationalRate;
+handler.KNOWN_PORTS_MAP = KNOWN_PORTS_MAP;
+handler.sanitizePortName = sanitizePortName;
 
 export default handler;
