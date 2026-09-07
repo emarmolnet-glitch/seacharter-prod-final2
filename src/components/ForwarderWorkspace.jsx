@@ -1099,6 +1099,61 @@ export function ForwarderWorkspace() {
     const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
     const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
 
+    const toneladas = totalWeightTons > 0 ? totalWeightTons : (reportRT > 0 ? reportRT : 1);
+
+    // Flete total en USD
+    let fleteTotalUsd = 0;
+    if (sourcePayload?.financialBreakdown?.flete_total_usd != null && Number(sourcePayload.financialBreakdown.flete_total_usd) > 0) {
+      fleteTotalUsd = Number(sourcePayload.financialBreakdown.flete_total_usd);
+    } else if (sourcePayload?.flete_total_usd != null && Number(sourcePayload.flete_total_usd) > 0) {
+      fleteTotalUsd = Number(sourcePayload.flete_total_usd);
+    } else {
+      fleteTotalUsd = Math.round(diasRotacionTotal * reportDailyHire * 100) / 100;
+    }
+
+    // Costes FOB operativos (excluyendo mercancía) y Valor total de la mercancía en USD
+    const fobOpsCostEur = estibaCostNum + matCostNum + (storageCostNum + initialHandlingCost + survCost + inlCost) + demurrageCostNum;
+    const valorMercanciaEur = custCost;
+
+    let costesFobTotalesUsd = 0;
+    let valorTotalMercanciaUsd = 0;
+
+    if (sourcePayload?.financialBreakdown?.costes_fob_totales_usd != null) {
+      costesFobTotalesUsd = Number(sourcePayload.financialBreakdown.costes_fob_totales_usd);
+    } else if (sourcePayload?.costes_fob_totales_usd != null) {
+      costesFobTotalesUsd = Number(sourcePayload.costes_fob_totales_usd);
+    } else {
+      costesFobTotalesUsd = Math.round((fobOpsCostEur / reportExRate) * 100) / 100;
+    }
+
+    if (sourcePayload?.financialBreakdown?.valor_total_mercancia_usd != null) {
+      valorTotalMercanciaUsd = Number(sourcePayload.financialBreakdown.valor_total_mercancia_usd);
+    } else if (sourcePayload?.valor_total_mercancia_usd != null) {
+      valorTotalMercanciaUsd = Number(sourcePayload.valor_total_mercancia_usd);
+    } else {
+      valorTotalMercanciaUsd = Math.round((valorMercanciaEur / reportExRate) * 100) / 100;
+    }
+
+    // Ratios unitarios en USD/MT (flete_unitario_usd_mt y fob_mas_mercancia_unitario_usd_mt)
+    let fleteUnitarioUsdMt = 0;
+    let fobMasMercanciaUnitarioUsdMt = 0;
+
+    if (sourcePayload?.financialBreakdown?.flete_unitario_usd_mt != null) {
+      fleteUnitarioUsdMt = Number(sourcePayload.financialBreakdown.flete_unitario_usd_mt);
+    } else if (sourcePayload?.flete_unitario_usd_mt != null) {
+      fleteUnitarioUsdMt = Number(sourcePayload.flete_unitario_usd_mt);
+    } else {
+      fleteUnitarioUsdMt = toneladas > 0 ? Math.round((fleteTotalUsd / toneladas) * 100) / 100 : 0;
+    }
+
+    if (sourcePayload?.financialBreakdown?.fob_mas_mercancia_unitario_usd_mt != null) {
+      fobMasMercanciaUnitarioUsdMt = Number(sourcePayload.financialBreakdown.fob_mas_mercancia_unitario_usd_mt);
+    } else if (sourcePayload?.fob_mas_mercancia_unitario_usd_mt != null) {
+      fobMasMercanciaUnitarioUsdMt = Number(sourcePayload.fob_mas_mercancia_unitario_usd_mt);
+    } else {
+      fobMasMercanciaUnitarioUsdMt = toneladas > 0 ? Math.round(((costesFobTotalesUsd + valorTotalMercanciaUsd) / toneladas) * 100) / 100 : 0;
+    }
+
     return {
       totals: { quantity: qTotal, weight: wTotalKg, m2: m2Total, m3: m3Total },
       totalWeightTons,
@@ -1145,6 +1200,17 @@ export function ForwarderWorkspace() {
       craneCostNum: (heavyLiftCount * 2500) + portCraneCost,
       storageCostNum,
       initialHandlingCost,
+      toneladas,
+      fleteTotalUsd,
+      costesFobTotalesUsd,
+      valorTotalMercanciaUsd,
+      fleteUnitarioUsdMt,
+      fobMasMercanciaUnitarioUsdMt,
+      flete_unitario_usd_mt: fleteUnitarioUsdMt,
+      fob_mas_mercancia_unitario_usd_mt: fobMasMercanciaUnitarioUsdMt,
+      flete_total_usd: fleteTotalUsd,
+      costes_fob_totales_usd: costesFobTotalesUsd,
+      valor_total_mercancia_usd: valorTotalMercanciaUsd,
     };
   };
 
@@ -1304,6 +1370,11 @@ export function ForwarderWorkspace() {
       chartering_assessment: charteringAssessment || currentReportSnapshot?.charteringAssessment || null,
       charteringAssessment: charteringAssessment || currentReportSnapshot?.charteringAssessment || null,
       executive_report_snapshot: currentReportSnapshot,
+      flete_unitario_usd_mt: currentReportSnapshot.flete_unitario_usd_mt,
+      fob_mas_mercancia_unitario_usd_mt: currentReportSnapshot.fob_mas_mercancia_unitario_usd_mt,
+      flete_total_usd: currentReportSnapshot.flete_total_usd,
+      costes_fob_totales_usd: currentReportSnapshot.costes_fob_totales_usd,
+      valor_total_mercancia_usd: currentReportSnapshot.valor_total_mercancia_usd,
     };
     const lineItemCost = parseFloat(estimatedCost) || currentReportSnapshot.finalTotalCost || 0;
     const lineItemPrice = parseFloat(salePrice) || currentReportSnapshot.finalTotalSale || 0;
@@ -2007,6 +2078,14 @@ export function ForwarderWorkspace() {
         const periSaleNum = activeReport.periSaleNum;
         const periMarginNum = activeReport.periMarginNum;
 
+        const fleteUnitarioUsdMt = Number(activeReport.flete_unitario_usd_mt ?? activeReport.fleteUnitarioUsdMt ?? 0);
+        const fobMasMercanciaUnitarioUsdMt = Number(activeReport.fob_mas_mercancia_unitario_usd_mt ?? activeReport.fobMasMercanciaUnitarioUsdMt ?? 0);
+        const fleteTotalUsd = Number(activeReport.flete_total_usd ?? activeReport.fleteTotalUsd ?? 0);
+        const costesFobTotalesUsd = Number(activeReport.costes_fob_totales_usd ?? activeReport.costesFobTotalesUsd ?? 0);
+        const valorTotalMercanciaUsd = Number(activeReport.valor_total_mercancia_usd ?? activeReport.valorTotalMercanciaUsd ?? 0);
+        const toneladas = Number(activeReport.toneladas || activeReport.totalWeightTons || (reportRT > 0 ? reportRT : 1));
+        const formatUsd = (val) => '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
         return (
           <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-10 pb-28 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
             <style>{`
@@ -2020,7 +2099,7 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            <div className="fixed bottom-6 left-8 flex items-center gap-4 z-[9999] print:hidden">
+            <div className="fixed bottom-6 right-8 flex items-center gap-4 z-[9999] print:hidden">
               <button
                 id="btn-close-executive-report"
                 type="button"
@@ -2183,6 +2262,53 @@ export function ForwarderWorkspace() {
                   <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum)) * 1.15)}</span>
                 </div>
               </div>
+
+              {/* Sección: Desglose Unitario Operativo (USD/MT) */}
+              <section className="mb-6">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2 flex items-center justify-between">
+                  <span>💵 Desglose Unitario Operativo (USD/MT)</span>
+                  <span className="text-[10px] font-bold text-slate-500 font-mono">
+                    Base: {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT · Valores exclusivos en USD/MT
+                  </span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Valor del Flete */}
+                  <div className="bg-sky-50 border-2 border-sky-300 p-4 rounded-xl shadow-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-black uppercase tracking-wide text-sky-800">
+                        Valor del Flete
+                      </span>
+                      <span className="text-[10px] font-extrabold bg-sky-200 text-sky-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                        USD/MT
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-sky-900 mt-2">
+                      {fleteUnitarioUsdMt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-sky-700">USD/MT</span>
+                    </div>
+                    <p className="text-[10px] text-sky-700 mt-1.5 font-semibold">
+                      Flete Marítimo Internacional Total: <span className="font-bold font-mono">{formatUsd(fleteTotalUsd)}</span> sobre {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+                    </p>
+                  </div>
+
+                  {/* Costes FOB + Mercancía */}
+                  <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-xl shadow-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-black uppercase tracking-wide text-amber-900">
+                        Costes FOB + Mercancía
+                      </span>
+                      <span className="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                        USD/MT
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-amber-950 mt-2">
+                      {fobMasMercanciaUnitarioUsdMt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-amber-800">USD/MT</span>
+                    </div>
+                    <p className="text-[10px] text-amber-800 mt-1.5 font-semibold">
+                      Costes FOB ({formatUsd(costesFobTotalesUsd)}) + Mercancía ({formatUsd(valorTotalMercanciaUsd)}) sobre {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+                    </p>
+                  </div>
+                </div>
+              </section>
 
               {/* Importe Total de Cotización / Venta (All-In) */}
               <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
