@@ -8110,6 +8110,51 @@
             border-radius: 0.875rem !important;
             background: #FFFFFF !important;
             box-shadow: var(--floating-panel-shadow) !important;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.2s ease,
+                        max-height 0.25s ease,
+                        margin 0.25s ease,
+                        padding 0.25s ease !important;
+            will-change: transform, opacity, max-height;
+        }
+
+        /* Colapso completo de la cabecera cuando el usuario la oculta */
+        body.header-collapsed > header.app-header,
+        header.app-header.header-collapsed,
+        header.app-header.is-hidden {
+            display: none !important;
+            max-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            border: none !important;
+            transform: translateY(-100%);
+        }
+
+        /* Botón flotante para restaurar la cabecera cuando está oculta */
+        body.header-collapsed #btn-expand-header {
+            display: inline-flex !important;
+            animation: headerFadeInDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Adaptación dinámica: el contenedor principal ocupa el 100vh al colapsar el header */
+        body.header-collapsed .app-main {
+            height: 100vh !important;
+            min-height: 100vh !important;
+            flex: 1 1 100vh !important;
+        }
+
+        @keyframes headerFadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .collapsible-section.collapsible-section--card {
@@ -8291,6 +8336,17 @@
 
             header.app-header #session-actions {
                 display: flex !important;
+            }
+
+            header.app-header #btn-collapse-header {
+                display: inline-flex !important;
+                width: 34px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+                padding: 0 !important;
+                border-radius: 7px !important;
+                align-items: center !important;
+                justify-content: center !important;
             }
         }
 
@@ -8773,6 +8829,20 @@
                     <span class="sr-only">Vista Fletador</span>
                 </button>
             </div>
+
+            <!-- Botón Colapsar Cabecera de Navegación -->
+            <button
+                type="button"
+                id="btn-collapse-header"
+                class="header-toggle-collapse-btn inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 shadow-xs cursor-pointer transition-all duration-150 shrink-0 ml-1 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                onclick="toggleHeaderVisibility()"
+                title="Ocultar barra de navegación (Alt+H)"
+                aria-label="Ocultar barra de navegación"
+                aria-expanded="true"
+            >
+                <i class="fa-solid fa-chevron-up text-xs" aria-hidden="true"></i>
+                <span class="sr-only">Ocultar navegación</span>
+            </button>
         </div>
     </header>
 
@@ -13415,6 +13485,21 @@
             <span class="sea-assistant-alert-badge" hidden aria-live="polite"></span>
         </button>
     </main>
+
+    <!-- BOTÓN FLOTANTE PARA RESTAURAR LA BARRA DE NAVEGACIÓN CUANDO ESTÁ OCULTA -->
+    <button
+        type="button"
+        id="btn-expand-header"
+        class="header-expand-floating-btn fixed top-2.5 right-4 z-50 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-900 text-slate-200 hover:text-white border border-slate-700/90 shadow-2xl text-xs font-semibold backdrop-blur transition-all duration-200 cursor-pointer no-print focus:outline-none focus:ring-2 focus:ring-sky-400"
+        onclick="toggleHeaderVisibility()"
+        title="Mostrar barra de navegación (Alt+H)"
+        aria-label="Mostrar barra de navegación"
+        aria-expanded="false"
+        style="display: none;"
+    >
+        <i class="fa-solid fa-chevron-down text-[11px] text-sky-400" aria-hidden="true"></i>
+        <span class="text-[11px] font-sans tracking-tight">Mostrar Navegación</span>
+    </button>
 
     <div id="dossier-save-modal" class="dossier-modal" aria-hidden="true">
         <div class="dossier-modal__backdrop" data-close-dossier-modal></div>
@@ -69282,6 +69367,130 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
           }
         }
       });
+    </script>
+
+    <!-- CONTROLADOR GLOBAL DE VISIBILIDAD DE NAVEGACIÓN (HEADER) -->
+    <script>
+        (function() {
+            const STORAGE_KEY = 'seacharter_header_visible';
+
+            function getStoredHeaderVisibility() {
+                try {
+                    const saved = window.localStorage?.getItem(STORAGE_KEY);
+                    if (saved !== null && saved !== undefined) {
+                        return saved === 'true';
+                    }
+                } catch (_) {}
+                return true;
+            }
+
+            function setStoredHeaderVisibility(visible) {
+                try {
+                    window.localStorage?.setItem(STORAGE_KEY, String(visible));
+                } catch (_) {}
+            }
+
+            function applyHeaderVisibility(visible, smooth = true) {
+                const isVisible = Boolean(visible);
+                window.isHeaderVisible = isVisible;
+                const body = document.body;
+                const header = document.querySelector('header.app-header') || document.getElementById('main-app-header');
+                const collapseBtn = document.getElementById('btn-collapse-header');
+                const expandBtn = document.getElementById('btn-expand-header');
+
+                if (body) {
+                    body.classList.toggle('header-collapsed', !isVisible);
+                    body.dataset.headerVisible = String(isVisible);
+                }
+
+                if (header) {
+                    header.classList.toggle('header-collapsed', !isVisible);
+                    header.setAttribute('aria-hidden', String(!isVisible));
+                }
+
+                if (collapseBtn) {
+                    collapseBtn.setAttribute('aria-expanded', String(isVisible));
+                }
+
+                if (expandBtn) {
+                    expandBtn.setAttribute('aria-expanded', String(isVisible));
+                }
+
+                // Disparar evento resize para reajuste dinámico de cartografía WebGL, Leaflet, tablas y lienzos
+                window.dispatchEvent(new Event('resize'));
+                if (typeof window.routeMap?.invalidateSize === 'function') {
+                    window.routeMap.invalidateSize();
+                }
+                if (typeof window.GlobalFleetGlobe?.resize === 'function') {
+                    window.GlobalFleetGlobe.resize();
+                }
+
+                // Segundo ciclo de reajuste para acomodar transiciones CSS completas
+                if (smooth) {
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('resize'));
+                        if (typeof window.routeMap?.invalidateSize === 'function') {
+                            window.routeMap.invalidateSize();
+                        }
+                    }, 260);
+                }
+
+                try {
+                    window.dispatchEvent(new CustomEvent('header:visibility-change', {
+                        detail: { isHeaderVisible: isVisible, visible: isVisible }
+                    }));
+                } catch (_) {}
+            }
+
+            function toggleHeaderVisibility() {
+                const current = (window.isHeaderVisible !== undefined) ? window.isHeaderVisible : getStoredHeaderVisibility();
+                const next = !current;
+                setStoredHeaderVisibility(next);
+                applyHeaderVisibility(next, true);
+                return next;
+            }
+
+            function setHeaderVisibility(visible) {
+                const next = Boolean(visible);
+                setStoredHeaderVisibility(next);
+                applyHeaderVisibility(next, true);
+                return next;
+            }
+
+            window.isHeaderVisible = true;
+            window.toggleHeaderVisibility = toggleHeaderVisibility;
+            window.setHeaderVisibility = setHeaderVisibility;
+            window.applyHeaderVisibility = applyHeaderVisibility;
+            window.getStoredHeaderVisibility = getStoredHeaderVisibility;
+
+            window.addEventListener('header:toggle', () => toggleHeaderVisibility());
+            window.addEventListener('header:set-visibility', (e) => {
+                if (e?.detail && typeof e.detail.visible === 'boolean') {
+                    setHeaderVisibility(e.detail.visible);
+                }
+            });
+
+            // Atajo de teclado accesible: Alt+H para alternar la cabecera
+            window.addEventListener('keydown', (e) => {
+                if ((e.altKey && (e.key === 'h' || e.key === 'H')) ||
+                    (e.ctrlKey && e.shiftKey && (e.key === 'h' || e.key === 'H'))) {
+                    const tag = e.target?.tagName;
+                    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !e.target?.isContentEditable) {
+                        e.preventDefault();
+                        toggleHeaderVisibility();
+                    }
+                }
+            });
+
+            const initialVisibility = getStoredHeaderVisibility();
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    applyHeaderVisibility(initialVisibility, false);
+                }, { once: true });
+            } else {
+                applyHeaderVisibility(initialVisibility, false);
+            }
+        })();
     </script>
 </body>
 </html>
