@@ -969,6 +969,76 @@ export function ForwarderWorkspace() {
     }
   };
 
+  const handleDeleteProject = async (e, projToDelete) => {
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
+    const displayName = projToDelete.client_name || projToDelete.project_ref || 'este proyecto';
+    const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar el proyecto "${displayName}"?`);
+    if (!confirmed) return;
+
+    // 1. Eliminar inmediatamente del estado local en el frontend
+    const updatedProjects = projects.filter((p) => {
+      if (projToDelete.id && p.id) {
+        return p.id !== projToDelete.id;
+      }
+      return p.project_ref !== projToDelete.project_ref;
+    });
+    setProjects(updatedProjects);
+
+    // 2. Si el usuario elimina el proyecto activo en el workspace, limpiar o redirigir
+    const isCurrentActive = activeProject && (
+      (projToDelete.id && activeProject.id === projToDelete.id) ||
+      (projToDelete.project_ref && activeProject.project_ref === projToDelete.project_ref)
+    );
+
+    if (isCurrentActive) {
+      setIsCargoModalOpen(false);
+      setShowExecutiveReport(false);
+      if (updatedProjects.length > 0) {
+        setActiveProject(updatedProjects[0]);
+      } else {
+        setActiveProject(null);
+      }
+    }
+
+    setSaveSuccessMessage('Proyecto eliminado correctamente');
+    setTimeout(() => setSaveSuccessMessage(null), 3000);
+
+    // 3. Sincronizar con almacenamiento local si existe caché
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cached = window.localStorage.getItem('forwarder_projects');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((p) => {
+              if (projToDelete.id && p.id) return p.id !== projToDelete.id;
+              return p.project_ref !== projToDelete.project_ref;
+            });
+            window.localStorage.setItem('forwarder_projects', JSON.stringify(filtered));
+          }
+        }
+      }
+    } catch (storageErr) {
+      console.warn('No se pudo actualizar localStorage:', storageErr);
+    }
+
+    // 4. Ejecutar llamada de borrado en la base de datos
+    try {
+      await fetch('/.netlify/functions/forwarder-projects', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          id: projToDelete.id,
+          project_ref: projToDelete.project_ref
+        })
+      });
+    } catch (err) {
+      console.error('Error al eliminar proyecto de la base de datos:', err);
+    }
+  };
+
   const handleTriggerImport = () => { if (fileInputRef.current && !isAnalyzingFile) fileInputRef.current.click(); };
 
   const handleSaveDocumentToProject = async (docMeta) => {
@@ -2294,11 +2364,35 @@ export function ForwarderWorkspace() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {projects.map((proj) => {
-              const isSelected = activeProject && activeProject.id === proj.id;
+              const isSelected = activeProject && (
+                (proj.id && activeProject.id === proj.id) ||
+                (proj.project_ref && activeProject.project_ref === proj.project_ref)
+              );
               return (
-                <div key={proj.id} onClick={() => setActiveProject(proj)} className={`p-3.5 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-slate-800 border-blue-500' : 'bg-slate-900/60 border-slate-800'}`}>
-                  <span className="font-mono text-[11px] text-sky-400">{proj.project_ref}</span>
-                  <h3 className="font-bold text-slate-200 text-sm truncate">{proj.client_name}</h3>
+                <div
+                  key={proj.id || proj.project_ref}
+                  onClick={() => setActiveProject(proj)}
+                  className={`group p-3.5 rounded-xl border transition-all cursor-pointer relative ${
+                    isSelected ? 'bg-slate-800 border-blue-500 shadow-sm' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono text-[11px] text-sky-400">{proj.project_ref}</span>
+                      <h3 className="font-bold text-slate-200 text-sm truncate">{proj.client_name}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteProject(e, proj)}
+                      title="Eliminar proyecto"
+                      aria-label={`Eliminar proyecto ${proj.client_name || proj.project_ref || ''}`}
+                      className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0 opacity-70 group-hover:opacity-100"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               );
             })}

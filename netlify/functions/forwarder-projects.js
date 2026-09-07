@@ -115,6 +115,50 @@ exports.handler = async (event) => {
       };
     }
 
+    // 4. ELIMINAR EXPEDIENTE (DELETE)
+    if (httpMethod === 'DELETE') {
+      let data = {};
+      if (body) {
+        try {
+          data = typeof body === 'string' ? JSON.parse(body) : body;
+        } catch (e) {
+          data = {};
+        }
+      }
+      const qParams = event.queryStringParameters || {};
+      const id = data.id || qParams.id;
+      const projectRef = data.project_ref || qParams.project_ref;
+
+      if (!id && !projectRef) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Se requiere id o project_ref para eliminar el proyecto' })
+        };
+      }
+
+      const parsedId = id && !isNaN(parseInt(id, 10)) ? parseInt(id, 10) : null;
+
+      const deleteQuery = `
+        DELETE FROM forwarder_projects 
+        WHERE ($1::integer IS NOT NULL AND id = $1)
+           OR ($2::text IS NOT NULL AND project_ref = $2)
+        RETURNING *;
+      `;
+      const deleteValues = [parsedId, projectRef || null];
+      const deleteResult = await pool.query(deleteQuery, deleteValues);
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: deleteResult.rowCount > 0 ? 'Expediente eliminado con éxito' : 'Proyecto no encontrado o ya eliminado',
+          deletedCount: deleteResult.rowCount,
+          project: deleteResult.rows[0] || null
+        })
+      };
+    }
+
     return { statusCode: 405, body: 'Method Not Allowed' };
 
   } catch (error) {
