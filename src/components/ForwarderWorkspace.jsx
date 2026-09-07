@@ -1790,7 +1790,7 @@ export function ForwarderWorkspace() {
         const periMarginNum = activeReport.periMarginNum;
 
         return (
-          <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-20 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
+          <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-10 pb-28 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -1802,12 +1802,26 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            <div className="fixed top-6 right-8 flex gap-4 z-[9999] print:hidden">
-              <button id="btn-print-executive-report" onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
-                🖨️ Imprimir / Guardar PDF
+            <div className="fixed bottom-6 left-8 flex items-center gap-4 z-[9999] print:hidden">
+              <button
+                id="btn-close-executive-report"
+                type="button"
+                onClick={() => setShowExecutiveReport(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform"
+                title="Cerrar Reporte (Esc)"
+                aria-label="Cerrar Reporte"
+              >
+                ✖ Cerrar
               </button>
-              <button id="btn-close-executive-report" onClick={() => setShowExecutiveReport(false)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
-                ✖ Cerrar Reporte
+              <button
+                id="btn-print-executive-report"
+                type="button"
+                onClick={() => window.print()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform"
+                title="Imprimir o Guardar Reporte"
+                aria-label="Imprimir / Guardar Reporte"
+              >
+                🖨️ Imprimir / Guardar Reporte
               </button>
             </div>
 
