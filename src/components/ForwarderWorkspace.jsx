@@ -37,6 +37,7 @@ export function ForwarderWorkspace() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
   const [activeProject, setActiveProject] = useState(null);
+  const [isAgentVisible, setIsAgentVisible] = useState(true);
 
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
   const [editingLineItemId, setEditingLineItemId] = useState(null);
@@ -199,12 +200,20 @@ export function ForwarderWorkspace() {
           dataBase64 = await readFileAsDataURL(file);
         } catch (e) {}
 
-        const formData = new FormData();
-        formData.append('file', file);
+        const cleanBase64 = (typeof dataBase64 === 'string' && dataBase64.includes(','))
+          ? dataBase64.split(',')[1].trim()
+          : (typeof dataBase64 === 'string' ? dataBase64.trim() : '');
 
         const response = await fetch('/.netlify/functions/project-parser', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileBase64: cleanBase64,
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+          }),
         });
         const data = await response.json();
 
@@ -219,7 +228,7 @@ export function ForwarderWorkspace() {
         await handleSaveDocumentToProject({
           name: file.name,
           size: file.size,
-          itemsCount: data.items ? data.items.length : 1,
+          itemsCount: data.items ? data.items.length : 0,
           uploadedAt: new Date().toISOString(),
           dataBase64: dataBase64
         });
@@ -407,21 +416,26 @@ export function ForwarderWorkspace() {
       return;
     }
 
-    if (payload.dunnageUnits !== undefined) { setDunnageWood(payload.dunnageUnits); hasChanges = true; }
-    if (payload.slingsUnits !== undefined) { setHighCapacitySlings(payload.slingsUnits); hasChanges = true; }
-    if (payload.lashingChains !== undefined) { setChainsBinders(payload.lashingChains); hasChanges = true; }
-    if (payload.stevedoringShifts !== undefined) { setStevedoreGangs(payload.stevedoringShifts); hasChanges = true; }
-    if (payload.lashingTeams !== undefined) { setLashingTeam(payload.lashingTeams); hasChanges = true; }
-    if (payload.heavyLiftCranes !== undefined) { setHeavyLiftCrane(payload.heavyLiftCranes); hasChanges = true; }
-    if (payload.mafiPlatforms !== undefined) { setMafiPlatforms(payload.mafiPlatforms); hasChanges = true; }
-    if (payload.storageDays !== undefined) { setStorageDays(payload.storageDays); hasChanges = true; }
+    let structuralModified = false;
+    if (payload.dunnageUnits !== undefined) { setDunnageWood(payload.dunnageUnits); hasChanges = true; structuralModified = true; }
+    if (payload.slingsUnits !== undefined) { setHighCapacitySlings(payload.slingsUnits); hasChanges = true; structuralModified = true; }
+    if (payload.lashingChains !== undefined) { setChainsBinders(payload.lashingChains); hasChanges = true; structuralModified = true; }
+    if (payload.stevedoringShifts !== undefined) { setStevedoreGangs(payload.stevedoringShifts); hasChanges = true; structuralModified = true; }
+    if (payload.lashingTeams !== undefined) { setLashingTeam(payload.lashingTeams); hasChanges = true; structuralModified = true; }
+    if (payload.heavyLiftCranes !== undefined) { setHeavyLiftCrane(payload.heavyLiftCranes); hasChanges = true; structuralModified = true; }
+    if (payload.mafiPlatforms !== undefined) { setMafiPlatforms(payload.mafiPlatforms); hasChanges = true; structuralModified = true; }
+    if (payload.storageDays !== undefined) { setStorageDays(Number(payload.storageDays)); hasChanges = true; }
     if (payload.surveyorCost !== undefined) {
       userEditedSurveyor.current = true;
-      setSurveyorCost(payload.surveyorCost);
+      setSurveyorCost(Number(payload.surveyorCost));
       hasChanges = true;
     }
     if (payload.inlandTrucksCount !== undefined) { setInlandCost(payload.inlandTrucksCount); hasChanges = true; }
     if (payload.customsCost !== undefined) { setCustomsCost(payload.customsCost); hasChanges = true; }
+
+    if (structuralModified || payload.forceOpenModal) {
+      setIsCargoModalOpen(true);
+    }
 
     if (hasChanges) {
       setActiveProject(updatedProject);
@@ -943,7 +957,11 @@ export function ForwarderWorkspace() {
         );
       })()}
 
-      <AgenteProyectosWidget onUpdatePayload={handleApplyProjectPayload} />
+      <AgenteProyectosWidget
+        onUpdatePayload={handleApplyProjectPayload}
+        isOpen={isAgentVisible}
+        onToggleOpen={setIsAgentVisible}
+      />
     </>
   );
 }

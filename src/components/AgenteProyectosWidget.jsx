@@ -169,34 +169,32 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
     setMessages(prev => [...prev, { sender: 'user', text: `📎 Archivo adjunto: ${file.name}` }]);
 
     try {
-      // Conversión local a Base64 para garantizar visualización inmediata sin depender del servidor
+      // Conversión local a Base64 limpia (sin prefijo data:...;base64,) para enviar JSON plano
       const reader = new FileReader();
-      const dataBase64 = await new Promise((resolve) => {
+      const rawDataBase64 = await new Promise((resolve) => {
         reader.onload = () => resolve(reader.result);
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
       });
 
-      const formData = new FormData();
-      formData.append('file', file);
+      const cleanBase64 = (typeof rawDataBase64 === 'string' && rawDataBase64.includes(','))
+        ? rawDataBase64.split(',')[1].trim()
+        : (typeof rawDataBase64 === 'string' ? rawDataBase64.trim() : '');
 
       const response = await fetch('/.netlify/functions/project-parser', {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileBase64: cleanBase64,
+          fileName: file.name,
+          mimeType: file.type || 'application/pdf',
+        })
       });
       const data = await response.json();
 
-      const formattedItems = (data.success && Array.isArray(data.items) && data.items.length > 0) ? data.items : [{
-        id: `item-${Date.now()}`,
-        category: 'Equipos de Proceso',
-        quantity: 1,
-        type: `Carga de ${file.name}`,
-        length: '6.0',
-        width: '2.4',
-        height: '2.8',
-        weight: '30000',
-        shipping_mode_supported: "40' Open Top"
-      }];
+      const formattedItems = (data.success && Array.isArray(data.items)) ? data.items : [];
 
       const documentMeta = {
         name: file.name,
@@ -204,19 +202,34 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         type: file.type || 'application/pdf',
         itemsCount: formattedItems.length,
         uploadedAt: new Date().toISOString(),
-        dataBase64: dataBase64 // <-- CONTENIDO BINARIO INCRUSTADO
+        dataBase64: rawDataBase64 // DataURL para visualización previa
       };
 
-      const text = `📁 Documento "${file.name}" procesado y guardado correctamente en la base de datos.`;
-      setMessages(prev => [...prev, { sender: 'agent', text }]);
-      speakText(text);
+      if (formattedItems.length > 0) {
+        const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s).`;
+        setMessages(prev => [...prev, { sender: 'agent', text }]);
+        speakText(text);
 
-      if (onUpdatePayload) {
-        onUpdatePayload({
-          category: 'Equipos de Proceso',
-          cargo_items: formattedItems,
-          documentMeta: documentMeta
-        });
+        if (onUpdatePayload) {
+          onUpdatePayload({
+            category: formattedItems[0]?.category || 'Maquinaria',
+            cargo_items: formattedItems,
+            documentMeta: documentMeta
+          });
+        }
+      } else {
+        const text = data.error
+          ? `⚠️ Error al procesar: ${data.error}`
+          : `📁 Documento "${file.name}" analizado: no se encontraron partidas de carga.`;
+        setMessages(prev => [...prev, { sender: 'agent', text }]);
+        speakText(text);
+
+        if (onUpdatePayload) {
+          onUpdatePayload({
+            cargo_items: [],
+            documentMeta: documentMeta
+          });
+        }
       }
     } catch (err) {
       console.error('Error analizando archivo en agente:', err);
