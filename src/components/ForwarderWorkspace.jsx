@@ -63,6 +63,13 @@ export function ForwarderWorkspace() {
   const [shippingMode, setShippingMode] = useState('Lo-Lo');
   const [vesselType, setVesselType] = useState('Geared Breakbulk (Lo-Lo)');
 
+  const [isUnder40t, setIsUnder40t] = useState(false);
+  const [tceActive, setTceActive] = useState(false);
+  const [tceValue, setTceValue] = useState(null);
+  const [charterMode, setCharterMode] = useState('Fletamento Completo');
+  const [isBigBagsCargo, setIsBigBagsCargo] = useState(false);
+  const [operationalProfileNotice, setOperationalProfileNotice] = useState('');
+
   const [storageDays, setStorageDays] = useState(0);
   const [surveyorCost, setSurveyorCost] = useState(0);
   const [inlandCost, setInlandCost] = useState(0);
@@ -288,6 +295,8 @@ export function ForwarderWorkspace() {
       setGangs(0); setHeavyLift(0); setMafiPlatforms(0); setLashingTeams(0);
       setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
       setEstimatedCost(''); setSalePrice('');
+      setIsUnder40t(false); setTceActive(false); setTceValue(null);
+      setOperationalProfileNotice('');
       return;
     }
     let totalPieces = 0; let totalWeightKg = 0; let totalVolumeM3 = 0; let total_m2 = 0;
@@ -336,17 +345,104 @@ export function ForwarderWorkspace() {
     setGangs(Gangs); setHeavyLift(HeavyLift); setMafiPlatforms(MAFIs);
     setLashingTeams(cargoItems.length > 0 ? Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)) : 0);
 
+    // 1. Evaluación del perfil operativo adecuado en Trincaje y Operativa
+    const isBigBagsOrBulk = items.some(it => {
+      const cat = String(it.category || '').toLowerCase();
+      const typ = String(it.type || '').toLowerCase();
+      const mod = String(it.shipping_mode_supported || '').toLowerCase();
+      return cat.includes('ensacad') || cat.includes('dry bulk') || mod.includes('big bag') || mod.includes('granel') ||
+        /big\s*bag|ensacad|saco|granel|bulk|cemento|urea|fertilizante|sulfato|harina|azucar|arroz|clinker|grano/i.test(typ) ||
+        /big\s*bag|ensacad|saco|granel|bulk|cemento|urea|fertilizante|sulfato/i.test(cat);
+    });
+
+    setIsBigBagsCargo(isBigBagsOrBulk);
+
+    let effectiveDunnage = Dunnage;
+    let effectiveCadenas = Cadenas;
+    let effectiveSlings = Eslingas;
+    let effectiveHeavyLift = HeavyLift;
+
+    if (isBigBagsOrBulk) {
+      // Regla estricta: Cargas como cemento en Big Bags NUNCA cargan maderas de cuna pesadas ni cables de acero de proyecto
+      effectiveDunnage = 0;
+      effectiveCadenas = 0;
+      effectiveHeavyLift = 0;
+      effectiveSlings = Math.max(1, Math.ceil(totalPieces / 4));
+
+      setDunnageWood(0);
+      setChainsBinders(0);
+      setHighCapacitySlings(effectiveSlings);
+      setShackles(effectiveSlings * 2);
+      setHeavyLiftCrane(0);
+      setOperationalProfileNotice('Perfil: Mercancía Ensacada / Big Bags (Estiba en Bloque) · Cunas pesadas y cables de acero excluidos');
+    } else {
+      setOperationalProfileNotice('Perfil: Carga Industrial de Proyecto / Breakbulk · Cunas estructurales y cables/cadenas requeridos');
+    }
+
     let currentSurveyorCost = Number(surveyorCost) || 0;
     if (maxPieceWeight > 35000 && Number(surveyorCost) === 0 && !userEditedSurveyor.current) { currentSurveyorCost = 1500; setSurveyorCost(1500); }
 
-    const RT = Math.max(totalWeightTons, totalVolumeM3);
-    const freightCost = RT * 65;
-    const lashingCost = (Dunnage * 30) + (Cadenas * 80) + (Eslingas * 40) + (Grilletes * 15);
-    const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
-    const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+    // 2. Evaluación del umbral de 40 toneladas
+    const isUnderThreshold = totalWeightTons < 40;
+    setIsUnder40t(isUnderThreshold);
 
-    const totalEstimatedCost = freightCost + lashingCost + stevedoringCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
-    setEstimatedCost(totalEstimatedCost.toFixed(2)); setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
+    let totalEstimatedCost = 0;
+
+    if (isUnderThreshold) {
+      // Regla < 40t: Desactivar TCE del buque y computar costes bajo la modalidad de grupaje LCL
+      setTceActive(false);
+      setTceValue(null);
+      setCharterMode('Grupaje LCL');
+      setShippingMode('Grupaje LCL');
+      setVesselType('Consolidación LCL (Sin buque exclusivo)');
+
+      const chargeableWeightTons = Math.max(0.1, totalWeightTons);
+      const chargeableVolumeCbm = Math.max(0.1, totalVolumeM3);
+      const revenueTons = Math.max(1, Math.max(chargeableWeightTons, chargeableVolumeCbm));
+
+      const oceanFreightCost = revenueTons * 65.0;
+      const cfsOriginCost = revenueTons * 22.0;
+      const cfsDestCost = revenueTons * 25.0;
+      const portT3Cost = revenueTons * 4.5;
+      const blFee = 85.0;
+      const totalLclFreightCost = oceanFreightCost + cfsOriginCost + cfsDestCost + portT3Cost + blFee;
+
+      const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+      totalEstimatedCost = totalLclFreightCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+    } else {
+      // Regla >= 40t: Aplicar fletamento completo y cálculo de TCE del buque sugerido
+      setTceActive(true);
+      setCharterMode('Fletamento Completo');
+
+      let suggestedVesselClass = 'Coaster / Buque de Carga General (Mini-Bulker)';
+      let dailyTce = 8500;
+      if (totalWeightTons >= 35000) {
+        suggestedVesselClass = 'Supramax / Ultramax Bulk Carrier';
+        dailyTce = 16500;
+      } else if (totalWeightTons >= 10000) {
+        suggestedVesselClass = 'Handysize Bulk Carrier';
+        dailyTce = 13800;
+      } else if (totalWeightTons >= 3000) {
+        suggestedVesselClass = 'Multi-Purpose MPP / Tween-decker';
+        dailyTce = 11500;
+      }
+
+      setTceValue(dailyTce);
+      if (autoMode !== 'Ro-Ro') {
+        setVesselType(suggestedVesselClass);
+      }
+
+      const RT = Math.max(totalWeightTons, totalVolumeM3);
+      const freightCost = RT * 65;
+      const lashingCost = (effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15);
+      const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
+      const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+
+      totalEstimatedCost = freightCost + lashingCost + stevedoringCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+    }
+
+    setEstimatedCost(totalEstimatedCost.toFixed(2));
+    setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
   useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
@@ -354,12 +450,27 @@ export function ForwarderWorkspace() {
   const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
 
-    if (!activeProject) {
-      window.alert('⚠️ Por favor, selecciona o crea un proyecto en la barra lateral antes de pedirle cambios al agente.');
-      return;
+    let currentProject = activeProject;
+    if (!currentProject) {
+      if (projects.length > 0) {
+        currentProject = projects[0];
+        setActiveProject(currentProject);
+      } else {
+        const defaultProj = {
+          id: `proj-${Date.now()}`,
+          project_ref: 'RDM/2026-001',
+          client_name: 'Proyecto Principal / Agente',
+          status: 'Borrador',
+          items: [],
+          documents: []
+        };
+        currentProject = defaultProj;
+        setProjects([defaultProj]);
+        setActiveProject(defaultProj);
+      }
     }
 
-    let updatedProject = { ...activeProject };
+    let updatedProject = { ...currentProject };
     let hasChanges = false;
 
     if (payload.instruction) {
@@ -391,24 +502,41 @@ export function ForwarderWorkspace() {
       }
     }
 
-    if (payload.category !== undefined) {
-      if (Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
-        const mappedItems = payload.cargo_items.map((ci, idx) => ({
-          id: ci.id || `item-${Date.now()}-${idx}`,
-          category: ci.category || 'Equipos de Proceso',
-          quantity: ci.quantity || 1,
-          type: ci.type || '',
-          length: ci.length_m ?? ci.length ?? '',
-          width: ci.width_m ?? ci.width ?? '',
-          height: ci.height_m ?? ci.height ?? '',
-          weight: ci.unit_weight_kg ?? ci.weight ?? '',
-          shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
-        }));
-        setCargoItems(mappedItems);
-        updatedProject.items = mappedItems;
-        hasChanges = true;
-        setIsCargoModalOpen(true);
-      }
+    const incomingItems = payload.items || payload.cargo_items;
+    if (Array.isArray(incomingItems) && incomingItems.length > 0) {
+      const mappedItems = incomingItems.map((ci, idx) => ({
+        id: ci.id || `item-${Date.now()}-${idx}`,
+        category: ci.category || 'Equipos de Proceso',
+        quantity: ci.quantity ? Math.max(1, Number(ci.quantity)) : 1,
+        type: ci.type || '',
+        length: ci.length_m ?? ci.length ?? '',
+        width: ci.width_m ?? ci.width ?? '',
+        height: ci.height_m ?? ci.height ?? '',
+        weight: ci.unit_weight_kg ?? ci.weight ?? '',
+        shipping_mode_supported: ci.shipping_mode_supported || "Contenedor (FCL / LCL)"
+      }));
+      setCargoItems(mappedItems);
+      updatedProject.items = mappedItems;
+      hasChanges = true;
+      setIsCargoModalOpen(true);
+      autoCalculateEstimates(mappedItems);
+    } else if (payload.category !== undefined && Array.isArray(payload.cargo_items) && payload.cargo_items.length > 0) {
+      const mappedItems = payload.cargo_items.map((ci, idx) => ({
+        id: ci.id || `item-${Date.now()}-${idx}`,
+        category: ci.category || 'Equipos de Proceso',
+        quantity: ci.quantity || 1,
+        type: ci.type || '',
+        length: ci.length_m ?? ci.length ?? '',
+        width: ci.width_m ?? ci.width ?? '',
+        height: ci.height_m ?? ci.height ?? '',
+        weight: ci.unit_weight_kg ?? ci.weight ?? '',
+        shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
+      }));
+      setCargoItems(mappedItems);
+      updatedProject.items = mappedItems;
+      hasChanges = true;
+      setIsCargoModalOpen(true);
+      autoCalculateEstimates(mappedItems);
     }
 
     if (payload.documentMeta) {
@@ -775,21 +903,53 @@ export function ForwarderWorkspace() {
                 </section>
 
                 <section className="pt-6 space-y-4">
-                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Operativa</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Operativa</h3>
+                    {isUnder40t ? (
+                      <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 rounded-full flex items-center gap-1.5 shadow-sm">
+                        📦 Modalidad Grupaje LCL (&lt; 40 t) · TCE Desactivado
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1.5 shadow-sm">
+                        🚢 Fletamento Completo (&ge; 40 t) · TCE Activo: {tceValue ? `${tceValue.toLocaleString('es-ES')} USD/día` : 'Activo'}
+                      </span>
+                    )}
+                  </div>
                   <div id="logistic-engine-banner" role="status" aria-live="polite" className="bg-slate-900 border-l-4 border-cyan-500 p-4 rounded shadow-lg flex items-center gap-4 mb-6">
                     <div className="text-2xl">⚙️</div>
                     <div className="flex flex-col">
                       <span className="text-cyan-400 font-bold text-sm tracking-wide uppercase">Motor de Decisión Operativa IA</span>
                       <span className="text-slate-200 mt-1 text-[11px]">
                         Modalidad detectada: <strong className="text-white ml-1 mr-3">{shippingMode}</strong>
-                        Buque recomendado: <strong className="text-white ml-1">{vesselType}</strong>
+                        Buque recomendado: <strong className="text-white ml-1 mr-3">{vesselType}</strong>
+                        {tceActive && tceValue ? (
+                          <span className="text-emerald-400 font-mono font-bold">| TCE: {tceValue.toLocaleString('es-ES')} USD/día</span>
+                        ) : (
+                          <span className="text-amber-300 font-mono font-bold">| TCE: Desactivado (LCL)</span>
+                        )}
                       </span>
+                      {operationalProfileNotice && (
+                        <span className="text-xs text-sky-300 font-semibold mt-1">
+                          📋 {operationalProfileNotice}
+                        </span>
+                      )}
                     </div>
                   </div>
+                  {isBigBagsCargo && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5 shadow-sm">
+                      <span className="text-base">🛡️</span>
+                      <div>
+                        <strong>Perfil de Carga Masiva / Ensacada (Big Bags):</strong>
+                        <p className="mt-0.5 text-amber-800">
+                          Se aplica estiba en bloque continuo. <strong>Maderas de cuna pesadas y cables de acero de proyecto quedan excluidos</strong> para evitar desgarros y cortes en los sacos de polipropileno.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <NumericCounter label="Maderas" subtitle="Dunnage" value={dunnageWood} onChange={setDunnageWood} />
+                    <NumericCounter label="Maderas" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Dunnage"} value={dunnageWood} onChange={setDunnageWood} />
                     <NumericCounter label="Eslingas" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
-                    <NumericCounter label="Cadenas" subtitle="Trincaje Pesado" value={chainsBinders} onChange={setChainsBinders} />
+                    <NumericCounter label="Cadenas" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Trincaje Pesado"} value={chainsBinders} onChange={setChainsBinders} />
                   </div>
                 </section>
 

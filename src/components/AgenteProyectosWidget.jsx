@@ -16,6 +16,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
     { sender: 'agent', text: '¡Hola! Soy tu Agente de Proyectos. Estoy conectado al workspace y listo para ejecutar cualquier orden en lenguaje natural.' }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const fileInputRef = useRef(null);
@@ -63,7 +64,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isAnalyzing]);
 
   const speakText = (text) => {
     if (!isAudioEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -79,94 +80,110 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
     }
   };
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     if (e) e.preventDefault();
     const raw = inputValue.trim();
-    if (!raw) return;
+    if (!raw || isAnalyzing) return;
 
     setMessages(prev => [...prev, { sender: 'user', text: raw }]);
     setInputValue('');
+    setIsAnalyzing(true);
 
-    const text = raw.toLowerCase();
-    let agentReply = "Orden procesada y aplicada en el workspace.";
-    let payloadObj = { instruction: raw };
+    try {
+      const response = await fetch('/.netlify/functions/project-parser', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: raw,
+          fileBase64: null,
+        }),
+      });
 
-    const extractNumber = (str) => {
-      const match = str.match(/(\d+([.,]\d+)?)/);
-      return match ? parseFloat(match[0].replace(',', '.')) : null;
-    };
+      const data = await response.json();
+      const formattedItems = (data.success && Array.isArray(data.items)) ? data.items : [];
 
-    const val = extractNumber(text);
+      if (formattedItems.length > 0) {
+        const totalKg = formattedItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (parseFloat(it.weight) || 0)), 0);
+        const totalTons = totalKg / 1000;
+        const charterModeLabel = totalTons < 40 ? 'Grupaje LCL (TCE buque desactivado)' : 'Fletamento Completo (TCE buque activo)';
+        const agentReply = `✅ Orden procesada: ${formattedItems.length} partida(s) analizada(s) (${totalTons.toFixed(2)} t acumuladas).\nModalidad: ${charterModeLabel}.\nLista de empaque y operativa actualizadas automáticamente.`;
 
-    if (text.includes('dónde') || text.includes('donde') || text.includes('integrado')) {
-      agentReply = "Los archivos adjuntos y datos procesados se integran directamente en la tabla de la Lista de Empaque (Project Cargo Builder) y actualizan los cálculos de flete y estiba de forma automática.";
-    } else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
-      if (val !== null) {
-        payloadObj.storageDays = val;
-        agentReply = `⚙️ Parámetro aplicado: ${val} días de almacenaje configurados en el proyecto.`;
+        setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
+        speakText(agentReply);
+
+        if (onUpdatePayload) {
+          onUpdatePayload({
+            items: formattedItems,
+            cargo_items: formattedItems,
+            category: formattedItems[0]?.category || 'Maquinaria',
+            orderTotals: data.orderTotals,
+            charteringAssessment: data.charteringAssessment,
+            operationalProfile: data.operationalProfile,
+            forceOpenModal: true,
+          });
+        }
+      } else {
+        const text = raw.toLowerCase();
+        let payloadObj = { instruction: raw };
+
+        const extractNumber = (str) => {
+          const match = str.match(/(\d+([.,]\d+)?)/);
+          return match ? parseFloat(match[0].replace(',', '.')) : null;
+        };
+
+        const val = extractNumber(text);
+
+        if (text.includes('dónde') || text.includes('donde') || text.includes('integrado')) {
+          payloadObj.infoReply = "Los archivos adjuntos y datos procesados se integran directamente en la tabla de la Lista de Empaque (Project Cargo Builder) y actualizan los cálculos de flete y estiba de forma automática.";
+        } else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
+          if (val !== null) payloadObj.storageDays = val;
+        } else if (text.includes('surveyor') || text.includes('perito') || text.includes('inspeccion')) {
+          if (val !== null) payloadObj.surveyorCost = val;
+        } else if (text.includes('inland') || text.includes('transporte') || text.includes('camion')) {
+          if (val !== null) payloadObj.inlandTrucksCount = val;
+        } else if (text.includes('aduana')) {
+          if (val !== null) payloadObj.customsCost = val;
+        } else if (text.includes('madera') || text.includes('dunnage')) {
+          if (val !== null) payloadObj.dunnageUnits = val;
+        } else if (text.includes('eslinga')) {
+          if (val !== null) payloadObj.slingsUnits = val;
+        } else if (text.includes('cadena')) {
+          if (val !== null) payloadObj.lashingChains = val;
+        }
+
+        const agentReply = data.error
+          ? `⚠️ ${data.error}`
+          : payloadObj.infoReply
+            ? payloadObj.infoReply
+            : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
+              ? `⚙️ Parámetros actualizados en el proyecto.`
+              : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
+
+        setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
+        speakText(agentReply);
+
+        if (onUpdatePayload) {
+          onUpdatePayload(payloadObj);
+        }
       }
-    } else if (text.includes('surveyor') || text.includes('perito') || text.includes('inspeccion')) {
-      if (val !== null) {
-        payloadObj.surveyorCost = val;
-        agentReply = `⚙️ Coste de Surveyor actualizado a ${val} €.`;
-      }
-    } else if (text.includes('inland') || text.includes('transporte') || text.includes('camion')) {
-      if (val !== null) {
-        payloadObj.inlandTrucksCount = val;
-        agentReply = `⚙️ Coste de transporte Inland actualizado a ${val} €.`;
-      }
-    } else if (text.includes('aduana')) {
-      if (val !== null) {
-        payloadObj.customsCost = val;
-        agentReply = `⚙️ Gastos de aduanas actualizados a ${val} €.`;
-      }
-    } else if (text.includes('madera') || text.includes('dunnage')) {
-      if (val !== null) {
-        payloadObj.dunnageUnits = val;
-        agentReply = `⚙️ Unidades de maderas de estiba ajustadas a ${val}.`;
-      }
-    } else if (text.includes('eslinga')) {
-      if (val !== null) {
-        payloadObj.slingsUnits = val;
-        agentReply = `⚙️ Unidades de eslingas ajustadas a ${val}.`;
-      }
-    } else if (text.includes('cadena')) {
-      if (val !== null) {
-        payloadObj.lashingChains = val;
-        agentReply = `⚙️ Unidades de cadenas de trincaje ajustadas a ${val}.`;
-      }
-    } else if (text.includes('pieza') || text.includes('cargo') || text.includes('equipo') || text.includes('añad') || text.includes('agreg') || text.includes('met') || text.includes('pon')) {
-      payloadObj.category = 'Equipos de Proceso';
-      payloadObj.cargo_items = [{
-        id: `item-${Date.now()}`,
-        category: 'Equipos de Proceso',
-        quantity: val !== null && val < 50 ? val : 1,
-        type: raw.length > 5 ? raw : 'Pieza Industrial Asistida por IA',
-        length: '5.5',
-        width: '2.5',
-        height: '3.0',
-        weight: '28000',
-        shipping_mode_supported: "40' Flat Rack"
-      }];
-      agentReply = `📦 Elemento añadido y sincronizado con la lista de empaque del expediente.`;
-    } else {
-      agentReply = `He procesado tu instrucción: "${raw}". Parámetros actualizados en el sistema.`;
+    } catch (err) {
+      console.error('Error al enviar orden a project-parser:', err);
+      const errorMsg = '⚠️ Error de comunicación con el motor de análisis project-parser.';
+      setMessages(prev => [...prev, { sender: 'agent', text: errorMsg }]);
+      speakText(errorMsg);
+    } finally {
+      setIsAnalyzing(false);
     }
-
-    setTimeout(() => {
-      setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
-      speakText(agentReply);
-      if (onUpdatePayload) {
-        onUpdatePayload(payloadObj);
-      }
-    }, 500);
   };
 
- const handleFileAttach = async (e) => {
+  const handleFileAttach = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || isAnalyzing) return;
 
     setMessages(prev => [...prev, { sender: 'user', text: `📎 Archivo adjunto: ${file.name}` }]);
+    setIsAnalyzing(true);
 
     try {
       // Conversión local a Base64 limpia (sin prefijo data:...;base64,) para enviar JSON plano
@@ -187,6 +204,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          text: file.name,
           fileBase64: cleanBase64,
           fileName: file.name,
           mimeType: file.type || 'application/pdf',
@@ -206,15 +224,23 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
       };
 
       if (formattedItems.length > 0) {
-        const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s).`;
+        const totalKg = formattedItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (parseFloat(it.weight) || 0)), 0);
+        const totalTons = totalKg / 1000;
+        const charterModeLabel = totalTons < 40 ? 'Grupaje LCL (TCE buque desactivado)' : 'Fletamento Completo (TCE buque activo)';
+        const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s) (${totalTons.toFixed(2)} t).\nModalidad: ${charterModeLabel}.\nLista de empaque y operativa actualizadas automáticamente.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
         speakText(text);
 
         if (onUpdatePayload) {
           onUpdatePayload({
-            category: formattedItems[0]?.category || 'Maquinaria',
+            items: formattedItems,
             cargo_items: formattedItems,
-            documentMeta: documentMeta
+            category: formattedItems[0]?.category || 'Maquinaria',
+            orderTotals: data.orderTotals,
+            charteringAssessment: data.charteringAssessment,
+            operationalProfile: data.operationalProfile,
+            documentMeta: documentMeta,
+            forceOpenModal: true,
           });
         }
       } else {
@@ -226,6 +252,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
 
         if (onUpdatePayload) {
           onUpdatePayload({
+            items: [],
             cargo_items: [],
             documentMeta: documentMeta
           });
@@ -236,6 +263,9 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
       const text = `⚠️ Hubo un error al procesar el archivo.`;
       setMessages(prev => [...prev, { sender: 'agent', text }]);
       speakText(text);
+    } finally {
+      setIsAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
   const toggleMic = () => {
@@ -367,6 +397,14 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
             <div className="pa-bubble-text">{msg.text}</div>
           </div>
         ))}
+        {isAnalyzing && (
+          <div className="pa-bubble agent pa-loading-bubble" role="status" aria-live="polite">
+            <span className="pa-avatar">📂</span>
+            <div className="pa-bubble-text pa-loading-text">
+              <span className="pa-spinner">⏳</span> Analizando orden y calculando parámetros...
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -382,6 +420,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           className="pa-tool-btn" 
           onClick={() => fileInputRef.current?.click()}
           title="Adjuntar archivo o plano"
+          disabled={isAnalyzing}
         >
           📎
         </button>
@@ -390,17 +429,19 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           className={`pa-tool-btn ${isListening ? 'listening' : ''}`} 
           onClick={toggleMic}
           title="Dictado por voz"
+          disabled={isAnalyzing}
         >
           🎙️
         </button>
         <input 
           type="text" 
-          placeholder="Escribe cualquier orden..." 
+          placeholder={isAnalyzing ? "Analizando orden y calculando parámetros..." : "Escribe cualquier orden..."} 
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
+          disabled={isAnalyzing}
         />
-        <button type="submit" className="pa-send-btn" title="Enviar orden">
-          ➤
+        <button type="submit" className="pa-send-btn" title="Enviar orden" disabled={isAnalyzing || !inputValue.trim()}>
+          {isAnalyzing ? '⏳' : '➤'}
         </button>
       </form>
     </div>

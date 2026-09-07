@@ -134,6 +134,27 @@
     padding: 10px 14px;
 }
 
+.pa-loading-bubble .pa-loading-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #0369a1 !important;
+    background: #f0f9ff !important;
+    border: 1px solid #bae6fd !important;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.pa-spinner {
+    display: inline-block;
+    animation: pa-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pa-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
 .project-agent-input-bar {
     display: flex;
     align-items: center;
