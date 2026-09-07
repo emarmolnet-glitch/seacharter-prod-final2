@@ -542,14 +542,135 @@ export function usePendingImoSync() {
 }
 
 /**
+ * Storage key for persistent header visibility preference.
+ */
+export const HEADER_STORAGE_KEY = 'seacharter_header_visible';
+
+/**
+ * Returns stored header visibility preference or true by default.
+ */
+export function getStoredHeaderVisibility(defaultVisible = true) {
+  if (typeof window === 'undefined') return defaultVisible;
+  try {
+    const stored = window.localStorage?.getItem(HEADER_STORAGE_KEY);
+    if (stored !== null && stored !== undefined) {
+      return stored === 'true';
+    }
+  } catch (_) {}
+  return defaultVisible;
+}
+
+/**
+ * Persists header visibility preference to localStorage and emits an event.
+ */
+export function setStoredHeaderVisibility(visible) {
+  const boolVal = Boolean(visible);
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage?.setItem(HEADER_STORAGE_KEY, String(boolVal));
+    } catch (_) {}
+    try {
+      window.dispatchEvent(new CustomEvent('header:visibility-change', {
+        detail: { isHeaderVisible: boolVal, visible: boolVal }
+      }));
+    } catch (_) {}
+  }
+  return boolVal;
+}
+
+/**
+ * Global Header Visibility management hook for SeaCharter Core PRO.
+ * Keeps state in sync with localStorage, DOM layout, and window resize events.
+ */
+export function useHeaderVisibility(defaultVisible = true) {
+  const [isHeaderVisible, setIsHeaderVisible] = useState(() => getStoredHeaderVisibility(defaultVisible));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Apply visibility class and ARIA states to DOM elements
+    const syncDom = (visible) => {
+      if (typeof document !== 'undefined') {
+        if (document.body) {
+          document.body.classList.toggle('header-collapsed', !visible);
+          document.body.dataset.headerVisible = String(visible);
+        }
+        const appHeader = document.querySelector('header.app-header');
+        if (appHeader) {
+          appHeader.classList.toggle('header-collapsed', !visible);
+          appHeader.setAttribute('aria-hidden', String(!visible));
+        }
+        const collapseBtn = document.getElementById('btn-collapse-header');
+        if (collapseBtn) {
+          collapseBtn.setAttribute('aria-expanded', String(visible));
+        }
+        const expandBtn = document.getElementById('btn-expand-header');
+        if (expandBtn) {
+          expandBtn.setAttribute('aria-expanded', String(visible));
+        }
+      }
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    syncDom(isHeaderVisible);
+
+    const handleVisibilityEvent = (event) => {
+      const nextVal = event?.detail?.isHeaderVisible ?? event?.detail?.visible;
+      if (typeof nextVal === 'boolean') {
+        setIsHeaderVisible(nextVal);
+      }
+    };
+
+    const handleToggleEvent = () => {
+      setIsHeaderVisible((prev) => {
+        const next = !prev;
+        setStoredHeaderVisibility(next);
+        return next;
+      });
+    };
+
+    window.addEventListener('header:visibility-change', handleVisibilityEvent);
+    window.addEventListener('header:toggle', handleToggleEvent);
+
+    window.isHeaderVisible = isHeaderVisible;
+    window.setHeaderVisibility = (val) => {
+      const next = Boolean(val);
+      setStoredHeaderVisibility(next);
+      setIsHeaderVisible(next);
+    };
+    window.toggleHeaderVisibility = () => {
+      setIsHeaderVisible((prev) => {
+        const next = !prev;
+        setStoredHeaderVisibility(next);
+        return next;
+      });
+    };
+
+    return () => {
+      window.removeEventListener('header:visibility-change', handleVisibilityEvent);
+      window.removeEventListener('header:toggle', handleToggleEvent);
+    };
+  }, [isHeaderVisible]);
+
+  const toggleHeader = () => {
+    const next = !isHeaderVisible;
+    setStoredHeaderVisibility(next);
+    setIsHeaderVisible(next);
+  };
+
+  return { isHeaderVisible, setIsHeaderVisible, toggleHeader };
+}
+
+/**
  * Main Application / Layout wrapper component for SeaCharter Core PRO.
  */
-export default function App({ children, currentView: initialView = 'MAP' }) {
+export default function App({ children, currentView: initialView = 'MAP', defaultHeaderVisible = true }) {
   useSeaCharterSync();
   useUrlImoAutoLookup();
   usePendingImoSync();
 
   const [currentView, setCurrentView] = useState(initialView);
+  const { isHeaderVisible, toggleHeader } = useHeaderVisibility(defaultHeaderVisible);
 
   useEffect(() => {
     const handleViewChange = (event) => {
@@ -576,7 +697,20 @@ export default function App({ children, currentView: initialView = 'MAP' }) {
   }, []);
 
   return (
-    <div className="seacharter-core-pro-app">
+    <div
+      className={`seacharter-core-pro-app ${isHeaderVisible ? 'header-visible' : 'header-collapsed'}`}
+      data-header-visible={isHeaderVisible}
+    >
+      <button
+        type="button"
+        id="react-header-toggle-btn"
+        className="header-toggle-control sr-only"
+        onClick={toggleHeader}
+        aria-label={isHeaderVisible ? 'Ocultar cabecera' : 'Mostrar cabecera'}
+        aria-expanded={isHeaderVisible}
+      >
+        {isHeaderVisible ? 'Ocultar cabecera' : 'Mostrar cabecera'}
+      </button>
       {currentView === 'FORWARDERS' ? (
         <ForwarderWorkspace />
       ) : (
