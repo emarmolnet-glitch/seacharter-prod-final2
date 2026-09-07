@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Buffer } from "node:buffer";
 
 export async function handler(event, context) {
+  // 1. Responder correctamente al preflight CORS del navegador
   if (event.httpMethod === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -24,10 +25,10 @@ export async function handler(event, context) {
     const rawBody = event.body || "";
     let pdfBase64 = "";
     let fileName = "Documento_Proyecto.pdf";
-    let fullDataUrl = "";
 
     const contentType = event.headers?.['content-type'] || event.headers?.['Content-Type'] || '';
 
+    // 2. Soporte dual: JSON o Multipart/form-data (FormData)
     if (contentType.includes('application/json')) {
       const body = JSON.parse(rawBody);
       const rawData = body.fileBase64 || body.pdfBase64 || body.data || ''; 
@@ -38,15 +39,14 @@ export async function handler(event, context) {
         });
       }
       fileName = body.fileName || fileName;
-      fullDataUrl = rawData.startsWith('data:') ? rawData : `data:application/pdf;base64,${rawData}`;
       const pureBase64 = rawData.includes(',') ? rawData.split(',')[1] : rawData;
-      const buffer = Buffer.from(pureBase64, 'base64');
-      pdfBase64 = buffer.toString('base64');
+      pdfBase64 = Buffer.from(pureBase64, 'base64').toString('base64');
     } else {
-      // Soporte robusto si llega por form-data o binario directo
-      const buffer = Buffer.from(rawBody, event.isBase64Encoded ? 'base64' : 'utf8');
-      pdfBase64 = buffer.toString('base64');
-      fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+      const bodyBuffer = event.isBase64Encoded 
+        ? Buffer.from(rawBody, 'base64') 
+        : Buffer.from(rawBody, 'binary');
+      
+      pdfBase64 = bodyBuffer.toString('base64');
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -60,7 +60,7 @@ export async function handler(event, context) {
     const prompt = `
       Eres el motor experto de inteligencia logística y fletamentos para SeaCharter Core PRO.
       Analiza de forma exhaustiva el documento adjunto. 
-      Extrae exclusivamente la información real que aparezca en el documento. Está estrictamente prohibido usar datos de ejemplo, inventar piezas o rellenar con valores pregrabados.
+      Extrae exclusivamente la información real que aparezca en el documento. Está estrictamente prohibido inventar piezas o rellenar con valores pregrabados.
       - Si el documento tiene formato tabular o de packing list, extrae cada fila real de carga.
       - Si es un documento de texto libre, factura o certificado, extrae los elementos descritos basándote únicamente en el contenido real.
 
@@ -112,7 +112,6 @@ export async function handler(event, context) {
       parsedData = { success: true, items: [] };
     }
 
-    // Mapeo seguro de IDs para compatibilidad con la interfaz
     const items = (parsedData.items || []).map((it, idx) => ({
       id: Date.now() + idx + Math.random(),
       quantity: it.quantity || 1,
@@ -129,14 +128,17 @@ export async function handler(event, context) {
       unit_weight_kg: it.weight || 0
     }));
 
+    const bufferFinal = Buffer.from(pdfBase64, 'base64');
+    const fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+
     return new Response(JSON.stringify({
       success: true,
-      filename,
+      filename: fileName,
       count: items.length,
       items,
       documentMeta: {
         name: fileName,
-        size: Buffer.from(pdfBase64, 'base64').length,
+        size: bufferFinal.length,
         itemsCount: items.length,
         uploadedAt: new Date().toISOString(),
         dataBase64: fullDataUrl
@@ -145,12 +147,12 @@ export async function handler(event, context) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': '*'
       }
     });
 
   } catch (error) {
-    console.error('Error crítico en parse-packing-list handler:', error);
+    console.error('Error crítico en parse-packing-list:', error);
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Error interno del servidor',
@@ -160,7 +162,7 @@ export async function handler(event, context) {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': '*'
       }
     });
   }
