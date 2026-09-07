@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Buffer } from "node:buffer";
 
 export async function handler(event, context) {
-  // 1. Responder correctamente al preflight CORS del navegador
   if (event.httpMethod === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -28,7 +27,6 @@ export async function handler(event, context) {
 
     const contentType = event.headers?.['content-type'] || event.headers?.['Content-Type'] || '';
 
-    // 2. Soporte dual: JSON o Multipart/form-data (FormData)
     if (contentType.includes('application/json')) {
       const body = JSON.parse(rawBody);
       const rawData = body.fileBase64 || body.pdfBase64 || body.data || ''; 
@@ -59,20 +57,18 @@ export async function handler(event, context) {
 
     const prompt = `
       Eres el motor experto de inteligencia logística y fletamentos para SeaCharter Core PRO.
-      Analiza de forma exhaustiva el documento adjunto. 
-      Extrae exclusivamente la información real que aparezca en el documento. Está estrictamente prohibido inventar piezas o rellenar con valores pregrabados.
-      - Si el documento tiene formato tabular o de packing list, extrae cada fila real de carga.
-      - Si es un documento de texto libre, factura o certificado, extrae los elementos descritos basándote únicamente en el contenido real.
+      Analiza exhaustivamente el documento adjunto distinguiendo claramente entre:
+      - **Encabezado**: Datos de la empresa, fechas, referencias y metadatos generales (deben ignorarse para la tabla de cargas).
+      - **Cuerpo del archivo**: Detalle tabular o descriptivo de las mercancías (es el núcleo que debes extraer).
+      - **Final / Pie de página**: Totales generales o notas legales (pueden usarse para contraste pero no como ítems individuales).
 
-      Para cada ítem obtenido, extrae los siguientes campos (si un valor numérico o dimensión no se especifica, pon 0 o cadena vacía "" según corresponda):
-      - category: Categoría o sección indicada en el documento (o "" si no aplica).
-      - type: Descripción exacta del ítem, equipo o servicio.
-      - quantity: Cantidad real (entero, por defecto 1).
-      - length: Largo en metros (si se indica, sino "").
-      - width: Ancho en metros (si se indica, sino "").
-      - height: Alto en metros (si se indica, sino "").
-      - weight: Peso unitario real en kilogramos (número; si el documento no indica el peso, pon obligatoriamente 0).
-      - shipping_mode_supported: Modo de transporte indicado o deducible estrictamente por las dimensiones/peso (si no se puede determinar, "").
+      REGLAS ESTRICTAS DE EXTRACCIÓN Y LÓGICA LOGÍSTICA:
+      1. **Categoría (category)**: Identifica con precisión si se trata de Maquinaria, Vehículo, Equipos de Proceso, Mercancía Paletizada, Suministros, etc.
+      2. **Descripción (type)**: Extrae el detalle exacto y completo de la mercancía.
+      3. **Cantidad (quantity)**: Número de unidades. Si se repiten o agrupan, refleja la cantidad real de piezas.
+      4. **Dimensiones (length, width, height)**: Largo, ancho y alto en metros. Si hay variaciones entre elementos similares, mantenlos en filas separadas con sus medidas reales.
+      5. **Peso Unitario (weight)**: Peso en kilogramos. **Atención**: Aunque dos mercancías compartan categoría y descripción general, respeta el peso específico indicado para cada una si difieren entre sí (no unifiques pesos por promedio).
+      6. **Modo de Envío (shipping_mode_supported)**: Deduce el tipo de estiba o transporte según el texto del documento (ej: "Contenedor", "Palet", "Plataforma / Flat Rack", "Suelto / Breakbulk", "Vehículo / Ro-Ro"). Si el documento no lo especifica de forma directa, dedúcelo de manera lógica según las características de la carga.
 
       Devuelve la respuesta EXCLUSIVAMENTE en formato JSON válido, sin bloques markdown ni texto adicional, cumpliendo exactamente con esta estructura:
       {
@@ -133,8 +129,6 @@ export async function handler(event, context) {
 
     return new Response(JSON.stringify({
       success: true,
-      filename: fileName,
-      count: items.length,
       items,
       documentMeta: {
         name: fileName,
@@ -152,12 +146,11 @@ export async function handler(event, context) {
     });
 
   } catch (error) {
-    console.error('Error crítico en parse-packing-list:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message || 'Error interno del servidor',
-      count: 0,
-      items: []
+    console.error('Error crítico en project-parser:', error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message || 'Error interno del servidor', 
+      items: [] 
     }), {
       status: 500,
       headers: {
