@@ -19,7 +19,7 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  timeout = 60   # Máximo en plan gratuito (segundos). En Pro es 60.
+  timeout = 60
 
 [functions."nlp-voyage-extract"]
   included_files = ["wpi.csv"]
