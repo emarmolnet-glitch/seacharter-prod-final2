@@ -7,16 +7,34 @@ export async function handler(event, context) {
   }
 
   try {
-    const payload = JSON.parse(event.body || "{}");
-    const dataUrl = payload.fileBase64;
-    
-    if (!dataUrl) {
-      throw new Error("No se ha recibido el archivo en formato Base64.");
-    }
+    const rawBody = event.body || "";
+    let pdfBase64 = "";
+    let fileName = "Documento_Proyecto.pdf";
+    let fullDataUrl = "";
 
-    // Extraer los bytes puros del PDF eliminando el prefijo "data:application/pdf;base64,"
-    const base64Data = dataUrl.split(',')[1] || dataUrl;
-    const buffer = Buffer.from(base64Data, 'base64');
+    const contentType = event.headers?.['content-type'] || event.headers?.['Content-Type'] || '';
+
+    if (contentType.includes('application/json')) {
+      const body = JSON.parse(rawBody);
+      const rawData = body.fileBase64 || body.pdfBase64 || body.data || ''; 
+      if (!rawData) throw new Error('No se encontró el archivo en el JSON');
+      
+      fileName = body.fileName || fileName;
+      fullDataUrl = rawData.startsWith('data:') ? rawData : `data:application/pdf;base64,${rawData}`;
+      
+      // Limpiar prefijo data:...;base64, si viene incluido para obtener Base64 puro
+      const pureBase64 = rawData.includes(',') ? rawData.split(',')[1] : rawData;
+      const buffer = Buffer.from(pureBase64, 'base64');
+      pdfBase64 = buffer.toString('base64');
+    } else if (event.isBase64Encoded) {
+      const buffer = Buffer.from(rawBody, 'base64');
+      pdfBase64 = buffer.toString('base64');
+      fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+    } else {
+      const buffer = Buffer.from(rawBody, 'utf8');
+      pdfBase64 = buffer.toString('base64');
+      fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -65,7 +83,7 @@ export async function handler(event, context) {
       prompt,
       {
         inlineData: {
-          data: base64Data,
+          data: pdfBase64,
           mimeType: "application/pdf"
         }
       }
@@ -81,6 +99,8 @@ export async function handler(event, context) {
       parsedData = { success: true, items: [] };
     }
 
+    const bufferFinal = Buffer.from(pdfBase64, 'base64');
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -88,11 +108,11 @@ export async function handler(event, context) {
         success: true,
         items: parsedData.items || [],
         documentMeta: {
-          name: payload.fileName || "Documento_Proyecto.pdf",
-          size: buffer.length,
+          name: fileName,
+          size: bufferFinal.length,
           itemsCount: (parsedData.items || []).length,
           uploadedAt: new Date().toISOString(),
-          dataBase64: dataUrl
+          dataBase64: fullDataUrl
         }
       })
     };
