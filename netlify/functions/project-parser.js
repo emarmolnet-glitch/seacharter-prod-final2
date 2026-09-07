@@ -2,47 +2,57 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Buffer } from "node:buffer";
 
 export async function handler(event, context) {
-  try {
-    if (event.httpMethod !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-        status: 405,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+  // 1. Responder correctamente al preflight CORS del navegador
+  if (event.httpMethod === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      }
+    });
+  }
 
+  if (event.httpMethod !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+
+  try {
     const rawBody = event.body || "";
     let pdfBase64 = "";
     let fileName = "Documento_Proyecto.pdf";
-    let fullDataUrl = "";
 
     const contentType = event.headers?.['content-type'] || event.headers?.['Content-Type'] || '';
 
+    // 2. Soporte dual: JSON o Multipart/form-data (FormData)
     if (contentType.includes('application/json')) {
       const body = JSON.parse(rawBody);
       const rawData = body.fileBase64 || body.pdfBase64 || body.data || ''; 
       if (!rawData) {
         return new Response(JSON.stringify({ success: false, error: 'No se encontró el archivo en el JSON' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       }
       fileName = body.fileName || fileName;
-      fullDataUrl = rawData.startsWith('data:') ? rawData : `data:application/pdf;base64,${rawData}`;
       const pureBase64 = rawData.includes(',') ? rawData.split(',')[1] : rawData;
-      const buffer = Buffer.from(pureBase64, 'base64');
-      pdfBase64 = buffer.toString('base64');
+      pdfBase64 = Buffer.from(pureBase64, 'base64').toString('base64');
     } else {
-      const buffer = Buffer.from(rawBody, event.isBase64Encoded ? 'base64' : 'utf8');
-      pdfBase64 = buffer.toString('base64');
-      fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+      // Extracción limpia para FormData / binario directo
+      const bodyBuffer = event.isBase64Encoded 
+        ? Buffer.from(rawBody, 'base64') 
+        : Buffer.from(rawBody, 'binary');
+      
+      pdfBase64 = bodyBuffer.toString('base64');
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ success: false, error: "GEMINI_API_KEY no configurada en el servidor." }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      throw new Error("GEMINI_API_KEY no configurada en el servidor.");
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -104,6 +114,7 @@ export async function handler(event, context) {
     }
 
     const bufferFinal = Buffer.from(pdfBase64, 'base64');
+    const fullDataUrl = `data:application/pdf;base64,${pdfBase64}`;
 
     return new Response(JSON.stringify({
       success: true,
@@ -117,7 +128,10 @@ export async function handler(event, context) {
       }
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
 
   } catch (error) {
@@ -128,7 +142,10 @@ export async function handler(event, context) {
       items: [] 
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
 };
