@@ -44,8 +44,19 @@ export function ForwarderWorkspace() {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
 
   const [showExecutiveReport, setShowExecutiveReport] = useState(false);
+  const [reportData, setReportData] = useState(null);
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowExecutiveReport(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const [cargoItems, setCargoItems] = useState([]);
   const [projectDocuments, setprojectDocuments] = useState([]);
@@ -480,10 +491,32 @@ export function ForwarderWorkspace() {
         ? (spreaderCost + airBagsCost)
         : ((effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15));
       const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
-      const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+
+      // Alquiler obligatorio de grúa móvil portuaria para spreader y su operador por jornada
+      const portCraneShifts = isBigBagsOrBulk ? Math.max(1, Gangs) : 0;
+      const portCraneDailyRate = 1800;
+      const portCraneCost = isBigBagsOrBulk ? (portCraneShifts * portCraneDailyRate) : 0;
+
+      // Pre-Stacking 70% obligatorio en muelle para Big Bags (almacenaje previo al atraque y manipulación inicial)
+      let terminalStorageCost = 0;
+      let initialHandlingCost = 0;
+      if (isBigBagsOrBulk) {
+        const preStackingRatio = 0.70;
+        const preStackedTons = totalWeightTons * preStackingRatio;
+        const preStackingDays = Math.max(5, Number(storageDays) || 5);
+        const effectiveArea = total_m2 > 0 ? total_m2 : (totalWeightTons > 0 ? totalWeightTons * 0.8 : totalPieces * 0.8);
+        const preStackedArea = Math.ceil(effectiveArea * preStackingRatio);
+        terminalStorageCost = preStackedArea * preStackingDays * 2;
+        if (Number(storageDays) > 5) {
+          terminalStorageCost += Math.ceil(effectiveArea) * (Number(storageDays) - 5) * 2;
+        }
+        initialHandlingCost = preStackedTons * 2.0;
+      } else {
+        terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
+      }
 
       calculatedOceanFreight = freightCost;
-      calculatedFobOperations = lashingCost + stevedoringCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
 
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     }
@@ -642,6 +675,170 @@ export function ForwarderWorkspace() {
     }
   };
 
+  const buildExecutiveReportData = (sourceItem = null) => {
+    let sourcePayload = null;
+    if (sourceItem && sourceItem.payload_data) {
+      sourcePayload = sourceItem.payload_data;
+    } else if (sourceItem && (sourceItem.cargo_items || sourceItem.financial_summary)) {
+      sourcePayload = sourceItem;
+    }
+
+    let items = [];
+    if (sourcePayload && Array.isArray(sourcePayload.cargo_items) && sourcePayload.cargo_items.length > 0) {
+      items = sourcePayload.cargo_items;
+    } else if (cargoItems.length > 0) {
+      items = cargoItems;
+    } else if (activeProject?.line_items?.length > 0) {
+      const found = activeProject.line_items.find(li => li.payload_data?.cargo_items?.length > 0);
+      if (found) {
+        items = found.payload_data.cargo_items;
+        sourcePayload = found.payload_data;
+      }
+    }
+
+    let qTotal = 0;
+    let wTotalKg = 0;
+    let m2Total = 0;
+    let m3Total = 0;
+
+    items.forEach((it) => {
+      const q = Math.max(1, Number(it.quantity) || 1);
+      const l = Math.max(0, parseFloat(it.length_m ?? it.length) || 0);
+      const w = Math.max(0, parseFloat(it.width_m ?? it.width) || 0);
+      const h = Math.max(0, parseFloat(it.height_m ?? it.height) || 0);
+      const wt = Math.max(0, parseFloat(it.unit_weight_kg ?? it.weight) || 0);
+      qTotal += q;
+      wTotalKg += q * wt;
+      m2Total += q * (l * w);
+      m3Total += q * (l * w * h);
+    });
+
+    if (qTotal === 0 && totals.quantity > 0) {
+      qTotal = totals.quantity;
+      wTotalKg = totals.weight;
+      m2Total = totals.m2;
+      m3Total = totals.m3;
+    }
+
+    const totalWeightTons = wTotalKg / 1000;
+    const reportRT = Math.max(1, Math.max(totalWeightTons, m3Total));
+
+    const isBigBags = items.some(it => {
+      const cat = String(it.category || '').toLowerCase();
+      const typ = String(it.type || '').toLowerCase();
+      const mod = String(it.shipping_mode_supported || '').toLowerCase();
+      return cat.includes('ensacad') || cat.includes('dry bulk') || mod.includes('big bag') || mod.includes('granel') ||
+        /big\s*bag|ensacad|saco|granel|bulk|cemento|urea|fertilizante|sulfato/i.test(typ) ||
+        /big\s*bag|ensacad|saco|granel|bulk|cemento|urea|fertilizante|sulfato/i.test(cat);
+    }) || isBigBagsCargo;
+
+    // Subtotal 1: Flete Marítimo / TCE
+    let fleteCostNum = 0;
+    if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
+      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur);
+    } else if (parseFloat(subtotalFreight) > 0) {
+      fleteCostNum = parseFloat(subtotalFreight);
+    } else {
+      fleteCostNum = reportRT * 65.0;
+    }
+    const fleteSaleNum = fleteCostNum * 1.15;
+    const fleteMarginNum = fleteSaleNum - fleteCostNum;
+
+    // Subtotal 2: Cuadrillas y Estiba
+    const gangsCount = sourcePayload?.port_labor_and_equipment?.stevedore_gangs_shifts ?? stevedoreGangs;
+    const effectiveGangs = gangsCount > 0 ? gangsCount : (isBigBags ? Math.max(1, Math.ceil(Math.ceil(qTotal / 15) / 140)) : Math.max(1, Math.ceil(qTotal / 15)));
+    const lashingCount = sourcePayload?.port_labor_and_equipment?.lashing_team ?? (isBigBags ? 0 : lashingTeam);
+    const estibaCostNum = (effectiveGangs * 1200) + (lashingCount * 800);
+    const estibaSaleNum = estibaCostNum * 1.15;
+    const estibaMarginNum = estibaSaleNum - estibaCostNum;
+
+    // Equipos Auxiliares y Materiales (Grúa Móvil Portuaria con Operador, MAFIs, Heavy Lift, Spreader, Cadenas, Dunnage)
+    const mafiCount = sourcePayload?.port_labor_and_equipment?.mafi_platforms ?? mafiPlatforms;
+    const heavyLiftCount = sourcePayload?.port_labor_and_equipment?.heavy_lift_crane ?? heavyLiftCrane;
+    const portCraneShifts = isBigBags ? effectiveGangs : 0;
+    const portCraneCost = portCraneShifts * 1800;
+    const spreaderCount = isBigBags ? (sourcePayload?.lashing_and_dunnage_materials?.spreader_multipunto ?? spreaderMultipunto ?? Math.max(1, Math.min(2, Math.ceil(qTotal / 1500)))) : 0;
+    const spreaderCost = spreaderCount * 600;
+    const airBagsCost = isBigBags ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
+    const dunnageCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.dunnage_wood ?? dunnageWood);
+    const chainsCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.chains_and_binders ?? chainsBinders);
+    const slingsCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.high_capacity_slings ?? highCapacitySlings);
+
+    const matCostNum = (mafiCount * 300) + (heavyLiftCount * 2500) + portCraneCost + spreaderCost + airBagsCost + (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40);
+    const matSaleNum = matCostNum * 1.15;
+    const matMarginNum = matSaleNum - matCostNum;
+
+    // Logística Periférica (Pre-Stacking 70%, Manipulación Inicial, Almacenaje, Surveyor, Inland, Aduanas)
+    const sDays = sourcePayload?.peripheral_services?.storage_days ?? storageDays;
+    const survCost = Number(sourcePayload?.peripheral_services?.surveyor_cost ?? surveyorCost) || 0;
+    const inlCost = Number(sourcePayload?.peripheral_services?.inland_cost ?? inlandCost) || 0;
+    const custCost = Number(sourcePayload?.peripheral_services?.customs_cost ?? customsCost) || 0;
+
+    let storageCostNum = 0;
+    let initialHandlingCost = 0;
+    if (isBigBags) {
+      const preStackRatio = 0.70;
+      const preStackedTons = totalWeightTons * preStackRatio;
+      const preStackDays = Math.max(5, Number(sDays) || 5);
+      const effectiveArea = m2Total > 0 ? m2Total : (totalWeightTons > 0 ? totalWeightTons * 0.8 : qTotal * 0.8);
+      const preStackedArea = Math.ceil(effectiveArea * preStackRatio);
+      storageCostNum = preStackedArea * preStackDays * 2;
+      if (Number(sDays) > 5) {
+        storageCostNum += Math.ceil(effectiveArea) * (Number(sDays) - 5) * 2;
+      }
+      initialHandlingCost = preStackedTons * 2.0;
+    } else {
+      storageCostNum = Math.ceil(m2Total) * (Number(sDays) || 0) * 2;
+    }
+
+    const periCostNum = storageCostNum + initialHandlingCost + survCost + inlCost + custCost;
+    const periSaleNum = periCostNum * 1.15;
+    const periMarginNum = periSaleNum - periCostNum;
+
+    const fobSubtotal = estibaCostNum + matCostNum + periCostNum;
+    const finalTotalCost = Math.round((fleteCostNum + fobSubtotal) * 100) / 100;
+    const finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
+    const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
+    const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
+
+    return {
+      totals: { quantity: qTotal, weight: wTotalKg, m2: m2Total, m3: m3Total },
+      totalWeightTons,
+      totalVolumeM3: m3Total,
+      reportRT,
+      shippingMode: sourcePayload?.shipping_mode || shippingMode,
+      vesselType: sourcePayload?.recommended_vessel || vesselType,
+      fleteCostNum,
+      fleteSaleNum,
+      fleteMarginNum,
+      estibaCostNum,
+      estibaSaleNum,
+      estibaMarginNum,
+      matCostNum,
+      matSaleNum,
+      matMarginNum,
+      periCostNum,
+      periSaleNum,
+      periMarginNum,
+      subtotalFreight: fleteCostNum.toFixed(2),
+      subtotalFobOperations: fobSubtotal.toFixed(2),
+      finalTotalCost,
+      finalTotalSale,
+      finalTotalMargin,
+      unitRateSale,
+      storageDays: sDays,
+      craneCostNum: (heavyLiftCount * 2500) + portCraneCost,
+      storageCostNum,
+      initialHandlingCost,
+    };
+  };
+
+  const handleOpenExecutiveReport = (item = null) => {
+    const data = buildExecutiveReportData(item);
+    setReportData(data);
+    setShowExecutiveReport(true);
+  };
+
   const handleOpenCreateService = () => {
     setEditingLineItemId(null); setCargoItems([]);
     setDunnageWood(0); setHighCapacitySlings(0); setChainsBinders(0); setShackles(0);
@@ -657,14 +854,17 @@ export function ForwarderWorkspace() {
     setEditingLineItemId(item.id);
     const payload = item.payload_data;
     if (payload) {
+      let mappedItems = [];
       if (Array.isArray(payload.cargo_items)) {
-        setCargoItems(payload.cargo_items.map((ci) => ({
+        mappedItems = payload.cargo_items.map((ci) => ({
           id: ci.id || `item-${Date.now()}`, category: ci.category || 'Equipos de Proceso', quantity: ci.quantity || 1, type: ci.type || '',
-          length: ci.length_m ?? '', width: ci.width_m ?? '', height: ci.height_m ?? '', weight: ci.unit_weight_kg ?? '', shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
-        })));
+          length: ci.length_m ?? ci.length ?? '', width: ci.width_m ?? ci.width ?? '', height: ci.height_m ?? ci.height ?? '', weight: ci.unit_weight_kg ?? ci.weight ?? '', shipping_mode_supported: ci.shipping_mode_supported || "40' HC Contenedor"
+        }));
+        setCargoItems(mappedItems);
       }
       const mats = payload.lashing_and_dunnage_materials || {};
       setDunnageWood(mats.dunnage_wood || 0); setHighCapacitySlings(mats.high_capacity_slings || 0); setChainsBinders(mats.chains_and_binders || 0); setShackles(mats.shackles || 0);
+      setSpreaderMultipunto(mats.spreader_multipunto || 0);
       const labor = payload.port_labor_and_equipment || {};
       setStevedoreGangs(labor.stevedore_gangs_shifts || 0); setLashingTeam(labor.lashing_team || 0); setHeavyLiftCrane(labor.heavy_lift_crane || 0); setMafiPlatforms(labor.mafi_platforms || 0);
       if (payload.shipping_mode) setShippingMode(payload.shipping_mode);
@@ -673,7 +873,12 @@ export function ForwarderWorkspace() {
       setStorageDays(peri.storage_days || 0); setSurveyorCost(peri.surveyor_cost || 0); setInlandCost(peri.inland_cost || 0); setCustomsCost(peri.customs_cost || 0);
       userEditedSurveyor.current = (peri.surveyor_cost || peri.surveyorCost) != null;
       const fin = payload.financial_summary || {};
+      if (fin.subtotal_ocean_freight_eur != null) setSubtotalFreight(String(fin.subtotal_ocean_freight_eur));
+      if (fin.subtotal_fob_operations_eur != null) setSubtotalFobOperations(String(fin.subtotal_fob_operations_eur));
       setEstimatedCost(fin.estimated_total_cost_eur ? String(fin.estimated_total_cost_eur) : ''); setSalePrice(fin.customer_sale_price_eur ? String(fin.customer_sale_price_eur) : '');
+
+      const repData = buildExecutiveReportData(item);
+      setReportData(repData);
     }
     setIsCargoModalOpen(true);
   };
@@ -696,25 +901,59 @@ export function ForwarderWorkspace() {
       estimatedCost,
       salePrice
     });
+    const currentReportSnapshot = buildExecutiveReportData();
+    setReportData(currentReportSnapshot);
+
     const payload = {
       project_ref: activeProject?.project_ref,
       cargo_items: cargoItems.map((item) => ({
+        id: item.id,
         category: item.category || 'Equipos de Proceso', quantity: parseInt(item.quantity, 10) || 1, type: item.type || 'Sin especificar',
         length_m: parseFloat(item.length) || 0, width_m: parseFloat(item.width) || 0, height_m: parseFloat(item.height) || 0, unit_weight_kg: parseFloat(item.weight) || 0, shipping_mode_supported: item.shipping_mode_supported || "40' HC Contenedor"
       })),
+      lashing_and_dunnage_materials: {
+        dunnage_wood: dunnageWood,
+        high_capacity_slings: highCapacitySlings,
+        chains_and_binders: chainsBinders,
+        shackles: shackles,
+        spreader_multipunto: spreaderMultipunto,
+      },
+      port_labor_and_equipment: {
+        stevedore_gangs_shifts: stevedoreGangs,
+        lashing_team: lashingTeam,
+        heavy_lift_crane: heavyLiftCrane,
+        mafi_platforms: mafiPlatforms,
+        port_crane_shifts: isBigBagsCargo ? stevedoreGangs : 0,
+      },
+      peripheral_services: {
+        storage_days: storageDays,
+        surveyor_cost: surveyorCost,
+        inland_cost: inlandCost,
+        customs_cost: customsCost,
+      },
+      shipping_mode: shippingMode,
+      recommended_vessel: vesselType,
+      totals: { ...totals },
       financial_summary: {
-        subtotal_ocean_freight_eur: parseFloat(subtotalFreight) || 0,
-        subtotal_fob_operations_eur: parseFloat(subtotalFobOperations) || 0,
-        estimated_total_cost_eur: parseFloat(estimatedCost) || 0,
-        customer_sale_price_eur: parseFloat(salePrice) || 0
-      }
+        subtotal_ocean_freight_eur: parseFloat(subtotalFreight) || currentReportSnapshot.fleteCostNum || 0,
+        subtotal_fob_operations_eur: parseFloat(subtotalFobOperations) || (currentReportSnapshot.estibaCostNum + currentReportSnapshot.matCostNum + currentReportSnapshot.periCostNum) || 0,
+        estimated_total_cost_eur: parseFloat(estimatedCost) || currentReportSnapshot.finalTotalCost || 0,
+        customer_sale_price_eur: parseFloat(salePrice) || currentReportSnapshot.finalTotalSale || 0,
+        crane_cost_eur: currentReportSnapshot.craneCostNum || 0,
+        storage_cost_eur: currentReportSnapshot.storageCostNum || 0,
+        initial_handling_cost_eur: currentReportSnapshot.initialHandlingCost || 0,
+      },
+      executive_report_snapshot: currentReportSnapshot,
     };
-    const lineItemCost = parseFloat(estimatedCost) || 0;
-    const lineItemPrice = parseFloat(salePrice) || 0;
+    const lineItemCost = parseFloat(estimatedCost) || currentReportSnapshot.finalTotalCost || 0;
+    const lineItemPrice = parseFloat(salePrice) || currentReportSnapshot.finalTotalSale || 0;
     const savedLineItem = {
       id: editingLineItemId || `item-${Date.now()}`,
-      description: `Flete y Estiba Project Cargo (${totals.quantity} piezas, ${totals.weight.toLocaleString('es-ES')} kg)`,
-      cost_eur: lineItemCost, sale_price_eur: lineItemPrice, margin_eur: lineItemPrice - lineItemCost, payload_data: payload,
+      description: `Flete y Estiba Project Cargo (${totals.quantity || currentReportSnapshot.totals.quantity} piezas, ${(totals.weight || currentReportSnapshot.totals.weight).toLocaleString('es-ES')} kg)`,
+      cost_eur: lineItemCost,
+      sale_price_eur: lineItemPrice,
+      margin_eur: lineItemPrice - lineItemCost,
+      payload_data: payload,
     };
     if (activeProject) {
       const existingItems = activeProject.line_items || [];
@@ -897,13 +1136,34 @@ export function ForwarderWorkspace() {
 
               {activeProject.line_items?.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center"><h3 className="text-base font-bold text-slate-900">Servicios</h3><button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button></div>
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-base font-bold text-slate-900">Servicios</h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenExecutiveReport(activeProject.line_items[0])}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5 transition"
+                      >
+                        📄 Reporte Ejecutivo
+                      </button>
+                      <button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button>
+                    </div>
+                  </div>
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700"><tr><th className="px-4 py-3 text-left">Servicio</th><th className="px-4 py-3 text-right">Coste (€)</th><th className="px-4 py-3 text-right">Venta (€)</th><th className="px-4 py-3 text-center">Acciones</th></tr></thead>
                       <tbody className="divide-y divide-slate-100 text-slate-800">
                         {activeProject.line_items.map((item) => (
-                          <tr key={item.id} className="border-b border-slate-100"><td className="px-4 py-3 font-semibold">{item.description}</td><td className="px-4 py-3 text-right text-rose-600 font-bold">{Number(item.cost_eur).toLocaleString('es-ES')} €</td><td className="px-4 py-3 text-right text-emerald-600 font-bold">{Number(item.sale_price_eur).toLocaleString('es-ES')} €</td><td className="px-4 py-3 text-center"><button onClick={() => handleEditService(item)} className="mx-1 cursor-pointer">✏️</button><button onClick={() => handleDeleteService(item.id)} className="mx-1 cursor-pointer">🗑️</button></td></tr>
+                          <tr key={item.id} className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-semibold">{item.description}</td>
+                            <td className="px-4 py-3 text-right text-rose-600 font-bold">{Number(item.cost_eur).toLocaleString('es-ES')} €</td>
+                            <td className="px-4 py-3 text-right text-emerald-600 font-bold">{Number(item.sale_price_eur).toLocaleString('es-ES')} €</td>
+                            <td className="px-4 py-3 text-center">
+                              <button type="button" onClick={() => handleOpenExecutiveReport(item)} className="mx-1 cursor-pointer hover:scale-110 transition-transform" title="Generar Reporte Ejecutivo">📄</button>
+                              <button onClick={() => handleEditService(item)} className="mx-1 cursor-pointer">✏️</button>
+                              <button onClick={() => handleDeleteService(item.id)} className="mx-1 cursor-pointer">🗑️</button>
+                            </td>
+                          </tr>
                         ))}
                       </tbody>
                     </table>
@@ -920,7 +1180,7 @@ export function ForwarderWorkspace() {
         </main>
 
         {/* MODAL PRINCIPAL TEMA CLARO PANTALLA COMPLETA */}
-        {isCargoModalOpen && (
+        {isCargoModalOpen && !showExecutiveReport && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto print:hidden">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden text-slate-900">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
@@ -1162,7 +1422,7 @@ export function ForwarderWorkspace() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button id="btn-generate-executive-report" onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte Ejecutivo</button>
+                  <button id="btn-generate-executive-report" onClick={() => { handleOpenExecutiveReport(); setShowExecutiveReport(true); }} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte Ejecutivo</button>
                   <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">💾 Guardar Flete y Estiba en Proyecto</button>
                 </div>
               </div>
@@ -1172,30 +1432,31 @@ export function ForwarderWorkspace() {
       </div>
 
       {showExecutiveReport && (() => {
-        const totalWeightTons = (totals.weight || 0) / 1000;
-        const totalVolumeM3 = totals.m3 || 0;
-        const reportRT = Math.max(totalWeightTons, totalVolumeM3);
-        const finalTotalCost = parseFloat(estimatedCost) || 0;
-        const finalTotalSale = parseFloat(salePrice) || 0;
-        const finalTotalMargin = finalTotalSale - finalTotalCost;
+        const activeReport = reportData || buildExecutiveReportData();
+        const totalWeightTons = activeReport.totalWeightTons;
+        const totalVolumeM3 = activeReport.totalVolumeM3;
+        const reportRT = activeReport.reportRT;
+        const finalTotalCost = activeReport.finalTotalCost;
+        const finalTotalSale = activeReport.finalTotalSale;
+        const finalTotalMargin = activeReport.finalTotalMargin;
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
-        const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
-        const fleteCostNum = parseFloat(subtotalFreight) || 0;
-        const fleteSaleNum = fleteCostNum * 1.15;
-        const fleteMarginNum = fleteSaleNum - fleteCostNum;
+        const unitRateSale = activeReport.unitRateSale;
+        const fleteCostNum = activeReport.fleteCostNum;
+        const fleteSaleNum = activeReport.fleteSaleNum;
+        const fleteMarginNum = activeReport.fleteMarginNum;
 
-        const estibaCostNum = (stevedoreGangs * 1200) + (lashingTeam * 800);
-        const estibaSaleNum = estibaCostNum * 1.15;
-        const estibaMarginNum = estibaSaleNum - estibaCostNum;
+        const estibaCostNum = activeReport.estibaCostNum;
+        const estibaSaleNum = activeReport.estibaSaleNum;
+        const estibaMarginNum = activeReport.estibaMarginNum;
 
-        const matCostNum = (mafiPlatforms * 300) + (heavyLiftCrane * 2500) + (dunnageWood * 30) + (chainsBinders * 80) + (highCapacitySlings * 40) + (spreaderMultipunto * 600);
-        const matSaleNum = matCostNum * 1.15;
-        const matMarginNum = matSaleNum - matCostNum;
+        const matCostNum = activeReport.matCostNum;
+        const matSaleNum = activeReport.matSaleNum;
+        const matMarginNum = activeReport.matMarginNum;
 
-        const periCostNum = (Math.ceil(totals.m2) * storageDays * 2) + Number(surveyorCost) + Number(inlandCost) + Number(customsCost);
-        const periSaleNum = periCostNum * 1.15;
-        const periMarginNum = periSaleNum - periCostNum;
+        const periCostNum = activeReport.periCostNum;
+        const periSaleNum = activeReport.periSaleNum;
+        const periMarginNum = activeReport.periMarginNum;
 
         return (
           <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-20 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
@@ -1299,7 +1560,7 @@ export function ForwarderWorkspace() {
                     {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas) */}
                     <tr className="hover:bg-slate-50">
                       <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({storageDays} d), surveyor portuario, transporte inland y aduanas</td>
+                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.storageDays ?? storageDays} d), surveyor portuario, transporte inland y aduanas</td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>
@@ -1312,13 +1573,13 @@ export function ForwarderWorkspace() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
-                  <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(subtotalFreight)}</div>
+                  <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(activeReport.subtotalFreight || fleteCostNum)}</div>
                   <span className="text-[10px] text-sky-600 font-semibold">Precio Venta Flete: {formatCurrency(fleteSaleNum)}</span>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">Subtotal Costes FOB y Operativa Portuaria</span>
-                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(subtotalFobOperations)}</div>
-                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(subtotalFobOperations) * 1.15)}</span>
+                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum))}</div>
+                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum)) * 1.15)}</span>
                 </div>
               </div>
 

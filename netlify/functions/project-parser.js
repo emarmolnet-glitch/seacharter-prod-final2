@@ -580,6 +580,8 @@ function buildOperationalProfile(items = [], orderTotals) {
       // Utillaje, equipamiento de izado y técnicas aplicadas obligatoriamente
       requiredEquipment: [
         'Spreader multipunto para izado en bloque (14-16 Big Bags por ciclo)',
+        'Alquiler de grúa móvil portuaria y operador certificado por jornada',
+        'Acopio previo en muelle del 70% de la carga (Pre-Stacking)',
         'Estiba en bloque (Block Stowage)',
         'Sacos de aire inflables (Dunnage Air Bags / Cojines neumáticos)',
         'Láminas antihumedad (Moisture Barrier Sheets / Papel Kraft / Polietileno)',
@@ -591,6 +593,18 @@ function buildOperationalProfile(items = [], orderTotals) {
         capacityBagsPerCycle: '14-16 sacos/ciclo',
         cyclesEstimated: estimatedCycles,
         function: 'Manipulación simultánea y segura de bloques de 14 a 16 Big Bags por ciclo de izado, manteniendo flujo continuo hacia bodega y eliminando por completo eslingas sueltas individuales.',
+      },
+      portCraneEquipment: {
+        applied: true,
+        required: true,
+        equipment: 'Grúa móvil portuaria con operador certificado por jornada',
+        function: 'Alquiler obligatorio de grúa móvil portuaria y su operador por jornada para la manipulación y elevación continua de bloques de sacos con spreader multipunto en muelle.',
+      },
+      preStackingRule: {
+        applied: true,
+        required: true,
+        percentage: 70,
+        function: 'Acopio previo en muelle del 70% de la carga total antes de la llegada del buque para sostener el ritmo operativo con spreader multipunto.',
       },
       stevedoringLabor: {
         applied: true,
@@ -943,6 +957,56 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
         category: 'Trincaje y Operativa',
         description: 'Cojines neumáticos y láminas protectoras de aislamiento para inmovilizar huecos contra mamparos en estiba en bloque compacta.',
       });
+
+      // 1. Alquiler obligatorio de grúa móvil portuaria y operador certificado por jornada para spreader
+      const portCraneShifts = Math.max(1, stevedoreGangs);
+      const portCraneDailyRate = 1800;
+      const portCraneCost = portCraneShifts * portCraneDailyRate;
+      fobPortOperationsItems.push({
+        concept: `Alquiler de Grúa Móvil Portuaria y Operador (${portCraneShifts} jornada${portCraneShifts === 1 ? '' : 's'})`,
+        units: portCraneShifts,
+        unitCost: portCraneDailyRate,
+        amount: portCraneCost,
+        category: 'Equipos Auxiliares',
+        description: 'Alquiler operativo de grúa móvil portuaria de muelle y operador certificado por jornada, imprescindible para sostener la elevación continua con spreader multipunto.',
+      });
+
+      // 2. Regla de acumulación en muelle: Pre-Stacking obligatorio del 70% de la carga total
+      // Para proyectos de gran volumen / Big Bags, al menos el 70% debe estar acopiado en el puerto
+      // antes de la llegada del buque para garantizar el ritmo de carga con spreader.
+      const preStackingRatio = 0.70;
+      const preStackedTons = Math.round(totalWeightTons * preStackingRatio * 100) / 100;
+      const preStackingDays = Math.max(5, storageDays || 5);
+      const effectiveAreaM2 = totalAreaM2 > 0 ? totalAreaM2 : (totalWeightTons > 0 ? totalWeightTons * 0.8 : totalPieces * 0.8);
+      const preStackedAreaM2 = Math.ceil(effectiveAreaM2 * preStackingRatio);
+      const preStackingStorageCost = Math.round(preStackedAreaM2 * preStackingDays * 2 * 100) / 100;
+
+      fobPortOperationsItems.push({
+        concept: `Almacenaje Portuario y Acopio Previo (Pre-Stacking 70%: ${preStackedTons.toLocaleString('es-ES')} MT, ${preStackingDays} días previos al atraque)`,
+        units: preStackingDays,
+        basis: `${preStackedAreaM2} m² (${preStackedTons.toLocaleString('es-ES')} MT acopiadas en muelle)`,
+        amount: preStackingStorageCost,
+        category: 'Almacenaje y Terminal',
+        preStackedTons,
+        preStackingDays,
+        preStackedAreaM2,
+        description: 'Estadía y almacenaje portuario obligatorio en muelle/terminal del 70% de la carga acumulada previamente a la llegada del buque para sostener el ritmo de carga con spreader.',
+      });
+
+      // Manipulación inicial: recepción terrestre, descarga y formación de acopio previo en explanada
+      const initialHandlingRate = 2.00;
+      const initialHandlingCost = Math.round(preStackedTons * initialHandlingRate * 100) / 100;
+      fobPortOperationsItems.push({
+        concept: `Manipulación Inicial y Acopio en Muelle (Recepción Pre-Stacking 70%: ${preStackedTons.toLocaleString('es-ES')} MT)`,
+        units: preStackedTons,
+        unitCost: initialHandlingRate,
+        rate: initialHandlingRate,
+        amount: initialHandlingCost,
+        category: 'Manipulación en Muelle',
+        preStackedTons,
+        description: 'Recepción, descarga terrestre de camiones inland y formación de acopio en explanada del 70% de la carga acumulada previa al atraque para asegurar ritmo operativo de izado.',
+      });
+
       // Personal técnico de trincaje industrial a bordo: EXCLUIDO (0 €)
       // Grúa heavy lift auxiliar: EXCLUIDA (0 €)
     } else {
@@ -1012,11 +1076,22 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
   }
 
   // Servicios Asociados y Periféricos
-  if (terminalStorageCost > 0 || storageDays > 0) {
+  const isBigBagsCargoProfile = profile?.isMassiveOrBigBags || isBulkOrBigBagsCargo(items);
+  if (!isBigBagsCargoProfile && (terminalStorageCost > 0 || storageDays > 0)) {
     fobPortOperationsItems.push({
       concept: `Almacenaje en Terminal Portuaria (${storageDays} día${storageDays === 1 ? '' : 's'}, ${Math.ceil(totalAreaM2)} m²)`,
       units: storageDays,
       amount: terminalStorageCost,
+      category: 'Servicios Asociados',
+    });
+  } else if (isBigBagsCargoProfile && storageDays > 5) {
+    const extraDays = storageDays - 5;
+    const effectiveAreaM2 = totalAreaM2 > 0 ? totalAreaM2 : (totalWeightTons > 0 ? totalWeightTons * 0.8 : totalPieces * 0.8);
+    const extraStorageCost = Math.round(Math.ceil(effectiveAreaM2) * extraDays * 2 * 100) / 100;
+    fobPortOperationsItems.push({
+      concept: `Almacenaje Adicional en Terminal (${extraDays} día${extraDays === 1 ? '' : 's'} adicionales, ${Math.ceil(effectiveAreaM2)} m²)`,
+      units: extraDays,
+      amount: extraStorageCost,
       category: 'Servicios Asociados',
     });
   }
