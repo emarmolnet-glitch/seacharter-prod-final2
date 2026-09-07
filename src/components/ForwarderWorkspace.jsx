@@ -697,10 +697,17 @@ export function ForwarderWorkspace() {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    };
   }, []);
 
   const [cargoItems, setCargoItems] = useState([]);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [recalculateFeedback, setRecalculateFeedback] = useState(null);
+  const feedbackTimeoutRef = useRef(null);
+  const [financialBreakdown, setFinancialBreakdown] = useState(null);
   const [projectDocuments, setprojectDocuments] = useState([]);
 
   const [dunnageWood, setDunnageWood] = useState(0);
@@ -1872,6 +1879,182 @@ export function ForwarderWorkspace() {
     };
   };
 
+  const handleRecalculate = async () => {
+    setIsRecalculating(true);
+    try {
+      // 1. Inmediata lectura y sanitización del estado actual de todas las filas editadas o añadidas manualmente
+      const currentItems = (cargoItems || []).map((item, idx) => {
+        const qty = Math.max(1, parseInt(String(item.quantity ?? 1).replace(',', '.'), 10) || 1);
+        const l = Math.max(0, parseFloat(String(item.length ?? item.length_m ?? 0).replace(',', '.')) || 0);
+        const w = Math.max(0, parseFloat(String(item.width ?? item.width_m ?? 0).replace(',', '.')) || 0);
+        const h = Math.max(0, parseFloat(String(item.height ?? item.height_m ?? 0).replace(',', '.')) || 0);
+        const wt = Math.max(0, parseFloat(String(item.weight ?? item.unit_weight_kg ?? 0).replace(',', '.')) || 0);
+        return {
+          ...item,
+          id: item.id || `item-${Date.now()}-${idx}`,
+          category: item.category || 'Equipos de Proceso',
+          type: item.type || '',
+          quantity: qty,
+          length: l,
+          width: w,
+          height: h,
+          weight: wt,
+          length_m: l,
+          width_m: w,
+          height_m: h,
+          unit_weight_kg: wt,
+          shipping_mode_supported: item.shipping_mode_supported || "40' HC Contenedor",
+        };
+      });
+
+      // Actualizar el estado de filas con los valores normalizados
+      setCargoItems(currentItems);
+
+      // 2. Disparar el motor de cálculo interno en tiempo real
+      // a) Totales y desglose de toneladas
+      const newTotals = currentItems.reduce((acc, it) => {
+        acc.quantity += it.quantity;
+        acc.m2 += it.quantity * (it.length * it.width);
+        acc.m3 += it.quantity * (it.length * it.width * it.height);
+        acc.weight += it.quantity * it.weight;
+        return acc;
+      }, { quantity: 0, m2: 0, m3: 0, weight: 0 });
+
+      autoCalculateEstimates(currentItems);
+
+      // b) Universal Stowage Engine (croquis esquemático)
+      const totalWeightTons = newTotals.weight / 1000;
+      const stowageOptions = {
+        shippingMode,
+        pol,
+        pod,
+        distanceNm,
+        vesselSpeedKnots,
+      };
+      const newStowagePlan = calculateUniversalStowagePlan(
+        currentItems,
+        {
+          totalWeightTons,
+          totalVolumeCbm: newTotals.m3,
+          totalPieces: newTotals.quantity,
+        },
+        stowageOptions
+      );
+
+      // c) Desglose financiero y ratios operativos en USD/MT
+      const localReportData = buildExecutiveReportData({
+        cargo_items: currentItems,
+        totals: newTotals,
+        stowagePlan: newStowagePlan,
+        route_and_chartering: {
+          pol,
+          pod,
+          loading_rate_mt_day: loadingRate,
+          discharging_rate_mt_day: dischargingRate,
+          distance_nm: distanceNm,
+          vessel_speed_knots: vesselSpeedKnots,
+          daily_hire_rate_usd: vesselDailyHireUsd,
+          exchange_rate: exchangeRateUsdEur,
+          actual_loading_days: actualLoadingDays !== '' ? Number(actualLoadingDays) : null,
+          actual_discharging_days: actualDischargingDays !== '' ? Number(actualDischargingDays) : null,
+          demurrage_daily_rate_usd: demurrageDailyRateUsd,
+        },
+      });
+
+      localReportData.stowagePlan = newStowagePlan;
+
+      const localFinancialBreakdown = {
+        isSeparatedBreakdown: true,
+        toneladas: localReportData.toneladas,
+        subtotals: {
+          oceanFreight: localReportData.fleteCostNum,
+          fobAndPortOperations: parseFloat(localReportData.subtotalFobOperations) || 0,
+        },
+        totalCostAllIn: localReportData.finalTotalCost,
+        totalQuotationAllIn: localReportData.finalTotalSale,
+        flete_total_usd: localReportData.fleteTotalUsd,
+        costes_fob_totales_usd: localReportData.costesFobTotalesUsd,
+        valor_total_mercancia_usd: localReportData.valorTotalMercanciaUsd,
+        flete_unitario_usd_mt: localReportData.fleteUnitarioUsdMt,
+        fob_mas_mercancia_unitario_usd_mt: localReportData.fobMasMercanciaUnitarioUsdMt,
+        unitRatios: {
+          fleteUnitarioUsdMt: localReportData.fleteUnitarioUsdMt,
+          fobMasMercanciaUnitarioUsdMt: localReportData.fobMasMercanciaUnitarioUsdMt,
+        },
+        stowagePlan: newStowagePlan,
+      };
+
+      setReportData(localReportData);
+      setActiveReport(localReportData);
+      setFinancialBreakdown(localFinancialBreakdown);
+
+      // 3. Sincronización remota con motor project-parser (con fallback seguro local)
+      try {
+        const response = await fetch('/.netlify/functions/project-parser', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            items: currentItems,
+            pol,
+            pod,
+            loadingRate,
+            dischargingRate,
+            distanceNm,
+            vesselSpeedKnots,
+            vesselDailyHireUsd,
+            exchangeRateUsdEur,
+            actualLoadingDays,
+            actualDischargingDays,
+            demurrageDailyRateUsd,
+            storageDays,
+            surveyorCost,
+            inlandCost,
+            customsCost,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.success) {
+            if (data.charteringAssessment) {
+              setCharteringAssessment(data.charteringAssessment);
+            }
+            if (data.financialBreakdown) {
+              const fb = data.financialBreakdown;
+              setFinancialBreakdown(fb);
+              if (fb.subtotals) {
+                if (fb.subtotals.oceanFreight != null) setSubtotalFreight(Number(fb.subtotals.oceanFreight).toFixed(2));
+                if (fb.subtotals.fobAndPortOperations != null) setSubtotalFobOperations(Number(fb.subtotals.fobAndPortOperations).toFixed(2));
+              }
+              if (fb.totalCostAllIn != null) setEstimatedCost(Number(fb.totalCostAllIn).toFixed(2));
+              if (fb.totalQuotationAllIn != null) setSalePrice(Number(fb.totalQuotationAllIn).toFixed(2));
+            }
+            if (data.stowagePlan) {
+              setReportData(prev => prev ? { ...prev, stowagePlan: data.stowagePlan } : null);
+              setActiveReport(prev => prev ? { ...prev, stowagePlan: data.stowagePlan } : null);
+            }
+          }
+        }
+      } catch (remoteErr) {
+        console.debug('Recálculo remoto completado con fallback local:', remoteErr);
+      }
+
+      // 4. Feedback visual sutil y rápido de confirmación al usuario
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+      setRecalculateFeedback('Cálculos actualizados');
+      feedbackTimeoutRef.current = setTimeout(() => {
+        setRecalculateFeedback(null);
+      }, 2500);
+
+    } catch (err) {
+      console.error('Error durante el recálculo:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   const handleOpenExecutiveReport = (item = null) => {
     try {
       const data = buildExecutiveReportData(item);
@@ -2310,6 +2493,44 @@ export function ForwarderWorkspace() {
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
                       <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">+ Añadir Pieza</button>
+                      <button
+                        type="button"
+                        id="btn-recalculate-cargo"
+                        onClick={handleRecalculate}
+                        disabled={isRecalculating}
+                        className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition-colors"
+                        title="Recalcular estiba, flete y ratios en tiempo real"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`w-3.5 h-3.5 ${isRecalculating ? 'animate-spin' : ''}`}
+                        >
+                          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                          <path d="M16 16h5v5" />
+                        </svg>
+                        <span>{isRecalculating ? 'Recalculando...' : 'Recalcular'}</span>
+                      </button>
+                      {recalculateFeedback && (
+                        <span
+                          id="recalculate-feedback-badge"
+                          role="status"
+                          aria-live="polite"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg shadow-xs transition-opacity duration-300"
+                        >
+                          <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          <span>{recalculateFeedback}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -2691,6 +2912,35 @@ export function ForwarderWorkspace() {
                         </div>
                       </div>
                     </div>
+
+                    {((activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0) > 0 || (activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0) > 0) && (
+                      <div id="financial-unit-ratios-summary" className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between transition-all hover:border-sky-300">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0"></span>
+                            <span className="text-xs font-bold text-slate-700 tracking-wide">Flete Unitario</span>
+                          </div>
+                          <div className="flex items-baseline gap-1 font-mono">
+                            <span className="text-lg font-black text-slate-900">
+                              {Number(activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0).toFixed(2)}
+                            </span>
+                            <span className="text-[11px] font-bold text-sky-700">USD/MT</span>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between transition-all hover:border-amber-300">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                            <span className="text-xs font-bold text-slate-700 tracking-wide">FOB + Mercancía Unitario</span>
+                          </div>
+                          <div className="flex items-baseline gap-1 font-mono">
+                            <span className="text-lg font-black text-slate-900">
+                              {Number(activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0).toFixed(2)}
+                            </span>
+                            <span className="text-[11px] font-bold text-amber-800">USD/MT</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>
