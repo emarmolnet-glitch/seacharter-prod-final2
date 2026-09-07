@@ -144,6 +144,7 @@ export default function AgenteProyectosWidget({
             rotationBreakdown: data.charteringAssessment?.rotationBreakdown,
             operationalProfile: data.operationalProfile,
             financialBreakdown: data.financialBreakdown,
+            stowagePlan: data.stowagePlan,
             forceOpenModal: true,
           });
         }
@@ -364,6 +365,7 @@ export default function AgenteProyectosWidget({
             charteringAssessment: data.charteringAssessment,
             operationalProfile: data.operationalProfile,
             financialBreakdown: data.financialBreakdown,
+            stowagePlan: data.stowagePlan,
             documentMeta: documentMeta,
             forceOpenModal: true,
           });
