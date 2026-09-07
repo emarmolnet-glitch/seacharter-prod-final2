@@ -1868,22 +1868,18 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     });
   }
 
-  if (customsCost > 0) {
-    fobPortOperationsItems.push({
-      concept: 'Despacho de Mercancía y Tramitación de Aranceles',
-      units: 1,
-      amount: customsCost,
-      category: 'Servicios Asociados',
-      description: 'Gestión y tramitación de mercancía en puerto.',
-    });
-  }
+  // Partida de Mercancía: sustituye permanentemente a Aduanas con el valor total de la mercancía gestionado internamente
+  const totalMerchandiseValue = (options.merchandiseValue != null && options.customsCost != null && Number(options.merchandiseValue) !== Number(options.customsCost))
+    ? (Number(options.merchandiseValue) + Number(options.customsCost))
+    : Math.max(0, Number(options.valor_total_mercancia_usd ?? options.merchandiseValue ?? options.valorMercancia ?? options.customsCost ?? options.merchandiseCost ?? options.cargoValue) || 0);
 
-  if (merchandiseValue > 0) {
+  if (totalMerchandiseValue > 0) {
     fobPortOperationsItems.push({
-      concept: 'Valor de la Mercancía / Cobertura y Seguro Repercutible',
+      concept: 'Mercancía',
       units: 1,
-      amount: merchandiseValue,
-      category: 'Valor de Mercancía',
+      amount: totalMerchandiseValue,
+      category: 'Mercancía',
+      description: 'Valor total de la mercancía gestionado internamente en la operativa FOB.',
     });
   }
 
@@ -1915,12 +1911,64 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
   const totalQuotationAllIn = Math.round((totalCostAllIn * (1 + (marginPercentage / 100))) * 100) / 100;
   const marginAmount = Math.round((totalQuotationAllIn - totalCostAllIn) * 100) / 100;
 
+  // =========================================================================
+  // 4. RATIOS UNITARIOS OPERATIVOS EN USD/MT (STRICTLY USD)
+  // =========================================================================
+  const toneladas = totalWeightTons > 0 ? totalWeightTons : (revenueTons > 0 ? revenueTons : 1);
+  const rot = assessment?.rotationBreakdown || assessment?.timeCharterEquivalent;
+  const D_total = rot?.totalRotationDays ?? rot?.totalVoyageDays ?? 10;
+  const dailyHire = rot?.dailyHireRateUsd ?? rot?.dailyUsd ?? assessment?.tce ?? 8500;
+  const exRateUsdToEur = Number(rot?.exchangeRateUsdToEur ?? options.exchangeRate ?? options.usdEurExchangeRate ?? 0.92) || 0.92;
+
+  // 1. Flete total en USD
+  let flete_total_usd = 0;
+  if (options.flete_total_usd != null && Number(options.flete_total_usd) > 0) {
+    flete_total_usd = Number(options.flete_total_usd);
+  } else if (currency === 'USD') {
+    flete_total_usd = oceanFreightSubtotal;
+  } else if (!isUnderThreshold) {
+    flete_total_usd = Math.round(D_total * dailyHire * 100) / 100;
+  } else {
+    flete_total_usd = Math.round((oceanFreightSubtotal / exRateUsdToEur) * 100) / 100;
+  }
+
+  // 2. Costes FOB operativos (excluyendo mercancía) y Valor total de la mercancía en USD
+  let costes_fob_totales_usd = 0;
+  let valor_total_mercancia_usd = 0;
+
+  const fobOperationsCostPure = fobPortOperationsItems
+    .filter(it => it.concept !== 'Mercancía' && it.category !== 'Mercancía' && it.category !== 'Valor de Mercancía')
+    .reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+
+  if (options.costes_fob_totales_usd != null) {
+    costes_fob_totales_usd = Number(options.costes_fob_totales_usd);
+  } else if (currency === 'USD') {
+    costes_fob_totales_usd = Math.round(fobOperationsCostPure * 100) / 100;
+  } else {
+    costes_fob_totales_usd = Math.round((fobOperationsCostPure / exRateUsdToEur) * 100) / 100;
+  }
+
+  if (options.valor_total_mercancia_usd != null) {
+    valor_total_mercancia_usd = Number(options.valor_total_mercancia_usd);
+  } else if (currency === 'USD') {
+    valor_total_mercancia_usd = Math.round(totalMerchandiseValue * 100) / 100;
+  } else {
+    valor_total_mercancia_usd = Math.round((totalMerchandiseValue / exRateUsdToEur) * 100) / 100;
+  }
+
+  // 3. Ratios unitarios en USD/MT
+  const flete_unitario_usd_mt = toneladas > 0 ? Math.round((flete_total_usd / toneladas) * 100) / 100 : 0;
+  const fob_mas_mercancia_unitario_usd_mt = toneladas > 0 ? Math.round(((costes_fob_totales_usd + valor_total_mercancia_usd) / toneladas) * 100) / 100 : 0;
+
   const formatCurrency = (val) => `${Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 
   const summaryLines = [
     `📊 DESGLOSE FINANCIERO SEPARADO (SEACHARTER CORE PRO):`,
-    `🌊 Subtotal Flete Marítimo / TCE: ${formatCurrency(oceanFreightSubtotal)} (${isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo'})`,
+    `🌊 Subtotal Flete Marítimo / TCE: ${formatCurrency(oceanFreightSubtotal)} (${isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo'}) · ${flete_unitario_usd_mt.toFixed(2)} USD/MT`,
     `🏗️ Subtotal Costes FOB y Operativa Portuaria: ${formatCurrency(fobPortOperationsSubtotal)} (Manipulación muelle, estiba/trincaje, tasas y servicios asociados)`,
+    `💵 Ratios Unitarios Operativos (USD/MT):`,
+    `   • Flete Unitario: ${flete_unitario_usd_mt.toFixed(2)} USD/MT`,
+    `   • FOB + Mercancía Unitario: ${fob_mas_mercancia_unitario_usd_mt.toFixed(2)} USD/MT`,
   ];
 
   if (demurrage && demurrage.hasDemurrage) {
@@ -1956,6 +2004,21 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       currency,
       items: fobPortOperationsItems,
     },
+    toneladas,
+    flete_total_usd,
+    costes_fob_totales_usd,
+    valor_total_mercancia_usd,
+    flete_unitario_usd_mt,
+    fob_mas_mercancia_unitario_usd_mt,
+    unitRatios: {
+      currency: 'USD/MT',
+      toneladas,
+      flete_total_usd,
+      costes_fob_totales_usd,
+      valor_total_mercancia_usd,
+      flete_unitario_usd_mt,
+      fob_mas_mercancia_unitario_usd_mt,
+    },
     demurrage: demurrage || null,
     rotationBreakdown: assessment?.rotationBreakdown || assessment?.timeCharterEquivalent || null,
     totalCostAllIn,
@@ -1985,6 +2048,13 @@ function evaluateOrderPortOperations(items = [], options = {}) {
     charteringAssessment,
     operationalProfile,
     financialBreakdown,
+    toneladas: financialBreakdown.toneladas,
+    flete_total_usd: financialBreakdown.flete_total_usd,
+    costes_fob_totales_usd: financialBreakdown.costes_fob_totales_usd,
+    valor_total_mercancia_usd: financialBreakdown.valor_total_mercancia_usd,
+    flete_unitario_usd_mt: financialBreakdown.flete_unitario_usd_mt,
+    fob_mas_mercancia_unitario_usd_mt: financialBreakdown.fob_mas_mercancia_unitario_usd_mt,
+    unitRatios: financialBreakdown.unitRatios,
   };
 }
 
@@ -2241,6 +2311,13 @@ export async function handler(req, context) {
           charteringAssessment,
           operationalProfile,
           financialBreakdown,
+          toneladas: financialBreakdown.toneladas,
+          flete_total_usd: financialBreakdown.flete_total_usd,
+          costes_fob_totales_usd: financialBreakdown.costes_fob_totales_usd,
+          valor_total_mercancia_usd: financialBreakdown.valor_total_mercancia_usd,
+          flete_unitario_usd_mt: financialBreakdown.flete_unitario_usd_mt,
+          fob_mas_mercancia_unitario_usd_mt: financialBreakdown.fob_mas_mercancia_unitario_usd_mt,
+          unitRatios: financialBreakdown.unitRatios,
           reply: financialBreakdown.summaryText,
           documentMeta: {
             name: fileName || 'Items_Estructurados.json',
@@ -2594,6 +2671,13 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       charteringAssessment,
       operationalProfile,
       financialBreakdown,
+      toneladas: financialBreakdown.toneladas,
+      flete_total_usd: financialBreakdown.flete_total_usd,
+      costes_fob_totales_usd: financialBreakdown.costes_fob_totales_usd,
+      valor_total_mercancia_usd: financialBreakdown.valor_total_mercancia_usd,
+      flete_unitario_usd_mt: financialBreakdown.flete_unitario_usd_mt,
+      fob_mas_mercancia_unitario_usd_mt: financialBreakdown.fob_mas_mercancia_unitario_usd_mt,
+      unitRatios: financialBreakdown.unitRatios,
       reply: financialBreakdown.summaryText,
       documentMeta: {
         name: fileName,
