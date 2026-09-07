@@ -716,25 +716,87 @@ function detectFileMimeType(fileName, buffer, headerContentType) {
     }
   }
 
-  if (headerContentType && !headerContentType.includes('application/octet-stream') && !headerContentType.includes('multipart')) {
-    const cleanHeader = headerContentType.split(';')[0].trim();
-    if (cleanHeader) return cleanHeader;
-  }
-
   const lowerName = (fileName || '').toLowerCase();
   if (lowerName.endsWith('.pdf')) return 'application/pdf';
+  if (lowerName.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (lowerName.endsWith('.xls')) return 'application/vnd.ms-excel';
+  if (lowerName.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (lowerName.endsWith('.doc')) return 'application/msword';
   if (lowerName.endsWith('.png')) return 'image/png';
   if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg';
   if (lowerName.endsWith('.webp')) return 'image/webp';
   if (lowerName.endsWith('.txt') || lowerName.endsWith('.csv')) return 'text/plain';
 
+  if (headerContentType && !headerContentType.includes('application/octet-stream') && !headerContentType.includes('multipart')) {
+    const cleanHeader = headerContentType.split(';')[0].trim();
+    if (cleanHeader) return cleanHeader;
+  }
+
   return 'application/pdf';
+}
+
+function isExcelFormat(mimeType = '', fileName = '') {
+  const lowerName = (fileName || '').toLowerCase();
+  const lowerMime = (mimeType || '').toLowerCase();
+  return (
+    lowerName.endsWith('.xlsx') ||
+    lowerName.endsWith('.xls') ||
+    lowerName.endsWith('.csv') ||
+    lowerMime.includes('spreadsheet') ||
+    lowerMime.includes('excel') ||
+    lowerMime.includes('csv')
+  );
+}
+
+function isWordFormat(mimeType = '', fileName = '') {
+  const lowerName = (fileName || '').toLowerCase();
+  const lowerMime = (mimeType || '').toLowerCase();
+  return (
+    lowerName.endsWith('.docx') ||
+    lowerName.endsWith('.doc') ||
+    lowerMime.includes('wordprocessingml') ||
+    lowerMime.includes('msword')
+  );
+}
+
+async function extractTextFromSpreadsheet(buffer) {
+  try {
+    const XLSX = await import('xlsx');
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const textParts = [];
+    for (const sheetName of (workbook.SheetNames || [])) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+      const csv = XLSX.utils.sheet_to_csv(sheet);
+      if (csv && csv.trim()) {
+        textParts.push(`[Hoja Excel: ${sheetName}]\n${csv.trim()}`);
+      }
+    }
+    return textParts.join('\n\n') || buffer.toString('utf8');
+  } catch (err) {
+    console.warn('Advertencia al procesar hoja de cálculo con XLSX:', err?.message || err);
+    return buffer.toString('utf8');
+  }
+}
+
+async function extractTextFromWord(buffer) {
+  try {
+    const mammoth = await import('mammoth');
+    const res = await mammoth.extractRawText({ buffer });
+    if (res?.value && res.value.trim()) {
+      return res.value.trim();
+    }
+    return buffer.toString('utf8');
+  } catch (err) {
+    console.warn('Advertencia al procesar documento Word con mammoth:', err?.message || err);
+    return buffer.toString('utf8');
+  }
 }
 
 export async function handler(req, context) {
   const method = req?.method || req?.httpMethod || '';
 
-  // 1. Manejo estricto de CORS preflight: método OPTIONS devuelve status 204
+  // 1. Interceptar obligatoriamente peticiones OPTIONS (preflight CORS) respondiendo con 204 y cabeceras completas
   if (method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -742,7 +804,7 @@ export async function handler(req, context) {
     });
   }
 
-  // 2. Aceptar exclusivamente el método POST para la ejecución principal
+  // 2. Permitir exclusivamente el método POST para la ejecución de negocio; rechazar cualquier otro método con 405
   if (method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
       status: 405,
@@ -776,9 +838,10 @@ export async function handler(req, context) {
       }
     }
 
-    // 3. Soportar lectura dual de entrada (JSON con Base64 o flujo binario directo)
+    // 3. Soportar lectura dual de entrada (archivos adjuntos PDF/Excel/Word y órdenes en texto plano)
     let body = null;
     let isJsonRequest = false;
+    let isTextPlainRequest = contentType.includes('text/plain') || contentType.includes('text/markdown');
 
     if (contentType.includes('application/json')) {
       isJsonRequest = true;
@@ -808,19 +871,33 @@ export async function handler(req, context) {
 
     let fileBuffer = null;
     let pureBase64 = '';
-    let fileName = headerFileName || 'Documento_Proyecto.pdf';
+    let fileName = headerFileName || '';
     let mimeType = '';
+    let isChatOrder = false;
 
     if (isJsonRequest || (body && typeof body === 'object')) {
-      let rawData = body?.fileBase64 ?? body?.pdfBase64 ?? body?.data ?? body?.file ?? '';
-      fileName = body?.fileName || body?.name || headerFileName || 'Documento_Proyecto.pdf';
+      let rawData = body?.fileBase64 ?? body?.pdfBase64 ?? body?.data ?? body?.file ?? body?.document ?? '';
+      fileName = body?.fileName || body?.name || headerFileName || '';
       mimeType = body?.mimeType || body?.type || '';
 
-      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && (body?.text || body?.content || body?.description)) {
-        const textStr = String(body.text || body.content || body.description);
+      const conversationalText = (
+        body?.text ||
+        body?.message ||
+        body?.prompt ||
+        body?.instruction ||
+        body?.order ||
+        body?.query ||
+        body?.content ||
+        body?.description
+      );
+
+      // Si no se adjuntó archivo en Base64 pero se envió una orden en texto plano desde el chat
+      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && (typeof conversationalText === 'string' && conversationalText.trim())) {
+        const textStr = conversationalText.trim();
+        isChatOrder = true;
         rawData = Buffer.from(textStr, 'utf8').toString('base64');
         if (!mimeType) mimeType = 'text/plain';
-        fileName = fileName || 'input.txt';
+        fileName = fileName || 'orden_conversacional.txt';
       }
 
       // Soporte directo para peticiones con lista de items ya estructurados
@@ -873,7 +950,7 @@ export async function handler(req, context) {
           charteringAssessment,
           operationalProfile,
           documentMeta: {
-            name: fileName,
+            name: fileName || 'Items_Estructurados.json',
             size: 0,
             itemsCount: items.length,
             uploadedAt: new Date().toISOString(),
@@ -891,7 +968,7 @@ export async function handler(req, context) {
       if (!rawData || typeof rawData !== 'string' || !rawData.trim()) {
         return new Response(JSON.stringify({
           success: false,
-          error: 'No se encontró el archivo Base64 en el cuerpo de la petición.',
+          error: 'No se encontró el archivo Base64 ni la orden en texto en el cuerpo de la petición.',
           items: [],
         }), {
           status: 400,
@@ -920,7 +997,7 @@ export async function handler(req, context) {
         });
       }
     } else {
-      // Lectura de flujo binario directo
+      // Lectura de flujo binario directo o texto plano (non-JSON)
       let rawBinaryBuffer = null;
       if (typeof req.arrayBuffer === 'function') {
         try {
@@ -937,8 +1014,15 @@ export async function handler(req, context) {
             rawBinaryBuffer = Buffer.from(req.body, 'base64');
           } catch (_) {}
         } else {
-          rawBinaryBuffer = Buffer.from(req.body, 'binary');
+          rawBinaryBuffer = Buffer.from(req.body, 'utf8');
         }
+      } else if (typeof req.text === 'function') {
+        try {
+          const txt = await req.text();
+          if (txt) {
+            rawBinaryBuffer = Buffer.from(txt, 'utf8');
+          }
+        } catch (_) {}
       }
 
       // Comprobar si el flujo binario recibido era en realidad un JSON sin cabecera Content-Type
@@ -950,10 +1034,17 @@ export async function handler(req, context) {
             if (parsed && typeof parsed === 'object') {
               body = parsed;
               const rawData = body.fileBase64 || body.pdfBase64 || body.data || body.file || '';
-              fileName = body.fileName || body.name || headerFileName || 'Documento_Proyecto.pdf';
+              fileName = body.fileName || body.name || headerFileName || '';
               mimeType = body.mimeType || body.type || '';
 
-              if (rawData && typeof rawData === 'string' && rawData.trim()) {
+              const conversationalText = body?.text || body?.message || body?.prompt || body?.instruction || body?.order || body?.query || body?.content || body?.description;
+              if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && typeof conversationalText === 'string' && conversationalText.trim()) {
+                isChatOrder = true;
+                pureBase64 = Buffer.from(conversationalText.trim(), 'utf8').toString('base64');
+                fileBuffer = Buffer.from(pureBase64, 'base64');
+                mimeType = 'text/plain';
+                fileName = fileName || 'orden_conversacional.txt';
+              } else if (rawData && typeof rawData === 'string' && rawData.trim()) {
                 pureBase64 = rawData.includes(',') ? rawData.split(',')[1].trim() : rawData.trim();
                 fileBuffer = Buffer.from(pureBase64, 'base64');
               }
@@ -966,7 +1057,7 @@ export async function handler(req, context) {
         if (!rawBinaryBuffer || rawBinaryBuffer.length === 0) {
           return new Response(JSON.stringify({
             success: false,
-            error: 'No se encontró el archivo Base64 o flujo binario en el cuerpo de la petición.',
+            error: 'No se encontró el archivo Base64, flujo binario ni orden en texto en el cuerpo de la petición.',
             items: [],
           }), {
             status: 400,
@@ -976,12 +1067,34 @@ export async function handler(req, context) {
             },
           });
         }
-        fileBuffer = rawBinaryBuffer;
-        pureBase64 = fileBuffer.toString('base64');
+
+        // Si es texto plano (orden de chat o documento .txt)
+        const isPdfMagic = rawBinaryBuffer.subarray(0, 5).toString('ascii').startsWith('%PDF-');
+        const isZipOrDoc = rawBinaryBuffer[0] === 0x50 && rawBinaryBuffer[1] === 0x4B; // PK...
+        const isOle = rawBinaryBuffer[0] === 0xD0 && rawBinaryBuffer[1] === 0xCF; // OLE...
+        const isPngOrJpg = (rawBinaryBuffer[0] === 0x89 && rawBinaryBuffer[1] === 0x50) || (rawBinaryBuffer[0] === 0xFF && rawBinaryBuffer[1] === 0xD8);
+
+        if (isTextPlainRequest || (!isPdfMagic && !isZipOrDoc && !isOle && !isPngOrJpg && !headerFileName.toLowerCase().endsWith('.pdf') && !headerFileName.toLowerCase().endsWith('.xlsx') && !headerFileName.toLowerCase().endsWith('.docx'))) {
+          isChatOrder = true;
+          fileBuffer = rawBinaryBuffer;
+          pureBase64 = fileBuffer.toString('base64');
+          mimeType = 'text/plain';
+          fileName = headerFileName || 'orden_conversacional.txt';
+        } else {
+          fileBuffer = rawBinaryBuffer;
+          pureBase64 = fileBuffer.toString('base64');
+          fileName = headerFileName || 'Documento_Proyecto.pdf';
+        }
       }
     }
 
-    mimeType = detectFileMimeType(fileName, fileBuffer, rawContentType);
+    if (!fileName) {
+      fileName = isChatOrder ? 'orden_conversacional.txt' : 'Documento_Proyecto.pdf';
+    }
+
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = detectFileMimeType(fileName, fileBuffer, rawContentType);
+    }
 
     const apiKey = (typeof Netlify !== 'undefined' && (Netlify.env?.get?.('GEMINI_API_KEY') || Netlify.env?.get?.('GOOGLE_API_KEY') || Netlify.env?.get?.('GOOGLE_GENAI_API_KEY')))
       || process.env.GEMINI_API_KEY
@@ -1013,7 +1126,7 @@ export async function handler(req, context) {
     });
 
     const prompt = `Eres el motor experto de inteligencia logística, estiba y fletamentos marítimos para SeaCharter Core PRO.
-Analiza exhaustivamente el documento adjunto.
+Analiza exhaustivamente el documento adjunto o la orden en lenguaje natural / texto plano enviada desde el widget conversacional.
 
 DETECCIÓN AUTOMÁTICA DE IDIOMAS Y NORMALIZACIÓN LOGÍSTICA:
 Detecta automáticamente el idioma de origen del documento (inglés, francés, alemán, catalán, italiano, portugués o español).
@@ -1068,9 +1181,27 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
 }`;
 
     let contentParts;
-    if (mimeType.startsWith('text/')) {
+    if (isExcelFormat(mimeType, fileName)) {
+      const extractedText = await extractTextFromSpreadsheet(fileBuffer);
+      contentParts = [
+        prompt,
+        `Contenido de la hoja de cálculo de carga (${fileName}):\n${extractedText}`,
+      ];
+    } else if (isWordFormat(mimeType, fileName)) {
+      const extractedText = await extractTextFromWord(fileBuffer);
+      contentParts = [
+        prompt,
+        `Contenido del documento Word de carga (${fileName}):\n${extractedText}`,
+      ];
+    } else if (mimeType.startsWith('text/') || isChatOrder) {
       const textContent = fileBuffer.toString('utf8');
-      contentParts = [prompt, `Contenido del documento:\n${textContent}`];
+      const intro = isChatOrder
+        ? 'Orden o instrucción en texto plano enviada desde el widget de chat conversacional:'
+        : `Contenido del documento de texto plano (${fileName}):`;
+      contentParts = [
+        prompt,
+        `${intro}\n${textContent}`,
+      ];
     } else {
       contentParts = [
         prompt,
@@ -1188,5 +1319,10 @@ handler.evaluateCharteringModel = evaluateCharteringModel;
 handler.isBulkOrBigBagsCargo = isBulkOrBigBagsCargo;
 handler.buildOperationalProfile = buildOperationalProfile;
 handler.evaluateOrderPortOperations = evaluateOrderPortOperations;
+handler.detectFileMimeType = detectFileMimeType;
+handler.isExcelFormat = isExcelFormat;
+handler.isWordFormat = isWordFormat;
+handler.extractTextFromSpreadsheet = extractTextFromSpreadsheet;
+handler.extractTextFromWord = extractTextFromWord;
 
 export default handler;
