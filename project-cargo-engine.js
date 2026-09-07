@@ -36,6 +36,41 @@
         return Math.round(toNumber(value) * 100) / 100;
     }
 
+    function calculateFinancialBreakdown(options = {}) {
+        const unitWeightMT = toNumber(options.unitWeightMT || options.weightMT || (toNumber(options.unitWeightKg || options.weightKg) / 1000));
+        const freightRate = toNumber(options.freightRatePerTon || options.oceanFreightRate) || 65;
+        const portOperationsCost = toNumber(options.fobCost || options.portOperationsCost || options.estimatedLashingCost || 0);
+        const cargoValue = toNumber(options.cargoValue || options.merchandiseValue || 0);
+
+        const subtotalOceanFreight = roundMoney(unitWeightMT * freightRate);
+        const subtotalFobPortOperations = roundMoney(portOperationsCost + cargoValue);
+        const totalCostAllIn = roundMoney(subtotalOceanFreight + subtotalFobPortOperations);
+        const totalQuotationAllIn = roundMoney(totalCostAllIn * 1.15);
+
+        return {
+            subtotalOceanFreight,
+            subtotalFobPortOperations,
+            totalCostAllIn,
+            totalQuotationAllIn,
+            marginPercentage: 15,
+            currency: options.currency || 'EUR',
+            details: {
+                oceanFreight: {
+                    concept: 'Flete Marítimo / Ocean Freight (TCE Buque)',
+                    amount: subtotalOceanFreight,
+                    ratePerMt: freightRate,
+                    weightMT: unitWeightMT
+                },
+                fobAndPortOperations: {
+                    concept: 'Costes FOB y Operativa Portuaria',
+                    amount: subtotalFobPortOperations,
+                    portServicesAmount: portOperationsCost,
+                    cargoValueAmount: cargoValue
+                }
+            }
+        };
+    }
+
     function calculateProjectCargoRequirements(options = {}) {
         const unitWeightMT = toNumber(options.unitWeightMT);
         const length = toNumber(options.length);
@@ -56,7 +91,8 @@
                 appliedRules: [],
                 costBreakdown: [],
                 portCostAllocation: { pol: 0, pod: 0 },
-                insightMessage: ''
+                insightMessage: '',
+                financialBreakdown: calculateFinancialBreakdown({ unitWeightMT, portOperationsCost: 0 })
             };
         }
 
@@ -130,14 +166,22 @@
             costBreakdown,
             portCostAllocation: { pol: polAllocation, pod: podAllocation },
             insightMessage,
-            cargoEnvelope: { unitWeightMT, length, width, height, footprint }
+            cargoEnvelope: { unitWeightMT, length, width, height, footprint },
+            financialBreakdown: calculateFinancialBreakdown({
+                unitWeightMT,
+                portOperationsCost: estimatedLashingCost,
+                freightRatePerTon: options.freightRatePerTon || options.oceanFreightRate || 65,
+                cargoValue: options.cargoValue || options.merchandiseValue || 0,
+                currency: options.currency || 'EUR'
+            })
         };
     }
 
     const api = {
         COST_RATES,
         isProjectCargoType,
-        calculateProjectCargoRequirements
+        calculateProjectCargoRequirements,
+        calculateFinancialBreakdown
     };
 
     root.ProjectCargoEngine = api;

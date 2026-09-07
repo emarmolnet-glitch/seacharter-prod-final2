@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './AgenteProyectosWidget.css';
 
-export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: controlledIsOpen, onToggleOpen }) {
+export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: controlledIsOpen, onToggleOpen, cargoItems = [], financialData = null }) {
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -98,6 +98,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         body: JSON.stringify({
           text: raw,
           fileBase64: null,
+          items: (Array.isArray(cargoItems) && cargoItems.length > 0) ? cargoItems : undefined,
         }),
       });
 
@@ -108,7 +109,11 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         const totalKg = formattedItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (parseFloat(it.weight) || 0)), 0);
         const totalTons = totalKg / 1000;
         const charterModeLabel = totalTons < 40 ? 'Grupaje LCL (TCE buque desactivado)' : 'Fletamento Completo (TCE buque activo)';
-        const agentReply = `✅ Orden procesada: ${formattedItems.length} partida(s) analizada(s) (${totalTons.toFixed(2)} t acumuladas).\nModalidad: ${charterModeLabel}.\nLista de empaque y operativa actualizadas automáticamente.`;
+        const fleteSub = data.financialBreakdown?.subtotals?.oceanFreight ?? (totalTons * 65);
+        const fobSub = data.financialBreakdown?.subtotals?.fobAndPortOperations ?? 0;
+        const totalAllIn = data.financialBreakdown?.totalQuotationAllIn ?? ((fleteSub + fobSub) * 1.15);
+
+        const agentReply = `✅ Orden procesada: ${formattedItems.length} partida(s) analizada(s) (${totalTons.toFixed(2)} t acumuladas).\nModalidad: ${charterModeLabel}.\n\n📊 Desglose Financiero Separado:\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB / Operativa: ${Number(fobSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Total Cotización (All-In): ${Number(totalAllIn).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nLista de empaque y operativa actualizadas automáticamente.`;
 
         setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
         speakText(agentReply);
@@ -121,6 +126,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
             orderTotals: data.orderTotals,
             charteringAssessment: data.charteringAssessment,
             operationalProfile: data.operationalProfile,
+            financialBreakdown: data.financialBreakdown,
             forceOpenModal: true,
           });
         }
@@ -134,9 +140,21 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         };
 
         const val = extractNumber(text);
+        const isBreakdownReq = /(desglose|desglos|flete\s*vs|flete\s*y\s*fob|fob\s*y\s*flete|separar\s*flete|subtotal|all-in|costes?\s*separados?|desglose\s*financiero)/i.test(text);
 
         if (text.includes('dónde') || text.includes('donde') || text.includes('integrado')) {
           payloadObj.infoReply = "Los archivos adjuntos y datos procesados se integran directamente en la tabla de la Lista de Empaque (Project Cargo Builder) y actualizan los cálculos de flete y estiba de forma automática.";
+        } else if (isBreakdownReq) {
+          payloadObj.requestFinancialBreakdown = true;
+          payloadObj.showFinancialBreakdown = true;
+          payloadObj.forceOpenModal = true;
+          if (data.financialBreakdown) {
+            payloadObj.financialBreakdown = data.financialBreakdown;
+          }
+          const fleteVal = data.financialBreakdown?.subtotals?.oceanFreight ?? (financialData?.subtotalFreight || '0.00');
+          const fobVal = data.financialBreakdown?.subtotals?.fobAndPortOperations ?? (financialData?.subtotalFobOperations || '0.00');
+          const allInVal = data.financialBreakdown?.totalQuotationAllIn ?? (financialData?.salePrice || '0.00');
+          payloadObj.breakdownReply = `📊 Desglose Financiero Separado (SeaCharter Core PRO):\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB y Operativa Portuaria: ${Number(fobVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Importe Total Cotización (All-In): ${Number(allInVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nEstado financiero de la interfaz actualizado: los subtotales son visibles de forma transparente.`;
         } else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
           if (val !== null) payloadObj.storageDays = val;
         } else if (text.includes('surveyor') || text.includes('perito') || text.includes('inspeccion')) {
@@ -155,11 +173,13 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
 
         const agentReply = data.error
           ? `⚠️ ${data.error}`
-          : payloadObj.infoReply
-            ? payloadObj.infoReply
-            : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
-              ? `⚙️ Parámetros actualizados en el proyecto.`
-              : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
+          : payloadObj.breakdownReply
+            ? payloadObj.breakdownReply
+            : payloadObj.infoReply
+              ? payloadObj.infoReply
+              : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
+                ? `⚙️ Parámetros actualizados en el proyecto.`
+                : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
 
         setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
         speakText(agentReply);
@@ -227,7 +247,11 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
         const totalKg = formattedItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (parseFloat(it.weight) || 0)), 0);
         const totalTons = totalKg / 1000;
         const charterModeLabel = totalTons < 40 ? 'Grupaje LCL (TCE buque desactivado)' : 'Fletamento Completo (TCE buque activo)';
-        const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s) (${totalTons.toFixed(2)} t).\nModalidad: ${charterModeLabel}.\nLista de empaque y operativa actualizadas automáticamente.`;
+        const fleteSub = data.financialBreakdown?.subtotals?.oceanFreight ?? (totalTons * 65);
+        const fobSub = data.financialBreakdown?.subtotals?.fobAndPortOperations ?? 0;
+        const totalAllIn = data.financialBreakdown?.totalQuotationAllIn ?? ((fleteSub + fobSub) * 1.15);
+
+        const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s) (${totalTons.toFixed(2)} t).\nModalidad: ${charterModeLabel}.\n\n📊 Desglose Financiero Separado:\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB / Operativa: ${Number(fobSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Total Cotización (All-In): ${Number(totalAllIn).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nLista de empaque y operativa actualizadas automáticamente.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
         speakText(text);
 
@@ -239,6 +263,7 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
             orderTotals: data.orderTotals,
             charteringAssessment: data.charteringAssessment,
             operationalProfile: data.operationalProfile,
+            financialBreakdown: data.financialBreakdown,
             documentMeta: documentMeta,
             forceOpenModal: true,
           });

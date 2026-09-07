@@ -76,6 +76,9 @@ export function ForwarderWorkspace() {
   const [customsCost, setCustomsCost] = useState(0);
   const userEditedSurveyor = useRef(false);
 
+  const [subtotalFreight, setSubtotalFreight] = useState('0.00');
+  const [subtotalFobOperations, setSubtotalFobOperations] = useState('0.00');
+  const [isBreakdownVisible, setIsBreakdownVisible] = useState(true);
   const [estimatedCost, setEstimatedCost] = useState('');
   const [salePrice, setSalePrice] = useState('');
 
@@ -294,6 +297,7 @@ export function ForwarderWorkspace() {
       setDunnage(0); setChains(0); setSlings(0); setShackles(0);
       setGangs(0); setHeavyLift(0); setMafiPlatforms(0); setLashingTeams(0);
       setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
+      setSubtotalFreight('0.00'); setSubtotalFobOperations('0.00');
       setEstimatedCost(''); setSalePrice('');
       setIsUnder40t(false); setTceActive(false); setTceValue(null);
       setOperationalProfileNotice('');
@@ -386,6 +390,8 @@ export function ForwarderWorkspace() {
     const isUnderThreshold = totalWeightTons < 40;
     setIsUnder40t(isUnderThreshold);
 
+    let calculatedOceanFreight = 0;
+    let calculatedFobOperations = 0;
     let totalEstimatedCost = 0;
 
     if (isUnderThreshold) {
@@ -400,15 +406,21 @@ export function ForwarderWorkspace() {
       const chargeableVolumeCbm = Math.max(0.1, totalVolumeM3);
       const revenueTons = Math.max(1, Math.max(chargeableWeightTons, chargeableVolumeCbm));
 
+      // Subtotal 1: Flete Marítimo LCL
       const oceanFreightCost = revenueTons * 65.0;
+
+      // Subtotal 2: Costes FOB y Operativa Portuaria (CFS, Tasas T3, B/L, almacenaje, surveyor, inland, aduanas)
       const cfsOriginCost = revenueTons * 22.0;
       const cfsDestCost = revenueTons * 25.0;
       const portT3Cost = revenueTons * 4.5;
       const blFee = 85.0;
       const totalLclFreightCost = oceanFreightCost + cfsOriginCost + cfsDestCost + portT3Cost + blFee;
-
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
-      totalEstimatedCost = totalLclFreightCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+
+      calculatedOceanFreight = oceanFreightCost;
+      calculatedFobOperations = cfsOriginCost + cfsDestCost + portT3Cost + blFee + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+
+      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     } else {
       // Regla >= 40t: Aplicar fletamento completo y cálculo de TCE del buque sugerido
       setTceActive(true);
@@ -433,14 +445,23 @@ export function ForwarderWorkspace() {
       }
 
       const RT = Math.max(totalWeightTons, totalVolumeM3);
+
+      // Subtotal 1: Flete Marítimo Buque Completo / TCE
       const freightCost = RT * 65;
+
+      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, aduanas)
       const lashingCost = (effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15);
       const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
 
-      totalEstimatedCost = freightCost + lashingCost + stevedoringCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+      calculatedOceanFreight = freightCost;
+      calculatedFobOperations = lashingCost + stevedoringCost + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+
+      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     }
 
+    setSubtotalFreight(calculatedOceanFreight.toFixed(2));
+    setSubtotalFobOperations(calculatedFobOperations.toFixed(2));
     setEstimatedCost(totalEstimatedCost.toFixed(2));
     setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
@@ -561,7 +582,26 @@ export function ForwarderWorkspace() {
     if (payload.inlandTrucksCount !== undefined) { setInlandCost(payload.inlandTrucksCount); hasChanges = true; }
     if (payload.customsCost !== undefined) { setCustomsCost(payload.customsCost); hasChanges = true; }
 
+    if (payload.requestFinancialBreakdown || payload.showFinancialBreakdown) {
+      setIsBreakdownVisible(true);
+      hasChanges = true;
+    }
+    if (payload.financialBreakdown) {
+      const fb = payload.financialBreakdown;
+      if (fb.subtotals) {
+        if (fb.subtotals.oceanFreight != null) setSubtotalFreight(Number(fb.subtotals.oceanFreight).toFixed(2));
+        if (fb.subtotals.fobAndPortOperations != null) setSubtotalFobOperations(Number(fb.subtotals.fobAndPortOperations).toFixed(2));
+      }
+      if (fb.totalCostAllIn != null) setEstimatedCost(Number(fb.totalCostAllIn).toFixed(2));
+      if (fb.totalQuotationAllIn != null) setSalePrice(Number(fb.totalQuotationAllIn).toFixed(2));
+      setIsBreakdownVisible(true);
+      hasChanges = true;
+    }
+
     if (structuralModified || payload.forceOpenModal) {
+      setIsCargoModalOpen(true);
+    }
+    if (payload.requestFinancialBreakdown) {
       setIsCargoModalOpen(true);
     }
 
@@ -619,13 +659,25 @@ export function ForwarderWorkspace() {
   };
 
   const handleSaveProjectCargo = async () => {
+    console.log('Guardar Flete y Estiba en Proyecto:', {
+      cargoItems,
+      subtotalFreight,
+      subtotalFobOperations,
+      estimatedCost,
+      salePrice
+    });
     const payload = {
       project_ref: activeProject?.project_ref,
       cargo_items: cargoItems.map((item) => ({
         category: item.category || 'Equipos de Proceso', quantity: parseInt(item.quantity, 10) || 1, type: item.type || 'Sin especificar',
         length_m: parseFloat(item.length) || 0, width_m: parseFloat(item.width) || 0, height_m: parseFloat(item.height) || 0, unit_weight_kg: parseFloat(item.weight) || 0, shipping_mode_supported: item.shipping_mode_supported || "40' HC Contenedor"
       })),
-      financial_summary: { estimated_total_cost_eur: parseFloat(estimatedCost) || 0, customer_sale_price_eur: parseFloat(salePrice) || 0 }
+      financial_summary: {
+        subtotal_ocean_freight_eur: parseFloat(subtotalFreight) || 0,
+        subtotal_fob_operations_eur: parseFloat(subtotalFobOperations) || 0,
+        estimated_total_cost_eur: parseFloat(estimatedCost) || 0,
+        customer_sale_price_eur: parseFloat(salePrice) || 0
+      }
     };
     const lineItemCost = parseFloat(estimatedCost) || 0;
     const lineItemPrice = parseFloat(salePrice) || 0;
@@ -642,6 +694,7 @@ export function ForwarderWorkspace() {
       setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
       await persistProjectToDatabase(updatedProject);
     }
+    setCargoItems([]);
     setIsCargoModalOpen(false);
     setSaveSuccessMessage('¡Flete y estiba guardados correctamente!');
     setTimeout(() => setSaveSuccessMessage(null), 3500);
@@ -693,7 +746,7 @@ export function ForwarderWorkspace() {
 
   return (
     <>
-      <div className={`w-full h-full flex overflow-hidden bg-slate-900 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
+      <div className={`w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
         <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
           <div className="p-4 border-b border-slate-800">
             <button onClick={handleCreateProject} disabled={isCreating} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase rounded-lg shadow-md cursor-pointer">{isCreating ? 'Creando...' : '+ Nuevo Proyecto'}</button>
@@ -839,7 +892,7 @@ export function ForwarderWorkspace() {
         {/* MODAL PRINCIPAL TEMA CLARO PANTALLA COMPLETA */}
         {isCargoModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto print:hidden">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full h-[95vh] flex flex-col overflow-hidden text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden text-slate-900">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Project Cargo Builder</h2>
                 <button onClick={() => setIsCargoModalOpen(false)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer flex items-center justify-center font-bold">✕</button>
@@ -848,7 +901,7 @@ export function ForwarderWorkspace() {
               <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-100">
                 <section className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">1. Lista de Empaque</h3>
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">1. Lista de Empaque (Packing List)</h3>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -862,49 +915,71 @@ export function ForwarderWorkspace() {
                       </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
-                      <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">➕ Añadir Pieza</button>
+                      <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">+ Añadir Pieza</button>
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <table className="w-full table-fixed text-left text-[11px] text-slate-700">
+                    <table className="w-full text-left text-[11px] text-slate-700">
                       <thead className="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
                         <tr>
-                          <th className="px-2 py-3 w-[15%]">Categoría</th>
-                          <th className="px-2 py-3 w-[35%]">Descripción</th>
-                          <th className="px-2 py-3 w-[6%] text-center">Cant.</th>
-                          <th className="px-2 py-3 w-[17%] text-center">Dimensiones (m)</th>
-                          <th className="px-2 py-3 w-[9%] text-right">Peso U. (kg)</th>
-                          <th className="px-2 py-3 w-[14%]">Modo Envío</th>
+                          <th className="px-2 py-3 w-[12%]">Categoría</th>
+                          <th className="px-2 py-3 w-[25%]">Tipo/Modelo</th>
+                          <th className="px-2 py-3 w-[7%] text-center">Cantidad</th>
+                          <th className="px-2 py-3 w-[7%] text-center">Largo (m)</th>
+                          <th className="px-2 py-3 w-[7%] text-center">Ancho (m)</th>
+                          <th className="px-2 py-3 w-[7%] text-center">Alto (m)</th>
+                          <th className="px-2 py-3 w-[10%] text-right">Peso Unitario (kg)</th>
+                          <th className="px-2 py-3 w-[7%] text-right font-mono">M2</th>
+                          <th className="px-2 py-3 w-[7%] text-right font-mono">M3</th>
+                          <th className="px-2 py-3 w-[12%]">Modo Envío</th>
                           <th className="px-2 py-3 w-[4%] text-center">🗑️</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {cargoItems.map((item) => (
-                          <tr key={item.id} className="hover:bg-slate-50/80">
-                            <td className="p-1"><input type="text" value={item.category || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'category', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-800" placeholder="Ej: Equipos..." /></td>
-                            <td className="p-1"><input type="text" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold" placeholder="Descripción de pieza..." /></td>
-                            <td className="p-1"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-1 py-1.5 text-center text-slate-900" /></td>
-                            <td className="p-1">
-                              <div className="flex items-center gap-1 w-full">
-                                <input type="number" placeholder="L" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
-                                <input type="number" placeholder="W" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />x
-                                <input type="number" placeholder="H" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-1/3 min-w-0 bg-white border border-slate-300 px-1 py-1.5 rounded text-center" />
-                              </div>
-                            </td>
-                            <td className="p-1"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-right font-mono" /></td>
-                            <td className="p-1"><input type="text" value={item.shipping_mode_supported || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'shipping_mode_supported', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-600 text-[10px]" placeholder="Modo..." /></td>
-                            <td className="p-1 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full cursor-pointer">✕</button></td>
-                          </tr>
-                        ))}
+                        {cargoItems.map((item) => {
+                          const qty = Math.max(1, Number(item.quantity) || 1);
+                          const l = Math.max(0, parseFloat(item.length) || 0);
+                          const w = Math.max(0, parseFloat(item.width) || 0);
+                          const h = Math.max(0, parseFloat(item.height) || 0);
+                          const itemM2 = qty * (l * w);
+                          const itemM3 = qty * (l * w * h);
+
+                          return (
+                            <tr key={item.id} className="hover:bg-slate-50/80">
+                              <td className="p-1"><input type="text" value={item.category || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'category', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-800 text-[11px]" placeholder="Ej: Equipos..." /></td>
+                              <td className="p-1"><input type="text" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold text-[11px]" placeholder="Descripción de pieza..." /></td>
+                              <td className="p-1"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-1 py-1.5 text-center text-slate-900 text-[11px]" /></td>
+                              <td className="p-1"><input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center text-[11px]" placeholder="L" /></td>
+                              <td className="p-1"><input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center text-[11px]" placeholder="W" /></td>
+                              <td className="p-1"><input type="number" value={item.height} onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center text-[11px]" placeholder="H" /></td>
+                              <td className="p-1"><input type="number" value={item.weight} onChange={(e) => handleUpdateCargoItem(item.id, 'weight', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-right font-mono text-[11px]" /></td>
+                              <td className="p-1 text-right font-mono text-[11px] text-slate-600">{itemM2.toFixed(2)}</td>
+                              <td className="p-1 text-right font-mono text-[11px] text-slate-600">{itemM3.toFixed(2)}</td>
+                              <td className="p-1"><input type="text" value={item.shipping_mode_supported || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'shipping_mode_supported', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-600 text-[10px]" placeholder="Modo..." /></td>
+                              <td className="p-1 text-center"><button onClick={() => handleRemoveCargoItem(item.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 rounded p-1 font-bold w-full h-full cursor-pointer">✕</button></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
+                      <tfoot className="bg-slate-100 font-bold text-slate-700 border-t border-slate-200">
+                        <tr>
+                          <td colSpan={2} className="px-3 py-2 text-left uppercase text-[10px]">Totales:</td>
+                          <td className="px-2 py-2 text-center font-mono">{totals.quantity}</td>
+                          <td colSpan={3} className="px-2 py-2 text-center text-[10px] text-slate-500">-</td>
+                          <td className="px-2 py-2 text-right font-mono">{Number(totals.weight).toLocaleString('es-ES')} kg</td>
+                          <td className="px-2 py-2 text-right font-mono">{Number(totals.m2).toFixed(2)} m²</td>
+                          <td className="px-2 py-2 text-right font-mono">{Number(totals.m3).toFixed(2)} m³</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </section>
 
                 <section className="pt-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Operativa</h3>
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Materiales</h3>
                     {isUnder40t ? (
                       <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 rounded-full flex items-center gap-1.5 shadow-sm">
                         📦 Modalidad Grupaje LCL (&lt; 40 t) · TCE Desactivado
@@ -947,18 +1022,19 @@ export function ForwarderWorkspace() {
                     </div>
                   )}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <NumericCounter label="Maderas" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Dunnage"} value={dunnageWood} onChange={setDunnageWood} />
-                    <NumericCounter label="Eslingas" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
-                    <NumericCounter label="Cadenas" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Trincaje Pesado"} value={chainsBinders} onChange={setChainsBinders} />
+                    <NumericCounter label="Maderas de Estiba (Dunnage)" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Dunnage"} value={dunnageWood} onChange={setDunnageWood} />
+                    <NumericCounter label="Eslingas de alta capacidad" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
+                    <NumericCounter label="Cadenas y Tensores" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Trincaje Pesado"} value={chainsBinders} onChange={setChainsBinders} />
+                    <NumericCounter label="Grilletes" subtitle="Unión de Trincas" value={shackles} onChange={setShackles} />
                   </div>
                 </section>
 
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Mano de Obra Portuaria</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <NumericCounter label="Turnos Estiba" subtitle="Cuadrillas completas" value={stevedoreGangs} onChange={setStevedoreGangs} />
-                    <NumericCounter label="Eq. Trincadores" subtitle="Especialistas" value={lashingTeam} onChange={setLashingTeam} />
-                    <NumericCounter label="Grúas Heavy Lift" subtitle="Móvil Portuaria" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
+                    <NumericCounter label="Cuadrillas de Estibadores (Turnos)" subtitle="Turnos de Estiba" value={stevedoreGangs} onChange={setStevedoreGangs} />
+                    <NumericCounter label="Equipo de Trincadores" subtitle="Especialistas" value={lashingTeam} onChange={setLashingTeam} />
+                    <NumericCounter label="Grúa Auxiliar de Tierra (Heavy Lift)" subtitle="Móvil Portuaria" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
                     <NumericCounter label="Plataformas MAFI" subtitle="Roll Trailers" value={mafiPlatforms} onChange={setMafiPlatforms} />
                   </div>
                 </section>
@@ -972,24 +1048,75 @@ export function ForwarderWorkspace() {
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Aduanas (€)</label><input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                   </div>
                 </section>
+
+                <section className="pt-6 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">5. Desglose Financiero Separado (Flete vs. FOB / Operativa)</h3>
+                    <span className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-wider">SeaCharter Core PRO</span>
+                  </div>
+
+                  <div id="financial-breakdown-card" className="bg-slate-900 border border-slate-700 rounded-xl p-5 text-white shadow-xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Subtotal Flete Marítimo / TCE */}
+                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-sky-400 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
+                            <span className="text-sm">🌊</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300">
+                            {tceActive ? `Fletamento Completo buque · TCE: ${tceValue ? `${tceValue.toLocaleString('es-ES')} USD/día` : 'Activo'}` : 'Grupaje LCL consolidado (TCE buque desactivado)'}
+                          </p>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
+                          <span className="text-[11px] font-mono text-slate-400">Subtotal Flete:</span>
+                          <div className="flex items-baseline">
+                            <span id="subtotal-ocean-freight" className="text-2xl font-mono font-black text-sky-300">{subtotalFreight}</span>
+                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">EUR</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Subtotal Costes FOB y Operativa Portuaria */}
+                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">Subtotal Costes FOB y Operativa Portuaria</span>
+                            <span className="text-sm">🏗️</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300">
+                            Manipulación en muelle, estiba y desestiba, trincaje, almacenaje terminal, peritaje, inland y aduanas
+                          </p>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
+                          <span className="text-[11px] font-mono text-slate-400">Subtotal FOB/Operativa:</span>
+                          <div className="flex items-baseline">
+                            <span id="subtotal-fob-operations" className="text-2xl font-mono font-black text-amber-300">{subtotalFobOperations}</span>
+                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">EUR</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">
                 <div className="flex gap-6 w-1/2">
                   <div className="w-full relative">
-                    <label htmlFor="input-estimated-cost" className="block text-slate-500 font-bold text-[10px] uppercase mb-1">COSTE TOTAL ESTIMADO (€)</label>
+                    <label htmlFor="input-estimated-cost" className="block text-slate-500 font-bold text-[10px] uppercase mb-1">Coste Total Estimado (€)</label>
                     <input id="input-estimated-cost" type="number" readOnly value={estimatedCost} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
                     <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
                   <div className="w-full relative">
-                    <label htmlFor="input-sale-price" className="block text-blue-600 font-bold text-[10px] uppercase mb-1">PRECIO VENTA CLIENTE (€)</label>
+                    <label htmlFor="input-sale-price" className="block text-blue-600 font-bold text-[10px] uppercase mb-1">Precio Venta a Cliente (€)</label>
                     <input id="input-sale-price" type="number" readOnly value={salePrice} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
                     <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte</button>
-                  <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">💾 GUARDAR PROYECTO</button>
+                  <button id="btn-generate-executive-report" onClick={() => setShowExecutiveReport(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">📄 Generar Reporte Ejecutivo</button>
+                  <button onClick={handleSaveProjectCargo} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded shadow font-bold text-sm cursor-pointer">💾 Guardar Flete y Estiba en Proyecto</button>
                 </div>
               </div>
             </div>
@@ -1006,105 +1133,163 @@ export function ForwarderWorkspace() {
         const finalTotalMargin = finalTotalSale - finalTotalCost;
         const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
-        const totalMetricUnits = cargoItems.reduce((sum, item) => sum + ((Number(item.quantity) || 1) * (parseFloat(item.weight) || 1000)), 0) || 1;
         const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
+        const fleteCostNum = parseFloat(subtotalFreight) || 0;
+        const fleteSaleNum = fleteCostNum * 1.15;
+        const fleteMarginNum = fleteSaleNum - fleteCostNum;
+
+        const estibaCostNum = (stevedoreGangs * 1200) + (lashingTeam * 800);
+        const estibaSaleNum = estibaCostNum * 1.15;
+        const estibaMarginNum = estibaSaleNum - estibaCostNum;
+
+        const matCostNum = (mafiPlatforms * 300) + (heavyLiftCrane * 2500) + (dunnageWood * 30) + (chainsBinders * 80) + (highCapacitySlings * 40);
+        const matSaleNum = matCostNum * 1.15;
+        const matMarginNum = matSaleNum - matCostNum;
+
+        const periCostNum = (Math.ceil(totals.m2) * storageDays * 2) + Number(surveyorCost) + Number(inlandCost) + Number(customsCost);
+        const periSaleNum = periCostNum * 1.15;
+        const periMarginNum = periSaleNum - periCostNum;
 
         return (
-          <div className="fixed inset-0 bg-slate-200 z-[999999] overflow-y-auto pt-28 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
+          <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-20 pb-10 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
                 #printable-a4-sheet, #printable-a4-sheet * { visibility: visible !important; }
-                #printable-a4-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 15mm !important; border: none !important; box-shadow: none !important;}
+                #printable-a4-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 12mm !important; border: none !important; box-shadow: none !important; }
                 .print-hidden { display: none !important; }
                 @page { size: A4 portrait; margin: 0; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               }
             `}</style>
 
-            <div className="fixed bottom-8 right-8 flex flex-col sm:flex-row gap-4 z-[9999999] print-hidden">
-              <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
-                🖨️ IMPRIMIR / PDF
+            <div className="fixed top-6 right-8 flex gap-4 z-[9999] print:hidden">
+              <button id="btn-print-executive-report" onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
+                🖨️ Imprimir / Guardar PDF
               </button>
-              <button onClick={() => setShowExecutiveReport(false)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
-                ✖ CERRAR REPORTE
+              <button id="btn-close-executive-report" onClick={() => setShowExecutiveReport(false)} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform">
+                ✖ Cerrar Reporte
               </button>
             </div>
 
-            <div id="printable-a4-sheet" className="max-w-[1100px] mx-auto p-12 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
+            <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
               
               <header className="border-b-2 border-slate-200 pb-4 mb-6 flex justify-between items-end">
                 <div>
                   <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
-                    UNIVERSAL FORWARDING / B2B
+                    Universal Forwarding / B2B Module
                   </h1>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                    División Especializada de Fletamentos y Carga de Proyecto
+                    OFERTA COMERCIAL - PROJECT CARGO
                   </p>
                 </div>
                 <div className="text-right text-[11px] text-slate-600 font-mono">
-                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Fecha:</span>{new Date().toLocaleDateString('es-ES')}</div>
-                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Ref:</span>{activeProject?.project_ref || 'EXP-SIN-REF'}</div>
+                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Fecha de Emisión:</span>{new Date().toLocaleDateString('es-ES')}</div>
+                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Referencia del Proyecto:</span>{activeProject?.project_ref || 'EXP-SIN-REF'}</div>
                   <div><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Cliente:</span><span className="font-bold text-blue-700">{activeProject?.client_name || 'Sin Cliente'}</span></div>
                 </div>
               </header>
 
-              <section className="bg-slate-50 p-6 rounded-lg border border-slate-200 mb-8">
-                <div className="grid grid-cols-4 gap-4 text-center">
-                  <div className="bg-white p-3 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Volumen Total</span><span className="text-xl font-black text-slate-900">{totals.m3.toFixed(2)} m³</span></div>
-                  <div className="bg-white p-3 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Peso Total</span><span className="text-xl font-black text-slate-900">{totalWeightTons.toFixed(2)} Tons</span></div>
-                  <div className="bg-white p-3 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Modalidad</span><span className="text-xl font-black text-blue-600">{shippingMode}</span></div>
-                  <div className="bg-white p-3 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Buque Sugerido</span><span className="text-sm font-black text-slate-900 mt-1 block">{vesselType}</span></div>
+              <section className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b border-slate-200 pb-1.5">
+                  Resumen Operativo (Operational Summary)
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+                  <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Volumen Total</span><span className="text-lg font-black text-slate-900">{totals.m3.toFixed(2)} m³</span></div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Peso Total</span><span className="text-lg font-black text-slate-900">{totalWeightTons.toFixed(2)} Tons</span></div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Revenue Tons (RT)</span><span className="text-lg font-black text-indigo-700">{reportRT.toFixed(2)} RT</span></div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Modalidad Operativa</span><span className="text-sm font-black text-blue-600 mt-1 block">{shippingMode}</span></div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Buque Recomendado</span><span className="text-xs font-black text-slate-900 mt-1 block">{vesselType}</span></div>
                 </div>
               </section>
 
-              <section className="mb-8 print-exact">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">🚢 Croquis Esquemático de Estiba (Stowage Plan)</h3>
-                <div className="bg-slate-50 border border-slate-300 p-4 rounded overflow-x-auto text-[10px] leading-tight font-mono whitespace-pre text-slate-800">
+              <section className="mb-6 print-exact">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-2 border-b-2 border-slate-200 pb-1">🚢 Croquis Esquemático de Estiba (Stowage Plan)</h3>
+                <div className="bg-slate-50 border border-slate-300 p-3 rounded overflow-x-auto text-[9px] leading-tight font-mono whitespace-pre text-slate-800">
                   {getStowageAscii()}
                 </div>
               </section>
 
-              <section className="mb-8">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">📋 Desglose de Partidas y Servicios del Proyecto</h3>
-                <table className="w-full text-[11px] border-collapse">
+              <section className="mb-6">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">
+                  📋 Desglose Financiero Separado (Flete Marítimo vs. Costes FOB / Operativa Portuaria)
+                </h3>
+                <table className="border-collapse w-full text-[11px]">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 uppercase font-bold border-y-2 border-slate-300">
-                      <th className="py-3 px-2 text-left">Concepto / Partida</th>
-                      <th className="py-3 px-2 text-center">Piezas</th>
-                      <th className="py-3 px-2 text-right">Coste Est.</th>
-                      <th className="py-3 px-2 text-right">Precio Venta</th>
+                      <th className="py-2.5 px-3 text-left">Concepto</th>
+                      <th className="py-2.5 px-3 text-left">Descripción</th>
+                      <th className="py-2.5 px-3 text-right">Coste (€)</th>
+                      <th className="py-2.5 px-3 text-right">Venta (€)</th>
+                      <th className="py-2.5 px-3 text-right">Margen</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {cargoItems.map((item, idx) => {
-                      const ratio = ((Number(item.quantity)||1) * (parseFloat(item.weight)||1000)) / totalMetricUnits;
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="py-3 px-2 font-bold text-slate-900">{item.type || 'Pieza'} <span className="text-slate-500 font-normal">({item.length}x{item.width}x{item.height}m)</span></td>
-                          <td className="py-3 px-2 text-center font-mono">{item.quantity}</td>
-                          <td className="py-3 px-2 text-right font-mono text-slate-600">{formatCurrency(finalTotalCost * ratio)}</td>
-                          <td className="py-3 px-2 text-right font-mono font-bold text-slate-900">{formatCurrency(finalTotalSale * ratio)}</td>
-                        </tr>
-                      );
-                    })}
+                    {/* Fila 1: Flete Marítimo (Base RT) */}
+                    <tr className="hover:bg-slate-50 bg-sky-50/40">
+                      <td className="py-2.5 px-3 font-bold text-sky-900">Flete Marítimo (Base RT)</td>
+                      <td className="py-2.5 px-3 text-slate-600">Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT)</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">{formatCurrency(fleteSaleNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(fleteMarginNum)}</td>
+                    </tr>
+                    {/* Fila 2: Estiba y Trincaje (Cuadrillas, Trincadores) */}
+                    <tr className="hover:bg-slate-50">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">Estiba y Trincaje (Cuadrillas, Trincadores)</td>
+                      <td className="py-2.5 px-3 text-slate-600">Turnos de estibadores en muelle y cuadrillas de trincaje especializado</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(estibaCostNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(estibaSaleNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(estibaMarginNum)}</td>
+                    </tr>
+                    {/* Fila 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage) */}
+                    <tr className="hover:bg-slate-50">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)</td>
+                      <td className="py-2.5 px-3 text-slate-600">Grúa auxiliar, roll trailers MAFI, dunnage, eslingas y cadenas certificadas</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(matCostNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(matSaleNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(matMarginNum)}</td>
+                    </tr>
+                    {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas) */}
+                    <tr className="hover:bg-slate-50">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas)</td>
+                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({storageDays} d), surveyor portuario, transporte inland y aduanas</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </section>
 
+              {/* Subtotales destacados: Flete vs FOB / Operativa */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
+                  <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
+                  <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(subtotalFreight)}</div>
+                  <span className="text-[10px] text-sky-600 font-semibold">Precio Venta Flete: {formatCurrency(fleteSaleNum)}</span>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                  <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">Subtotal Costes FOB y Operativa Portuaria</span>
+                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(subtotalFobOperations)}</div>
+                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(subtotalFobOperations) * 1.15)}</span>
+                </div>
+              </div>
+
+              {/* Importe Total de Cotización / Venta (All-In) */}
               <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">Importe Total Cotización (All-In)</span>
-                  <h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA</h2>
+                  <h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA AL CLIENTE</h2>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1 rounded text-xs font-bold font-mono">
-                      Tarifa: {formatCurrency(unitRateSale)} / RT (W/M)
+                      Tarifa All-In: {formatCurrency(unitRateSale)} / RT (W/M)
                     </span>
                     <span className="text-[10px] text-slate-500 font-semibold">Cálculo sobre {reportRT.toFixed(2)} Revenue Tons</span>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-4xl font-black font-mono text-blue-700">{formatCurrency(finalTotalSale)}</div>
-                  <div className="text-xs text-slate-500 mt-1 font-bold">Margen comercial ({formatCurrency(finalTotalMargin)})</div>
+                  <div className="text-xs text-slate-500 mt-1 font-bold">Coste All-In: {formatCurrency(finalTotalCost)} · Margen comercial ({formatCurrency(finalTotalMargin)})</div>
                 </div>
               </div>
 
@@ -1121,6 +1306,8 @@ export function ForwarderWorkspace() {
         onUpdatePayload={handleApplyProjectPayload}
         isOpen={isAgentVisible}
         onToggleOpen={setIsAgentVisible}
+        cargoItems={cargoItems}
+        financialData={{ subtotalFreight, subtotalFobOperations, estimatedCost, salePrice }}
       />
     </>
   );
