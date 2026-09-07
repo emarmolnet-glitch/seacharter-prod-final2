@@ -157,10 +157,15 @@ test('project-parser: multilingual prompt and normalizer processes EN, FR, DE, C
   assert.equal(data.success, true);
   assert.equal(data.items.length, 3);
 
-  // Verificación de deducción logística normalizada
+  // Verificación de deducción logística normalizada con vocabulario estrictamente controlado
   assert.equal(data.items[0].shipping_mode_supported, 'Breakbulk / Maquinaria Suelta');
+  assert.equal(data.items[0].category, 'Maquinaria / Equipos Industriales');
+
   assert.equal(data.items[1].shipping_mode_supported, 'Ro-Ro / Vehículo Rodado');
-  assert.equal(data.items[2].shipping_mode_supported, 'Paletizado / Suelto');
+  assert.equal(data.items[1].category, 'Vehículo / Unidades Rodadas');
+
+  assert.equal(data.items[2].shipping_mode_supported, 'Contenedor (FCL / LCL)');
+  assert.equal(data.items[2].category, 'Suministros / Supplies');
 });
 
 test('project-parser: cleans complex data URL base64 prefixes', async () => {
