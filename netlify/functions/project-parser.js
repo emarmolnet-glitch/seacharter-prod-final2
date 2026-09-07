@@ -7,8 +7,16 @@ export async function handler(event, context) {
   }
 
   try {
-    const rawBody = event.body || "";
-    const buffer = Buffer.from(rawBody, event.isBase64Encoded ? 'base64' : 'utf8');
+    const payload = JSON.parse(event.body || "{}");
+    const dataUrl = payload.fileBase64;
+    
+    if (!dataUrl) {
+      throw new Error("No se ha recibido el archivo en formato Base64.");
+    }
+
+    // Extraer los bytes puros del PDF eliminando el prefijo "data:application/pdf;base64,"
+    const base64Data = dataUrl.split(',')[1] || dataUrl;
+    const buffer = Buffer.from(base64Data, 'base64');
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -16,21 +24,16 @@ export async function handler(event, context) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Usamos Gemini 2.5 Flash con capacidad multimodal (lee imágenes y PDFs visualmente como un humano)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const pdfBase64 = buffer.toString('base64');
 
     const prompt = `
       Eres el motor experto de inteligencia logística y fletamentos para SeaCharter Core PRO.
-      Actúa como un sistema OCR avanzado y analista de documentos marítimos. Analiza visual y textualmente el documento PDF adjunto de principio a fin.
-      
-      INSTRUCCIONES DE EXTRACCIÓN:
-      - Extrae exclusivamente la información real que aparezca en el documento. No inventes ni asumas datos.
-      - Si el documento contiene una lista de empaque (packing list) o tabla de cargas, extrae cada fila real de carga con su respectiva cantidad, dimensiones y pesos si se indican.
-      - Si es una factura, certificado o texto libre, extrae los elementos descritos basándote únicamente en el contenido visual o textual.
+      Analiza de forma exhaustiva el documento PDF adjunto. 
+      Extrae exclusivamente la información real que aparezca en el documento. No inventes ni asumas datos que no estén escritos.
+      - Si el documento tiene formato tabular o de packing list, extrae cada fila real de carga.
+      - Si es un documento de texto libre, factura o certificado, extrae los elementos descritos basándote únicamente en el contenido.
 
-      Para cada ítem obtenido, extrae los siguientes campos (si un valor numérico o dimensión no se especifica en el documento, pon 0 o cadena vacía "" según corresponda):
+      Para cada ítem obtenido, extrae los siguientes campos (si un valor numérico o dimensión no se especifica, pon 0 o cadena vacía "" según corresponda):
       - category: Categoría o sección indicada en el documento (o "" si no aplica).
       - type: Descripción exacta del ítem, equipo o servicio.
       - quantity: Cantidad real (entero, por defecto 1).
@@ -58,12 +61,11 @@ export async function handler(event, context) {
       }
     `;
 
-    // Envío multimodal nativo: Gemini procesa el PDF completo visual y textualmente
     const result = await model.generateContent([
       prompt,
       {
         inlineData: {
-          data: pdfBase64,
+          data: base64Data,
           mimeType: "application/pdf"
         }
       }
@@ -71,16 +73,13 @@ export async function handler(event, context) {
 
     const responseText = result.response.text();
     const cleanJson = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
-    
     let parsedData;
+    
     try {
       parsedData = JSON.parse(cleanJson);
     } catch (e) {
-      console.error("Error parseando JSON multimodal:", responseText);
       parsedData = { success: true, items: [] };
     }
-
-    const dataBase64 = `data:application/pdf;base64,${pdfBase64}`;
 
     return {
       statusCode: 200,
@@ -89,17 +88,17 @@ export async function handler(event, context) {
         success: true,
         items: parsedData.items || [],
         documentMeta: {
-          name: "Documento_Proyecto.pdf",
+          name: payload.fileName || "Documento_Proyecto.pdf",
           size: buffer.length,
           itemsCount: (parsedData.items || []).length,
           uploadedAt: new Date().toISOString(),
-          dataBase64: dataBase64
+          dataBase64: dataUrl
         }
       })
     };
 
   } catch (error) {
-    console.error('Error crítico en parser multimodal:', error);
+    console.error('Error crítico en project-parser:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
