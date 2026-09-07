@@ -101,6 +101,7 @@ export function ForwarderWorkspace() {
   const [actualLoadingDays, setActualLoadingDays] = useState('');
   const [actualDischargingDays, setActualDischargingDays] = useState('');
   const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(11500);
+  const [charteringAssessment, setCharteringAssessment] = useState(null);
 
   const [subtotalFreight, setSubtotalFreight] = useState('0.00');
   const [subtotalFobOperations, setSubtotalFobOperations] = useState('0.00');
@@ -143,10 +144,140 @@ export function ForwarderWorkspace() {
   useEffect(() => {
     if (activeProject) {
       setprojectDocuments(activeProject.documents || activeProject.files || []);
+      const projectRoute = activeProject.route_and_chartering ||
+        activeProject.line_items?.[0]?.payload_data?.route_and_chartering ||
+        activeProject.services?.[0]?.payload_data?.route_and_chartering;
+      if (projectRoute) {
+        if (projectRoute.pol) setPol(projectRoute.pol);
+        if (projectRoute.pod) setPod(projectRoute.pod);
+        if (projectRoute.loading_rate_mt_day) setLoadingRate(Number(projectRoute.loading_rate_mt_day));
+        if (projectRoute.discharging_rate_mt_day) setDischargingRate(Number(projectRoute.discharging_rate_mt_day));
+        if (projectRoute.distance_nm) setDistanceNm(Number(projectRoute.distance_nm));
+        if (projectRoute.vessel_speed_knots) setVesselSpeedKnots(Number(projectRoute.vessel_speed_knots));
+        if (projectRoute.daily_hire_rate_usd) setVesselDailyHireUsd(Number(projectRoute.daily_hire_rate_usd));
+        if (projectRoute.actual_loading_days !== undefined && projectRoute.actual_loading_days !== null) {
+          setActualLoadingDays(projectRoute.actual_loading_days);
+        }
+        if (projectRoute.actual_discharging_days !== undefined && projectRoute.actual_discharging_days !== null) {
+          setActualDischargingDays(projectRoute.actual_discharging_days);
+        }
+        if (projectRoute.demurrage_daily_rate_usd) {
+          setDemurrageDailyRateUsd(Number(projectRoute.demurrage_daily_rate_usd));
+        }
+      }
+      const projectAssessment = activeProject.charteringAssessment ||
+        activeProject.chartering_assessment ||
+        activeProject.line_items?.[0]?.payload_data?.charteringAssessment ||
+        activeProject.services?.[0]?.payload_data?.charteringAssessment;
+      if (projectAssessment) {
+        setCharteringAssessment(projectAssessment);
+      }
     } else {
       setprojectDocuments([]);
     }
   }, [activeProject]);
+
+  // Hook de sincronización reactiva (Two-Way Binding): Parser del Agente -> Inputs del Formulario y Contadores Visuales
+  // Asegura que cuando el Agente de Proyectos procese una instrucción (charteringAssessment / rotationBreakdown),
+  // los inputs de "Ruta Marítima, Ritmos Operativos y Gestión de Demoras" reflejen de inmediato los nuevos valores devueltos por el backend
+  // y actualicen los contadores visuales en tiempo real, evitando que los campos se queden estáticos con los valores por defecto iniciales.
+  useEffect(() => {
+    if (!charteringAssessment) return;
+
+    const rot = charteringAssessment.rotationBreakdown || charteringAssessment.timeCharterEquivalent;
+    if (!rot) return;
+
+    if (rot.pol && rot.pol !== pol) {
+      setPol(rot.pol);
+    }
+    if (rot.pod && rot.pod !== pod) {
+      setPod(rot.pod);
+    }
+    const loadRate = Number(rot.loadingRateMtDay || rot.loadingRate || rot.loadRate);
+    if (!isNaN(loadRate) && loadRate > 0 && loadRate !== Number(loadingRate)) {
+      setLoadingRate(loadRate);
+    }
+    const dischRate = Number(rot.dischargingRateMtDay || rot.dischargingRate || rot.dischargeRate);
+    if (!isNaN(dischRate) && dischRate > 0 && dischRate !== Number(dischargingRate)) {
+      setDischargingRate(dischRate);
+    }
+    const dist = Number(rot.distanceNm || rot.distance_nm);
+    if (!isNaN(dist) && dist > 0 && dist !== Number(distanceNm)) {
+      setDistanceNm(dist);
+    }
+    const speed = Number(rot.serviceSpeedKnots || rot.serviceSpeed || rot.speedKnots);
+    if (!isNaN(speed) && speed > 0 && speed !== Number(vesselSpeedKnots)) {
+      setVesselSpeedKnots(speed);
+    }
+    const dailyHire = Number(rot.dailyHireRateUsd || rot.vesselDailyRateUsd || rot.dailyRateUsd);
+    if (!isNaN(dailyHire) && dailyHire > 0 && dailyHire !== Number(vesselDailyHireUsd)) {
+      setVesselDailyHireUsd(dailyHire);
+    }
+    if (rot.demurrage) {
+      const dem = rot.demurrage;
+      if (dem.actualLoadingDays !== undefined && dem.actualLoadingDays !== null && String(dem.actualLoadingDays) !== String(actualLoadingDays)) {
+        setActualLoadingDays(dem.actualLoadingDays);
+      }
+      if (dem.actualDischargingDays !== undefined && dem.actualDischargingDays !== null && String(dem.actualDischargingDays) !== String(actualDischargingDays)) {
+        setActualDischargingDays(dem.actualDischargingDays);
+      }
+      const demDaily = Number(dem.demurrageRateDailyUsd);
+      if (!isNaN(demDaily) && demDaily > 0 && demDaily !== Number(demurrageDailyRateUsd)) {
+        setDemurrageDailyRateUsd(demDaily);
+      }
+    }
+  }, [charteringAssessment]);
+
+  // Hook de sincronización reactiva (Two-Way Binding): Inputs del Formulario -> Estado global de Fletamento y Workspace
+  // Mantiene sincronizado el desglose de rotación (rotationBreakdown) cuando el usuario edita directamente los campos
+  useEffect(() => {
+    setCharteringAssessment(prev => {
+      const currentRot = prev?.rotationBreakdown || {};
+      const newLoadingRate = Number(loadingRate);
+      const newDischargingRate = Number(dischargingRate);
+      const newDistance = Number(distanceNm);
+      const newSpeed = Number(vesselSpeedKnots);
+      const newDailyHire = Number(vesselDailyHireUsd);
+      const newDemDaily = Number(demurrageDailyRateUsd);
+      const newActualLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
+      const newActualDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
+
+      if (
+        currentRot.pol === pol &&
+        currentRot.pod === pod &&
+        currentRot.loadingRateMtDay === newLoadingRate &&
+        currentRot.dischargingRateMtDay === newDischargingRate &&
+        currentRot.distanceNm === newDistance &&
+        currentRot.serviceSpeedKnots === newSpeed &&
+        currentRot.dailyHireRateUsd === newDailyHire &&
+        currentRot.demurrage?.actualLoadingDays === newActualLoad &&
+        currentRot.demurrage?.actualDischargingDays === newActualDisch &&
+        currentRot.demurrage?.demurrageRateDailyUsd === newDemDaily
+      ) {
+        return prev;
+      }
+
+      return {
+        ...(prev || {}),
+        rotationBreakdown: {
+          ...currentRot,
+          pol,
+          pod,
+          loadingRateMtDay: newLoadingRate,
+          dischargingRateMtDay: newDischargingRate,
+          distanceNm: newDistance,
+          serviceSpeedKnots: newSpeed,
+          dailyHireRateUsd: newDailyHire,
+          demurrage: {
+            ...(currentRot.demurrage || {}),
+            actualLoadingDays: newActualLoad,
+            actualDischargingDays: newActualDisch,
+            demurrageRateDailyUsd: newDemDaily,
+          }
+        }
+      };
+    });
+  }, [pol, pod, loadingRate, dischargingRate, distanceNm, vesselSpeedKnots, vesselDailyHireUsd, actualLoadingDays, actualDischargingDays, demurrageDailyRateUsd]);
 
   const persistProjectToDatabase = async (projectToSave) => {
     try {
@@ -645,6 +776,54 @@ export function ForwarderWorkspace() {
     }
 
     // Parámetros de ruta y ritmos operativos
+    if (payload.charteringAssessment) {
+      setCharteringAssessment(payload.charteringAssessment);
+      hasChanges = true;
+    } else if (payload.rotationBreakdown) {
+      setCharteringAssessment({ rotationBreakdown: payload.rotationBreakdown });
+      hasChanges = true;
+    }
+
+    const assessmentRot = payload.charteringAssessment?.rotationBreakdown || payload.rotationBreakdown || payload.charteringAssessment?.timeCharterEquivalent;
+    if (assessmentRot) {
+      if (assessmentRot.pol) { setPol(assessmentRot.pol); hasChanges = true; }
+      if (assessmentRot.pod) { setPod(assessmentRot.pod); hasChanges = true; }
+      if (assessmentRot.loadingRateMtDay || assessmentRot.loadingRate) {
+        setLoadingRate(Number(assessmentRot.loadingRateMtDay || assessmentRot.loadingRate));
+        hasChanges = true;
+      }
+      if (assessmentRot.dischargingRateMtDay || assessmentRot.dischargingRate) {
+        setDischargingRate(Number(assessmentRot.dischargingRateMtDay || assessmentRot.dischargingRate));
+        hasChanges = true;
+      }
+      if (assessmentRot.distanceNm || assessmentRot.distance_nm) {
+        setDistanceNm(Number(assessmentRot.distanceNm || assessmentRot.distance_nm));
+        hasChanges = true;
+      }
+      if (assessmentRot.serviceSpeedKnots || assessmentRot.vesselSpeedKnots) {
+        setVesselSpeedKnots(Number(assessmentRot.serviceSpeedKnots || assessmentRot.vesselSpeedKnots));
+        hasChanges = true;
+      }
+      if (assessmentRot.dailyHireRateUsd || assessmentRot.dailyHireRate) {
+        setVesselDailyHireUsd(Number(assessmentRot.dailyHireRateUsd || assessmentRot.dailyHireRate));
+        hasChanges = true;
+      }
+      if (assessmentRot.demurrage) {
+        if (assessmentRot.demurrage.actualLoadingDays !== undefined) {
+          setActualLoadingDays(assessmentRot.demurrage.actualLoadingDays);
+          hasChanges = true;
+        }
+        if (assessmentRot.demurrage.actualDischargingDays !== undefined) {
+          setActualDischargingDays(assessmentRot.demurrage.actualDischargingDays);
+          hasChanges = true;
+        }
+        if (assessmentRot.demurrage.demurrageRateDailyUsd) {
+          setDemurrageDailyRateUsd(Number(assessmentRot.demurrage.demurrageRateDailyUsd));
+          hasChanges = true;
+        }
+      }
+    }
+
     if (payload.pol) { setPol(payload.pol); hasChanges = true; }
     if (payload.pod) { setPod(payload.pod); hasChanges = true; }
     if (payload.loadingRate || payload.loadingRateMtDay) {
@@ -752,11 +931,17 @@ export function ForwarderWorkspace() {
     if (structuralModified || payload.forceOpenModal) {
       setIsCargoModalOpen(true);
     }
+    if (payload.pol || payload.pod || payload.loadingRate || payload.dischargingRate || payload.distanceNm) {
+      setIsCargoModalOpen(true);
+    }
     if (payload.requestFinancialBreakdown) {
       setIsCargoModalOpen(true);
     }
 
     if (hasChanges) {
+      if (!incomingItems || incomingItems.length === 0) {
+        autoCalculateEstimates(cargoItems);
+      }
       setActiveProject(updatedProject);
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
       await persistProjectToDatabase(updatedProject);
@@ -1005,6 +1190,29 @@ export function ForwarderWorkspace() {
       if (fin.subtotal_fob_operations_eur != null) setSubtotalFobOperations(String(fin.subtotal_fob_operations_eur));
       setEstimatedCost(fin.estimated_total_cost_eur ? String(fin.estimated_total_cost_eur) : ''); setSalePrice(fin.customer_sale_price_eur ? String(fin.customer_sale_price_eur) : '');
 
+      if (payload.route_and_chartering) {
+        const rc = payload.route_and_chartering;
+        if (rc.pol) setPol(rc.pol);
+        if (rc.pod) setPod(rc.pod);
+        if (rc.loading_rate_mt_day) setLoadingRate(Number(rc.loading_rate_mt_day));
+        if (rc.discharging_rate_mt_day) setDischargingRate(Number(rc.discharging_rate_mt_day));
+        if (rc.distance_nm) setDistanceNm(Number(rc.distance_nm));
+        if (rc.vessel_speed_knots) setVesselSpeedKnots(Number(rc.vessel_speed_knots));
+        if (rc.daily_hire_rate_usd) setVesselDailyHireUsd(Number(rc.daily_hire_rate_usd));
+        if (rc.actual_loading_days !== undefined && rc.actual_loading_days !== null) {
+          setActualLoadingDays(rc.actual_loading_days);
+        }
+        if (rc.actual_discharging_days !== undefined && rc.actual_discharging_days !== null) {
+          setActualDischargingDays(rc.actual_discharging_days);
+        }
+        if (rc.demurrage_daily_rate_usd) {
+          setDemurrageDailyRateUsd(Number(rc.demurrage_daily_rate_usd));
+        }
+      }
+      if (payload.charteringAssessment || payload.chartering_assessment) {
+        setCharteringAssessment(payload.charteringAssessment || payload.chartering_assessment);
+      }
+
       const repData = buildExecutiveReportData(item);
       setReportData(repData);
     }
@@ -1091,6 +1299,8 @@ export function ForwarderWorkspace() {
         storage_cost_eur: currentReportSnapshot.storageCostNum || 0,
         initial_handling_cost_eur: currentReportSnapshot.initialHandlingCost || 0,
       },
+      chartering_assessment: charteringAssessment || currentReportSnapshot?.charteringAssessment || null,
+      charteringAssessment: charteringAssessment || currentReportSnapshot?.charteringAssessment || null,
       executive_report_snapshot: currentReportSnapshot,
     };
     const lineItemCost = parseFloat(estimatedCost) || currentReportSnapshot.finalTotalCost || 0;
@@ -1106,7 +1316,13 @@ export function ForwarderWorkspace() {
     if (activeProject) {
       const existingItems = activeProject.line_items || [];
       const updatedLineItems = editingLineItemId ? existingItems.map((li) => (li.id === editingLineItemId ? savedLineItem : li)) : [...existingItems, savedLineItem];
-      const updatedProject = { ...activeProject, line_items: updatedLineItems, services: updatedLineItems };
+      const updatedProject = {
+        ...activeProject,
+        route_and_chartering: payload.route_and_chartering,
+        charteringAssessment: charteringAssessment,
+        line_items: updatedLineItems,
+        services: updatedLineItems
+      };
       setActiveProject(updatedProject);
       setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
       await persistProjectToDatabase(updatedProject);
@@ -1570,27 +1786,27 @@ export function ForwarderWorkspace() {
                         <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                           <div className="bg-white p-2 rounded border border-slate-200">
                             <span className="block text-[9px] uppercase font-bold text-slate-500">Días Carga (POL)</span>
-                            <span className="text-sm font-black text-slate-800 font-mono">{dCarga.toFixed(2)} d</span>
+                            <span id="counter-loading-days" className="text-sm font-black text-slate-800 font-mono">{dCarga.toFixed(2)} d</span>
                             <span className="block text-[9px] text-slate-400">({wTons.toFixed(1)} MT / {effLoad} MT/d)</span>
                           </div>
                           <div className="bg-white p-2 rounded border border-slate-200">
                             <span className="block text-[9px] uppercase font-bold text-slate-500">Días Descarga (POD)</span>
-                            <span className="text-sm font-black text-slate-800 font-mono">{dDescarga.toFixed(2)} d</span>
+                            <span id="counter-discharging-days" className="text-sm font-black text-slate-800 font-mono">{dDescarga.toFixed(2)} d</span>
                             <span className="block text-[9px] text-slate-400">({wTons.toFixed(1)} MT / {effDisch} MT/d)</span>
                           </div>
                           <div className="bg-white p-2 rounded border border-slate-200">
                             <span className="block text-[9px] uppercase font-bold text-slate-500">Días Navegación</span>
-                            <span className="text-sm font-black text-blue-700 font-mono">{dNav.toFixed(2)} d</span>
+                            <span id="counter-navigation-days" className="text-sm font-black text-blue-700 font-mono">{dNav.toFixed(2)} d</span>
                             <span className="block text-[9px] text-slate-400">({effDist} NM @ {effSpd} kn)</span>
                           </div>
-                          <div className={`p-2 rounded border ${totalDem > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                          <div id="counter-demurrage-card" className={`p-2 rounded border ${totalDem > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
                             <span className="block text-[9px] uppercase font-bold text-slate-600">
                               {totalDem > 0 ? '⚠️ Demoras Muelle' : '✅ Plancha / Demoras'}
                             </span>
-                            <span className={`text-sm font-black font-mono ${totalDem > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                            <span id="counter-demurrage-status" className={`text-sm font-black font-mono ${totalDem > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
                               {totalDem > 0 ? `+${totalDem.toFixed(2)} d (+${demPenalty.toLocaleString('es-ES')} €)` : 'En Plancha'}
                             </span>
-                            <span className="block text-[9px] text-slate-500">Rotación Total: {dRot.toFixed(2)} d</span>
+                            <span id="counter-rotation-days" className="block text-[9px] text-slate-500">Rotación Total: {dRot.toFixed(2)} d</span>
                           </div>
                         </div>
                       );
@@ -1998,6 +2214,8 @@ export function ForwarderWorkspace() {
         isOpen={isAgentVisible}
         onToggleOpen={setIsAgentVisible}
         cargoItems={cargoItems}
+        charteringAssessment={charteringAssessment}
+        routeData={{ pol, pod, loadingRate, dischargingRate, distanceNm, actualLoadingDays, actualDischargingDays, demurrageDailyRateUsd }}
         financialData={{ subtotalFreight, subtotalFobOperations, estimatedCost, salePrice }}
       />
     </>
