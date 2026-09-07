@@ -1039,7 +1039,7 @@ function evaluateCharteringModel(orderTotals, items = [], options = {}) {
     const cfsOriginRatePerRt = 22.0;    // Terminal handling / consolidación CFS origen por RT
     const cfsDestRatePerRt = 25.0;      // Terminal handling / desconsolidación CFS destino por RT
     const portT3RatePerRt = 4.5;        // Tasas portuarias mercadería T3 por RT
-    const blDocumentationFee = 85.0;    // Emisión de Bill of Lading y gestión aduanera documental (fijo)
+    const blDocumentationFee = 85.0;    // Emisión de Bill of Lading y gestión de mercancía documental (fijo)
 
     const oceanFreightCost = Math.round(revenueTons * oceanFreightRatePerRt * 100) / 100;
     const cfsOriginCost = Math.round(revenueTons * cfsOriginRatePerRt * 100) / 100;
@@ -1503,7 +1503,7 @@ function buildOperationalProfile(items = [], orderTotals) {
 /**
  * Realiza el cálculo económico final del proyecto separando de forma explícita y rigurosa:
  * 1. Flete Marítimo (Ocean Freight / TCE del buque)
- * 2. Costes FOB y Operativa Portuaria (manipulación en muelle, estiba, trincaje, almacenaje, peritaje, inland, aduanas)
+ * 2. Costes FOB y Operativa Portuaria (manipulación en muelle, estiba, trincaje, almacenaje, peritaje, inland, mercancía)
  * 3. Subtotales y Total Global (All-In) con precio de cotización o venta.
  *
  * Queda prohibido agrupar todos los conceptos en una cifra única sin antes detallar
@@ -1513,7 +1513,7 @@ function buildOperationalProfile(items = [], orderTotals) {
  * @param {Object} orderTotals Totales físicos calculados (peso, volumen, piezas)
  * @param {Object} charteringAssessment Evaluación de fletamento (LCL o buque completo con TCE)
  * @param {Object} operationalProfile Perfil operativo (estiba en bloque vs trincaje estructural)
- * @param {Object} options Parámetros adicionales (días almacenaje, peritaje, inland, aduanas, valor de mercancía)
+ * @param {Object} options Parámetros adicionales (días almacenaje, peritaje, inland, mercancía, valor de mercancía)
  * @returns {Object} Desglose financiero detallado y transparente
  */
 function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessment, operationalProfile, options = {}) {
@@ -1536,7 +1536,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     surveyorCost = 1500;
   }
   const inlandCost = Math.max(0, Number(options.inlandCost || options.inlandTrucksCount) || 0);
-  const customsCost = Math.max(0, Number(options.customsCost) || 0);
+  const customsCost = Math.max(0, Number(options.customsCost || options.merchandiseCost) || 0);
   const merchandiseValue = Math.max(0, Number(options.merchandiseValue || options.cargoValue) || 0);
 
   // Superficie aproximada para almacenaje muelle/terminal
@@ -1730,7 +1730,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       // antes de la llegada del buque para garantizar el ritmo de carga con spreader.
       const preStackingRatio = 0.70;
       const preStackedTons = Math.round(totalWeightTons * preStackingRatio * 100) / 100;
-      const preStackingDays = Math.max(5, storageDays || 5);
+      const preStackingDays = Math.max(5, Number(options.preStackingDays) || storageDays || 5);
       const effectiveAreaM2 = totalAreaM2 > 0 ? totalAreaM2 : (totalWeightTons > 0 ? totalWeightTons * 0.8 : totalPieces * 0.8);
       const preStackedAreaM2 = Math.ceil(effectiveAreaM2 * preStackingRatio);
       const preStackingStorageCost = Math.round(preStackedAreaM2 * preStackingDays * 2 * 100) / 100;
@@ -1744,7 +1744,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
         preStackedTons,
         preStackingDays,
         preStackedAreaM2,
-        description: 'Estadía y almacenaje portuario obligatorio en muelle/terminal del 70% de la carga acumulada previamente a la llegada del buque para sostener el ritmo de carga con spreader.',
+        description: `Estadía y almacenaje portuario obligatorio en muelle/terminal (${preStackingDays} d) del 70% de la carga acumulada previamente a la llegada del buque para sostener el ritmo de carga con spreader.`,
       });
 
       // Manipulación inicial: recepción terrestre, descarga y formación de acopio previo en explanada
@@ -1870,10 +1870,11 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
 
   if (customsCost > 0) {
     fobPortOperationsItems.push({
-      concept: 'Despacho Aduanero y Tramitación de Aranceles',
+      concept: 'Despacho de Mercancía y Tramitación de Aranceles',
       units: 1,
       amount: customsCost,
       category: 'Servicios Asociados',
+      description: 'Gestión y tramitación de mercancía en puerto.',
     });
   }
 
@@ -1934,6 +1935,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
   return {
     currency,
     isSeparatedBreakdown: true,
+    preStackingDays: isBigBagsCargoProfile ? Math.max(5, Number(options.preStackingDays) || storageDays || 5) : (storageDays > 0 ? storageDays : Math.max(5, Number(options.preStackingDays) || 5)),
     subtotalOceanFreight: oceanFreightSubtotal,
     subtotalFobPortOperations: fobPortOperationsSubtotal,
     subtotals: {

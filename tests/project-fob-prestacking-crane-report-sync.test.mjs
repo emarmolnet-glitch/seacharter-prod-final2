@@ -159,3 +159,48 @@ test('3. Sincronización Reporte Ejecutivo: buildExecutiveReportData y propagaci
   assert.match(workspaceSource, /formatCurrency\(activeReport\.subtotalFreight/);
   assert.match(workspaceSource, /formatCurrency\(activeReport\.subtotalFobOperations/);
 });
+
+// ============================================================================
+// 4. PRE-STACKING DÍAS REALES (EVITAR "0 d") Y ETIQUETA "MERCANCÍA"
+// ============================================================================
+
+test('4. Pre-Stacking días reales (no "0 d") e interpolación de preStackingDays en backend y frontend', () => {
+  const items = [
+    {
+      id: 'bulk-item-1',
+      category: 'Mercancía Ensacada / Dry Bulk',
+      type: 'Big Bags de Cemento Gris',
+      quantity: 5000,
+      weight: 1000,
+      shipping_mode_supported: 'Big Bags / Granel',
+    },
+  ];
+
+  const orderTotals = handler.calculateOrderTotals(items);
+  const charteringAssessment = handler.evaluateCharteringModel(orderTotals, items);
+  const operationalProfile = handler.buildOperationalProfile(items, orderTotals);
+
+  // Caso 1: storageDays = 0 o sin definir -> preStackingDays debe ser al menos 5 y reflejarse en la descripción
+  const breakdown = handler.calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, {
+    storageDays: 0,
+    customsCost: 450,
+  });
+
+  const fobItems = breakdown.fobAndPortOperations.items;
+  const preStackItem = fobItems.find(it => it.concept.includes('Almacenaje Portuario y Acopio Previo'));
+  assert.ok(preStackItem, 'Debe existir partida de Almacenaje Portuario y Acopio Previo');
+  assert.doesNotMatch(preStackItem.description, /\(0\s*d\)/, 'La descripción de almacenaje no debe mostrar "(0 d)"');
+  assert.match(preStackItem.description, /\(5\s*d\)/, 'La descripción de almacenaje debe interpolar (5 d)');
+  assert.equal(breakdown.preStackingDays, 5, 'preStackingDays en breakdown debe ser 5');
+
+  // Partida de aduanas debe llamarse Mercancía
+  const customsItem = fobItems.find(it => it.amount === 450);
+  assert.ok(customsItem, 'Debe existir la partida de trámites/aduanas');
+  assert.match(customsItem.concept, /Mercancía/i, 'El concepto debe contener Mercancía en lugar de Aduanas');
+
+  // Frontend ForwarderWorkspace
+  assert.match(workspaceSource, /preStackingDays/, 'ForwarderWorkspace debe utilizar preStackingDays');
+  assert.doesNotMatch(workspaceSource, /Almacenaje muelle \(0 d\)/, 'ForwarderWorkspace no debe tener hardcoded "(0 d)"');
+  assert.match(workspaceSource, /Mercancía \(€\)/, 'ForwarderWorkspace debe mostrar etiqueta Mercancía (€)');
+  assert.match(workspaceSource, /Logística Periférica \(Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía\)/, 'Fila 4 debe usar Mercancía');
+});
