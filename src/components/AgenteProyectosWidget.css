@@ -227,7 +227,8 @@
 
 .project-agent-floating-btn {
     position: fixed;
-    bottom: 24px;
+    bottom: 96px; /* bottom-24 (6rem / 96px): situado por encima del globo del asistente global */
+    bottom: max(96px, calc(env(safe-area-inset-bottom) + 72px));
     right: 24px;
     background: #0f172a;
     color: #ffffff;

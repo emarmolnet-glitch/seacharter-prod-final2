@@ -5,6 +5,7 @@ import { parseProjectInstruction } from '../src/utils/agenteProyectosParser.mjs'
 
 const widgetSource = readFileSync(new URL('../src/components/AgenteProyectosWidget.jsx', import.meta.url), 'utf8');
 const workspaceSource = readFileSync(new URL('../src/components/ForwarderWorkspace.jsx', import.meta.url), 'utf8');
+const widgetCssSource = readFileSync(new URL('../src/components/AgenteProyectosWidget.css', import.meta.url), 'utf8');
 
 test('1. parseProjectInstruction extracts "almacenaje 5 días" without parroting', () => {
   const result = parseProjectInstruction('almacenaje 5 días');
@@ -87,3 +88,9 @@ test('8. ForwarderWorkspace connects AgenteProyectosWidget with onUpdatePayload 
   assert.match(workspaceSource, /<AgenteProyectosWidget[\s\S]*?onUpdatePayload=\{handleApplyProjectPayload\}[\s\S]*?isOpen=\{isAgentVisible\}[\s\S]*?onToggleOpen=\{setIsAgentVisible\}/);
   assert.match(workspaceSource, /const\s+\[isAgentVisible,\s*setIsAgentVisible\]\s*=\s*useState\(true\);/);
 });
+
+test('9. AgenteProyectosWidget collapsed floating button is elevated (bottom-24 / 96px) to avoid overlapping the global assistant globe', () => {
+  assert.match(widgetCssSource, /\.project-agent-floating-btn\s*\{[\s\S]*?bottom:\s*(?:96px|6rem)/);
+  assert.match(widgetCssSource, /bottom-24/);
+});
+
