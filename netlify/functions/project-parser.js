@@ -264,6 +264,442 @@ function normalizeShippingMode(rawMode, desc = '', weightVal = 0, len = 0, wid =
   return 'Contenedor (FCL / LCL)';
 }
 
+const WEIGHT_THRESHOLD_TONS = 40;
+
+/**
+ * Suma el peso total acumulado de todos los ítems de la orden,
+ * además del volumen métrico total y el peso unitario máximo.
+ *
+ * @param {Array<Object>} items Lista de ítems de carga
+ * @returns {Object} Resumen consolidado de la orden
+ */
+function calculateOrderTotals(items = []) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return {
+      totalItems: 0,
+      totalPieces: 0,
+      totalWeightKg: 0,
+      totalWeightTons: 0,
+      totalVolumeCbm: 0,
+      maxPieceWeightKg: 0,
+      maxPieceWeightTons: 0,
+      weightThresholdTons: WEIGHT_THRESHOLD_TONS,
+      exceedsCharterThreshold: false,
+    };
+  }
+
+  let totalPieces = 0;
+  let totalWeightKg = 0;
+  let totalVolumeCbm = 0;
+  let maxPieceWeightKg = 0;
+
+  for (const item of items) {
+    const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
+    const unitWeight = Math.max(0, Number(item.weight ?? item.unit_weight_kg) || 0);
+    const lineWeight = qty * unitWeight;
+
+    const len = Math.max(0, Number(item.length ?? item.length_m) || 0);
+    const wid = Math.max(0, Number(item.width ?? item.width_m) || 0);
+    const hgt = Math.max(0, Number(item.height ?? item.height_m) || 0);
+    const unitVolume = len * wid * hgt;
+    const lineVolume = qty * unitVolume;
+
+    totalPieces += qty;
+    totalWeightKg += lineWeight;
+    totalVolumeCbm += lineVolume;
+    if (unitWeight > maxPieceWeightKg) {
+      maxPieceWeightKg = unitWeight;
+    }
+  }
+
+  const totalWeightTons = totalWeightKg / 1000;
+  const maxPieceWeightTons = maxPieceWeightKg / 1000;
+  const exceedsCharterThreshold = totalWeightTons >= WEIGHT_THRESHOLD_TONS;
+
+  return {
+    totalItems: items.length,
+    totalPieces,
+    totalWeightKg: Math.round(totalWeightKg * 100) / 100,
+    totalWeightTons: Math.round(totalWeightTons * 1000) / 1000,
+    totalVolumeCbm: Math.round(totalVolumeCbm * 1000) / 1000,
+    maxPieceWeightKg: Math.round(maxPieceWeightKg * 100) / 100,
+    maxPieceWeightTons: Math.round(maxPieceWeightTons * 1000) / 1000,
+    weightThresholdTons: WEIGHT_THRESHOLD_TONS,
+    exceedsCharterThreshold,
+  };
+}
+
+/**
+ * Evalúa la modalidad de fletamento según el umbral de 40 toneladas:
+ * - Si peso < 40t: Omite por completo el cálculo de TCE y fletamento completo.
+ *                  Computa automáticamente costes bajo modalidad de grupaje LCL.
+ * - Si peso >= 40t: Aplica modelo de fletamento y calcula el TCE del buque sugerido.
+ *
+ * @param {Object} orderTotals Resumen de totales de la orden
+ * @param {Array<Object>} items Lista de ítems
+ * @returns {Object} Evaluación de fletamento y desglose económico
+ */
+function evaluateCharteringModel(orderTotals, items = []) {
+  const totalWeightTons = Number(orderTotals?.totalWeightTons) || 0;
+  const totalVolumeCbm = Number(orderTotals?.totalVolumeCbm) || 0;
+  const maxPieceWeightTons = Number(orderTotals?.maxPieceWeightTons) || 0;
+
+  // REGLA 1: Peso < 40 toneladas => MODALIDAD LCL, OMITIR TCE Y FLETAMENTO COMPLETO
+  if (totalWeightTons < WEIGHT_THRESHOLD_TONS) {
+    // Cálculo de Revenue Tons (W/M) para grupaje marítimo LCL (1 t = 1 m3, mínimo de facturación 1 RT)
+    const chargeableWeightTons = Math.max(0.1, totalWeightTons);
+    const chargeableVolumeCbm = Math.max(0.1, totalVolumeCbm);
+    const revenueTons = Math.max(1, Math.max(chargeableWeightTons, chargeableVolumeCbm));
+    const wmBasis = chargeableWeightTons >= chargeableVolumeCbm ? 'Weight (W)' : 'Measurement (M)';
+
+    // Tarifas comerciales marítimas estándar para grupaje internacional LCL
+    const oceanFreightRatePerRt = 65.0; // Tarifa base flete marítimo LCL por RT
+    const cfsOriginRatePerRt = 22.0;    // Terminal handling / consolidación CFS origen por RT
+    const cfsDestRatePerRt = 25.0;      // Terminal handling / desconsolidación CFS destino por RT
+    const portT3RatePerRt = 4.5;        // Tasas portuarias mercadería T3 por RT
+    const blDocumentationFee = 85.0;    // Emisión de Bill of Lading y gestión aduanera documental (fijo)
+
+    const oceanFreightCost = Math.round(revenueTons * oceanFreightRatePerRt * 100) / 100;
+    const cfsOriginCost = Math.round(revenueTons * cfsOriginRatePerRt * 100) / 100;
+    const cfsDestCost = Math.round(revenueTons * cfsDestRatePerRt * 100) / 100;
+    const portChargesCost = Math.round(revenueTons * portT3RatePerRt * 100) / 100;
+    const totalLclCost = Math.round((oceanFreightCost + cfsOriginCost + cfsDestCost + portChargesCost + blDocumentationFee) * 100) / 100;
+
+    return {
+      weightThresholdTons: WEIGHT_THRESHOLD_TONS,
+      totalWeightTons,
+      mode: 'Grupaje LCL (Less than Container Load)',
+      shippingModeCategory: 'LCL',
+      isFullCharter: false,
+      fullCharterOmitted: true,
+      tceCalculated: false,
+      tce: null,
+      timeCharterEquivalent: null,
+      suggestedVessel: null,
+      tceCalculation: null,
+      reasoning: `El peso total acumulado (${totalWeightTons.toFixed(2)} t) es inferior a ${WEIGHT_THRESHOLD_TONS} toneladas. Se omite por completo la modalidad de fletamento completo y el cálculo del TCE del buque. Se computan automáticamente los costes bajo grupaje LCL.`,
+      lclCostEstimation: {
+        currency: 'USD',
+        revenueTons: Math.round(revenueTons * 100) / 100,
+        chargeableWeightTons: Math.round(chargeableWeightTons * 1000) / 1000,
+        chargeableVolumeCbm: Math.round(chargeableVolumeCbm * 1000) / 1000,
+        wmBasis,
+        totalLclCost,
+        rates: {
+          oceanFreightRatePerRt,
+          cfsOriginRatePerRt,
+          cfsDestRatePerRt,
+          portT3RatePerRt,
+          blDocumentationFee,
+        },
+        costs: {
+          oceanFreight: oceanFreightCost,
+          cfsOriginHandling: cfsOriginCost,
+          cfsDestinationHandling: cfsDestCost,
+          portChargesT3: portChargesCost,
+          documentationBL: blDocumentationFee,
+          totalLclCost,
+        },
+        breakdown: [
+          { concept: 'Flete Marítimo LCL (Ocean Freight)', ratePerRt: oceanFreightRatePerRt, amount: oceanFreightCost },
+          { concept: 'Manipulación y Consolidación CFS Origen', ratePerRt: cfsOriginRatePerRt, amount: cfsOriginCost },
+          { concept: 'Manipulación y Desconsolidación CFS Destino', ratePerRt: cfsDestRatePerRt, amount: cfsDestCost },
+          { concept: 'Tasas Portuarias Mercancía (T3/Wharfage)', ratePerRt: portT3RatePerRt, amount: portChargesCost },
+          { concept: 'Emisión B/L y Gestión Documental (Flat)', rateFlat: blDocumentationFee, amount: blDocumentationFee },
+        ],
+      },
+    };
+  }
+
+  // REGLA 2: Peso >= 40 toneladas => MODALIDAD FLETAMENTO COMPLETO Y CÁLCULO DE TCE
+  let vesselType = 'Coaster / Buque de Carga General (Mini-Bulker)';
+  let dwt = 3500;
+  let serviceSpeed = 10.5; // nudos
+  let marketDailyTce = 8500; // USD/día benchmark de mercado spot
+  let seaFuelConsumptionMt = 6.5; // VLSFO MT/día
+  let portFuelConsumptionMt = 0.8; // LSMGO MT/día
+  let gear = maxPieceWeightTons > 20 ? 'Geared (Grúas 2 x 25t)' : 'Gearless / Apoyo grúas de muelle';
+  let portDisbursementsBase = 16000; // PDA combinada POL + POD
+
+  if (totalWeightTons >= 35000) {
+    vesselType = 'Supramax / Ultramax Bulk Carrier';
+    dwt = 58000;
+    serviceSpeed = 13.5;
+    marketDailyTce = 16500;
+    seaFuelConsumptionMt = 24.0;
+    portFuelConsumptionMt = 3.0;
+    gear = 'Geared (4 x 35t con cucharas 12m³)';
+    portDisbursementsBase = 45000;
+  } else if (totalWeightTons >= 10000) {
+    vesselType = 'Handysize Bulk Carrier';
+    dwt = 32000;
+    serviceSpeed = 13.0;
+    marketDailyTce = 13800;
+    seaFuelConsumptionMt = 17.5;
+    portFuelConsumptionMt = 2.2;
+    gear = 'Geared (4 x 30t grúas con cucharas)';
+    portDisbursementsBase = 32000;
+  } else if (totalWeightTons >= 3000) {
+    vesselType = 'Multi-Purpose MPP / Tween-decker';
+    dwt = 9500;
+    serviceSpeed = 12.0;
+    marketDailyTce = 11500;
+    seaFuelConsumptionMt = 12.0;
+    portFuelConsumptionMt = 1.5;
+    gear = 'Geared (Grúas combinables 2 x 60t a 120t SWL)';
+    portDisbursementsBase = 24000;
+  }
+
+  // Travesía de referencia náutica (1,500 NM estándar)
+  const voyageDistanceNm = 1500;
+  const seaDays = Math.max(2, Math.round((voyageDistanceNm / (serviceSpeed * 24)) * 10) / 10);
+
+  // Ritmos de carga y descarga portuaria según tipo de mercancía
+  const isBulkOrBags = isBulkOrBigBagsCargo(items);
+  const loadRateTonsPerDay = isBulkOrBags ? 1200 : (maxPieceWeightTons > 30 ? 600 : 850);
+  const dischargeRateTonsPerDay = isBulkOrBags ? 1000 : (maxPieceWeightTons > 30 ? 500 : 750);
+
+  const loadPortDays = Math.max(1, Math.round((totalWeightTons / loadRateTonsPerDay) * 10) / 10);
+  const dischargePortDays = Math.max(1, Math.round((totalWeightTons / dischargeRateTonsPerDay) * 10) / 10);
+  const bufferManiobraNorDays = 1.0;
+  const portDays = Math.round((loadPortDays + dischargePortDays + bufferManiobraNorDays) * 10) / 10;
+  const totalVoyageDays = Math.round((seaDays + portDays) * 10) / 10;
+
+  // Flete bruto estimado por tonelada según tamaño del lote
+  const freightRatePerTon = totalWeightTons < 3000 ? 52.0 : (totalWeightTons < 10000 ? 42.0 : (totalWeightTons < 35000 ? 32.0 : 25.0));
+  const grossFreightRevenue = Math.round(totalWeightTons * freightRatePerTon * 100) / 100;
+
+  // Gastos de viaje del armador (Bunkers + PDA portuaria)
+  const bunkerPriceVlsfo = 620; // USD/MT
+  const bunkerPriceLsmgo = 840; // USD/MT
+  const seaBunkerCost = Math.round(seaDays * seaFuelConsumptionMt * bunkerPriceVlsfo);
+  const portBunkerCost = Math.round(portDays * portFuelConsumptionMt * bunkerPriceLsmgo);
+  const totalBunkerCost = seaBunkerCost + portBunkerCost;
+  const totalVoyageExpenses = totalBunkerCost + portDisbursementsBase;
+
+  // TCE = (Gross Freight - Voyage Expenses) / Total Voyage Duration Days
+  const netVoyageRevenue = grossFreightRevenue - totalVoyageExpenses;
+  const calculatedTceDaily = totalVoyageDays > 0 ? Math.round(netVoyageRevenue / totalVoyageDays) : marketDailyTce;
+  const tceEffectiveDaily = calculatedTceDaily > 0 ? calculatedTceDaily : marketDailyTce;
+
+  return {
+    weightThresholdTons: WEIGHT_THRESHOLD_TONS,
+    totalWeightTons,
+    mode: 'Fletamento Completo / Buque Exclusivo (Full / Voyage Charter)',
+    shippingModeCategory: 'Full Charter',
+    isFullCharter: true,
+    fullCharterOmitted: false,
+    tceCalculated: true,
+    tce: tceEffectiveDaily,
+    timeCharterEquivalent: {
+      dailyUsd: tceEffectiveDaily,
+      calculatedTceDaily,
+      marketBenchmarkDailyTce: marketDailyTce,
+      totalVoyageDays,
+      seaDays,
+      portDays,
+      grossFreightRevenueUsd: grossFreightRevenue,
+      freightRatePerTonUsd: freightRatePerTon,
+      totalVoyageExpensesUsd: totalVoyageExpenses,
+      bunkerCostUsd: totalBunkerCost,
+      portDisbursementsUsd: portDisbursementsBase,
+      netVoyageRevenueUsd: netVoyageRevenue,
+      formula: 'TCE = (Gross Freight - Voyage Expenses) / Total Voyage Duration Days',
+    },
+    suggestedVessel: {
+      vesselType,
+      dwt,
+      gear,
+      serviceSpeedKnots: serviceSpeed,
+      marketDailyTceUsd: marketDailyTce,
+      fuelSeaMtPerDay: seaFuelConsumptionMt,
+      fuelPortMtPerDay: portFuelConsumptionMt,
+    },
+    reasoning: `El peso total acumulado (${totalWeightTons.toFixed(2)} t) iguala o supera las ${WEIGHT_THRESHOLD_TONS} toneladas. Se aplica el modelo de fletamento marítimo de buque completo (Voyage Charter) y se calcula el TCE del buque sugerido (${vesselType}, ${dwt.toLocaleString('en-US')} DWT).`,
+    lclCostEstimation: null,
+  };
+}
+
+/**
+ * Identifica si la orden corresponde a cargas masivas o en Big Bags / graneles ensacados.
+ *
+ * @param {Array<Object>} items Lista de ítems
+ * @returns {boolean}
+ */
+function isBulkOrBigBagsCargo(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+
+  for (const it of items) {
+    const cat = String(it.category || '');
+    const shipping = String(it.shipping_mode_supported || '');
+    const combined = normalizeStr(`${cat} ${it.type || ''} ${shipping}`);
+
+    if (
+      cat === 'Mercancía Ensacada / Dry Bulk' ||
+      shipping === 'Big Bags / Granel' ||
+      combined.includes('big bag') || combined.includes('bigbag') || combined.includes('fibc') ||
+      combined.includes('saco') || combined.includes('ensacad') || combined.includes('granel') ||
+      combined.includes('dry bulk') || hasWord(combined, 'bulk') || combined.includes('cereal') ||
+      combined.includes('trigo') || combined.includes('cemento') || combined.includes('fertilizante') ||
+      combined.includes('urea') || combined.includes('pellet') || combined.includes('biomasa') ||
+      hasWord(combined, 'vrac') || combined.includes('mineral')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Establece un perfil operativo coherente:
+ * - Las cargas masivas o en Big Bags emplean estiba en bloque, sacos de aire y láminas
+ *   antihumedad, excluyendo por completo los cables de acero pesados o cunas de madera
+ *   estructurales de proyectos industriales pesados.
+ * - Las cargas industriales pesadas (maquinaria, transformadores, estructuras) emplean
+ *   cunas de madera estructurales y cables de acero pesados.
+ *
+ * @param {Array<Object>} items Lista de ítems
+ * @param {Object} orderTotals Totales consolidados de la orden
+ * @returns {Object} Perfil operativo detallado con materiales requeridos y estrictamente excluidos
+ */
+function buildOperationalProfile(items = [], orderTotals) {
+  const isBulkOrBags = isBulkOrBigBagsCargo(items);
+
+  if (isBulkOrBags) {
+    return {
+      profileType: 'CARGA_MASIVA_BIG_BAGS',
+      title: 'Perfil Operativo: Cargas Masivas / Ensacadas en Big Bags',
+      isMassiveOrBigBags: true,
+      stowageMethod: 'Estiba en bloque (Block Stowage)',
+      stowageDescription: 'Estiba compacta en bloque trabado y autosustentado en bodega corrida, eliminando huecos intermedios para maximizar el factor de estiba y prevenir corrimientos de carga durante la navegación marítima.',
+
+      // Materiales y técnicas aplicadas obligatoriamente
+      requiredEquipment: [
+        'Estiba en bloque (Block Stowage)',
+        'Sacos de aire inflables (Dunnage Air Bags / Cojines neumáticos)',
+        'Láminas antihumedad (Moisture Barrier Sheets / Papel Kraft / Polietileno)',
+      ],
+      airBags: {
+        applied: true,
+        required: true,
+        material: 'Sacos de aire inflables (Dunnage Air Bags)',
+        function: 'Inmovilización neumática y relleno de huecos perimetrales contra mamparos y costados para absorber esfuerzos dinámicos transversales.',
+      },
+      moistureBarrier: {
+        applied: true,
+        required: true,
+        material: 'Láminas antihumedad (Moisture Barrier Sheets / Papel Kraft / Polietileno)',
+        function: 'Aislamiento continuo sobre el plan de bodega y mamparos para proteger de condensaciones y sudor del buque (ship sweat).',
+      },
+      blockStowage: {
+        applied: true,
+        required: true,
+        method: 'Estiba en bloque',
+        function: 'Disposición continua trabada formando un prisma compacto de carga autosoportado.',
+      },
+
+      // EXCLUSIONES ESTRICTAS SEGÚN REGLA DE COHERENCIA OPERATIVA
+      excludedEquipment: [
+        'Cables de acero pesados (Heavy steel wire ropes)',
+        'Cunas de madera estructurales (Structural timber saddles / Heavy wood cradles)',
+      ],
+      heavySteelCables: {
+        applied: false,
+        required: false,
+        permitted: false,
+        status: 'EXCLUIDO POR COMPLETO',
+        reason: 'Incompatibilidad técnico-operativa: Los cables de acero pesados desgarran y seccionan los sacos y Big Bags de polipropileno, comprometiendo la integridad de la carga; están absolutamente prohibidos en estibas de mercancía masiva ensacada.',
+      },
+      structuralTimberCradles: {
+        applied: false,
+        required: false,
+        permitted: false,
+        status: 'EXCLUIDO POR COMPLETO',
+        reason: 'Incompatibilidad estructural: Las cunas de madera estructurales corresponden a maquinaria industrial pesada indivisible o transformadores, quedando excluidas por completo en cargas en Big Bags o graneles.',
+      },
+
+      operationalRecommendations: [
+        'Verificar bodegas limpias y secas antes del embarque (Dry Cargo Clean).',
+        'Extender láminas antihumedad continuas en el plan de bodega y costados.',
+        'Ejecutar estiba en bloque trabado sin dejar vacíos entre fardos o sacos.',
+        'Instalar sacos de aire inflables (Dunnage Bags) para inmovilizar huecos contra mamparos.',
+        'PROHIBIDO utilizar cables de acero pesados o cunas de madera estructurales sobre esta mercancía.',
+      ],
+    };
+  }
+
+  // Carga industrial de proyecto / maquinaria pesada / breakbulk
+  return {
+    profileType: 'CARGA_PROYECTO_INDUSTRIAL',
+    title: 'Perfil Operativo: Carga de Proyecto Industrial / Maquinaria Pesada',
+    isMassiveOrBigBags: false,
+    stowageMethod: 'Estiba Individualizada de Carga de Proyecto y Reparto de Presiones',
+    stowageDescription: 'Estiba individualizada sobre vagras y dobles fondos con cálculo de presión admisible (t/m2), empleando cunas de madera estructurales y trincajes directos mediante cables de acero pesados o cadenas con tensores.',
+    requiredEquipment: [
+      'Cunas de madera estructurales (Structural timber saddles / Heavy wood cradles)',
+      'Cables de acero pesados con guardacabos y tensores',
+      'Cadenas de trincaje de alta resistencia grado 80/100',
+    ],
+    airBags: {
+      applied: false,
+      required: false,
+      material: 'Sacos de aire inflables',
+      function: 'No aplicable como trincaje primario para piezas pesadas de maquinaria.',
+    },
+    moistureBarrier: {
+      applied: false,
+      required: false,
+      material: 'Láminas antihumedad',
+      function: 'No requeridas a nivel de bodega completa; se emplea embalaje propio del fabricante.',
+    },
+    blockStowage: {
+      applied: false,
+      required: false,
+      method: 'Estiba individualizada',
+      function: 'Apoyos distribuidos con cálculo de carga por cuaderna.',
+    },
+    excludedEquipment: [],
+    heavySteelCables: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Imprescindible para el trincaje de piezas pesadas a cáncamos D-rings soldables según Código CSS de la OMI.',
+    },
+    structuralTimberCradles: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Imprescindible para el asiento y reparto uniforme del peso concentrado de la maquinaria sobre la estructura del doble fondo del buque.',
+    },
+    operationalRecommendations: [
+      'Verificar capacidad de carga local del doble fondo (t/m2).',
+      'Asentar sobre cunas de madera estructurales adecuadamente dimensionadas.',
+      'Trincar mediante cables de acero pesados o cadenas con tensores a cáncamos D-rings certificados.',
+    ],
+  };
+}
+
+/**
+ * Función consolidadora para evaluar completamente la operativa portuaria y de fletamento.
+ *
+ * @param {Array<Object>} items Lista de ítems de la orden
+ * @returns {Object} Evaluación consolidada (orderTotals, charteringAssessment, operationalProfile)
+ */
+function evaluateOrderPortOperations(items = []) {
+  const orderTotals = calculateOrderTotals(items);
+  const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+  const operationalProfile = buildOperationalProfile(items, orderTotals);
+
+  return {
+    orderTotals,
+    charteringAssessment,
+    operationalProfile,
+  };
+}
+
 function detectFileMimeType(fileName, buffer, headerContentType) {
   if (buffer && buffer.length >= 4) {
     if (buffer.subarray(0, 5).toString('ascii') === '%PDF-') {
@@ -385,6 +821,71 @@ export async function handler(req, context) {
         rawData = Buffer.from(textStr, 'utf8').toString('base64');
         if (!mimeType) mimeType = 'text/plain';
         fileName = fileName || 'input.txt';
+      }
+
+      // Soporte directo para peticiones con lista de items ya estructurados
+      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && Array.isArray(body?.items) && body.items.length > 0) {
+        const rawItems = body.items;
+        const items = rawItems.map((it, idx) => {
+          const qty = Number(it.quantity);
+          const len = Number(it.length);
+          const wid = Number(it.width);
+          const hgt = Number(it.height);
+          const wt = Number(it.weight);
+
+          const lengthVal = !isNaN(len) && len > 0 ? len : 0;
+          const widthVal = !isNaN(wid) && wid > 0 ? wid : 0;
+          const heightVal = !isNaN(hgt) && hgt > 0 ? hgt : 0;
+          const weightVal = !isNaN(wt) && wt > 0 ? wt : 0;
+
+          const rawCategory = typeof it.category === 'string' ? it.category.trim() : '';
+          const typeVal = typeof it.type === 'string' ? it.type.trim() : '';
+          const desc = `${rawCategory} ${typeVal}`.trim();
+
+          const category = normalizeCategory(rawCategory, desc, typeVal);
+          const shippingMode = normalizeShippingMode(it.shipping_mode_supported, desc, weightVal, lengthVal, widthVal, heightVal, category);
+
+          return {
+            id: it.id || `item-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+            category,
+            type: typeVal,
+            quantity: !isNaN(qty) && qty > 0 ? Math.round(qty) : 1,
+            length: lengthVal,
+            width: widthVal,
+            height: heightVal,
+            weight: weightVal,
+            shipping_mode_supported: shippingMode,
+            length_m: lengthVal,
+            width_m: widthVal,
+            height_m: heightVal,
+            unit_weight_kg: weightVal,
+          };
+        });
+
+        const orderTotals = calculateOrderTotals(items);
+        const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+        const operationalProfile = buildOperationalProfile(items, orderTotals);
+
+        return new Response(JSON.stringify({
+          success: true,
+          items,
+          orderTotals,
+          charteringAssessment,
+          operationalProfile,
+          documentMeta: {
+            name: fileName,
+            size: 0,
+            itemsCount: items.length,
+            uploadedAt: new Date().toISOString(),
+            dataBase64: null,
+          },
+        }), {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            'Content-Type': 'application/json',
+          },
+        });
       }
 
       if (!rawData || typeof rawData !== 'string' || !rawData.trim()) {
@@ -631,11 +1132,18 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       };
     });
 
+    const orderTotals = calculateOrderTotals(items);
+    const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+    const operationalProfile = buildOperationalProfile(items, orderTotals);
+
     const fullDataUrl = `data:${mimeType};base64,${pureBase64}`;
 
     return new Response(JSON.stringify({
       success: true,
       items,
+      orderTotals,
+      charteringAssessment,
+      operationalProfile,
       documentMeta: {
         name: fileName,
         size: fileBuffer.length,
@@ -657,6 +1165,9 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       success: false,
       error: error?.message || 'Error interno del servidor al procesar el documento',
       items: [],
+      orderTotals: null,
+      charteringAssessment: null,
+      operationalProfile: null,
     }), {
       status: 500,
       headers: {
@@ -671,5 +1182,11 @@ handler.VALID_CATEGORIES = VALID_CATEGORIES;
 handler.VALID_SHIPPING_MODES = VALID_SHIPPING_MODES;
 handler.normalizeCategory = normalizeCategory;
 handler.normalizeShippingMode = normalizeShippingMode;
+handler.WEIGHT_THRESHOLD_TONS = WEIGHT_THRESHOLD_TONS;
+handler.calculateOrderTotals = calculateOrderTotals;
+handler.evaluateCharteringModel = evaluateCharteringModel;
+handler.isBulkOrBigBagsCargo = isBulkOrBigBagsCargo;
+handler.buildOperationalProfile = buildOperationalProfile;
+handler.evaluateOrderPortOperations = evaluateOrderPortOperations;
 
 export default handler;
