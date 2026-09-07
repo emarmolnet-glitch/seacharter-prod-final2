@@ -587,7 +587,7 @@ export function ForwarderWorkspace() {
       // Subtotal 1: Flete Marítimo LCL
       const oceanFreightCost = revenueTons * 65.0;
 
-      // Subtotal 2: Costes FOB y Operativa Portuaria (CFS, Tasas T3, B/L, almacenaje, surveyor, inland, aduanas)
+      // Subtotal 2: Costes FOB y Operativa Portuaria (CFS, Tasas T3, B/L, almacenaje, surveyor, inland, mercancía)
       const cfsOriginCost = revenueTons * 22.0;
       const cfsDestCost = revenueTons * 25.0;
       const portT3Cost = revenueTons * 4.5;
@@ -655,7 +655,7 @@ export function ForwarderWorkspace() {
       const effectiveDemDaily = Number(demurrageDailyRateUsd) || effectiveDailyHire;
       const demurrageCostEur = Math.round(totalDemDays * effectiveDemDaily * effectiveExRate * 100) / 100;
 
-      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, aduanas, demoras)
+      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, mercancía, demoras)
       const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
       const airBagsCost = isBigBagsOrBulk ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
 
@@ -769,7 +769,7 @@ export function ForwarderWorkspace() {
         const val = matchNumber(text);
         if (val !== null) { setInlandCost(val); hasChanges = true; }
       }
-      if (text.includes('aduana')) {
+      if (text.includes('aduana') || text.includes('mercancía') || text.includes('mercancia')) {
         const val = matchNumber(text);
         if (val !== null) { setCustomsCost(val); hasChanges = true; }
       }
@@ -1065,7 +1065,7 @@ export function ForwarderWorkspace() {
     const matSaleNum = matCostNum * 1.15;
     const matMarginNum = matSaleNum - matCostNum;
 
-    // Logística Periférica (Pre-Stacking 70%, Manipulación Inicial, Almacenaje, Surveyor, Inland, Aduanas)
+    // Logística Periférica (Pre-Stacking 70%, Manipulación Inicial, Almacenaje, Surveyor, Inland, Mercancía)
     const sDays = sourcePayload?.peripheral_services?.storage_days ?? storageDays;
     const survCost = Number(sourcePayload?.peripheral_services?.surveyor_cost ?? surveyorCost) || 0;
     const inlCost = Number(sourcePayload?.peripheral_services?.inland_cost ?? inlandCost) || 0;
@@ -1073,10 +1073,11 @@ export function ForwarderWorkspace() {
 
     let storageCostNum = 0;
     let initialHandlingCost = 0;
+    const preStackDays = Math.max(5, Number(sDays) || 5);
+    const preStackingDays = sourcePayload?.financialBreakdown?.preStackingDays ?? (isBigBags ? preStackDays : (Number(sDays) > 0 ? Number(sDays) : preStackDays));
     if (isBigBags) {
       const preStackRatio = 0.70;
       const preStackedTons = totalWeightTons * preStackRatio;
-      const preStackDays = Math.max(5, Number(sDays) || 5);
       const effectiveArea = m2Total > 0 ? m2Total : (totalWeightTons > 0 ? totalWeightTons * 0.8 : qTotal * 0.8);
       const preStackedArea = Math.ceil(effectiveArea * preStackRatio);
       storageCostNum = preStackedArea * preStackDays * 2;
@@ -1140,6 +1141,7 @@ export function ForwarderWorkspace() {
       finalTotalMargin,
       unitRateSale,
       storageDays: sDays,
+      preStackingDays: preStackingDays || 5,
       craneCostNum: (heavyLiftCount * 2500) + portCraneCost,
       storageCostNum,
       initialHandlingCost,
@@ -1899,7 +1901,7 @@ export function ForwarderWorkspace() {
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Días Almacenaje</label><input type="number" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Surveyor (€)</label><input type="number" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current=true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                     <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Transporte Inland (€)</label><input type="number" value={inlandCost} onChange={(e) => setInlandCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Aduanas (€)</label><input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Mercancía (€)</label><input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                   </div>
                 </section>
 
@@ -1939,7 +1941,7 @@ export function ForwarderWorkspace() {
                             <span className="text-sm">🏗️</span>
                           </div>
                           <p className="text-[11px] text-slate-300">
-                            Manipulación en muelle, estiba y desestiba, trincaje, almacenaje terminal, peritaje, inland y aduanas
+                            Manipulación en muelle, estiba y desestiba, trincaje, almacenaje terminal, peritaje, inland y mercancía
                           </p>
                         </div>
                         <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
@@ -2144,10 +2146,10 @@ export function ForwarderWorkspace() {
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(matSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(matMarginNum)}</td>
                     </tr>
-                    {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas) */}
+                    {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía) */}
                     <tr className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.storageDays ?? storageDays} d), surveyor portuario, transporte inland y aduanas</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)</td>
+                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.preStackingDays || (Number(activeReport.storageDays) > 0 ? activeReport.storageDays : (Number(storageDays) > 0 ? storageDays : 5))} d), surveyor portuario, transporte inland y mercancía</td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>

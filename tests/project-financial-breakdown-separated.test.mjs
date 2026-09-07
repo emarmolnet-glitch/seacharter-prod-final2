@@ -225,7 +225,7 @@ test('8. ForwarderWorkspace Executive Report displays separated financial table 
   assert.match(workspaceSource, /Flete Marítimo \(Base RT\)/);
   assert.match(workspaceSource, /Estiba y Trincaje \(Cuadrillas, Trincadores\)/);
   assert.match(workspaceSource, /Materiales Especiales \(MAFIs, Heavy Lift, Cadenas, Dunnage\)/);
-  assert.match(workspaceSource, /Logística Periférica \(Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas\)/);
+  assert.match(workspaceSource, /Logística Periférica \(Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía\)/);
   assert.match(workspaceSource, /Subtotal Flete Marítimo \/ TCE/);
   assert.match(workspaceSource, /Subtotal Costes FOB y Operativa Portuaria/);
   assert.match(workspaceSource, /PRECIO TOTAL DE VENTA AL CLIENTE/);

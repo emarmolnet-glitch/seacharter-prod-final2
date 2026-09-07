@@ -88,9 +88,9 @@ export function parseProjectInstruction(rawText) {
     detectedActions.push(`Coste de transporte inland ajustado a ${inlandVal.toLocaleString('es-ES')} €`);
   }
 
-  // 4. Aduanas: "aduanas 450", "despacho 300"
-  const customsRegex1 = /(?:aduanas?|despacho|arancel(?:es)?)\s*(?:de|coste|:)?\s*(\d+[\d.,]*)/i;
-  const customsRegex2 = /(\d+[\d.,]*)\s*(?:€|eur|euros)?\s*(?:de|para|en)?\s*(?:aduanas?|despacho)/i;
+  // 4. Mercancía: "mercancía 450", "aduanas 450", "despacho 300"
+  const customsRegex1 = /(?:mercanc[ií]as?|aduanas?|despacho|arancel(?:es)?)\s*(?:de|coste|:)?\s*(\d+[\d.,]*)/i;
+  const customsRegex2 = /(\d+[\d.,]*)\s*(?:€|eur|euros)?\s*(?:de|para|en)?\s*(?:mercanc[ií]as?|aduanas?|despacho)/i;
 
   let customsVal = null;
   const mCustoms1 = lower.match(customsRegex1);
@@ -104,7 +104,7 @@ export function parseProjectInstruction(rawText) {
 
   if (customsVal !== null && !isNaN(customsVal)) {
     payload.customsCost = customsVal;
-    detectedActions.push(`Coste de aduanas ajustado a ${customsVal.toLocaleString('es-ES')} €`);
+    detectedActions.push(`Coste de mercancía ajustado a ${customsVal.toLocaleString('es-ES')} €`);
   }
 
   // 5. Materiales de estiba y trincaje estructural
@@ -305,7 +305,7 @@ export function parseProjectInstruction(rawText) {
       agentResponse += '\n\n📂 He forzado la apertura del Project Cargo Builder para que puedas verificar la estiba y los costes asociados.';
     }
   } else {
-    agentResponse = `He analizado tu mensaje: "${text}". Puedes pedirme órdenes concretas como "almacenaje 5 días", "surveyor 1500", "transporte 800", "aduanas 450", "desglose financiero" o "añadir pieza" para sincronizar automáticamente el workspace del proyecto.`;
+    agentResponse = `He analizado tu mensaje: "${text}". Puedes pedirme órdenes concretas como "almacenaje 5 días", "surveyor 1500", "transporte 800", "mercancía 450", "desglose financiero" o "añadir pieza" para sincronizar automáticamente el workspace del proyecto.`;
   }
 
   return {

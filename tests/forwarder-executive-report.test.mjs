@@ -70,8 +70,10 @@ test('8. Financial breakdown table uses border-collapse w-full and defines the 4
   assert.match(forwarderComponentSource, /Estiba y Trincaje \(Cuadrillas, Trincadores\)/);
   // Row 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)
   assert.match(forwarderComponentSource, /Materiales Especiales \(MAFIs, Heavy Lift, Cadenas, Dunnage\)/);
-  // Row 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas)
-  assert.match(forwarderComponentSource, /Logística Periférica \(Almacenaje Portuario, Surveyor, Transporte Inland, Aduanas\)/);
+  // Row 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)
+  assert.match(forwarderComponentSource, /Logística Periférica \(Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía\)/);
+  assert.match(forwarderComponentSource, /activeReport\.preStackingDays/);
+  assert.doesNotMatch(forwarderComponentSource, /Almacenaje muelle \(0 d\)/);
 });
 
 test('9. Standout highlight displays PRECIO TOTAL DE VENTA AL CLIENTE at table foot', () => {

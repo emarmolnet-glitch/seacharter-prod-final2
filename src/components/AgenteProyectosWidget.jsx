@@ -178,7 +178,7 @@ export default function AgenteProyectosWidget({
           if (val !== null) payloadObj.surveyorCost = val;
         } else if (text.includes('inland') || text.includes('transporte') || text.includes('camion')) {
           if (val !== null) payloadObj.inlandTrucksCount = val;
-        } else if (text.includes('aduana')) {
+        } else if (text.includes('mercancía') || text.includes('mercancia') || text.includes('aduana')) {
           if (val !== null) payloadObj.customsCost = val;
         } else if (text.includes('madera') || text.includes('dunnage')) {
           if (val !== null) payloadObj.dunnageUnits = val;
