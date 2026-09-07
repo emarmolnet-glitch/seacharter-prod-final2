@@ -565,8 +565,11 @@ function isBulkOrBigBagsCargo(items = []) {
  */
 function buildOperationalProfile(items = [], orderTotals) {
   const isBulkOrBags = isBulkOrBigBagsCargo(items);
+  const totalPcs = Number(orderTotals?.totalPieces) || (Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0) : 1);
 
   if (isBulkOrBags) {
+    const estimatedCycles = Math.ceil(totalPcs / 15);
+
     return {
       profileType: 'CARGA_MASIVA_BIG_BAGS',
       title: 'Perfil Operativo: Cargas Masivas / Ensacadas en Big Bags',
@@ -574,12 +577,27 @@ function buildOperationalProfile(items = [], orderTotals) {
       stowageMethod: 'Estiba en bloque (Block Stowage)',
       stowageDescription: 'Estiba compacta en bloque trabado y autosustentado en bodega corrida, eliminando huecos intermedios para maximizar el factor de estiba y prevenir corrimientos de carga durante la navegación marítima.',
 
-      // Materiales y técnicas aplicadas obligatoriamente
+      // Utillaje, equipamiento de izado y técnicas aplicadas obligatoriamente
       requiredEquipment: [
+        'Spreader multipunto para izado en bloque (14-16 Big Bags por ciclo)',
         'Estiba en bloque (Block Stowage)',
         'Sacos de aire inflables (Dunnage Air Bags / Cojines neumáticos)',
         'Láminas antihumedad (Moisture Barrier Sheets / Papel Kraft / Polietileno)',
       ],
+      spreaderEquipment: {
+        applied: true,
+        required: true,
+        equipment: 'Spreader multipunto para Big Bags (bloques de 14 a 16 sacos por ciclo de izado)',
+        capacityBagsPerCycle: '14-16 sacos/ciclo',
+        cyclesEstimated: estimatedCycles,
+        function: 'Manipulación simultánea y segura de bloques de 14 a 16 Big Bags por ciclo de izado, manteniendo flujo continuo hacia bodega y eliminando por completo eslingas sueltas individuales.',
+      },
+      stevedoringLabor: {
+        applied: true,
+        required: true,
+        focus: 'Cuadrillas de estiba en tierra especializadas en enganche rápido al spreader',
+        pacingBasis: 'Dimensionamiento del personal de tierra en función de los ciclos de retorno de grúa (buque o grúa móvil portuaria de muelle) para mantener flujo continuo hacia bodega.',
+      },
       airBags: {
         applied: true,
         required: true,
@@ -599,11 +617,21 @@ function buildOperationalProfile(items = [], orderTotals) {
         function: 'Disposición continua trabada formando un prisma compacto de carga autosoportado.',
       },
 
-      // EXCLUSIONES ESTRICTAS SEGÚN REGLA DE COHERENCIA OPERATIVA
+      // EXCLUSIONES ESTRICTAS SEGÚN REGLA DE COHERENCIA OPERATIVA Y SEGURIDAD PORTUARIA
       excludedEquipment: [
+        'Eslingas sueltas individuales (Loose individual slings)',
         'Cables de acero pesados (Heavy steel wire ropes)',
         'Cunas de madera estructurales (Structural timber saddles / Heavy wood cradles)',
+        'Cadenas de trincaje pesado grado 80/100 (Heavy G80 lashing chains)',
+        'Personal técnico especializado en trincaje industrial a bordo (no aplicable a estiba en bloque)',
       ],
+      looseSlings: {
+        applied: false,
+        required: false,
+        permitted: false,
+        status: 'EXCLUIDO POR COMPLETO',
+        reason: 'Queda prohibido calcular eslingas sueltas individuales para cargas de Big Bags; el izado debe computar obligatoriamente un Spreader multipunto para bloques de 14 a 16 Big Bags por ciclo.',
+      },
       heavySteelCables: {
         applied: false,
         required: false,
@@ -618,29 +646,80 @@ function buildOperationalProfile(items = [], orderTotals) {
         status: 'EXCLUIDO POR COMPLETO',
         reason: 'Incompatibilidad estructural: Las cunas de madera estructurales corresponden a maquinaria industrial pesada indivisible o transformadores, quedando excluidas por completo en cargas en Big Bags o graneles.',
       },
+      heavyLashingChains: {
+        applied: false,
+        required: false,
+        permitted: false,
+        status: 'EXCLUIDO POR COMPLETO',
+        reason: 'Incompatibilidad operativa: Las cadenas de trincaje pesado dañan los sacos y corresponden a trincaje de maquinaria y piezas pesadas sobre cubierta o plan de bodega.',
+      },
+      industrialLashingPersonnel: {
+        applied: false,
+        required: false,
+        permitted: false,
+        status: 'EXCLUIDO POR COMPLETO',
+        reason: 'En granel ensacado / Big Bags la estiba se ejecuta en bloque por cuadrillas portuarias de enganche rápido y posicionamiento, excluyendo el personal técnico especializado en trincaje industrial a bordo.',
+      },
 
       operationalRecommendations: [
         'Verificar bodegas limpias y secas antes del embarque (Dry Cargo Clean).',
         'Extender láminas antihumedad continuas en el plan de bodega y costados.',
+        'Utilizar obligatoriamente Spreader multipunto (14-16 Big Bags por ciclo) para izado simultáneo en bloque.',
+        'Dimensionar cuadrillas de estiba en tierra para enganche rápido según ciclos de retorno de grúa (buque o móvil portuaria), garantizando flujo continuo hacia bodega.',
         'Ejecutar estiba en bloque trabado sin dejar vacíos entre fardos o sacos.',
         'Instalar sacos de aire inflables (Dunnage Bags) para inmovilizar huecos contra mamparos.',
-        'PROHIBIDO utilizar cables de acero pesados o cunas de madera estructurales sobre esta mercancía.',
+        'PROHIBIDO utilizar eslingas sueltas individuales, cables de acero pesados o cunas de madera estructurales sobre esta mercancía.',
       ],
     };
   }
 
-  // Carga industrial de proyecto / maquinaria pesada / breakbulk
+  // Carga industrial de proyecto / maquinaria pesada / breakbulk / mercancías paletizadas
   return {
     profileType: 'CARGA_PROYECTO_INDUSTRIAL',
-    title: 'Perfil Operativo: Carga de Proyecto Industrial / Maquinaria Pesada',
+    title: 'Perfil Operativo: Carga de Proyecto Industrial / Breakbulk / Maquinaria / Paletizado',
     isMassiveOrBigBags: false,
     stowageMethod: 'Estiba Individualizada de Carga de Proyecto y Reparto de Presiones',
-    stowageDescription: 'Estiba individualizada sobre vagras y dobles fondos con cálculo de presión admisible (t/m2), empleando cunas de madera estructurales y trincajes directos mediante cables de acero pesados o cadenas con tensores.',
+    stowageDescription: 'Estiba individualizada sobre vagras y dobles fondos con cálculo de presión admisible (t/m2), empleando maderas de dunnage, cunas estructurales y trincajes directos mediante cables de acero pesados o cadenas con tensores.',
     requiredEquipment: [
-      'Cunas de madera estructurales (Structural timber saddles / Heavy wood cradles)',
+      'Maderas de dunnage y cunas estructurales (Structural timber saddles / Dunnage wood)',
       'Cables de acero pesados con guardacabos y tensores',
       'Cadenas de trincaje de alta resistencia grado 80/100',
+      'Personal técnico especializado en trincaje industrial a bordo',
     ],
+    dunnageWood: {
+      applied: true,
+      required: true,
+      status: 'REQUERIDO',
+      reason: 'Imprescindible para el reparto de presiones y calce de seguridad de mercancías paletizadas, maquinaria y piezas de proyecto.',
+    },
+    heavySteelCables: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Imprescindible para el trincaje de piezas pesadas a cáncamos D-rings soldables según Código CSS de la OMI.',
+    },
+    lashingChainsG80: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Cadenas de trincaje de alta resistencia grado 80/100 con tensores de trinquete para trincaje primario.',
+    },
+    structuralTimberCradles: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Imprescindible para el asiento y reparto uniforme del peso concentrado de la maquinaria sobre la estructura del doble fondo del buque.',
+    },
+    industrialLashingPersonnel: {
+      applied: true,
+      required: true,
+      permitted: true,
+      status: 'REQUERIDO',
+      reason: 'Personal técnico especializado en trincaje industrial a bordo para ejecución y certificación del trincaje según IMO CSS Code.',
+    },
     airBags: {
       applied: false,
       required: false,
@@ -660,24 +739,11 @@ function buildOperationalProfile(items = [], orderTotals) {
       function: 'Apoyos distribuidos con cálculo de carga por cuaderna.',
     },
     excludedEquipment: [],
-    heavySteelCables: {
-      applied: true,
-      required: true,
-      permitted: true,
-      status: 'REQUERIDO',
-      reason: 'Imprescindible para el trincaje de piezas pesadas a cáncamos D-rings soldables según Código CSS de la OMI.',
-    },
-    structuralTimberCradles: {
-      applied: true,
-      required: true,
-      permitted: true,
-      status: 'REQUERIDO',
-      reason: 'Imprescindible para el asiento y reparto uniforme del peso concentrado de la maquinaria sobre la estructura del doble fondo del buque.',
-    },
     operationalRecommendations: [
       'Verificar capacidad de carga local del doble fondo (t/m2).',
-      'Asentar sobre cunas de madera estructurales adecuadamente dimensionadas.',
-      'Trincar mediante cables de acero pesados o cadenas con tensores a cáncamos D-rings certificados.',
+      'Asentar sobre maderas de dunnage y cunas estructurales adecuadamente dimensionadas.',
+      'Trincar mediante cables de acero pesados o cadenas grado 80 con tensores a cáncamos D-rings certificados.',
+      'Contar con personal técnico especializado en trincaje industrial a bordo durante toda la operativa de carga y fijación.',
     ],
   };
 }
@@ -820,63 +886,124 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       category: 'Documentación y Despacho',
     });
   } else {
-    // Desglose de costes operativos portuarios en régimen Breakbulk / Full Charter
+    // Desglose de costes operativos portuarios en régimen Breakbulk / Full Charter / Granel Ensacado
     const isBigBags = profile?.isMassiveOrBigBags || isBulkOrBigBagsCargo(items);
 
-    // Estiba y medios portuarios
-    const stevedoreGangs = Math.max(1, Math.ceil(totalPieces / 15));
-    const stevedoringGangsCost = stevedoreGangs * 1200;
-    fobPortOperationsItems.push({
-      concept: `Cuadrillas de Estibadores en Muelle (${stevedoreGangs} turno${stevedoreGangs === 1 ? '' : 's'})`,
-      units: stevedoreGangs,
-      unitCost: 1200,
-      amount: stevedoringGangsCost,
-      category: 'Manipulación en Muelle',
-    });
-
-    if (maxPieceWeightKg > 8000 && !isBigBags) {
-      const heavyLiftCost = 2500;
-      fobPortOperationsItems.push({
-        concept: 'Grúa Auxiliar de Muelle Heavy Lift (Izado de Alta Capacidad)',
-        units: 1,
-        unitCost: 2500,
-        amount: heavyLiftCost,
-        category: 'Manipulación en Muelle',
-      });
-    }
-
-    if (roRoCount > 0) {
-      const mafiUnits = roRoCount;
-      const mafiCost = mafiUnits * 300;
-      fobPortOperationsItems.push({
-        concept: `Plataformas MAFI / Roll Trailers (${mafiUnits} unid.)`,
-        units: mafiUnits,
-        unitCost: 300,
-        amount: mafiCost,
-        category: 'Manipulación en Muelle',
-      });
-    }
-
-    // Trincaje y estiba
     if (isBigBags) {
-      const slingsCount = Math.max(1, Math.ceil(totalPieces / 4));
-      const slingsCost = slingsCount * 40;
-      const shacklesCost = (slingsCount * 2) * 15;
+      // =======================================================================
+      // OPERATIVA ESPECÍFICA PARA GRANEL ENSACADO EN BIG BAGS
+      // =======================================================================
+      // Mano de Obra Portuaria y Ciclos de Operación:
+      // Se calcula con base en cuadrillas y turnos de estiba enfocados en el enganche rápido
+      // de los sacos al spreader multipunto (14-16 Big Bags por ciclo).
+      // El modelo dimensiona el personal de tierra en función de los ciclos de retorno de grúa
+      // (grúa propia de buque ~135 ciclos/turno o grúa móvil portuaria de muelle ~170 ciclos/turno).
+      const bagsPerCycle = 15; // Bloques de 14 a 16 Big Bags por ciclo
+      const totalCraneCycles = Math.max(1, Math.ceil(totalPieces / bagsPerCycle));
+
+      const isPortCrane = options.craneType === 'port_crane' || options.usePortCrane === true;
+      const cyclesPerShift = isPortCrane ? 170 : 135;
+      const stevedoreGangs = Math.max(1, Math.ceil(totalCraneCycles / cyclesPerShift));
+      const stevedoringGangsCost = stevedoreGangs * 1200;
+
       fobPortOperationsItems.push({
-        concept: `Eslingas y Medios Neumáticos de Estiba en Bloque (${slingsCount} unid.)`,
-        units: slingsCount,
-        amount: slingsCost + shacklesCost,
-        category: 'Trincaje y Estiba',
+        concept: `Cuadrillas de Estiba en Muelle (Enganche Rápido Spreader: ${stevedoreGangs} turno${stevedoreGangs === 1 ? '' : 's'}, ${totalCraneCycles} ciclos)`,
+        units: stevedoreGangs,
+        unitCost: 1200,
+        amount: stevedoringGangsCost,
+        category: 'Manipulación en Muelle',
+        craneCycles: totalCraneCycles,
+        bagsPerCycle: '14-16',
+        cranePacing: isPortCrane ? 'Grúa Móvil Portuaria de Muelle' : 'Grúa Propia del Buque',
+        description: 'Cuadrilla portuaria de estibadores en muelle dimensionada para enganche rápido al spreader multipunto según ciclos de retorno de grúa, garantizando flujo continuo hacia bodega.',
       });
+
+      // Utillaje y Equipamiento de Izado ("Trincaje y Operativa"):
+      // Prohibidas eslingas sueltas individuales, cadenas y maderas de cuna estructurales.
+      // Obligatorio Spreader multipunto (14-16 sacos por ciclo).
+      const spreaderSets = Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)));
+      const spreaderCost = spreaderSets * 600;
+      fobPortOperationsItems.push({
+        concept: 'Spreader Multipunto de Izado para Big Bags (Bloques de 14-16 sacos/ciclo)',
+        units: spreaderSets,
+        unitCost: 600,
+        amount: spreaderCost,
+        category: 'Trincaje y Operativa',
+        description: 'Bastidor esparcidor multipunto homologado para izado simultáneo en bloque de 14 a 16 sacos. Prohibidas eslingas sueltas individuales y trincaje pesado.',
+      });
+
+      // Medios neumáticos de inmovilización en bodega (Dunnage Air Bags y láminas antihumedad)
+      const airBagsUnits = Math.max(2, Math.ceil(totalWeightTons / 50));
+      const airBagsCost = airBagsUnits * 35;
+      fobPortOperationsItems.push({
+        concept: `Medios Neumáticos de Estiba en Bloque (Dunnage Air Bags y Barrera Antihumedad: ${airBagsUnits} unid.)`,
+        units: airBagsUnits,
+        unitCost: 35,
+        amount: airBagsCost,
+        category: 'Trincaje y Operativa',
+        description: 'Cojines neumáticos y láminas protectoras de aislamiento para inmovilizar huecos contra mamparos en estiba en bloque compacta.',
+      });
+      // Personal técnico de trincaje industrial a bordo: EXCLUIDO (0 €)
+      // Grúa heavy lift auxiliar: EXCLUIDA (0 €)
     } else {
+      // =======================================================================
+      // OPERATIVA PARA CARGA GENERAL, PALETIZADA Y PROYECTO (BREAKBULK / HEAVY LIFT)
+      // =======================================================================
+      // Mano de obra portuaria estándar
+      const stevedoreGangs = Math.max(1, Math.ceil(totalPieces / 15));
+      const stevedoringGangsCost = stevedoreGangs * 1200;
+      fobPortOperationsItems.push({
+        concept: `Cuadrillas de Estibadores en Muelle (${stevedoreGangs} turno${stevedoreGangs === 1 ? '' : 's'})`,
+        units: stevedoreGangs,
+        unitCost: 1200,
+        amount: stevedoringGangsCost,
+        category: 'Manipulación en Muelle',
+      });
+
+      if (maxPieceWeightKg > 8000) {
+        const heavyLiftCost = 2500;
+        fobPortOperationsItems.push({
+          concept: 'Grúa Auxiliar de Muelle Heavy Lift (Izado de Alta Capacidad)',
+          units: 1,
+          unitCost: 2500,
+          amount: heavyLiftCost,
+          category: 'Manipulación en Muelle',
+        });
+      }
+
+      if (roRoCount > 0) {
+        const mafiUnits = roRoCount;
+        const mafiCost = mafiUnits * 300;
+        fobPortOperationsItems.push({
+          concept: `Plataformas MAFI / Roll Trailers (${mafiUnits} unid.)`,
+          units: mafiUnits,
+          unitCost: 300,
+          amount: mafiCost,
+          category: 'Manipulación en Muelle',
+        });
+      }
+
+      // Personal técnico especializado en trincaje industrial a bordo
+      const lashingTeamCount = Math.max(1, Math.ceil(totalPieces / 20) + (roRoCount > 0 ? 1 : 0));
+      const lashingTeamCost = lashingTeamCount * 800;
+      fobPortOperationsItems.push({
+        concept: `Personal Técnico Especializado en Trincaje Industrial a Bordo (${lashingTeamCount} equipo${lashingTeamCount === 1 ? '' : 's'})`,
+        units: lashingTeamCount,
+        unitCost: 800,
+        amount: lashingTeamCost,
+        category: 'Trincaje y Estiba',
+        description: 'Especialistas homologados para ejecución y certificación del trincaje a bordo según Código CSS de la OMI.',
+      });
+
+      // Materiales de sujeción específicos: maderas de dunnage, cables de acero, cadenas de trincaje G80
       const dunnageCount = Math.ceil(totalWeightTons / 5);
-      const chainsCount = roRoCount * 4;
+      const chainsCount = Math.max(2, (roRoCount * 4) || Math.ceil(totalPieces * 1.5));
       const slingsCount = Math.ceil(totalPieces / 2);
       const shacklesCount = (slingsCount * 2) + (chainsCount * 2);
       const lashingCost = (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40) + (shacklesCount * 15);
 
       fobPortOperationsItems.push({
-        concept: 'Materiales y Mano de Obra de Trincaje (Dunnage, Cadenas, Eslingas, Grilletes)',
+        concept: 'Materiales de Sujeción y Trincaje Pesado (Maderas Dunnage, Cadenas G80, Cables de Acero, Grilletes)',
         units: totalPieces,
         amount: lashingCost,
         category: 'Trincaje y Estiba',
