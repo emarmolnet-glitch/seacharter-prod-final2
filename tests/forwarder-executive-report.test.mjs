@@ -24,8 +24,8 @@ test('4. Centered A4 container is rendered with requested max-w-4xl mx-auto p-10
   assert.match(forwarderComponentSource, /max-w-4xl\s+mx-auto\s+p-10\s+bg-white\s+text-slate-900/);
 });
 
-test('5. Top-right floating controls contain "🖨️ Imprimir / PDF" and "✖ Cerrar Reporte" with print:hidden', () => {
-  const printButtonMatch = forwarderComponentSource.match(/id="btn-print-executive-report"[\s\S]*?>[\s\S]*?Imprimir\s*\/\s*(?:Guardar\s+)?PDF[\s\S]*?<\/button>/);
+test('5. Bottom-left floating controls contain "🖨️ Imprimir / Guardar Reporte" and "✖ Cerrar" with print:hidden', () => {
+  const printButtonMatch = forwarderComponentSource.match(/id="btn-print-executive-report"[\s\S]*?>[\s\S]*?Imprimir\s*\/\s*(?:Guardar\s+)?(?:Reporte|PDF)[\s\S]*?<\/button>/);
   assert.ok(printButtonMatch, 'btn-print-executive-report must exist');
   assert.match(printButtonMatch[0], /window\.print\(\)/);
   assert.match(printButtonMatch[0], /🖨️/);
@@ -34,7 +34,7 @@ test('5. Top-right floating controls contain "🖨️ Imprimir / PDF" and "✖ C
   assert.ok(closeButtonMatch, 'btn-close-executive-report must exist');
   assert.match(closeButtonMatch[0], /setShowExecutiveReport\(false\)/);
 
-  assert.match(forwarderComponentSource, /fixed\s+top-6\s+right-8\s+flex\s+gap-4\s+z-\[(?:60|100|9999)\]\s+print:hidden/);
+  assert.match(forwarderComponentSource, /fixed\s+bottom-6\s+left-8\s+flex\s+(?:items-center\s+)?gap-4\s+z-\[(?:60|100|9999)\]\s+print:hidden/);
 });
 
 test('6. Header section includes forwarder branding, issue date, project_ref, and commercial title', () => {
@@ -88,4 +88,15 @@ test('10. Print styles ensure outer layout containers and modals are hidden duri
   // CSS print rules
   assert.match(forwarderComponentSource, /@media print/);
   assert.match(forwarderComponentSource, /print-color-adjust:\s*exact/);
+});
+
+test('11. Action controls in bottom-left corner allow exiting executive report view fluidly without trapping user', () => {
+  // Container positioned at bottom-left
+  assert.match(forwarderComponentSource, /fixed\s+bottom-6\s+left-8/);
+  // Contains both close and print action buttons accessible to user
+  assert.match(forwarderComponentSource, /id="btn-close-executive-report"[\s\S]*?onClick=\{\(\)\s*=>\s*setShowExecutiveReport\(false\)\}/);
+  assert.match(forwarderComponentSource, /id="btn-print-executive-report"[\s\S]*?onClick=\{\(\)\s*=>\s*window\.print\(\)\}/);
+  // Button labels match Cerrar and Imprimir / Guardar Reporte
+  assert.match(forwarderComponentSource, /id="btn-close-executive-report"[\s\S]*?>[\s\S]*?Cerrar[\s\S]*?<\/button>/);
+  assert.match(forwarderComponentSource, /id="btn-print-executive-report"[\s\S]*?>[\s\S]*?Imprimir\s*\/\s*Guardar\s+Reporte[\s\S]*?<\/button>/);
 });
