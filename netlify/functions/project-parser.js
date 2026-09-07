@@ -877,6 +877,9 @@ export async function handler(req, context) {
 
     if (isJsonRequest || (body && typeof body === 'object')) {
       let rawData = body?.fileBase64 ?? body?.pdfBase64 ?? body?.data ?? body?.file ?? body?.document ?? '';
+      if (typeof rawData === 'string' && (rawData.trim().toLowerCase() === 'opcional' || rawData.trim().toLowerCase() === 'null' || rawData.trim().toLowerCase() === 'undefined')) {
+        rawData = '';
+      }
       fileName = body?.fileName || body?.name || headerFileName || '';
       mimeType = body?.mimeType || body?.type || '';
 
