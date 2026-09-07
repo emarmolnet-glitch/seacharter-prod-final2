@@ -683,20 +683,325 @@ function buildOperationalProfile(items = [], orderTotals) {
 }
 
 /**
+ * Realiza el cálculo económico final del proyecto separando de forma explícita y rigurosa:
+ * 1. Flete Marítimo (Ocean Freight / TCE del buque)
+ * 2. Costes FOB y Operativa Portuaria (manipulación en muelle, estiba, trincaje, almacenaje, peritaje, inland, aduanas)
+ * 3. Subtotales y Total Global (All-In) con precio de cotización o venta.
+ *
+ * Queda prohibido agrupar todos los conceptos en una cifra única sin antes detallar
+ * estas dos grandes partidas de forma independiente.
+ *
+ * @param {Array<Object>} items Lista de ítems del proyecto
+ * @param {Object} orderTotals Totales físicos calculados (peso, volumen, piezas)
+ * @param {Object} charteringAssessment Evaluación de fletamento (LCL o buque completo con TCE)
+ * @param {Object} operationalProfile Perfil operativo (estiba en bloque vs trincaje estructural)
+ * @param {Object} options Parámetros adicionales (días almacenaje, peritaje, inland, aduanas, valor de mercancía)
+ * @returns {Object} Desglose financiero detallado y transparente
+ */
+function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessment, operationalProfile, options = {}) {
+  const totals = orderTotals || calculateOrderTotals(items);
+  const assessment = charteringAssessment || evaluateCharteringModel(totals, items);
+  const profile = operationalProfile || buildOperationalProfile(items, totals);
+
+  const currency = options.currency || 'EUR';
+  const totalWeightTons = Number(totals?.totalWeightTons) || 0;
+  const totalVolumeCbm = Number(totals?.totalVolumeCbm) || 0;
+  const totalPieces = Number(totals?.totalPieces) || (Array.isArray(items) ? items.length : 1);
+  const maxPieceWeightKg = Number(totals?.maxPieceWeightKg) || 0;
+  const revenueTons = Math.max(1, Math.max(totalWeightTons, totalVolumeCbm));
+  const isUnderThreshold = totalWeightTons < WEIGHT_THRESHOLD_TONS;
+
+  // Parámetros periféricos
+  const storageDays = Math.max(0, Number(options.storageDays) || 0);
+  let surveyorCost = Math.max(0, Number(options.surveyorCost) || 0);
+  if (surveyorCost === 0 && maxPieceWeightKg > 35000) {
+    surveyorCost = 1500;
+  }
+  const inlandCost = Math.max(0, Number(options.inlandCost || options.inlandTrucksCount) || 0);
+  const customsCost = Math.max(0, Number(options.customsCost) || 0);
+  const merchandiseValue = Math.max(0, Number(options.merchandiseValue || options.cargoValue) || 0);
+
+  // Superficie aproximada para almacenaje muelle/terminal
+  let totalAreaM2 = 0;
+  let roRoCount = 0;
+  const roRoRegex = /camion|vehiculo|trailer|tractor|coche|furgoneta/i;
+  for (const it of (Array.isArray(items) ? items : [])) {
+    const q = Math.max(1, Number(it.quantity) || 1);
+    const l = Math.max(0, Number(it.length ?? it.length_m) || 0);
+    const w = Math.max(0, Number(it.width ?? it.width_m) || 0);
+    totalAreaM2 += q * (l * w);
+    const typ = String(it.type || '');
+    if (roRoRegex.test(typ) || roRoRegex.test(normalizeStr(typ))) {
+      roRoCount += q;
+    }
+  }
+  const terminalStorageCost = Math.ceil(totalAreaM2) * storageDays * 2;
+
+  // =========================================================================
+  // 1. SUB-BLOQUE: FLETE MARÍTIMO (OCEAN FREIGHT / TCE BUQUE)
+  // =========================================================================
+  let oceanFreightSubtotal = 0;
+  const oceanFreightItems = [];
+
+  if (isUnderThreshold) {
+    // Modalidad LCL
+    const oceanFreightRatePerRt = 65.0;
+    oceanFreightSubtotal = Math.round(revenueTons * oceanFreightRatePerRt * 100) / 100;
+    oceanFreightItems.push({
+      concept: 'Flete Marítimo LCL Base (Ocean Freight)',
+      rate: oceanFreightRatePerRt,
+      basis: `${revenueTons.toFixed(2)} RT (W/M)`,
+      amount: oceanFreightSubtotal,
+      currency,
+      description: 'Tarifa base de flete marítimo internacional en régimen de grupaje consolidado',
+    });
+  } else {
+    // Modalidad Fletamento Completo
+    const freightRatePerRt = 65.0;
+    oceanFreightSubtotal = Math.round(revenueTons * freightRatePerRt * 100) / 100;
+    const tceDaily = assessment?.tce || assessment?.timeCharterEquivalent?.dailyUsd || 8500;
+    const vesselName = assessment?.suggestedVessel?.vesselType || 'Buque de Carga General / Coaster';
+
+    oceanFreightItems.push({
+      concept: 'Flete Marítimo Buque Completo (Ocean Freight / TCE)',
+      rate: freightRatePerRt,
+      basis: `${revenueTons.toFixed(2)} RT`,
+      amount: oceanFreightSubtotal,
+      currency,
+      tceDaily,
+      suggestedVessel: vesselName,
+      description: `Flete de travesía marítima para buque fletado (${vesselName}, TCE equivalente: ${tceDaily.toLocaleString('es-ES')} USD/día)`,
+    });
+  }
+
+  // =========================================================================
+  // 2. SUB-BLOQUE: COSTES FOB Y OPERATIVA PORTUARIA
+  // =========================================================================
+  let fobPortOperationsSubtotal = 0;
+  const fobPortOperationsItems = [];
+
+  if (isUnderThreshold) {
+    // Desglose de costes operativos portuarios en régimen LCL
+    const cfsOriginRatePerRt = 22.0;
+    const cfsDestRatePerRt = 25.0;
+    const portT3RatePerRt = 4.5;
+    const blFee = 85.0;
+
+    const cfsOriginCost = Math.round(revenueTons * cfsOriginRatePerRt * 100) / 100;
+    const cfsDestCost = Math.round(revenueTons * cfsDestRatePerRt * 100) / 100;
+    const portT3Cost = Math.round(revenueTons * portT3RatePerRt * 100) / 100;
+
+    fobPortOperationsItems.push({
+      concept: 'Manipulación y Consolidación CFS en Muelle Origen',
+      rate: cfsOriginRatePerRt,
+      basis: `${revenueTons.toFixed(2)} RT`,
+      amount: cfsOriginCost,
+      category: 'Manipulación en Muelle',
+    });
+    fobPortOperationsItems.push({
+      concept: 'Manipulación y Desconsolidación CFS en Muelle Destino',
+      rate: cfsDestRatePerRt,
+      basis: `${revenueTons.toFixed(2)} RT`,
+      amount: cfsDestCost,
+      category: 'Manipulación en Muelle',
+    });
+    fobPortOperationsItems.push({
+      concept: 'Tasas Portuarias sobre Mercancía (T3 / Wharfage)',
+      rate: portT3RatePerRt,
+      basis: `${revenueTons.toFixed(2)} RT`,
+      amount: portT3Cost,
+      category: 'Tasas Portuarias',
+    });
+    fobPortOperationsItems.push({
+      concept: 'Emisión Documental B/L y Gestión de Despacho Portuario',
+      rate: blFee,
+      basis: 'Tarifa Fija',
+      amount: blFee,
+      category: 'Documentación y Despacho',
+    });
+  } else {
+    // Desglose de costes operativos portuarios en régimen Breakbulk / Full Charter
+    const isBigBags = profile?.isMassiveOrBigBags || isBulkOrBigBagsCargo(items);
+
+    // Estiba y medios portuarios
+    const stevedoreGangs = Math.max(1, Math.ceil(totalPieces / 15));
+    const stevedoringGangsCost = stevedoreGangs * 1200;
+    fobPortOperationsItems.push({
+      concept: `Cuadrillas de Estibadores en Muelle (${stevedoreGangs} turno${stevedoreGangs === 1 ? '' : 's'})`,
+      units: stevedoreGangs,
+      unitCost: 1200,
+      amount: stevedoringGangsCost,
+      category: 'Manipulación en Muelle',
+    });
+
+    if (maxPieceWeightKg > 8000 && !isBigBags) {
+      const heavyLiftCost = 2500;
+      fobPortOperationsItems.push({
+        concept: 'Grúa Auxiliar de Muelle Heavy Lift (Izado de Alta Capacidad)',
+        units: 1,
+        unitCost: 2500,
+        amount: heavyLiftCost,
+        category: 'Manipulación en Muelle',
+      });
+    }
+
+    if (roRoCount > 0) {
+      const mafiUnits = roRoCount;
+      const mafiCost = mafiUnits * 300;
+      fobPortOperationsItems.push({
+        concept: `Plataformas MAFI / Roll Trailers (${mafiUnits} unid.)`,
+        units: mafiUnits,
+        unitCost: 300,
+        amount: mafiCost,
+        category: 'Manipulación en Muelle',
+      });
+    }
+
+    // Trincaje y estiba
+    if (isBigBags) {
+      const slingsCount = Math.max(1, Math.ceil(totalPieces / 4));
+      const slingsCost = slingsCount * 40;
+      const shacklesCost = (slingsCount * 2) * 15;
+      fobPortOperationsItems.push({
+        concept: `Eslingas y Medios Neumáticos de Estiba en Bloque (${slingsCount} unid.)`,
+        units: slingsCount,
+        amount: slingsCost + shacklesCost,
+        category: 'Trincaje y Estiba',
+      });
+    } else {
+      const dunnageCount = Math.ceil(totalWeightTons / 5);
+      const chainsCount = roRoCount * 4;
+      const slingsCount = Math.ceil(totalPieces / 2);
+      const shacklesCount = (slingsCount * 2) + (chainsCount * 2);
+      const lashingCost = (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40) + (shacklesCount * 15);
+
+      fobPortOperationsItems.push({
+        concept: 'Materiales y Mano de Obra de Trincaje (Dunnage, Cadenas, Eslingas, Grilletes)',
+        units: totalPieces,
+        amount: lashingCost,
+        category: 'Trincaje y Estiba',
+      });
+    }
+  }
+
+  // Servicios Asociados y Periféricos
+  if (terminalStorageCost > 0 || storageDays > 0) {
+    fobPortOperationsItems.push({
+      concept: `Almacenaje en Terminal Portuaria (${storageDays} día${storageDays === 1 ? '' : 's'}, ${Math.ceil(totalAreaM2)} m²)`,
+      units: storageDays,
+      amount: terminalStorageCost,
+      category: 'Servicios Asociados',
+    });
+  }
+
+  if (surveyorCost > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Inspección Pericial / Surveyor Portuario Independiente',
+      units: 1,
+      amount: surveyorCost,
+      category: 'Servicios Asociados',
+    });
+  }
+
+  if (inlandCost > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Transporte Terrestre Inland / Acarreo Portuario',
+      units: 1,
+      amount: inlandCost,
+      category: 'Servicios Asociados',
+    });
+  }
+
+  if (customsCost > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Despacho Aduanero y Tramitación de Aranceles',
+      units: 1,
+      amount: customsCost,
+      category: 'Servicios Asociados',
+    });
+  }
+
+  if (merchandiseValue > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Valor de la Mercancía / Cobertura y Seguro Repercutible',
+      units: 1,
+      amount: merchandiseValue,
+      category: 'Valor de Mercancía',
+    });
+  }
+
+  // Suma exacta del Subtotal FOB y Operativa Portuaria
+  fobPortOperationsSubtotal = fobPortOperationsItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+  fobPortOperationsSubtotal = Math.round(fobPortOperationsSubtotal * 100) / 100;
+
+  // =========================================================================
+  // 3. SUBTOTALES Y TOTAL GLOBAL (ALL-IN)
+  // =========================================================================
+  const totalCostAllIn = Math.round((oceanFreightSubtotal + fobPortOperationsSubtotal) * 100) / 100;
+  const marginPercentage = Number(options.marginPercent) || 15;
+  const totalQuotationAllIn = Math.round((totalCostAllIn * (1 + (marginPercentage / 100))) * 100) / 100;
+  const marginAmount = Math.round((totalQuotationAllIn - totalCostAllIn) * 100) / 100;
+
+  const formatCurrency = (val) => `${Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+
+  const summaryText = [
+    `📊 DESGLOSE FINANCIERO SEPARADO (SEACHARTER CORE PRO):`,
+    `🌊 Subtotal Flete Marítimo / TCE: ${formatCurrency(oceanFreightSubtotal)} (${isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo'})`,
+    `🏗️ Subtotal Costes FOB y Operativa Portuaria: ${formatCurrency(fobPortOperationsSubtotal)} (Manipulación muelle, estiba/trincaje, tasas y servicios asociados)`,
+    `💰 Coste Total Estimado All-In: ${formatCurrency(totalCostAllIn)}`,
+    `🏷️ Importe Total Cotización / Venta (All-In): ${formatCurrency(totalQuotationAllIn)} (Margen: ${marginPercentage}%, ${formatCurrency(marginAmount)})`
+  ].join('\n');
+
+  return {
+    currency,
+    isSeparatedBreakdown: true,
+    subtotalOceanFreight: oceanFreightSubtotal,
+    subtotalFobPortOperations: fobPortOperationsSubtotal,
+    subtotals: {
+      oceanFreight: oceanFreightSubtotal,
+      fobAndPortOperations: fobPortOperationsSubtotal,
+    },
+    oceanFreight: {
+      concept: 'Flete Marítimo / Ocean Freight (TCE Buque)',
+      subtotal: oceanFreightSubtotal,
+      currency,
+      mode: isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo',
+      tceDaily: isUnderThreshold ? null : (assessment?.tce || 8500),
+      items: oceanFreightItems,
+    },
+    fobAndPortOperations: {
+      concept: 'Costes FOB y Operativa Portuaria',
+      subtotal: fobPortOperationsSubtotal,
+      currency,
+      items: fobPortOperationsItems,
+    },
+    totalCostAllIn,
+    totalQuotationAllIn,
+    salePriceAllIn: totalQuotationAllIn,
+    marginPercentage,
+    marginAmount,
+    summaryText,
+  };
+}
+
+/**
  * Función consolidadora para evaluar completamente la operativa portuaria y de fletamento.
  *
  * @param {Array<Object>} items Lista de ítems de la orden
- * @returns {Object} Evaluación consolidada (orderTotals, charteringAssessment, operationalProfile)
+ * @param {Object} options Opciones financieras y operativas
+ * @returns {Object} Evaluación consolidada (orderTotals, charteringAssessment, operationalProfile, financialBreakdown)
  */
-function evaluateOrderPortOperations(items = []) {
+function evaluateOrderPortOperations(items = [], options = {}) {
   const orderTotals = calculateOrderTotals(items);
   const charteringAssessment = evaluateCharteringModel(orderTotals, items);
   const operationalProfile = buildOperationalProfile(items, orderTotals);
+  const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, options);
 
   return {
     orderTotals,
     charteringAssessment,
     operationalProfile,
+    financialBreakdown,
   };
 }
 
@@ -894,24 +1199,15 @@ export async function handler(req, context) {
         body?.description
       );
 
-      // Si no se adjuntó archivo en Base64 pero se envió una orden en texto plano desde el chat
-      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && (typeof conversationalText === 'string' && conversationalText.trim())) {
-        const textStr = conversationalText.trim();
-        isChatOrder = true;
-        rawData = Buffer.from(textStr, 'utf8').toString('base64');
-        if (!mimeType) mimeType = 'text/plain';
-        fileName = fileName || 'orden_conversacional.txt';
-      }
-
-      // Soporte directo para peticiones con lista de items ya estructurados
-      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && Array.isArray(body?.items) && body.items.length > 0) {
-        const rawItems = body.items;
-        const items = rawItems.map((it, idx) => {
+      // Soporte directo prioritario para peticiones con lista de items ya estructurados
+      const rawStructuredItems = Array.isArray(body?.items) ? body.items : (Array.isArray(body?.cargo_items) ? body.cargo_items : null);
+      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && Array.isArray(rawStructuredItems) && rawStructuredItems.length > 0) {
+        const items = rawStructuredItems.map((it, idx) => {
           const qty = Number(it.quantity);
-          const len = Number(it.length);
-          const wid = Number(it.width);
-          const hgt = Number(it.height);
-          const wt = Number(it.weight);
+          const len = Number(it.length ?? it.length_m);
+          const wid = Number(it.width ?? it.width_m);
+          const hgt = Number(it.height ?? it.height_m);
+          const wt = Number(it.weight ?? it.unit_weight_kg);
 
           const lengthVal = !isNaN(len) && len > 0 ? len : 0;
           const widthVal = !isNaN(wid) && wid > 0 ? wid : 0;
@@ -945,6 +1241,7 @@ export async function handler(req, context) {
         const orderTotals = calculateOrderTotals(items);
         const charteringAssessment = evaluateCharteringModel(orderTotals, items);
         const operationalProfile = buildOperationalProfile(items, orderTotals);
+        const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
 
         return new Response(JSON.stringify({
           success: true,
@@ -952,6 +1249,8 @@ export async function handler(req, context) {
           orderTotals,
           charteringAssessment,
           operationalProfile,
+          financialBreakdown,
+          reply: financialBreakdown.summaryText,
           documentMeta: {
             name: fileName || 'Items_Estructurados.json',
             size: 0,
@@ -966,6 +1265,15 @@ export async function handler(req, context) {
             'Content-Type': 'application/json',
           },
         });
+      }
+
+      // Si no se adjuntó archivo en Base64 pero se envió una orden en texto plano desde el chat
+      if ((!rawData || typeof rawData !== 'string' || !rawData.trim()) && (typeof conversationalText === 'string' && conversationalText.trim())) {
+        const textStr = conversationalText.trim();
+        isChatOrder = true;
+        rawData = Buffer.from(textStr, 'utf8').toString('base64');
+        if (!mimeType) mimeType = 'text/plain';
+        fileName = fileName || 'orden_conversacional.txt';
       }
 
       if (!rawData || typeof rawData !== 'string' || !rawData.trim()) {
@@ -1269,6 +1577,7 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
     const orderTotals = calculateOrderTotals(items);
     const charteringAssessment = evaluateCharteringModel(orderTotals, items);
     const operationalProfile = buildOperationalProfile(items, orderTotals);
+    const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
 
     const fullDataUrl = `data:${mimeType};base64,${pureBase64}`;
 
@@ -1278,6 +1587,8 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       orderTotals,
       charteringAssessment,
       operationalProfile,
+      financialBreakdown,
+      reply: financialBreakdown.summaryText,
       documentMeta: {
         name: fileName,
         size: fileBuffer.length,
@@ -1302,6 +1613,7 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       orderTotals: null,
       charteringAssessment: null,
       operationalProfile: null,
+      financialBreakdown: null,
     }), {
       status: 500,
       headers: {
@@ -1322,6 +1634,7 @@ handler.evaluateCharteringModel = evaluateCharteringModel;
 handler.isBulkOrBigBagsCargo = isBulkOrBigBagsCargo;
 handler.buildOperationalProfile = buildOperationalProfile;
 handler.evaluateOrderPortOperations = evaluateOrderPortOperations;
+handler.calculateFinancialBreakdown = calculateFinancialBreakdown;
 handler.detectFileMimeType = detectFileMimeType;
 handler.isExcelFormat = isExcelFormat;
 handler.isWordFormat = isWordFormat;

@@ -205,15 +205,30 @@ export function parseProjectInstruction(rawText) {
     detectedActions.push(`Nueva pieza añadida: "${pieceType}" (${l}x${w}x${h} m, ${Number(pieceWeight).toLocaleString('es-ES')} kg)`);
   }
 
+  // 7. Solicitud de desglose financiero separado (Flete vs. FOB / Operativa Portuaria)
+  const isBreakdown = /(?:desglose|desglos|separar|separa|subtotales?|flete\s*vs|flete\s*y\s*fob|fob\s*y\s*flete|all-in|costes?\s*separados?|desglose\s*financiero)/i.test(lower);
+  if (isBreakdown) {
+    payload.requestFinancialBreakdown = true;
+    payload.showFinancialBreakdown = true;
+    payload.forceOpenModal = true;
+    detectedActions.push('Desglose financiero activado: separación rigurosa de Flete Marítimo (Ocean Freight / TCE) y Costes FOB / Operativa Portuaria');
+  }
+
   // Generación de respuesta explicativa sin comportamiento de "loro"
   let agentResponse = '';
   if (detectedActions.length > 0) {
     agentResponse = `✅ Entendido. He procesado tu solicitud y aplicado los siguientes cambios:\n• ` + detectedActions.join('\n• ');
-    if (payload.addPiece || payload.forceOpenModal) {
+    if (payload.requestFinancialBreakdown) {
+      agentResponse += '\n\n📊 Estructura financiera desglosada y sincronizada en el workspace:\n' +
+        '• Subtotal Flete Marítimo / TCE del buque.\n' +
+        '• Subtotal Costes FOB y Operativa Portuaria (muelle, trincaje, tasas y servicios asociados).\n' +
+        '• Importe Total de Cotización / Venta (All-In).\n' +
+        'Los subtotales ya son visibles de forma transparente en el Project Cargo Builder.';
+    } else if (payload.addPiece || payload.forceOpenModal) {
       agentResponse += '\n\n📂 He forzado la apertura del Project Cargo Builder para que puedas verificar la estiba y los costes asociados.';
     }
   } else {
-    agentResponse = `He analizado tu mensaje: "${text}". Puedes pedirme órdenes concretas como "almacenaje 5 días", "surveyor 1500", "transporte 800", "aduanas 450" o "añadir pieza" para sincronizar automáticamente el workspace del proyecto.`;
+    agentResponse = `He analizado tu mensaje: "${text}". Puedes pedirme órdenes concretas como "almacenaje 5 días", "surveyor 1500", "transporte 800", "aduanas 450", "desglose financiero" o "añadir pieza" para sincronizar automáticamente el workspace del proyecto.`;
   }
 
   return {
