@@ -1,7 +1,6 @@
-# Redirecciones
 [[redirects]]
   from = "/api/databridge-port-tariff"
-  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
+  to = https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff
   status = 200
   force = true
 
@@ -11,38 +10,33 @@
   status = 200
   force = true
 
-# Configuración de build
 [build]
+  # Compile the application only; database lifecycle is managed externally.
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
-# Configuración de funciones
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  timeout = 60
+  timeout = 60   # Máximo en plan gratuito (segundos). En Pro es 60.
 
-# Función específica con archivos incluidos
 [functions."nlp-voyage-extract"]
   included_files = ["wpi.csv"]
 
-# Entorno de desarrollo (si usas Netlify Dev)
 [dev]
   command = "npm run dev"
   targetPort = 5173
   port = 8889
 
-# Variables de entorno para el build
 [build.environment]
   NODE_ENV = "production"
 
-# Cabeceras personalizadas
 [[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval' blob:; worker-src 'self' blob:; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';"
 
-# Redirecciones adicionales
 [[redirects]]
   from = "/api/syncPull/*"
   to = "/.netlify/functions/sync-pull/:splat"
