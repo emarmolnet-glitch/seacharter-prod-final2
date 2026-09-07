@@ -329,6 +329,234 @@ function calculateOrderTotals(items = []) {
   };
 }
 
+// =============================================================================
+// CATÁLOGO DE PUERTOS Y DISTANCIAS NÁUTICAS DE REFERENCIA (POL / POD)
+// =============================================================================
+const WORLD_PORTS = {
+  valencia: { name: 'Valencia, Spain', lat: 39.45, lon: -0.32 },
+  barcelona: { name: 'Barcelona, Spain', lat: 41.35, lon: 2.17 },
+  bilbao: { name: 'Bilbao, Spain', lat: 43.35, lon: -3.05 },
+  algeciras: { name: 'Algeciras, Spain', lat: 36.13, lon: -5.44 },
+  rotterdam: { name: 'Rotterdam, Netherlands', lat: 51.95, lon: 4.14 },
+  antwerp: { name: 'Antwerp, Belgium', lat: 51.27, lon: 4.33 },
+  hamburg: { name: 'Hamburg, Germany', lat: 53.53, lon: 9.96 },
+  houston: { name: 'Houston, USA', lat: 29.74, lon: -95.27 },
+  'new orleans': { name: 'New Orleans, USA', lat: 29.95, lon: -90.07 },
+  'new york': { name: 'New York, USA', lat: 40.67, lon: -74.04 },
+  santos: { name: 'Santos, Brazil', lat: -23.95, lon: -46.30 },
+  'buenos aires': { name: 'Buenos Aires, Argentina', lat: -34.60, lon: -58.37 },
+  alexandria: { name: 'Alexandria, Egypt', lat: 31.20, lon: 29.88 },
+  genoa: { name: 'Genoa, Italy', lat: 44.41, lon: 8.92 },
+  singapore: { name: 'Singapore', lat: 1.28, lon: 103.85 },
+  shanghai: { name: 'Shanghai, China', lat: 31.23, lon: 121.50 },
+  'jebel ali': { name: 'Jebel Ali, UAE', lat: 25.01, lon: 55.06 },
+  dubai: { name: 'Dubai, UAE', lat: 25.27, lon: 55.30 },
+  casablanca: { name: 'Casablanca, Morocco', lat: 33.60, lon: -7.60 },
+  dakar: { name: 'Dakar, Senegal', lat: 14.68, lon: -17.43 }
+};
+
+const KNOWN_PORT_DISTANCES_NM = {
+  'valencia-houston': 4850,
+  'houston-valencia': 4850,
+  'bilbao-rotterdam': 750,
+  'rotterdam-bilbao': 750,
+  'valencia-rotterdam': 1950,
+  'rotterdam-valencia': 1950,
+  'valencia-alexandria': 1600,
+  'alexandria-valencia': 1600,
+  'barcelona-santos': 5100,
+  'santos-barcelona': 5100,
+  'algeciras-houston': 4650,
+  'houston-algeciras': 4650,
+  'antwerp-houston': 4900,
+  'houston-antwerp': 4900,
+  'rotterdam-houston': 4920,
+  'houston-rotterdam': 4920
+};
+
+/**
+ * Calcula la distancia náutica aproximada en millas náuticas (NM) entre dos puertos.
+ *
+ * @param {string} pol Puerto de Carga (origen)
+ * @param {string} pod Puerto de Descarga (destino)
+ * @returns {number} Distancia en Millas Náuticas (NM)
+ */
+function calculatePortDistanceNm(pol, pod) {
+  const normPol = String(pol || '').trim().toLowerCase();
+  const normPod = String(pod || '').trim().toLowerCase();
+  if (!normPol || !normPod) return 1500;
+  if (normPol === normPod) return 50;
+
+  const key = `${normPol}-${normPod}`;
+  if (KNOWN_PORT_DISTANCES_NM[key]) {
+    return KNOWN_PORT_DISTANCES_NM[key];
+  }
+
+  const findPort = (name) => {
+    for (const [k, p] of Object.entries(WORLD_PORTS)) {
+      if (name.includes(k) || k.includes(name)) return p;
+    }
+    return null;
+  };
+
+  const p1 = findPort(normPol);
+  const p2 = findPort(normPod);
+
+  if (p1 && p2) {
+    const earthRadiusNm = 3440.065;
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const dLat = toRad(p2.lat - p1.lat);
+    const dLon = toRad(p2.lon - p1.lon);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+    // Factor de ruta marítima 1.20 por desvío de masas terrestres y canales
+    const nauticalDist = Math.round(earthRadiusNm * c * 1.20);
+    return Math.max(100, nauticalDist);
+  }
+
+  return 1500;
+}
+
+/**
+ * Motor paramétrico de rotación de buque y flete marítimo TCE.
+ *
+ * @param {Object} params Parámetros de navegación y ritmos
+ * @returns {Object} Desglose paramétrico de duración de rotación y coste de flete TCE
+ */
+function calculateRotationAndTce({
+  totalWeightTons = 0,
+  loadingRateMtDay = 1200,
+  dischargingRateMtDay = 1000,
+  distanceNm = 1500,
+  serviceSpeedKnots = 12.0,
+  vesselDailyRateUsd = 11500,
+  exchangeRateUsdToEur = 0.92,
+  pol = 'Valencia',
+  pod = 'Houston'
+} = {}) {
+  const weight = Math.max(0, Number(totalWeightTons) || 0);
+  const loadRate = Math.max(1, Number(loadingRateMtDay) || 1200);
+  const dischRate = Math.max(1, Number(dischargingRateMtDay) || 1000);
+  const dist = Math.max(10, Number(distanceNm) || 1500);
+  const speed = Math.max(1, Number(serviceSpeedKnots) || 12.0);
+  const dailyRate = Math.max(0, Number(vesselDailyRateUsd) || 11500);
+  const exRate = Math.max(0.01, Number(exchangeRateUsdToEur) || 0.92);
+
+  // 1. Días de Carga = Peso Total de la Carga (MT) / Ritmo de Carga (MT/día)
+  const loadingDays = Math.round((weight / loadRate) * 100) / 100;
+
+  // 2. Días de Descarga = Peso Total de la Carga (MT) / Ritmo de Descarga (MT/día)
+  const dischargingDays = Math.round((weight / dischRate) * 100) / 100;
+
+  // 3. Días de Navegación = Distancia Náutica POL-POD / (Velocidad de Servicio del Buque en nudos × 24)
+  const navigationDays = Math.round((dist / (speed * 24)) * 100) / 100;
+
+  // 4. Duración Total de la Rotación del Buque (D_total)
+  const totalRotationDays = Math.round((loadingDays + dischargingDays + navigationDays) * 100) / 100;
+
+  // 5. Flete Marítimo (TCE) = D_total × Tarifa Diaria (USD/día) × Tipo de Cambio aplicable
+  const oceanFreightTceUsd = Math.round(totalRotationDays * dailyRate * 100) / 100;
+  const oceanFreightTceEur = Math.round(oceanFreightTceUsd * exRate * 100) / 100;
+
+  return {
+    pol: String(pol || 'Valencia').trim(),
+    pod: String(pod || 'Houston').trim(),
+    totalWeightTons: weight,
+    loadingRateMtDay: loadRate,
+    dischargingRateMtDay: dischRate,
+    distanceNm: dist,
+    serviceSpeedKnots: speed,
+    dailyHireRateUsd: dailyRate,
+    exchangeRateUsdToEur: exRate,
+    loadingDays,
+    dischargingDays,
+    navigationDays,
+    totalRotationDays,
+    oceanFreightTceUsd,
+    oceanFreightTceEur,
+    formula: 'Flete Marítimo (TCE) = D_total × Tarifa diaria del buque (USD/día) × Tipo de cambio aplicable',
+    formulaRotation: 'D_total = Días de Carga + Días de Descarga + Días de Navegación',
+  };
+}
+
+/**
+ * Cálculo y gestión de demoras portuarias (Demurrage) por exceso de tiempo de operativa en muelle.
+ *
+ * @param {Object} params Tiempos permitidos y tiempos reales en muelle
+ * @returns {Object} Liquidación de demoras y penalizaciones
+ */
+function calculateDemurrage({
+  allowedLoadingDays = 0,
+  allowedDischargingDays = 0,
+  actualLoadingDays = null,
+  actualDischargingDays = null,
+  actualPortDays = null,
+  demurrageDays = null,
+  demurrageRateDailyUsd = 11500,
+  exchangeRateUsdToEur = 0.92
+} = {}) {
+  const allowedLoad = Math.max(0, Number(allowedLoadingDays) || 0);
+  const allowedDisch = Math.max(0, Number(allowedDischargingDays) || 0);
+  const allowedTotalPortDays = Math.round((allowedLoad + allowedDisch) * 100) / 100;
+
+  const actualLoad = actualLoadingDays !== null && actualLoadingDays !== undefined && actualLoadingDays !== ''
+    ? Math.max(0, Number(actualLoadingDays)) : null;
+  const actualDisch = actualDischargingDays !== null && actualDischargingDays !== undefined && actualDischargingDays !== ''
+    ? Math.max(0, Number(actualDischargingDays)) : null;
+  const actualPort = actualPortDays !== null && actualPortDays !== undefined && actualPortDays !== ''
+    ? Math.max(0, Number(actualPortDays)) : null;
+  const explicitDemurrage = demurrageDays !== null && demurrageDays !== undefined && demurrageDays !== ''
+    ? Math.max(0, Number(demurrageDays)) : null;
+
+  let loadingDemurrageDays = 0;
+  if (actualLoad !== null && actualLoad > allowedLoad) {
+    loadingDemurrageDays = Math.round((actualLoad - allowedLoad) * 100) / 100;
+  }
+
+  let dischargingDemurrageDays = 0;
+  if (actualDisch !== null && actualDisch > allowedDisch) {
+    dischargingDemurrageDays = Math.round((actualDisch - allowedDisch) * 100) / 100;
+  }
+
+  let totalDemurrageDays = 0;
+  if (explicitDemurrage !== null && explicitDemurrage > 0) {
+    totalDemurrageDays = explicitDemurrage;
+  } else if (actualLoad !== null || actualDisch !== null) {
+    totalDemurrageDays = Math.round((loadingDemurrageDays + dischargingDemurrageDays) * 100) / 100;
+  } else if (actualPort !== null && actualPort > allowedTotalPortDays) {
+    totalDemurrageDays = Math.round((actualPort - allowedTotalPortDays) * 100) / 100;
+  }
+
+  const dailyRate = Math.max(0, Number(demurrageRateDailyUsd) || 0);
+  const exRate = Math.max(0.01, Number(exchangeRateUsdToEur) || 0.92);
+
+  const totalPenaltyUsd = Math.round(totalDemurrageDays * dailyRate * 100) / 100;
+  const totalPenaltyEur = Math.round(totalPenaltyUsd * exRate * 100) / 100;
+
+  const hasDemurrage = totalDemurrageDays > 0;
+  const status = hasDemurrage ? 'EXCESO DE ESTADÍA (ON DEMURRAGE)' : 'DENTRO DE PLANCHA (ON SCHEDULE)';
+
+  return {
+    hasDemurrage,
+    status,
+    allowedLoadingDays: allowedLoad,
+    allowedDischargingDays: allowedDisch,
+    allowedTotalPortDays,
+    actualLoadingDays: actualLoad !== null ? actualLoad : allowedLoad,
+    actualDischargingDays: actualDisch !== null ? actualDisch : allowedDisch,
+    actualTotalPortDays: actualPort !== null ? actualPort : (actualLoad !== null && actualDisch !== null ? Math.round((actualLoad + actualDisch) * 100) / 100 : allowedTotalPortDays),
+    loadingDemurrageDays,
+    dischargingDemurrageDays,
+    demurrageDays: totalDemurrageDays,
+    demurrageRateDailyUsd: dailyRate,
+    demurrageRateDailyEur: Math.round(dailyRate * exRate * 100) / 100,
+    totalPenaltyUsd,
+    totalPenaltyEur,
+  };
+}
+
 /**
  * Evalúa la modalidad de fletamento según el umbral de 40 toneladas:
  * - Si peso < 40t: Omite por completo el cálculo de TCE y fletamento completo.
@@ -337,9 +565,10 @@ function calculateOrderTotals(items = []) {
  *
  * @param {Object} orderTotals Resumen de totales de la orden
  * @param {Array<Object>} items Lista de ítems
+ * @param {Object} options Opciones operativas y de ruta (POL, POD, ritmos, demoras)
  * @returns {Object} Evaluación de fletamento y desglose económico
  */
-function evaluateCharteringModel(orderTotals, items = []) {
+function evaluateCharteringModel(orderTotals, items = [], options = {}) {
   const totalWeightTons = Number(orderTotals?.totalWeightTons) || 0;
   const totalVolumeCbm = Number(orderTotals?.totalVolumeCbm) || 0;
   const maxPieceWeightTons = Number(orderTotals?.maxPieceWeightTons) || 0;
@@ -450,24 +679,63 @@ function evaluateCharteringModel(orderTotals, items = []) {
     portDisbursementsBase = 24000;
   }
 
-  // Travesía de referencia náutica (1,500 NM estándar)
-  const voyageDistanceNm = 1500;
-  const seaDays = Math.max(2, Math.round((voyageDistanceNm / (serviceSpeed * 24)) * 10) / 10);
-
-  // Ritmos de carga y descarga portuaria según tipo de mercancía
   const isBulkOrBags = isBulkOrBigBagsCargo(items);
-  const loadRateTonsPerDay = isBulkOrBags ? 1200 : (maxPieceWeightTons > 30 ? 600 : 850);
-  const dischargeRateTonsPerDay = isBulkOrBags ? 1000 : (maxPieceWeightTons > 30 ? 500 : 750);
+  const pol = String(options.pol || options.port_of_loading || options.polPort || 'Valencia').trim();
+  const pod = String(options.pod || options.port_of_discharge || options.podPort || 'Houston').trim();
 
-  const loadPortDays = Math.max(1, Math.round((totalWeightTons / loadRateTonsPerDay) * 10) / 10);
-  const dischargePortDays = Math.max(1, Math.round((totalWeightTons / dischargeRateTonsPerDay) * 10) / 10);
-  const bufferManiobraNorDays = 1.0;
-  const portDays = Math.round((loadPortDays + dischargePortDays + bufferManiobraNorDays) * 10) / 10;
-  const totalVoyageDays = Math.round((seaDays + portDays) * 10) / 10;
+  // Distancia náutica POL-POD (calculada paramétricamente o provista)
+  let voyageDistanceNm = Number(options.distanceNm || options.voyageDistanceNm || options.distance);
+  if (!voyageDistanceNm || isNaN(voyageDistanceNm) || voyageDistanceNm <= 0) {
+    voyageDistanceNm = calculatePortDistanceNm(pol, pod);
+  }
 
-  // Flete bruto estimado por tonelada según tamaño del lote
-  const freightRatePerTon = totalWeightTons < 3000 ? 52.0 : (totalWeightTons < 10000 ? 42.0 : (totalWeightTons < 35000 ? 32.0 : 25.0));
-  const grossFreightRevenue = Math.round(totalWeightTons * freightRatePerTon * 100) / 100;
+  // Ritmos de carga y descarga portuaria según tipo de mercancía o especificados
+  const defaultLoadRate = isBulkOrBags ? 1200 : (maxPieceWeightTons > 30 ? 600 : 850);
+  const defaultDischargeRate = isBulkOrBags ? 1000 : (maxPieceWeightTons > 30 ? 500 : 750);
+
+  const loadRateTonsPerDay = Math.max(1, Number(options.loadingRate || options.loadingRateMtDay || options.loadRate) || defaultLoadRate);
+  const dischargeRateTonsPerDay = Math.max(1, Number(options.dischargingRate || options.dischargingRateMtDay || options.dischargeRate) || defaultDischargeRate);
+
+  if (options.serviceSpeedKnots || options.serviceSpeed || options.speedKnots) {
+    serviceSpeed = Number(options.serviceSpeedKnots || options.serviceSpeed || options.speedKnots) || serviceSpeed;
+  }
+
+  const dailyHireRate = Number(options.dailyHireRate || options.vesselDailyRateUsd || options.dailyRateUsd) || marketDailyTce;
+  const exchangeRate = Number(options.exchangeRate || options.usdEurExchangeRate) || 0.92;
+
+  // MOTOR DE CÁLCULO DINÁMICO DE ROTACIÓN Y FLETE (TCE)
+  // Días de Carga = Peso Total de la Carga (MT) / Ritmo de Carga (MT/día)
+  // Días de Descarga = Peso Total de la Carga (MT) / Ritmo de Descarga (MT/día)
+  // Días de Navegación = Distancia Náutica POL-POD / (Velocidad de Servicio del Buque en nudos × 24)
+  // D_total = Días de Carga + Días de Descarga + Días de Navegación
+  // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × Tipo de cambio aplicable
+  const rotation = calculateRotationAndTce({
+    totalWeightTons,
+    loadingRateMtDay: loadRateTonsPerDay,
+    dischargingRateMtDay: dischargeRateTonsPerDay,
+    distanceNm: voyageDistanceNm,
+    serviceSpeedKnots: serviceSpeed,
+    vesselDailyRateUsd: dailyHireRate,
+    exchangeRateUsdToEur: exchangeRate,
+    pol,
+    pod,
+  });
+
+  // CÁLCULO Y GESTIÓN DE DEMORAS (DEMURRAGE)
+  const demurrage = calculateDemurrage({
+    allowedLoadingDays: rotation.loadingDays,
+    allowedDischargingDays: rotation.dischargingDays,
+    actualLoadingDays: options.actualLoadingDays,
+    actualDischargingDays: options.actualDischargingDays,
+    actualPortDays: options.actualPortDays,
+    demurrageDays: options.demurrageDays,
+    demurrageRateDailyUsd: options.demurrageRate || dailyHireRate,
+    exchangeRateUsdToEur: exchangeRate,
+  });
+
+  const totalVoyageDays = rotation.totalRotationDays;
+  const seaDays = rotation.navigationDays;
+  const portDays = Math.round((rotation.loadingDays + rotation.dischargingDays) * 100) / 100;
 
   // Gastos de viaje del armador (Bunkers + PDA portuaria)
   const bunkerPriceVlsfo = 620; // USD/MT
@@ -477,10 +745,7 @@ function evaluateCharteringModel(orderTotals, items = []) {
   const totalBunkerCost = seaBunkerCost + portBunkerCost;
   const totalVoyageExpenses = totalBunkerCost + portDisbursementsBase;
 
-  // TCE = (Gross Freight - Voyage Expenses) / Total Voyage Duration Days
-  const netVoyageRevenue = grossFreightRevenue - totalVoyageExpenses;
-  const calculatedTceDaily = totalVoyageDays > 0 ? Math.round(netVoyageRevenue / totalVoyageDays) : marketDailyTce;
-  const tceEffectiveDaily = calculatedTceDaily > 0 ? calculatedTceDaily : marketDailyTce;
+  const tceEffectiveDaily = dailyHireRate;
 
   return {
     weightThresholdTons: WEIGHT_THRESHOLD_TONS,
@@ -493,18 +758,36 @@ function evaluateCharteringModel(orderTotals, items = []) {
     tce: tceEffectiveDaily,
     timeCharterEquivalent: {
       dailyUsd: tceEffectiveDaily,
-      calculatedTceDaily,
+      calculatedTceDaily: tceEffectiveDaily,
       marketBenchmarkDailyTce: marketDailyTce,
       totalVoyageDays,
+      rotationDays: totalVoyageDays,
       seaDays,
+      navigationDays: seaDays,
       portDays,
-      grossFreightRevenueUsd: grossFreightRevenue,
-      freightRatePerTonUsd: freightRatePerTon,
+      loadingDays: rotation.loadingDays,
+      dischargingDays: rotation.dischargingDays,
+      pol,
+      pod,
+      distanceNm: voyageDistanceNm,
+      loadingRateMtDay: loadRateTonsPerDay,
+      dischargingRateMtDay: dischargeRateTonsPerDay,
+      serviceSpeedKnots: serviceSpeed,
+      exchangeRateUsdToEur: exchangeRate,
+      oceanFreightTceUsd: rotation.oceanFreightTceUsd,
+      oceanFreightTceEur: rotation.oceanFreightTceEur,
+      grossFreightRevenueUsd: rotation.oceanFreightTceUsd,
       totalVoyageExpensesUsd: totalVoyageExpenses,
       bunkerCostUsd: totalBunkerCost,
       portDisbursementsUsd: portDisbursementsBase,
-      netVoyageRevenueUsd: netVoyageRevenue,
-      formula: 'TCE = (Gross Freight - Voyage Expenses) / Total Voyage Duration Days',
+      demurrage,
+      formula: 'TCE = (Gross Freight - Voyage Expenses) / Total Voyage Duration Days | Flete Marítimo (TCE) = D_total × Tarifa diaria del buque (USD/día) × Tipo de cambio aplicable',
+      formulaFreight: 'Flete Marítimo (TCE) = D_total × Tarifa diaria del buque (USD/día) × Tipo de cambio aplicable',
+      formulaRotation: 'D_total = Días de Carga + Días de Descarga + Días de Navegación',
+    },
+    rotationBreakdown: {
+      ...rotation,
+      demurrage,
     },
     suggestedVessel: {
       vesselType,
@@ -512,10 +795,11 @@ function evaluateCharteringModel(orderTotals, items = []) {
       gear,
       serviceSpeedKnots: serviceSpeed,
       marketDailyTceUsd: marketDailyTce,
+      dailyHireRateUsd: dailyHireRate,
       fuelSeaMtPerDay: seaFuelConsumptionMt,
       fuelPortMtPerDay: portFuelConsumptionMt,
     },
-    reasoning: `El peso total acumulado (${totalWeightTons.toFixed(2)} t) iguala o supera las ${WEIGHT_THRESHOLD_TONS} toneladas. Se aplica el modelo de fletamento marítimo de buque completo (Voyage Charter) y se calcula el TCE del buque sugerido (${vesselType}, ${dwt.toLocaleString('en-US')} DWT).`,
+    reasoning: `El peso total acumulado (${totalWeightTons.toFixed(2)} t) iguala o supera las ${WEIGHT_THRESHOLD_TONS} toneladas. Se aplica el modelo de fletamento marítimo de buque completo (Voyage Charter) con rotación de ${totalVoyageDays.toFixed(2)} días (${rotation.loadingDays.toFixed(2)} d carga + ${rotation.dischargingDays.toFixed(2)} d descarga + ${seaDays.toFixed(2)} d navegación entre ${pol} y ${pod}) y tarifa de ${dailyHireRate.toLocaleString('es-ES')} USD/día.`,
     lclCostEstimation: null,
   };
 }
@@ -780,7 +1064,7 @@ function buildOperationalProfile(items = [], orderTotals) {
  */
 function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessment, operationalProfile, options = {}) {
   const totals = orderTotals || calculateOrderTotals(items);
-  const assessment = charteringAssessment || evaluateCharteringModel(totals, items);
+  const assessment = charteringAssessment || evaluateCharteringModel(totals, items, options);
   const profile = operationalProfile || buildOperationalProfile(items, totals);
 
   const currency = options.currency || 'EUR';
@@ -836,21 +1120,37 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       description: 'Tarifa base de flete marítimo internacional en régimen de grupaje consolidado',
     });
   } else {
-    // Modalidad Fletamento Completo
-    const freightRatePerRt = 65.0;
-    oceanFreightSubtotal = Math.round(revenueTons * freightRatePerRt * 100) / 100;
-    const tceDaily = assessment?.tce || assessment?.timeCharterEquivalent?.dailyUsd || 8500;
+    // Modalidad Fletamento Completo: Multiplicación estricta de D_total por la tarifa diaria del buque (USD/día) y el tipo de cambio aplicable
+    const rot = assessment?.rotationBreakdown || assessment?.timeCharterEquivalent;
+    const D_total = rot?.totalRotationDays ?? rot?.totalVoyageDays ?? 10;
+    const dailyHire = rot?.dailyHireRateUsd ?? rot?.dailyUsd ?? assessment?.tce ?? 8500;
+    const exRate = rot?.exchangeRateUsdToEur ?? (Number(options.exchangeRate || options.usdEurExchangeRate) || 0.92);
+
+    // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × Tipo de cambio aplicable
+    oceanFreightSubtotal = Math.round(D_total * dailyHire * exRate * 100) / 100;
     const vesselName = assessment?.suggestedVessel?.vesselType || 'Buque de Carga General / Coaster';
+    const polName = rot?.pol || options.pol || 'Valencia';
+    const podName = rot?.pod || options.pod || 'Houston';
+    const loadDays = rot?.loadingDays ?? 1;
+    const dischDays = rot?.dischargingDays ?? 1;
+    const navDays = rot?.navigationDays ?? rot?.seaDays ?? 6;
 
     oceanFreightItems.push({
       concept: 'Flete Marítimo Buque Completo (Ocean Freight / TCE)',
-      rate: freightRatePerRt,
-      basis: `${revenueTons.toFixed(2)} RT`,
+      rate: Math.round(dailyHire * exRate * 100) / 100,
+      basis: `${D_total.toFixed(2)} días rotación (${loadDays.toFixed(2)}d carga + ${dischDays.toFixed(2)}d descarga + ${navDays.toFixed(2)}d nav)`,
       amount: oceanFreightSubtotal,
       currency,
-      tceDaily,
+      tceDaily: dailyHire,
       suggestedVessel: vesselName,
-      description: `Flete de travesía marítima para buque fletado (${vesselName}, TCE equivalente: ${tceDaily.toLocaleString('es-ES')} USD/día)`,
+      rotationDays: D_total,
+      loadingDays: loadDays,
+      dischargingDays: dischDays,
+      navigationDays: navDays,
+      pol: polName,
+      pod: podName,
+      exchangeRate: exRate,
+      description: `Flete de travesía marítima para buque fletado (${vesselName}, TCE: ${dailyHire.toLocaleString('es-ES')} USD/día) en rotación ${polName} a ${podName} (${D_total.toFixed(2)} días).`,
     });
   }
 
@@ -1132,6 +1432,22 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     });
   }
 
+  // Gestión y penalización automática por demoras (Demurrage) en muelle
+  const demurrage = assessment?.timeCharterEquivalent?.demurrage || assessment?.rotationBreakdown?.demurrage;
+  if (demurrage && demurrage.hasDemurrage && demurrage.totalPenaltyEur > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Penalización por Demoras en Muelle (Demurrage)',
+      units: demurrage.demurrageDays,
+      unitCost: demurrage.demurrageRateDailyEur,
+      amount: demurrage.totalPenaltyEur,
+      category: 'Servicios Asociados',
+      subCategory: 'Demoras y Penalizaciones Portuarias',
+      basis: `${demurrage.demurrageDays.toFixed(2)} días demora (${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`,
+      status: demurrage.status,
+      description: `Sobrecoste automático por superar plazos de plancha en muelle (${demurrage.allowedTotalPortDays.toFixed(2)} d permitidos vs ${demurrage.actualTotalPortDays.toFixed(2)} d reales). Tarifa diaria de demora: ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día.`,
+    });
+  }
+
   // Suma exacta del Subtotal FOB y Operativa Portuaria
   fobPortOperationsSubtotal = fobPortOperationsItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
   fobPortOperationsSubtotal = Math.round(fobPortOperationsSubtotal * 100) / 100;
@@ -1146,13 +1462,20 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
 
   const formatCurrency = (val) => `${Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 
-  const summaryText = [
+  const summaryLines = [
     `📊 DESGLOSE FINANCIERO SEPARADO (SEACHARTER CORE PRO):`,
     `🌊 Subtotal Flete Marítimo / TCE: ${formatCurrency(oceanFreightSubtotal)} (${isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo'})`,
     `🏗️ Subtotal Costes FOB y Operativa Portuaria: ${formatCurrency(fobPortOperationsSubtotal)} (Manipulación muelle, estiba/trincaje, tasas y servicios asociados)`,
-    `💰 Coste Total Estimado All-In: ${formatCurrency(totalCostAllIn)}`,
-    `🏷️ Importe Total Cotización / Venta (All-In): ${formatCurrency(totalQuotationAllIn)} (Margen: ${marginPercentage}%, ${formatCurrency(marginAmount)})`
-  ].join('\n');
+  ];
+
+  if (demurrage && demurrage.hasDemurrage) {
+    summaryLines.push(`⚠️ Demoras en Muelle (Demurrage): ${formatCurrency(demurrage.totalPenaltyEur)} (${demurrage.demurrageDays.toFixed(2)} días de sobrecoste a ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`);
+  }
+
+  summaryLines.push(`💰 Coste Total Estimado All-In: ${formatCurrency(totalCostAllIn)}`);
+  summaryLines.push(`🏷️ Importe Total Cotización / Venta (All-In): ${formatCurrency(totalQuotationAllIn)} (Margen: ${marginPercentage}%, ${formatCurrency(marginAmount)})`);
+
+  const summaryText = summaryLines.join('\n');
 
   return {
     currency,
@@ -1177,6 +1500,8 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       currency,
       items: fobPortOperationsItems,
     },
+    demurrage: demurrage || null,
+    rotationBreakdown: assessment?.rotationBreakdown || assessment?.timeCharterEquivalent || null,
     totalCostAllIn,
     totalQuotationAllIn,
     salePriceAllIn: totalQuotationAllIn,
@@ -1195,7 +1520,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
  */
 function evaluateOrderPortOperations(items = [], options = {}) {
   const orderTotals = calculateOrderTotals(items);
-  const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+  const charteringAssessment = evaluateCharteringModel(orderTotals, items, options);
   const operationalProfile = buildOperationalProfile(items, orderTotals);
   const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, options);
 
@@ -1441,7 +1766,7 @@ export async function handler(req, context) {
         });
 
         const orderTotals = calculateOrderTotals(items);
-        const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+        const charteringAssessment = evaluateCharteringModel(orderTotals, items, body || {});
         const operationalProfile = buildOperationalProfile(items, orderTotals);
         const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
 
@@ -1777,7 +2102,7 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
     });
 
     const orderTotals = calculateOrderTotals(items);
-    const charteringAssessment = evaluateCharteringModel(orderTotals, items);
+    const charteringAssessment = evaluateCharteringModel(orderTotals, items, body || {});
     const operationalProfile = buildOperationalProfile(items, orderTotals);
     const financialBreakdown = calculateFinancialBreakdown(items, orderTotals, charteringAssessment, operationalProfile, body || {});
 
@@ -1837,6 +2162,11 @@ handler.isBulkOrBigBagsCargo = isBulkOrBigBagsCargo;
 handler.buildOperationalProfile = buildOperationalProfile;
 handler.evaluateOrderPortOperations = evaluateOrderPortOperations;
 handler.calculateFinancialBreakdown = calculateFinancialBreakdown;
+handler.WORLD_PORTS = WORLD_PORTS;
+handler.KNOWN_PORT_DISTANCES_NM = KNOWN_PORT_DISTANCES_NM;
+handler.calculatePortDistanceNm = calculatePortDistanceNm;
+handler.calculateRotationAndTce = calculateRotationAndTce;
+handler.calculateDemurrage = calculateDemurrage;
 handler.detectFileMimeType = detectFileMimeType;
 handler.isExcelFormat = isExcelFormat;
 handler.isWordFormat = isWordFormat;
