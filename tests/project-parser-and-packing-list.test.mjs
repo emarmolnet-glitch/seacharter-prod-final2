@@ -157,15 +157,29 @@ test('8. Function prompts enforce 3-phase filtering (Header, Body, Footer)', () 
 });
 
 test('9. Function prompts specify model gemini-2.5-flash and all transport modes', () => {
-  for (const src of [projectParserSource, parsePackingListSource]) {
-    assert.match(src, /gemini-2\.5-flash/);
-    assert.match(src, /shipping_mode_supported/);
-    assert.match(src, /Paletizado \/ Suelto/);
-    assert.match(src, /Contenedor 20'\/40'/);
-    assert.match(src, /Plataforma \/ Flat Rack/);
-    assert.match(src, /Breakbulk \/ Maquinaria Suelta/);
-    assert.match(src, /Ro-Ro \/ Vehículo Rodado/);
-  }
+  // project-parser implements the official controlled vocabulary
+  assert.match(projectParserSource, /gemini-2\.5-flash/);
+  assert.match(projectParserSource, /shipping_mode_supported/);
+  assert.match(projectParserSource, /Big Bags \/ Granel/);
+  assert.match(projectParserSource, /Contenedor \(FCL \/ LCL\)/);
+  assert.match(projectParserSource, /Plataforma \/ Flat Rack/);
+  assert.match(projectParserSource, /Breakbulk \/ Maquinaria Suelta/);
+  assert.match(projectParserSource, /Ro-Ro \/ Vehículo Rodado/);
+  assert.match(projectParserSource, /Mercancía Ensacada \/ Dry Bulk/);
+  assert.match(projectParserSource, /Maquinaria \/ Equipos Industriales/);
+  assert.match(projectParserSource, /Vehículo \/ Unidades Rodadas/);
+  assert.match(projectParserSource, /Estructura Metálica/);
+  assert.match(projectParserSource, /Carga General \/ General Cargo/);
+  assert.match(projectParserSource, /Suministros \/ Supplies/);
+
+  // parse-packing-list
+  assert.match(parsePackingListSource, /gemini-2\.5-flash/);
+  assert.match(parsePackingListSource, /shipping_mode_supported/);
+  assert.match(parsePackingListSource, /Paletizado \/ Suelto/);
+  assert.match(parsePackingListSource, /Contenedor 20'\/40'/);
+  assert.match(parsePackingListSource, /Plataforma \/ Flat Rack/);
+  assert.match(parsePackingListSource, /Breakbulk \/ Maquinaria Suelta/);
+  assert.match(parsePackingListSource, /Ro-Ro \/ Vehículo Rodado/);
 });
 
 test('10. Functions forbid averaging dimensions or unit weights across items', () => {
@@ -269,7 +283,7 @@ test('12. End-to-end execution parses valid items with exact logistics propertie
   assert.equal(data.items.length, 2);
 
   const item1 = data.items[0];
-  assert.equal(item1.category, 'Equipos de Proceso');
+  assert.equal(item1.category, 'Maquinaria / Equipos Industriales');
   assert.equal(item1.type, 'Bastidor Ósmosis Inversa SWRO');
   assert.equal(item1.quantity, 2);
   assert.equal(item1.length, 6.0);
@@ -279,7 +293,7 @@ test('12. End-to-end execution parses valid items with exact logistics propertie
   assert.equal(item1.shipping_mode_supported, 'Breakbulk / Maquinaria Suelta');
 
   const item2 = data.items[1];
-  assert.equal(item2.category, 'Vehículo');
+  assert.equal(item2.category, 'Vehículo / Unidades Rodadas');
   assert.equal(item2.shipping_mode_supported, 'Ro-Ro / Vehículo Rodado');
   assert.equal(item2.weight, 9200);
 });
