@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Buffer } from "node:buffer";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 export async function handler(event, context) {
   if (event.httpMethod !== 'POST') {
@@ -10,6 +14,24 @@ export async function handler(event, context) {
     const rawBody = event.body || "";
     const buffer = Buffer.from(rawBody, event.isBase64Encoded ? 'base64' : 'utf8');
 
+    // PASO 1: Digitalización y extracción limpia del texto digital del documento
+    let digitalText = "";
+    try {
+      const pdfData = await pdfParse(buffer);
+      digitalText = pdfData.text || "";
+    } catch (parseErr) {
+      console.warn("Extracción estándar falló, usando buffer en texto plano:", parseErr);
+      digitalText = buffer.toString('utf8');
+    }
+
+    // Limpieza de cabeceras binarias multipart si el body llega con envoltorio HTTP crudo
+    if (digitalText.includes("Content-Disposition")) {
+      const parts = digitalText.split("\r\n\r\n");
+      if (parts.length > 1) {
+        digitalText = parts.slice(1).join("\n").replace(/\r\n--[\s\S]*$/, "");
+      }
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY no configurada en el servidor.");
@@ -18,27 +40,28 @@ export async function handler(event, context) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // Conversión directa a Base64 para que Gemini procese el archivo de forma multimodal nativa
-    const pdfBase64 = buffer.toString('base64');
-
+    // PASO 2: Análisis inteligente de la "digitalización" con cero datos pregrabados
     const prompt = `
       Eres el motor experto de inteligencia logística y fletamentos para SeaCharter Core PRO.
-      Analiza de forma exhaustiva el documento PDF adjunto. 
-      Extrae exclusivamente la información real que aparezca en el documento. No inventes ni asumas datos que no estén escritos.
-      - Si el documento tiene formato tabular o de packing list, extrae cada fila real de carga.
-      - Si es un documento de texto libre, factura o certificado, extrae los elementos descritos basándote únicamente en el contenido.
+      A continuación se presenta el texto digitalizado de un documento adjunto al expediente.
+      
+      INSTRUCCIONES DE ANÁLISIS ESTRICTO:
+      - Lee y analiza el contenido digitalizado de principio a fin.
+      - Extrae exclusivamente los datos reales que aparezcan en el texto. Está totalmente prohibido inventar, asumir o rellenar con valores ficticios.
+      - Si el documento contiene una lista de empaque (packing list) o tabla de cargas, extrae cada fila real encontrada.
+      - Si es una factura, certificado o texto libre, extrae los elementos descritos basándote únicamente en lo que reza el texto.
 
-      Para cada ítem obtenido, extrae los siguientes campos (si un valor numérico o dimensión no se especifica, pon 0 o cadena vacía "" según corresponda):
+      Para cada ítem extraído, completa los campos de forma rigurosa (si un valor numérico o dimensión no se indica en el documento, pon obligatoriamente 0 o cadena vacía ""):
       - category: Categoría o sección indicada en el documento (o "" si no aplica).
-      - type: Descripción exacta del ítem, equipo o servicio.
-      - quantity: Cantidad real (entero, por defecto 1).
+      - type: Descripción exacta del ítem, equipo, carga o servicio.
+      - quantity: Cantidad real (entero; si no se especifica, 1).
       - length: Largo en metros (si se indica, sino "").
       - width: Ancho en metros (si se indica, sino "").
       - height: Alto en metros (si se indica, sino "").
-      - weight: Peso unitario real en kilogramos (número; si el documento no indica el peso, pon obligatoriamente 0).
+      - weight: Peso unitario real en kilogramos (número; si el documento no indica el peso, pon 0).
       - shipping_mode_supported: Modo de transporte indicado o deducible estrictamente por las dimensiones/peso (si no se puede determinar, "").
 
-      Devuelve la respuesta EXCLUSIVAMENTE en formato JSON válido, sin bloques markdown ni texto adicional, cumpliendo exactamente con esta estructura:
+      Devuelve la respuesta EXCLUSIVAMENTE en formato JSON válido, sin bloques markdown ni texto adicional, cumpliendo exactamente con esta estructura de esquema:
       {
         "success": true,
         "items": [
@@ -54,30 +77,25 @@ export async function handler(event, context) {
           }
         ]
       }
+
+      --- TEXTO DIGITALIZADO DEL DOCUMENTO ---
+      ${digitalText.substring(0, 45000)}
     `;
 
-    // Envío multimodal nativo directo a Gemini (sin librerías intermedias que fallen en servidor)
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: pdfBase64,
-          mimeType: "application/pdf"
-        }
-      }
-    ]);
-
+    const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     const cleanJson = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
-    let parsedData;
     
+    let parsedData;
     try {
       parsedData = JSON.parse(cleanJson);
-    } catch (e) {
+    } catch (jsonErr) {
+      console.error("Error parseando JSON de Gemini:", responseText);
       parsedData = { success: true, items: [] };
     }
 
-    const dataBase64 = `data:application/pdf;base64,${pdfBase64}`;
+    const mimeType = event.headers['content-type']?.includes('pdf') ? 'application/pdf' : 'application/octet-stream';
+    const dataBase64 = `data:${mimeType};base64,${buffer.toString('base64')}`;
 
     return {
       statusCode: 200,
