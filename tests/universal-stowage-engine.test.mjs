@@ -418,3 +418,33 @@ test('8. ForwarderWorkspace renderiza dinámicamente el croquis esquemático y l
     'Debe mostrar la comprobación de GM estabilidad'
   );
 });
+
+test('9. ForwarderWorkspace aplica salto de página obligatorio (CSS print) antes del croquis de estiba', () => {
+  // Verificación de page-break-before o break-before en el CSS @media print y en la clase contenedora
+  assert.match(
+    workspaceSource,
+    /\.stowage-plan-section[\s\S]*?(?:page-break-before:\s*always|break-before:\s*page)/,
+    'El CSS print de .stowage-plan-section debe definir salto de página limpio (page-break-before: always o break-before: page)'
+  );
+  assert.match(
+    workspaceSource,
+    /<section[^>]*class(?:Name)?="[^"]*stowage-plan-section[^"]*"[^>]*style=\{\{[^}]*(?:pageBreakBefore:\s*['"]always['"]|breakBefore:\s*['"]page['"])/,
+    'El contenedor del croquis debe aplicar estilos de salto de página de impresión'
+  );
+});
+
+test('10. Croquis de estiba ubicado al final del documento en formato técnico ampliado', () => {
+  // El croquis debe aparecer después de las firmas y el desglose financiero
+  const signatureIndex = workspaceSource.indexOf('Aceptación Cliente');
+  const croquisIndex = workspaceSource.indexOf('<section\n                className="stowage-plan-section');
+  assert.ok(signatureIndex > 0, 'Debe existir la sección de firmas');
+  assert.ok(croquisIndex > signatureIndex, 'El croquis de estiba debe aparecer al final del documento, tras las firmas');
+
+  // Formato técnico ampliado
+  assert.match(
+    workspaceSource,
+    /croquis-ascii-container[\s\S]*?p-[45][\s\S]*?text-\[(?:10|11|10\.5)px\]/,
+    'El contenedor del croquis debe tener padding amplio y tipografía monoespaciada legible y escalada'
+  );
+});
+

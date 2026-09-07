@@ -2781,6 +2781,17 @@ export function ForwarderWorkspace() {
                 #printable-a4-sheet, #printable-a4-sheet * { visibility: visible !important; }
                 #printable-a4-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 12mm !important; border: none !important; box-shadow: none !important; }
                 .print-hidden { display: none !important; }
+                .stowage-plan-section {
+                  page-break-before: always !important;
+                  break-before: page !important;
+                  margin-top: 0 !important;
+                  padding-top: 6mm !important;
+                  width: 100% !important;
+                }
+                .stowage-plan-section .croquis-ascii-container {
+                  font-size: 10px !important;
+                  line-height: 1.28 !important;
+                }
                 @page { size: A4 portrait; margin: 0; }
                 * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               }
@@ -2862,92 +2873,6 @@ export function ForwarderWorkspace() {
                     <span className="block text-[9px] text-slate-500">Tarifa: {(activeReport.demurrageDailyRateUsd || activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/d</span>
                   </div>
                 </div>
-              </section>
-
-              <section className="mb-6 print-exact">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-2 border-b-2 border-slate-200 pb-1">🚢 Croquis Esquemático de Estiba (Stowage Plan)</h3>
-                <div className="bg-slate-50 border border-slate-300 p-3 rounded overflow-x-auto text-[9px] leading-tight font-mono whitespace-pre text-slate-800">
-                  {getStowageAscii(activeReport)}
-                </div>
-
-                {activeReport?.stowagePlan && (
-                  <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${activeReport.stowagePlan.cargoClassification?.isMixedCargo ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}`}>
-                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo ? '🔀 Distribución Multi-Carga Optimizada' : '📦 Estiba Homogénea Monopartida'}
-                        </span>
-                        <span className="text-[10px] text-slate-600 font-semibold">
-                          Handysize MPP · 4 Bodegas + Cubierta · Capacidad: 30.300 m³
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] font-mono">
-                        <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          ✓ Resistencia Estructural ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.maxFloorPressureTm2 || 0).toFixed(1)} / 20.0 t/m²)
-                        </span>
-                        <span className="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                          ✓ GM Estabilidad ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.metacentricHeightGmEstimatedM || 1.55).toFixed(2)}m)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Matriz visual de bodegas 1 a 4 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {activeReport.stowagePlan.holds?.map((hold) => (
-                        <div key={hold.holdNumber} className="bg-white border border-slate-200 rounded p-2 shadow-xs">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-black uppercase text-slate-800">{hold.name}</span>
-                            <span className="text-[9px] font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                              {Number(hold.weightPercentage || 0).toFixed(1)}% peso
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-600 mb-1">
-                            <span className="font-bold text-slate-900">{Number(hold.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold.totalVolumeCbm || 0).toFixed(1)} m³
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-1.5 mb-1.5 overflow-hidden">
-                            <div
-                              className="bg-blue-600 h-1.5 rounded-full"
-                              style={{ width: `${Math.min(100, Math.max(4, hold.volumeUtilizationPct || 0))}%` }}
-                            />
-                          </div>
-                          <div className="text-[9px] font-semibold text-slate-700 truncate" title={hold.stowageTier}>
-                            Nivel: <span className="font-bold text-slate-900">{hold.stowageTier}</span>
-                          </div>
-                          <div className="text-[8.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold.securingLegend}>
-                            {hold.securingLegend}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Cubierta y Doble Fondo complementarios */}
-                    <div className="grid grid-cols-2 gap-2 text-[9.5px]">
-                      <div className="bg-slate-100/70 border border-slate-200 rounded p-2">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="font-bold text-slate-800 uppercase text-[9px]">🌊 Cubierta Superior / Weather Deck</span>
-                          <span className="font-mono font-bold text-slate-700 text-[9px]">
-                            {activeReport.stowagePlan.weatherDeck?.totalWeightTons > 0 ? `${Number(activeReport.stowagePlan.weatherDeck.totalWeightTons).toFixed(2)} MT (${Number(activeReport.stowagePlan.weatherDeck.weightPercentage || 0).toFixed(1)}%)` : 'Despejada'}
-                          </span>
-                        </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
-                          {activeReport.stowagePlan.weatherDeck?.stowageMethod || 'Cubierta despejada / libre para estiba adicional'}
-                        </p>
-                      </div>
-
-                      <div className="bg-slate-100/70 border border-slate-200 rounded p-2">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="font-bold text-slate-800 uppercase text-[9px]">⚓ Doble Fondo / Tanktop & Tween Deck</span>
-                          <span className="font-mono font-bold text-emerald-700 text-[9px]">Resistencia: 20.0 t/m²</span>
-                        </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
-                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo
-                            ? 'Asignación por gravedad: maquinaria y cargas críticas en Tanktop con cunas estructurales; paletizado en Tween Deck con cinchas.'
-                            : (activeReport.stowagePlan.tanktopSummary?.securingMethod || 'Fondo de bodega reforzado para soporte de cargas pesadas.')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </section>
 
               <section className="mb-6">
@@ -3098,6 +3023,110 @@ export function ForwarderWorkspace() {
                 <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Firma Transitario</p></div>
                 <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Aceptación Cliente</p></div>
               </div>
+
+              {/* Croquis Esquemático de Estiba (Stowage Plan) en página dedicada al final del documento */}
+              <section
+                className="stowage-plan-section print-exact mt-12 pt-8 border-t-2 border-dashed border-slate-300 print:border-none print:mt-0 print:pt-4"
+                style={{ pageBreakBefore: 'always', breakBefore: 'page' }}
+              >
+                <header className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-end">
+                  <div>
+                    <h3 className="text-base font-black uppercase tracking-tight text-slate-900 flex items-center gap-2">
+                      <span>🚢</span> Croquis Esquemático de Estiba (Stowage Plan)
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                      Plano Técnico de Distribución Matricial & Segregación Operativa
+                    </p>
+                  </div>
+                  <div className="text-right text-[11px] text-slate-600 font-mono">
+                    <div className="mb-0.5"><span className="font-bold text-slate-800 uppercase text-[10px] mr-1.5">Ref:</span>{activeProject?.project_ref || 'EXP-SIN-REF'}</div>
+                    <div><span className="font-bold text-slate-800 uppercase text-[10px] mr-1.5">Buque:</span>{vesselType || 'Handysize MPP 30.300 m³'}</div>
+                  </div>
+                </header>
+
+                <div className="croquis-ascii-container bg-slate-900 text-slate-100 border-2 border-slate-800 p-4 sm:p-5 rounded-xl overflow-x-auto text-[10px] sm:text-[11px] print:text-[10px] leading-snug font-mono whitespace-pre shadow-md">
+                  {getStowageAscii(activeReport)}
+                </div>
+
+                {activeReport?.stowagePlan && (
+                  <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider ${activeReport.stowagePlan.cargoClassification?.isMixedCargo ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}`}>
+                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo ? '🔀 Distribución Multi-Carga Optimizada' : '📦 Estiba Homogénea Monopartida'}
+                        </span>
+                        <span className="text-[11px] text-slate-600 font-bold">
+                          Handysize MPP · 4 Bodegas + Cubierta · Capacidad: 30.300 m³
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] font-mono">
+                        <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          ✓ Resistencia Estructural ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.maxFloorPressureTm2 || 0).toFixed(1)} / 20.0 t/m²)
+                        </span>
+                        <span className="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                          ✓ GM Estabilidad ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.metacentricHeightGmEstimatedM || 1.55).toFixed(2)}m)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Matriz visual de bodegas 1 a 4 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {activeReport.stowagePlan.holds?.map((hold) => (
+                        <div key={hold.holdNumber} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[11px] font-black uppercase text-slate-800">{hold.name}</span>
+                            <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              {Number(hold.weightPercentage || 0).toFixed(1)}% peso
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 mb-1.5">
+                            <span className="font-bold text-slate-900">{Number(hold.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold.totalVolumeCbm || 0).toFixed(1)} m³
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full"
+                              style={{ width: `${Math.min(100, Math.max(4, hold.volumeUtilizationPct || 0))}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold.stowageTier}>
+                            Nivel: <span className="font-bold text-slate-900">{hold.stowageTier}</span>
+                          </div>
+                          <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold.securingLegend}>
+                            {hold.securingLegend}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cubierta y Doble Fondo complementarios */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10.5px]">
+                      <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-slate-800 uppercase text-[10px]">🌊 Cubierta Superior / Weather Deck</span>
+                          <span className="font-mono font-bold text-slate-700 text-[10px]">
+                            {activeReport.stowagePlan.weatherDeck?.totalWeightTons > 0 ? `${Number(activeReport.stowagePlan.weatherDeck.totalWeightTons).toFixed(2)} MT (${Number(activeReport.stowagePlan.weatherDeck.weightPercentage || 0).toFixed(1)}%)` : 'Despejada'}
+                          </span>
+                        </div>
+                        <p className="text-[9.5px] text-slate-600 leading-tight">
+                          {activeReport.stowagePlan.weatherDeck?.stowageMethod || 'Cubierta despejada / libre para estiba adicional'}
+                        </p>
+                      </div>
+
+                      <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-slate-800 uppercase text-[10px]">⚓ Doble Fondo / Tanktop & Tween Deck</span>
+                          <span className="font-mono font-bold text-emerald-700 text-[10px]">Resistencia: 20.0 t/m²</span>
+                        </div>
+                        <p className="text-[9.5px] text-slate-600 leading-tight">
+                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo
+                            ? 'Asignación por gravedad: maquinaria y cargas críticas en Tanktop con cunas estructurales; paletizado en Tween Deck con cinchas.'
+                            : (activeReport.stowagePlan.tanktopSummary?.securingMethod || 'Fondo de bodega reforzado para soporte de cargas pesadas.')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         );
