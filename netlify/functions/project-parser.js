@@ -70,7 +70,7 @@ export async function handler(event, context) {
     // 4️⃣ Inicializar Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
     // Ajusta el modelo según disponibilidad (gemini-2.5-flash puede no estar activo para todos)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
     // 5️⃣ Prompt detallado para extracción de datos logísticos
     const prompt = `
