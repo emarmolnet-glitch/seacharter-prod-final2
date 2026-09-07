@@ -42,7 +42,7 @@ export async function handler(event, context) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       Eres el motor experto de inteligencia logística y fletamentos para SeaCharter Core PRO.
