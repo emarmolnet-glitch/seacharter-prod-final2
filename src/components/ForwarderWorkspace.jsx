@@ -89,6 +89,19 @@ export function ForwarderWorkspace() {
   const [customsCost, setCustomsCost] = useState(0);
   const userEditedSurveyor = useRef(false);
 
+  // Parámetros dinámicos de ruta, ritmos operativos, rotación y demoras
+  const [pol, setPol] = useState('Valencia');
+  const [pod, setPod] = useState('Houston');
+  const [loadingRate, setLoadingRate] = useState(1200);
+  const [dischargingRate, setDischargingRate] = useState(1000);
+  const [distanceNm, setDistanceNm] = useState(4850);
+  const [vesselSpeedKnots, setVesselSpeedKnots] = useState(12.0);
+  const [vesselDailyHireUsd, setVesselDailyHireUsd] = useState(11500);
+  const [exchangeRateUsdEur, setExchangeRateUsdEur] = useState(0.92);
+  const [actualLoadingDays, setActualLoadingDays] = useState('');
+  const [actualDischargingDays, setActualDischargingDays] = useState('');
+  const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(11500);
+
   const [subtotalFreight, setSubtotalFreight] = useState('0.00');
   const [subtotalFobOperations, setSubtotalFobOperations] = useState('0.00');
   const [isBreakdownVisible, setIsBreakdownVisible] = useState(true);
@@ -480,10 +493,38 @@ export function ForwarderWorkspace() {
 
       const RT = Math.max(totalWeightTons, totalVolumeM3);
 
-      // Subtotal 1: Flete Marítimo Buque Completo / TCE
-      const freightCost = RT * 65;
+      // MOTOR DE CÁLCULO DINÁMICO DE ROTACIÓN Y FLETE (TCE):
+      // Días de Carga = Peso Total de la Carga (MT) / Ritmo de Carga (MT/día)
+      // Días de Descarga = Peso Total de la Carga (MT) / Ritmo de Descarga (MT/día)
+      // Días de Navegación = Distancia Náutica POL-POD / (Velocidad de Servicio del Buque en nudos × 24)
+      // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × Tipo de cambio aplicable
+      const effectiveLoadRate = Math.max(1, Number(loadingRate) || (isBigBagsOrBulk ? 1200 : 850));
+      const effectiveDischRate = Math.max(1, Number(dischargingRate) || (isBigBagsOrBulk ? 1000 : 750));
+      const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveLoadRate) * 100) / 100 : 0;
+      const diasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveDischRate) * 100) / 100 : 0;
 
-      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, aduanas)
+      const effectiveDistance = Math.max(10, Number(distanceNm) || 1500);
+      const defaultSpeed = totalWeightTons >= 35000 ? 13.5 : (totalWeightTons >= 10000 ? 13.0 : (totalWeightTons >= 3000 ? 12.0 : 10.5));
+      const effectiveSpeed = Math.max(1, Number(vesselSpeedKnots) || defaultSpeed);
+      const diasNavegacion = Math.round((effectiveDistance / (effectiveSpeed * 24)) * 100) / 100;
+      const diasRotacionTotal = Math.round((diasCarga + diasDescarga + diasNavegacion) * 100) / 100;
+
+      const effectiveDailyHire = Number(vesselDailyHireUsd) || dailyTce;
+      const effectiveExRate = Number(exchangeRateUsdEur) || 0.92;
+
+      // Subtotal 1: Flete Marítimo Buque Completo / TCE
+      const freightCost = Math.round(diasRotacionTotal * effectiveDailyHire * effectiveExRate * 100) / 100;
+
+      // CÁLCULO Y GESTIÓN DE DEMORAS (Demurrage)
+      const actualLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
+      const actualDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
+      const demLoadDays = (actualLoad !== null && actualLoad > diasCarga) ? Math.round((actualLoad - diasCarga) * 100) / 100 : 0;
+      const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
+      const totalDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
+      const effectiveDemDaily = Number(demurrageDailyRateUsd) || effectiveDailyHire;
+      const demurrageCostEur = Math.round(totalDemDays * effectiveDemDaily * effectiveExRate * 100) / 100;
+
+      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, aduanas, demoras)
       const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
       const airBagsCost = isBigBagsOrBulk ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
 
@@ -516,7 +557,7 @@ export function ForwarderWorkspace() {
       }
 
       calculatedOceanFreight = freightCost;
-      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + demurrageCostEur;
 
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     }
@@ -527,7 +568,26 @@ export function ForwarderWorkspace() {
     setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
-  useEffect(() => { autoCalculateEstimates(cargoItems); }, [cargoItems, storageDays, surveyorCost, inlandCost, customsCost]);
+  useEffect(() => {
+    autoCalculateEstimates(cargoItems);
+  }, [
+    cargoItems,
+    storageDays,
+    surveyorCost,
+    inlandCost,
+    customsCost,
+    pol,
+    pod,
+    loadingRate,
+    dischargingRate,
+    distanceNm,
+    vesselSpeedKnots,
+    vesselDailyHireUsd,
+    exchangeRateUsdEur,
+    actualLoadingDays,
+    actualDischargingDays,
+    demurrageDailyRateUsd,
+  ]);
 
   const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
@@ -582,6 +642,34 @@ export function ForwarderWorkspace() {
         const val = matchNumber(text);
         if (val !== null) { setCustomsCost(val); hasChanges = true; }
       }
+    }
+
+    // Parámetros de ruta y ritmos operativos
+    if (payload.pol) { setPol(payload.pol); hasChanges = true; }
+    if (payload.pod) { setPod(payload.pod); hasChanges = true; }
+    if (payload.loadingRate || payload.loadingRateMtDay) {
+      setLoadingRate(Number(payload.loadingRate || payload.loadingRateMtDay));
+      hasChanges = true;
+    }
+    if (payload.dischargingRate || payload.dischargingRateMtDay) {
+      setDischargingRate(Number(payload.dischargingRate || payload.dischargingRateMtDay));
+      hasChanges = true;
+    }
+    if (payload.distanceNm || payload.distance_nm) {
+      setDistanceNm(Number(payload.distanceNm || payload.distance_nm));
+      hasChanges = true;
+    }
+    if (payload.actualLoadingDays !== undefined) {
+      setActualLoadingDays(payload.actualLoadingDays);
+      hasChanges = true;
+    }
+    if (payload.actualDischargingDays !== undefined) {
+      setActualDischargingDays(payload.actualDischargingDays);
+      hasChanges = true;
+    }
+    if (payload.demurrageDays !== undefined) {
+      setActualLoadingDays(payload.demurrageDays);
+      hasChanges = true;
     }
 
     const incomingItems = payload.items || payload.cargo_items;
@@ -732,6 +820,30 @@ export function ForwarderWorkspace() {
         /big\s*bag|ensacad|saco|granel|bulk|cemento|urea|fertilizante|sulfato/i.test(cat);
     }) || isBigBagsCargo;
 
+    // Parámetros de Ruta, Ritmos Operativos y Demoras
+    const reportPol = sourcePayload?.route_and_chartering?.pol || pol || 'Valencia';
+    const reportPod = sourcePayload?.route_and_chartering?.pod || pod || 'Houston';
+    const reportLoadRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.loading_rate_mt_day ?? loadingRate) || (isBigBags ? 1200 : 850));
+    const reportDischRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.discharging_rate_mt_day ?? dischargingRate) || (isBigBags ? 1000 : 750));
+    const reportDistance = Math.max(10, Number(sourcePayload?.route_and_chartering?.distance_nm ?? distanceNm) || 1500);
+    const reportSpeed = Math.max(1, Number(sourcePayload?.route_and_chartering?.vessel_speed_knots ?? vesselSpeedKnots) || 12.0);
+    const reportDailyHire = Number(sourcePayload?.route_and_chartering?.daily_hire_rate_usd ?? vesselDailyHireUsd) || (totalWeightTons >= 35000 ? 16500 : (totalWeightTons >= 10000 ? 13800 : (totalWeightTons >= 3000 ? 11500 : 8500)));
+    const reportExRate = Number(sourcePayload?.route_and_chartering?.exchange_rate ?? exchangeRateUsdEur) || 0.92;
+
+    const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportLoadRate) * 100) / 100 : 0;
+    const diasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportDischRate) * 100) / 100 : 0;
+    const diasNavegacion = Math.round((reportDistance / (reportSpeed * 24)) * 100) / 100;
+    const diasRotacionTotal = Math.round((diasCarga + diasDescarga + diasNavegacion) * 100) / 100;
+
+    // Demoras
+    const actualLoad = sourcePayload?.route_and_chartering?.actual_loading_days ?? (actualLoadingDays !== '' ? Number(actualLoadingDays) : null);
+    const actualDisch = sourcePayload?.route_and_chartering?.actual_discharging_days ?? (actualDischargingDays !== '' ? Number(actualDischargingDays) : null);
+    const demLoadDays = (actualLoad !== null && actualLoad > diasCarga) ? Math.round((actualLoad - diasCarga) * 100) / 100 : 0;
+    const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
+    const reportDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
+    const reportDemDailyUsd = Number(sourcePayload?.route_and_chartering?.demurrage_daily_rate_usd ?? demurrageDailyRateUsd) || reportDailyHire;
+    const demurrageCostNum = Math.round(reportDemDays * reportDemDailyUsd * reportExRate * 100) / 100;
+
     // Subtotal 1: Flete Marítimo / TCE
     let fleteCostNum = 0;
     if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
@@ -739,7 +851,7 @@ export function ForwarderWorkspace() {
     } else if (parseFloat(subtotalFreight) > 0) {
       fleteCostNum = parseFloat(subtotalFreight);
     } else {
-      fleteCostNum = reportRT * 65.0;
+      fleteCostNum = Math.round(diasRotacionTotal * reportDailyHire * reportExRate * 100) / 100;
     }
     const fleteSaleNum = fleteCostNum * 1.15;
     const fleteMarginNum = fleteSaleNum - fleteCostNum;
@@ -795,7 +907,7 @@ export function ForwarderWorkspace() {
     const periSaleNum = periCostNum * 1.15;
     const periMarginNum = periSaleNum - periCostNum;
 
-    const fobSubtotal = estibaCostNum + matCostNum + periCostNum;
+    const fobSubtotal = estibaCostNum + matCostNum + periCostNum + demurrageCostNum;
     const finalTotalCost = Math.round((fleteCostNum + fobSubtotal) * 100) / 100;
     const finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
     const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
@@ -808,6 +920,22 @@ export function ForwarderWorkspace() {
       reportRT,
       shippingMode: sourcePayload?.shipping_mode || shippingMode,
       vesselType: sourcePayload?.recommended_vessel || vesselType,
+      pol: reportPol,
+      pod: reportPod,
+      distanceNm: reportDistance,
+      loadingRate: reportLoadRate,
+      dischargingRate: reportDischRate,
+      vesselSpeedKnots: reportSpeed,
+      dailyRateUsd: reportDailyHire,
+      exchangeRateUsdEur: reportExRate,
+      diasCarga,
+      diasDescarga,
+      diasNavegacion,
+      diasRotacionTotal,
+      demurrageDays: reportDemDays,
+      demurrageCostNum,
+      demurrageDailyRateUsd: reportDemDailyUsd,
+      demurrageStatus: reportDemDays > 0 ? 'EXCESO DE ESTADÍA (ON DEMURRAGE)' : 'DENTRO DE PLANCHA (ON SCHEDULE)',
       fleteCostNum,
       fleteSaleNum,
       fleteMarginNum,
@@ -933,6 +1061,26 @@ export function ForwarderWorkspace() {
       },
       shipping_mode: shippingMode,
       recommended_vessel: vesselType,
+      route_and_chartering: {
+        pol,
+        pod,
+        distance_nm: distanceNm,
+        loading_rate_mt_day: loadingRate,
+        discharging_rate_mt_day: dischargingRate,
+        vessel_speed_knots: vesselSpeedKnots,
+        daily_hire_rate_usd: vesselDailyHireUsd,
+        exchange_rate: exchangeRateUsdEur,
+        dias_carga: currentReportSnapshot.diasCarga,
+        dias_descarga: currentReportSnapshot.diasDescarga,
+        dias_navegacion: currentReportSnapshot.diasNavegacion,
+        dias_rotacion_total: currentReportSnapshot.diasRotacionTotal,
+        actual_loading_days: actualLoadingDays,
+        actual_discharging_days: actualDischargingDays,
+        demurrage_days: currentReportSnapshot.demurrageDays,
+        demurrage_daily_rate_usd: demurrageDailyRateUsd,
+        demurrage_cost_eur: currentReportSnapshot.demurrageCostNum,
+        demurrage_status: currentReportSnapshot.demurrageStatus,
+      },
       totals: { ...totals },
       financial_summary: {
         subtotal_ocean_freight_eur: parseFloat(subtotalFreight) || currentReportSnapshot.fleteCostNum || 0,
@@ -1267,6 +1415,189 @@ export function ForwarderWorkspace() {
                   </div>
                 </section>
 
+                {/* Sección Parámetros Dinámicos de Ruta, Ritmos Operativos y Demoras */}
+                <section className="pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">Ruta Marítima, Ritmos Operativos y Gestión de Demoras</h3>
+                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                      POL / POD · Ritmos MT/día · Rotación Paramétrica
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                      <div>
+                        <label htmlFor="input-pol" className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Puerto de Carga (POL / Origen) *
+                        </label>
+                        <input
+                          id="input-pol"
+                          type="text"
+                          required
+                          value={pol}
+                          onChange={(e) => setPol(e.target.value)}
+                          placeholder="Ej: Valencia, Bilbao, Barcelona"
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-pod" className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Puerto de Destino (POD / Destino) *
+                        </label>
+                        <input
+                          id="input-pod"
+                          type="text"
+                          required
+                          value={pod}
+                          onChange={(e) => setPod(e.target.value)}
+                          placeholder="Ej: Houston, Rotterdam, Alexandria"
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-loading-rate" className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Ritmo de Carga (MT/día) *
+                        </label>
+                        <input
+                          id="input-loading-rate"
+                          type="number"
+                          min={1}
+                          required
+                          value={loadingRate}
+                          onChange={(e) => setLoadingRate(Math.max(1, Number(e.target.value)))}
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 shadow-sm font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-discharging-rate" className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Ritmo de Descarga (MT/día) *
+                        </label>
+                        <input
+                          id="input-discharging-rate"
+                          type="number"
+                          min={1}
+                          required
+                          value={dischargingRate}
+                          onChange={(e) => setDischargingRate(Math.max(1, Number(e.target.value)))}
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 shadow-sm font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
+                      <div>
+                        <label htmlFor="input-distance-nm" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Distancia Náutica (NM)
+                        </label>
+                        <input
+                          id="input-distance-nm"
+                          type="number"
+                          min={10}
+                          value={distanceNm}
+                          onChange={(e) => setDistanceNm(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-mono text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-actual-loading-days" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Días Reales Carga en POL (Muelle)
+                        </label>
+                        <input
+                          id="input-actual-loading-days"
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          value={actualLoadingDays}
+                          onChange={(e) => setActualLoadingDays(e.target.value)}
+                          placeholder="Automático (sin demora)"
+                          className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-mono text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-actual-discharging-days" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Días Reales Descarga en POD (Muelle)
+                        </label>
+                        <input
+                          id="input-actual-discharging-days"
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          value={actualDischargingDays}
+                          onChange={(e) => setActualDischargingDays(e.target.value)}
+                          placeholder="Automático (sin demora)"
+                          className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-mono text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-demurrage-rate" className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Tarifa de Demoras (USD/día)
+                        </label>
+                        <input
+                          id="input-demurrage-rate"
+                          type="number"
+                          value={demurrageDailyRateUsd}
+                          onChange={(e) => setDemurrageDailyRateUsd(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-mono text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Resumen dinámico en vivo */}
+                    {(() => {
+                      const wTons = (totals.weight || 0) / 1000;
+                      const effLoad = Math.max(1, Number(loadingRate) || 1200);
+                      const effDisch = Math.max(1, Number(dischargingRate) || 1000);
+                      const dCarga = wTons > 0 ? Math.round((wTons / effLoad) * 100) / 100 : 0;
+                      const dDescarga = wTons > 0 ? Math.round((wTons / effDisch) * 100) / 100 : 0;
+                      const effDist = Math.max(10, Number(distanceNm) || 1500);
+                      const effSpd = Math.max(1, Number(vesselSpeedKnots) || 12.0);
+                      const dNav = Math.round((effDist / (effSpd * 24)) * 100) / 100;
+                      const dRot = Math.round((dCarga + dDescarga + dNav) * 100) / 100;
+                      const aLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
+                      const aDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
+                      const demLoad = (aLoad !== null && aLoad > dCarga) ? Math.round((aLoad - dCarga) * 100) / 100 : 0;
+                      const demDisch = (aDisch !== null && aDisch > dDescarga) ? Math.round((aDisch - dDescarga) * 100) / 100 : 0;
+                      const totalDem = Math.round((demLoad + demDisch) * 100) / 100;
+                      const demPenalty = Math.round(totalDem * (Number(demurrageDailyRateUsd) || 11500) * (Number(exchangeRateUsdEur) || 0.92) * 100) / 100;
+
+                      return (
+                        <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <span className="block text-[9px] uppercase font-bold text-slate-500">Días Carga (POL)</span>
+                            <span className="text-sm font-black text-slate-800 font-mono">{dCarga.toFixed(2)} d</span>
+                            <span className="block text-[9px] text-slate-400">({wTons.toFixed(1)} MT / {effLoad} MT/d)</span>
+                          </div>
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <span className="block text-[9px] uppercase font-bold text-slate-500">Días Descarga (POD)</span>
+                            <span className="text-sm font-black text-slate-800 font-mono">{dDescarga.toFixed(2)} d</span>
+                            <span className="block text-[9px] text-slate-400">({wTons.toFixed(1)} MT / {effDisch} MT/d)</span>
+                          </div>
+                          <div className="bg-white p-2 rounded border border-slate-200">
+                            <span className="block text-[9px] uppercase font-bold text-slate-500">Días Navegación</span>
+                            <span className="text-sm font-black text-blue-700 font-mono">{dNav.toFixed(2)} d</span>
+                            <span className="block text-[9px] text-slate-400">({effDist} NM @ {effSpd} kn)</span>
+                          </div>
+                          <div className={`p-2 rounded border ${totalDem > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                            <span className="block text-[9px] uppercase font-bold text-slate-600">
+                              {totalDem > 0 ? '⚠️ Demoras Muelle' : '✅ Plancha / Demoras'}
+                            </span>
+                            <span className={`text-sm font-black font-mono ${totalDem > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                              {totalDem > 0 ? `+${totalDem.toFixed(2)} d (+${demPenalty.toLocaleString('es-ES')} €)` : 'En Plancha'}
+                            </span>
+                            <span className="block text-[9px] text-slate-500">Rotación Total: {dRot.toFixed(2)} d</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </section>
+
                 <section className="pt-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Materiales</h3>
@@ -1509,6 +1840,30 @@ export function ForwarderWorkspace() {
                   <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Modalidad Operativa</span><span className="text-sm font-black text-blue-600 mt-1 block">{shippingMode}</span></div>
                   <div className="bg-white p-2.5 rounded border border-slate-200"><span className="block text-[10px] uppercase font-bold text-slate-500">Buque Recomendado</span><span className="text-xs font-black text-slate-900 mt-1 block">{vesselType}</span></div>
                 </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center mt-3 pt-3 border-t border-slate-200">
+                  <div className="bg-white p-2.5 rounded border border-slate-200">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500">Ruta Marítima</span>
+                    <span className="text-xs font-black text-slate-900 mt-1 block">{activeReport.pol || 'Valencia'} ➔ {activeReport.pod || 'Houston'}</span>
+                    <span className="block text-[9px] text-slate-500 font-mono">{(activeReport.distanceNm || 4850).toLocaleString('es-ES')} NM</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500">Ritmos Carga / Descarga</span>
+                    <span className="text-xs font-black text-slate-900 mt-1 block">{(activeReport.loadingRate || 1200).toLocaleString('es-ES')} / {(activeReport.dischargingRate || 1000).toLocaleString('es-ES')} MT/d</span>
+                    <span className="block text-[9px] text-slate-500">Velocidad: {activeReport.vesselSpeedKnots || 12} nudos</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded border border-slate-200">
+                    <span className="block text-[10px] uppercase font-bold text-slate-500">Rotación Buque (D_total)</span>
+                    <span className="text-xs font-black text-blue-700 mt-1 block font-mono">{(activeReport.diasRotacionTotal || 10).toFixed(2)} días</span>
+                    <span className="block text-[9px] text-slate-500">({(activeReport.diasCarga || 1.5).toFixed(1)}d C + {(activeReport.diasDescarga || 1.8).toFixed(1)}d D + {(activeReport.diasNavegacion || 6.7).toFixed(1)}d Nav)</span>
+                  </div>
+                  <div className={`p-2.5 rounded border ${activeReport.demurrageDays > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                    <span className="block text-[10px] uppercase font-bold text-slate-600">Gestión de Demoras</span>
+                    <span className={`text-xs font-black mt-1 block font-mono ${activeReport.demurrageDays > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                      {activeReport.demurrageDays > 0 ? `⚠️ Exceso: ${activeReport.demurrageDays.toFixed(2)} d (+${formatCurrency(activeReport.demurrageCostNum)})` : '✅ Sin Demoras (En Plancha)'}
+                    </span>
+                    <span className="block text-[9px] text-slate-500">Tarifa: {(activeReport.demurrageDailyRateUsd || activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/d</span>
+                  </div>
+                </div>
               </section>
 
               <section className="mb-6 print-exact">
@@ -1536,7 +1891,9 @@ export function ForwarderWorkspace() {
                     {/* Fila 1: Flete Marítimo (Base RT) */}
                     <tr className="hover:bg-slate-50 bg-sky-50/40">
                       <td className="py-2.5 px-3 font-bold text-sky-900">Flete Marítimo (Base RT)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT)</td>
+                      <td className="py-2.5 px-3 text-slate-600">
+                        Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                      </td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">{formatCurrency(fleteSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(fleteMarginNum)}</td>
@@ -1565,6 +1922,18 @@ export function ForwarderWorkspace() {
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>
                     </tr>
+                    {/* Fila Demoras: Penalización por Exceso de Estadía si existe */}
+                    {activeReport.demurrageDays > 0 && (
+                      <tr className="hover:bg-amber-50 bg-amber-50/60 font-semibold">
+                        <td className="py-2.5 px-3 font-bold text-amber-950">Demoras y Sobrecostes de Muelle (Demurrage)</td>
+                        <td className="py-2.5 px-3 text-amber-900">
+                          Penalización automática por exceso de tiempo en muelle ({activeReport.demurrageDays.toFixed(2)} d) a {(activeReport.demurrageDailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-bold">{formatCurrency(activeReport.demurrageCostNum)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">{formatCurrency(activeReport.demurrageCostNum * 1.15)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(activeReport.demurrageCostNum * 0.15)}</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </section>

@@ -171,6 +171,36 @@ export default function AgenteProyectosWidget({ onUpdatePayload, isOpen: control
           if (val !== null) payloadObj.lashingChains = val;
         }
 
+        const polMatch = text.match(/(?:pol|puerto\s*de\s*(?:origen|carga)|cargar\s*en|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pod|\s+hasta|\s+a\s+|\s+ritmo|\s+demora|$)/i);
+        if (polMatch && polMatch[1]) {
+          const p = polMatch[1].trim();
+          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(p.toLowerCase())) {
+            payloadObj.pol = p.charAt(0).toUpperCase() + p.slice(1);
+          }
+        }
+        const podMatch = text.match(/(?:pod|puerto\s*de\s*(?:destino|descarga)|descargar\s*en|hasta|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pol|\s+ritmo|\s+demora|$)/i);
+        if (podMatch && podMatch[1]) {
+          const p = podMatch[1].trim();
+          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(p.toLowerCase())) {
+            payloadObj.pod = p.charAt(0).toUpperCase() + p.slice(1);
+          }
+        }
+        const loadMatch = text.match(/(?:ritmo\s*(?:de)?\s*carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (loadMatch && loadMatch[1]) {
+          const v = parseFloat(loadMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v) && v > 0) payloadObj.loadingRate = v;
+        }
+        const dischMatch = text.match(/(?:ritmo\s*(?:de)?\s*descarga|discharging\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (dischMatch && dischMatch[1]) {
+          const v = parseFloat(dischMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v) && v > 0) payloadObj.dischargingRate = v;
+        }
+        const demMatch = text.match(/(?:demoras?|demurrage|retraso(?:\s*en\s*muelle)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+        if (demMatch && demMatch[1]) {
+          const v = parseFloat(demMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(v) && v >= 0) payloadObj.demurrageDays = v;
+        }
+
         const agentReply = data.error
           ? `⚠️ ${data.error}`
           : payloadObj.breakdownReply

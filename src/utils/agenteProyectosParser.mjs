@@ -150,7 +150,84 @@ export function parseProjectInstruction(rawText) {
     detectedActions.push(`${val} turno(s) / cuadrilla(s) de estiba`);
   }
 
-  // 6. Añadir pieza / carga de proyecto
+  // 6. Parámetros de Ruta Marítima: POL y POD
+  const polMatch = lower.match(/(?:pol|puerto\s*de\s*(?:origen|carga)|cargar\s*en|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pod|\s+hasta|\s+a\s+|\s+ritmo|\s+demora|$)/i);
+  if (polMatch && polMatch[1]) {
+    const polVal = polMatch[1].trim();
+    if (polVal.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(polVal.toLowerCase())) {
+      payload.pol = polVal.charAt(0).toUpperCase() + polVal.slice(1);
+      detectedActions.push(`Puerto de Origen (POL): ${payload.pol}`);
+    }
+  }
+
+  const podMatch = lower.match(/(?:pod|puerto\s*de\s*(?:destino|descarga)|descargar\s*en|hasta|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pol|\s+ritmo|\s+demora|$)/i);
+  if (podMatch && podMatch[1]) {
+    const podVal = podMatch[1].trim();
+    if (podVal.length > 2 && !['dias', 'euros', 'turnos', 'toneladas'].includes(podVal.toLowerCase())) {
+      payload.pod = podVal.charAt(0).toUpperCase() + podVal.slice(1);
+      detectedActions.push(`Puerto de Destino (POD): ${payload.pod}`);
+    }
+  }
+
+  // 7. Ritmos Operativos de Carga y Descarga (MT/día)
+  const loadRateMatch = lower.match(/(?:ritmo\s*(?:de)?\s*carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (loadRateMatch && loadRateMatch[1]) {
+    const loadRateVal = parseFloat(loadRateMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(loadRateVal) && loadRateVal > 0) {
+      payload.loadingRate = loadRateVal;
+      payload.loadingRateMtDay = loadRateVal;
+      detectedActions.push(`Ritmo de Carga: ${loadRateVal.toLocaleString('es-ES')} MT/día`);
+    }
+  }
+
+  const dischRateMatch = lower.match(/(?:ritmo\s*(?:de)?\s*descarga|discharging\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (dischRateMatch && dischRateMatch[1]) {
+    const dischRateVal = parseFloat(dischRateMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(dischRateVal) && dischRateVal > 0) {
+      payload.dischargingRate = dischRateVal;
+      payload.dischargingRateMtDay = dischRateVal;
+      detectedActions.push(`Ritmo de Descarga: ${dischRateVal.toLocaleString('es-ES')} MT/día`);
+    }
+  }
+
+  // 8. Demoras y Tiempos Reales de Operativa en Muelle
+  const demurrageMatch = lower.match(/(?:demoras?|demurrage|retraso(?:\s*en\s*muelle)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (demurrageMatch && demurrageMatch[1]) {
+    const demVal = parseFloat(demurrageMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(demVal) && demVal >= 0) {
+      payload.demurrageDays = demVal;
+      detectedActions.push(`Demoras en muelle: ${demVal} día${demVal === 1 ? '' : 's'} de exceso`);
+    }
+  }
+
+  const actualLoadMatch = lower.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*carga|actual\s*loading\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (actualLoadMatch && actualLoadMatch[1]) {
+    const aLoad = parseFloat(actualLoadMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(aLoad)) {
+      payload.actualLoadingDays = aLoad;
+      detectedActions.push(`Tiempo real en carga (POL): ${aLoad} días`);
+    }
+  }
+
+  const actualDischMatch = lower.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*descarga|actual\s*discharging\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (actualDischMatch && actualDischMatch[1]) {
+    const aDisch = parseFloat(actualDischMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(aDisch)) {
+      payload.actualDischargingDays = aDisch;
+      detectedActions.push(`Tiempo real en descarga (POD): ${aDisch} días`);
+    }
+  }
+
+  const distanceMatch = lower.match(/(?:distancia(?:\s*n[aá]utica)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (distanceMatch && distanceMatch[1]) {
+    const distVal = parseFloat(distanceMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(distVal) && distVal > 0) {
+      payload.distanceNm = distVal;
+      detectedActions.push(`Distancia náutica ajustada a ${distVal.toLocaleString('es-ES')} NM`);
+    }
+  }
+
+  // 9. Añadir pieza / carga de proyecto
   const isAddPiece = /(?:a[ñn]adir|agregar|nueva|meter|sumar|incluir|insertar|crear)\s*(?:una\s*)?(?:pieza|carga|bulto|equipo|transformador|skid|generador|maquinaria|item)/i.test(lower)
     || (lower.includes('pieza') && (lower.includes('añad') || lower.includes('agreg') || lower.includes('nueva') || lower.includes('meter') || lower.includes('crear')));
 
