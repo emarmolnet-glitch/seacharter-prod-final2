@@ -1,7 +1,7 @@
 [[redirects]]
   from = "/api/databridge-port-tariff"
-  to = https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff
-  status = 200
+  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
+  status = 301
   force = true
 
 [[redirects]]
