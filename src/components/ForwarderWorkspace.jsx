@@ -59,6 +59,8 @@ export function ForwarderWorkspace() {
   const [lashingTeam, setLashingTeam] = useState(0);
   const [heavyLiftCrane, setHeavyLiftCrane] = useState(0);
   const [mafiPlatforms, setMafiPlatforms] = useState(0);
+  const [spreaderMultipunto, setSpreaderMultipunto] = useState(0);
+  const [craneLiftCycles, setCraneLiftCycles] = useState(0);
 
   const [shippingMode, setShippingMode] = useState('Lo-Lo');
   const [vesselType, setVesselType] = useState('Geared Breakbulk (Lo-Lo)');
@@ -88,6 +90,7 @@ export function ForwarderWorkspace() {
   const setGangs = setStevedoreGangs;
   const setHeavyLift = setHeavyLiftCrane;
   const setLashingTeams = setLashingTeam;
+  const setSpreader = setSpreaderMultipunto;
 
   const fetchProjects = async () => {
     setIsLoading(true); setError(null);
@@ -367,19 +370,39 @@ export function ForwarderWorkspace() {
     let effectiveHeavyLift = HeavyLift;
 
     if (isBigBagsOrBulk) {
-      // Regla estricta: Cargas como cemento en Big Bags NUNCA cargan maderas de cuna pesadas ni cables de acero de proyecto
+      // Regla estricta Big Bags: Queda prohibido calcular eslingas sueltas individuales o materiales de trincaje pesado (cadenas, maderas de cuna estructurales)
       effectiveDunnage = 0;
       effectiveCadenas = 0;
       effectiveHeavyLift = 0;
-      effectiveSlings = Math.max(1, Math.ceil(totalPieces / 4));
+      effectiveSlings = 0;
+
+      // Spreader multipunto (14-16 sacos por ciclo) y ciclos de izado
+      const bagsPerLift = 15;
+      const calculatedCycles = Math.max(1, Math.ceil(totalPieces / bagsPerLift));
+      setCraneLiftCycles(calculatedCycles);
+
+      // Dimensionamiento del personal de tierra en función de los ciclos de retorno de grúa (buque o móvil portuaria)
+      // para flujo continuo de carga hacia la bodega con cuadrillas enfocadas en enganche rápido al spreader
+      const calculatedGangs = Math.max(1, Math.ceil(calculatedCycles / 140));
+      const calculatedSpreaders = Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)));
+
+      Gangs = calculatedGangs;
+      HeavyLift = 0;
 
       setDunnageWood(0);
       setChainsBinders(0);
-      setHighCapacitySlings(effectiveSlings);
-      setShackles(effectiveSlings * 2);
+      setHighCapacitySlings(0);
+      setShackles(0);
       setHeavyLiftCrane(0);
-      setOperationalProfileNotice('Perfil: Mercancía Ensacada / Big Bags (Estiba en Bloque) · Cunas pesadas y cables de acero excluidos');
+      setLashingTeams(0);
+      setLashingTeam(0);
+      setStevedoreGangs(calculatedGangs);
+      setSpreaderMultipunto(calculatedSpreaders);
+
+      setOperationalProfileNotice('Perfil: Mercancía Ensacada / Big Bags (Estiba en Bloque) · Spreader multipunto (14-16 sacos/ciclo) · Maderas de cuna pesadas y cables de acero de proyecto quedan excluidos');
     } else {
+      setSpreaderMultipunto(0);
+      setCraneLiftCycles(0);
       setOperationalProfileNotice('Perfil: Carga Industrial de Proyecto / Breakbulk · Cunas estructurales y cables/cadenas requeridos');
     }
 
@@ -450,7 +473,12 @@ export function ForwarderWorkspace() {
       const freightCost = RT * 65;
 
       // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, aduanas)
-      const lashingCost = (effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15);
+      const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
+      const airBagsCost = isBigBagsOrBulk ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
+
+      const lashingCost = isBigBagsOrBulk
+        ? (spreaderCost + airBagsCost)
+        : ((effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15));
       const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
 
@@ -573,6 +601,8 @@ export function ForwarderWorkspace() {
     if (payload.lashingTeams !== undefined) { setLashingTeam(payload.lashingTeams); hasChanges = true; structuralModified = true; }
     if (payload.heavyLiftCranes !== undefined) { setHeavyLiftCrane(payload.heavyLiftCranes); hasChanges = true; structuralModified = true; }
     if (payload.mafiPlatforms !== undefined) { setMafiPlatforms(payload.mafiPlatforms); hasChanges = true; structuralModified = true; }
+    if (payload.spreaderUnits !== undefined) { setSpreaderMultipunto(payload.spreaderUnits); hasChanges = true; structuralModified = true; }
+    if (payload.spreaderMultipunto !== undefined) { setSpreaderMultipunto(payload.spreaderMultipunto); hasChanges = true; structuralModified = true; }
     if (payload.storageDays !== undefined) { setStorageDays(Number(payload.storageDays)); hasChanges = true; }
     if (payload.surveyorCost !== undefined) {
       userEditedSurveyor.current = true;
@@ -1011,31 +1041,48 @@ export function ForwarderWorkspace() {
                     </div>
                   </div>
                   {isBigBagsCargo && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5 shadow-sm">
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5 shadow-sm">
                       <span className="text-base">🛡️</span>
-                      <div>
+                      <div className="space-y-1">
                         <strong>Perfil de Carga Masiva / Ensacada (Big Bags):</strong>
-                        <p className="mt-0.5 text-amber-800">
+                        <p className="text-amber-800">
                           Se aplica estiba en bloque continuo. <strong>Maderas de cuna pesadas y cables de acero de proyecto quedan excluidos</strong> para evitar desgarros y cortes en los sacos de polipropileno.
+                        </p>
+                        <p className="text-amber-950 font-semibold">
+                          🏗️ <strong>Spreader Multipunto Obligatorio:</strong> Diseñado para bloques simultáneos de 14 a 16 Big Bags por ciclo de izado ({craneLiftCycles} ciclos estimados). Prohibidas eslingas sueltas individuales y trincaje pesado a bordo.
                         </p>
                       </div>
                     </div>
                   )}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <NumericCounter label="Maderas de Estiba (Dunnage)" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Dunnage"} value={dunnageWood} onChange={setDunnageWood} />
-                    <NumericCounter label="Eslingas de alta capacidad" subtitle="Alta Capacidad" value={highCapacitySlings} onChange={setHighCapacitySlings} />
+                    <NumericCounter label="Eslingas de alta capacidad" subtitle={isBigBagsCargo ? "Prohibidas (Usar Spreader)" : "Alta Capacidad"} value={highCapacitySlings} onChange={setHighCapacitySlings} />
                     <NumericCounter label="Cadenas y Tensores" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Trincaje Pesado"} value={chainsBinders} onChange={setChainsBinders} />
-                    <NumericCounter label="Grilletes" subtitle="Unión de Trincas" value={shackles} onChange={setShackles} />
+                    <NumericCounter label="Grilletes" subtitle={isBigBagsCargo ? "Excluidos (Big Bags)" : "Unión de Trincas"} value={shackles} onChange={setShackles} />
                   </div>
+                  {isBigBagsCargo && (
+                    <div className="mt-3 bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏗️</span>
+                        <div>
+                          <div className="text-xs font-bold text-blue-900">Spreader Multipunto de Izado (14-16 Big Bags / ciclo)</div>
+                          <div className="text-[11px] text-blue-700">Equipamiento de muelle para izado en bloque ({craneLiftCycles} ciclos de grúa estimados)</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <NumericCounter label="Spreaders en Muelle" subtitle="Bloques 14-16 sacos" value={spreaderMultipunto} onChange={setSpreaderMultipunto} />
+                      </div>
+                    </div>
+                  )}
                 </section>
 
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">3. Mano de Obra Portuaria</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <NumericCounter label="Cuadrillas de Estibadores (Turnos)" subtitle="Turnos de Estiba" value={stevedoreGangs} onChange={setStevedoreGangs} />
-                    <NumericCounter label="Equipo de Trincadores" subtitle="Especialistas" value={lashingTeam} onChange={setLashingTeam} />
-                    <NumericCounter label="Grúa Auxiliar de Tierra (Heavy Lift)" subtitle="Móvil Portuaria" value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
-                    <NumericCounter label="Plataformas MAFI" subtitle="Roll Trailers" value={mafiPlatforms} onChange={setMafiPlatforms} />
+                    <NumericCounter label="Cuadrillas de Estibadores (Turnos)" subtitle={isBigBagsCargo ? "Enganche Rápido Spreader" : "Turnos de Estiba"} value={stevedoreGangs} onChange={setStevedoreGangs} />
+                    <NumericCounter label="Equipo de Trincadores" subtitle={isBigBagsCargo ? "Excluido (Big Bags)" : "Especialistas"} value={lashingTeam} onChange={setLashingTeam} />
+                    <NumericCounter label="Grúa Auxiliar de Tierra (Heavy Lift)" subtitle={isBigBagsCargo ? "Excluida (No Heavy Lift)" : "Móvil Portuaria"} value={heavyLiftCrane} onChange={setHeavyLiftCrane} />
+                    <NumericCounter label="Plataformas MAFI" subtitle={isBigBagsCargo ? "Excluidas" : "Roll Trailers"} value={mafiPlatforms} onChange={setMafiPlatforms} />
                   </div>
                 </section>
 
@@ -1142,7 +1189,7 @@ export function ForwarderWorkspace() {
         const estibaSaleNum = estibaCostNum * 1.15;
         const estibaMarginNum = estibaSaleNum - estibaCostNum;
 
-        const matCostNum = (mafiPlatforms * 300) + (heavyLiftCrane * 2500) + (dunnageWood * 30) + (chainsBinders * 80) + (highCapacitySlings * 40);
+        const matCostNum = (mafiPlatforms * 300) + (heavyLiftCrane * 2500) + (dunnageWood * 30) + (chainsBinders * 80) + (highCapacitySlings * 40) + (spreaderMultipunto * 600);
         const matSaleNum = matCostNum * 1.15;
         const matMarginNum = matSaleNum - matCostNum;
 
