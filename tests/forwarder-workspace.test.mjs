@@ -156,3 +156,21 @@ test('13. Modal Footer implements financial inputs and "Guardar Flete y Estiba e
   assert.match(forwarderComponentSource, /setIsCargoModalOpen\(false\)/);
 });
 
+test('14. ForwarderWorkspace implements delete project button with stopPropagation, confirmation, and state update', () => {
+  // Discreet delete button in project card
+  assert.match(forwarderComponentSource, /handleDeleteProject/);
+  assert.match(forwarderComponentSource, /title=["']Eliminar proyecto["']/);
+  // Uses stopPropagation to prevent opening project
+  assert.match(forwarderComponentSource, /e\.stopPropagation\(\)/);
+  // Confirmation dialog
+  assert.match(forwarderComponentSource, /window\.confirm\(/);
+  // Deletes from local state
+  assert.match(forwarderComponentSource, /setProjects\(/);
+  // Redirects or cleans active project
+  assert.match(forwarderComponentSource, /setActiveProject\(updatedProjects\[0\]\)/);
+  assert.match(forwarderComponentSource, /setActiveProject\(null\)/);
+  // Calls DELETE endpoint
+  assert.match(forwarderComponentSource, /method:\s*['"]DELETE['"]/);
+});
+
+
