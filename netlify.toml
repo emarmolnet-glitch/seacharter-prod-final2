@@ -18,7 +18,6 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  timeout = 26
 
 [functions."nlp-voyage-extract"]
   included_files = ["wpi.csv"]
