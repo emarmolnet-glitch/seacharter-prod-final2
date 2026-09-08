@@ -67,17 +67,18 @@
     "npm": "10.x"
   },
   "build": {
-  "appId": "com.seacharter.corepro",
-  "productName": "SeaCharter Core PRO",
-  "directories": {
-    "output": "dist_electron"
-  },
-  "win": {
-    "target": "portable"
-  },
-  "files": [
-    "dist/**/*",
-    "electron/**/*",
-    "preload.js"
-  ]
+    "appId": "com.seacharter.corepro",
+    "productName": "SeaCharter Core PRO",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "preload.js"
+    ]
+  }
 }
