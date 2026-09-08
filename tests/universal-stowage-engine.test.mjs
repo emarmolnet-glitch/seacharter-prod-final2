@@ -448,3 +448,111 @@ test('10. Croquis de estiba ubicado al final del documento en formato técnico a
   );
 });
 
+// ============================================================================
+// 11. JUSTIFICACIÓN TÉCNICA DINÁMICA DE INGENIERÍA NAVAL (EXECUTIVE JUSTIFICATION)
+// ============================================================================
+
+test('11. calculateUniversalStowagePlan genera executiveJustification con los 3 puntos exactos y física naval calculada', () => {
+  // Caso Heavy Lift / Tanktop
+  const heavyItems = [
+    {
+      id: 'hl-transformador-80t',
+      category: 'Maquinaria / Equipos Industriales',
+      type: 'Transformador Eléctrico 80MT',
+      quantity: 1,
+      weight: 80000,
+      length: 6.0,
+      width: 4.0,
+      height: 3.5,
+      shipping_mode_supported: 'Breakbulk / Maquinaria Suelta',
+    },
+  ];
+
+  const heavyPlan = handler.calculateUniversalStowagePlan(heavyItems);
+  assert.ok(heavyPlan.executiveJustification, 'stowagePlan debe incluir executiveJustification');
+  assert.ok(Array.isArray(heavyPlan.executiveJustification), 'executiveJustification debe ser un array');
+  assert.equal(heavyPlan.executiveJustification.length, 3, 'Debe contener exactamente 3 puntos');
+
+  const [point1, point2, point3] = heavyPlan.executiveJustification;
+
+  // Punto 1: Cálculo de Masas y Volúmenes
+  assert.match(point1, /Cálculo de Masas y Volúmenes:/, 'Punto 1 debe iniciar con Cálculo de Masas y Volúmenes');
+  assert.match(point1, /80\.00\s*MT/, 'Debe reflejar totalCargoWeightMT (80.00 MT)');
+  assert.match(point1, /24\.00\s*m²/, 'Debe reflejar el área en m² calculada de los items (6x4 = 24 m²)');
+  assert.match(point1, /84\.00\s*m³/, 'Debe reflejar el totalVolumeOccupiedCbm (6x4x3.5 = 84 m³)');
+
+  // Punto 2: Lógica de Asignación de Bodegas (Heavy Lift -> Tanktop)
+  assert.match(point2, /Lógica de Asignación de Bodegas:/, 'Punto 2 debe iniciar con Lógica de Asignación de Bodegas');
+  assert.match(point2, /Heavy Lift|Tanktop|Doble Fondo/i, 'Debe explicar la asignación a Tanktop por ser Heavy Lift');
+
+  // Punto 3: Validación de Resistencia Estructural (presión vs admisible y Código CSS OMI)
+  assert.match(point3, /Validación de Resistencia Estructural:/, 'Punto 3 debe iniciar con Validación de Resistencia Estructural');
+  assert.match(point3, /3\.33\s*t\/m²/, 'Debe comparar la presión máxima ejercida (80/24 = 3.33 t/m²)');
+  assert.match(point3, /20\.0\s*t\/m²/, 'Debe comparar frente a la capacidad máxima admisible (20.0 t/m²)');
+  assert.match(point3, /Código CSS de la OMI/i, 'Debe confirmar el cumplimiento con el Código CSS de la OMI');
+
+  // Caso Ro-Ro / Weather Deck
+  const roroItems = [
+    {
+      id: 'roro-camion-1',
+      category: 'Vehículo / Unidades Rodadas',
+      type: 'Camión Articulado',
+      quantity: 2,
+      weight: 25000,
+      length: 12.0,
+      width: 2.5,
+      height: 3.0,
+      shipping_mode_supported: 'Ro-Ro / Vehículo Rodado',
+    },
+  ];
+  const roroPlan = handler.calculateUniversalStowagePlan(roroItems);
+  assert.match(roroPlan.executiveJustification[1], /Ro-Ro|Cubierta Superior|Weather Deck/i, 'Debe explicar asignación a Weather Deck');
+
+  // Caso Big Bags / Bodega Bloque
+  const bbItems = [
+    {
+      id: 'bb-cemento-100',
+      category: 'Mercancía Ensacada / Dry Bulk',
+      type: 'Big Bags de Cemento',
+      quantity: 100,
+      weight: 1000,
+      length: 1.0,
+      width: 1.0,
+      height: 1.2,
+      shipping_mode_supported: 'Big Bags / Granel',
+    },
+  ];
+  const bbPlan = handler.calculateUniversalStowagePlan(bbItems);
+  assert.match(bbPlan.executiveJustification[1], /Big Bags|bloque|Block Stowage/i, 'Debe explicar estiba en bloque para Big Bags');
+});
+
+test('12. ForwarderWorkspace renderiza el bloque "Razonamiento Técnico de Ingeniería Naval" justo debajo del croquis', () => {
+  // Debe contener el título del bloque
+  assert.match(
+    workspaceSource,
+    /Razonamiento Técnico de Ingeniería Naval/,
+    'Debe incluir el título "Razonamiento Técnico de Ingeniería Naval"'
+  );
+
+  // Ubicación: inmediatamente después del croquis-ascii-container
+  const croquisIndex = workspaceSource.indexOf('croquis-ascii-container');
+  const justificationTitleIndex = workspaceSource.indexOf('Razonamiento Técnico de Ingeniería Naval');
+  assert.ok(croquisIndex > 0, 'Debe existir el contenedor del croquis');
+  assert.ok(justificationTitleIndex > croquisIndex, 'El bloque de razonamiento técnico debe ubicarse tras el croquis');
+
+  // Debe renderizar executiveJustification
+  assert.match(
+    workspaceSource,
+    /executiveJustification/,
+    'Debe evaluar y renderizar executiveJustification'
+  );
+
+  // Formato corporativo text-sm text-gray-700
+  assert.match(
+    workspaceSource,
+    /text-sm\s+text-gray-700/,
+    'Debe aplicar estilo corporativo con clase text-sm text-gray-700'
+  );
+});
+
+
