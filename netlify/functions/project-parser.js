@@ -3281,6 +3281,7 @@ APLICA UN FILTRADO INTELIGENTE EN TRES FASES ESTRICTAS:
 3. PIE DE PÁGINA / FINAL: Identifica e ignora los totales globales (ej. Total Bruto, Total Bultos, Sumas acumuladas, Peso Total General), notas legales, condiciones generales y firmas para evitar duplicidades de ítems.
 
 REGLAS DE NEGOCIO ESTRICTAS PARA CADA ÍTEM EXTRAÍDO:
+- COMPRESIÓN Y AGRUPACIÓN OBLIGATORIA (ANTI-TIMEOUT): Si el documento contiene decenas de líneas de mercancías (ej. docenas de vehículos, bobinas o pallets), ESTÁ ESTRICTAMENTE PROHIBIDO devolver un JSON con decenas de elementos separados. Debes AGRUPAR obligatoriamente los ítems similares por 'category' y 'type', sumando la 'quantity' total y calculando el peso y dimensiones promedio del grupo. Tu salida JSON NUNCA debe superar los 5 a 10 ítems agrupados para garantizar una respuesta ultra rápida y evitar el colapso del servidor. Si el Excel incluye tablas de resumen, prioriza extraer esos totales agrupados.
 - category: Clasifica OBLIGATORIAMENTE la mercancía en una de las siguientes categorías oficiales del catálogo controlado (ESTÁ ESTRICTAMENTE PROHIBIDO generar valores personalizados fuera de estos catálogos):
   * "Mercancía Ensacada / Dry Bulk" (para mercancías ensacadas, sacos, big bags, graneles secos, minerales, cereales, etc.)
   * "Maquinaria / Equipos Industriales" (para maquinaria de construcción, equipos industriales, equipos de proceso, transformadores, generadores, turbinas, etc.)
