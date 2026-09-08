@@ -1068,6 +1068,12 @@ export function ForwarderWorkspace() {
     if (e && typeof e.stopPropagation === 'function') {
       e.stopPropagation();
     }
+
+    // 🛡️ Blindaje: Si no hay un proyecto real y válido, se cancela sin mostrar la alerta
+    if (!projToDelete || typeof projToDelete !== 'object' || (!projToDelete.id && !projToDelete.project_ref)) {
+      return;
+    }
+
     const displayName = projToDelete.client_name || projToDelete.project_ref || 'este proyecto';
     const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar el proyecto "${displayName}"?`);
     if (!confirmed) return;
