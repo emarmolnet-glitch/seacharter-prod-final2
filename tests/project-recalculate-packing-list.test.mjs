@@ -67,7 +67,7 @@ test('3. handleRecalculate logic reads rows, triggers internal calculation, Univ
   assert.match(forwarderSource, /setFinancialBreakdown/, 'Must update financialBreakdown state');
 
   // Verifies remote recalculation sync to project-parser with defensive try/catch
-  assert.match(forwarderSource, /fetch\(\s*['"]\/\.netlify\/functions\/project-parser['"][\s\S]*?method:\s*['"]POST['"]/, 'Must call remote project-parser function for recalculation');
+  assert.match(forwarderSource, /fetch\(\s*['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/project-parser['"][\s\S]*?method:\s*['"]POST['"]/, 'Must call remote project-parser function for recalculation');
 });
 
 test('4. Subtle and fast visual feedback is displayed upon successful recalculation', () => {

@@ -1,3 +1,5 @@
+import { getApiUrl } from "./utils/apiConfig.js";
+
 function cleanText(value) {
   return String(value ?? "").trim();
 }
@@ -67,7 +69,7 @@ async function enrichPortWithWpi(port) {
 async function findPort(query) {
   if (!query) return null;
   const [response] = await Promise.all([
-    fetch(`/api/v1/ports/search?q=${encodeURIComponent(query)}`, {
+    fetch(getApiUrl(`/api/v1/ports/search?q=${encodeURIComponent(query)}`), {
       headers: { Accept: "application/json" },
     }),
     ensureGlobalWpiCatalog(),

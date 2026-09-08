@@ -213,6 +213,7 @@
                 if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) return endpoint;
                 return endpoint.startsWith('/') ? (base + endpoint) : (base + '/' + endpoint);
             };
+            global.getApiUrl = global.getAbsoluteApiUrl;
 
             if (isLocal && typeof global.fetch === 'function') {
                 const nativeFetch = global.fetch;

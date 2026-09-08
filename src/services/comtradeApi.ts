@@ -1,4 +1,6 @@
-const COMTRADE_PROXY_ENDPOINT = '/.netlify/functions/comtrade';
+import { getApiUrl } from '../utils/apiConfig.js';
+
+const COMTRADE_PROXY_ENDPOINT = getApiUrl('/.netlify/functions/comtrade');
 const CACHE_PREFIX = 'seacharter:comtrade:v3';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LAST_CONSOLIDATED_PERIOD = 2025;

@@ -2,16 +2,17 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
+import { getApiUrl } from "./utils/apiConfig.js";
 
-const DEFAULT_CEREBRO_IA_ENDPOINT = "/api/cerebro-ia";
-const DEFAULT_CHAT_ASSISTANT_ENDPOINT = "/.netlify/functions/chat-assistant";
+const DEFAULT_CEREBRO_IA_ENDPOINT = getApiUrl("/api/cerebro-ia");
+const DEFAULT_CHAT_ASSISTANT_ENDPOINT = getApiUrl("/.netlify/functions/chat-assistant");
 const REQUEST_TIMEOUT_MS = 45_000;
 const AI_HISTORY_LIMIT = 6;
 const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
 const AI_USER_CONTEXT_MAX_CHARS = 8_000;
 const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
-const VESSEL_NAME_RESOLUTION_ENDPOINT = "/api/vessel-name-resolution";
+const VESSEL_NAME_RESOLUTION_ENDPOINT = getApiUrl("/api/vessel-name-resolution");
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -2150,7 +2151,7 @@ if (document.readyState === "loading") {
   mountSeaAssistant();
 }
 
-const DRAFT_EMAIL_ENDPOINT = "/api/send-email";
+const DRAFT_EMAIL_ENDPOINT = getApiUrl("/api/send-email");
 const DRAFT_EMAIL_TIMEOUT_MS = 20_000;
 let activeDraftEmailModal = null;
 

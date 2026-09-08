@@ -187,7 +187,8 @@ class CompatibilityModuleManager {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const res = await fetch('/api/vessel-compatibility', {
+            const getApiUrl = (typeof window !== 'undefined' && window.getApiUrl) || function(u) { return u; };
+            const res = await fetch(getApiUrl('/api/vessel-compatibility'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({

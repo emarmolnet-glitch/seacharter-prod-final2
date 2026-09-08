@@ -8,7 +8,14 @@
  * como en los campos que consume el motor de aptitud por tipo de carga.
  */
 
-const ENDPOINT = '/api/vessels-master-classes';
+const resolveRegistryEndpoint = (path) => {
+  if (typeof window !== 'undefined' && typeof window.getApiUrl === 'function') {
+    return window.getApiUrl(path);
+  }
+  return path;
+};
+
+const ENDPOINT = resolveRegistryEndpoint('/api/vessels-master-classes');
 const STORAGE_KEY = 'seacharter:verified-vessel-classes';
 const STORAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_LOOKUP_BATCH = 200;

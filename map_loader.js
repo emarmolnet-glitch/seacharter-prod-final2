@@ -152,6 +152,8 @@
         shouldReconnect: false,
         options: {}
     };
+    const getLocalApiUrl = (endpoint) => (typeof window !== 'undefined' && window.getApiUrl ? window.getApiUrl(endpoint) : endpoint);
+
     const aisProxyPollingState = {
         timer: null,
         inFlight: false,
@@ -159,7 +161,7 @@
         retryIndex: 0,
         retryDelaysMs: [5000, 10000, 30000],
         userActivated: false,
-        endpoint: '/api/audit-vessels',
+        endpoint: getLocalApiUrl('/api/audit-vessels'),
         map: null,
         waitingForMapIdle: false
     };
@@ -831,11 +833,12 @@
     }
 
     function getViewportQueryUrl(bounds) {
-        if (!bounds) return '/api/ais-scan';
+        const baseEndpoint = getLocalApiUrl('/api/ais-scan');
+        if (!bounds) return baseEndpoint;
         const sw = bounds.getSouthWest ? bounds.getSouthWest() : bounds._southWest;
         const ne = bounds.getNorthEast ? bounds.getNorthEast() : bounds._northEast;
-        if (!sw || !ne) return '/api/ais-scan';
-        return `/api/ais-scan?sw_lat=${sw.lat}&sw_lon=${sw.lng}&ne_lat=${ne.lat}&ne_lon=${ne.lng}`;
+        if (!sw || !ne) return baseEndpoint;
+        return `${baseEndpoint}?sw_lat=${sw.lat}&sw_lon=${sw.lng}&ne_lat=${ne.lat}&ne_lon=${ne.lng}`;
     }
 
     function getDefaultAisMap() {
@@ -911,7 +914,7 @@
     }
 
     function appendProxyBoundsToEndpoint(endpoint, bounds) {
-        if (!endpoint || !bounds || !hasValidAisBounds(bounds)) return endpoint || '/api/audit-vessels';
+        if (!endpoint || !bounds || !hasValidAisBounds(bounds)) return endpoint || getLocalApiUrl('/api/audit-vessels');
         try {
             const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
             const url = new URL(endpoint, base);
@@ -919,6 +922,9 @@
             url.searchParams.set('sw_lon', String(bounds.swLon));
             url.searchParams.set('ne_lat', String(bounds.neLat));
             url.searchParams.set('ne_lon', String(bounds.neLon));
+            if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+                return `${url.origin}${url.pathname}${url.search}`;
+            }
             return `${url.pathname}${url.search}`;
         } catch (_) {
             return endpoint;
@@ -1050,7 +1056,7 @@
         if (aisProxyPollingState.inFlight) return Promise.resolve(null);
 
         aisProxyPollingState.inFlight = true;
-        const targetEndpoint = endpoint || aisProxyPollingState.endpoint || '/api/audit-vessels';
+        const targetEndpoint = endpoint || aisProxyPollingState.endpoint || getLocalApiUrl('/api/audit-vessels');
         const finalUrl = buildFinalProxyRequestUrl(targetEndpoint, mapInstance);
 
         return fetch(finalUrl, {
@@ -1312,7 +1318,7 @@
         const destination = shipData.destination || 'N/A';
 
         try {
-            const res = await fetch('/api/vessels', {
+            const res = await fetch(getLocalApiUrl('/api/vessels'), {
                 method: 'POST',
                 cache: 'no-store',
                 headers: {

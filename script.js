@@ -139,7 +139,8 @@ parts: [{ text: prompt }]
 }]
 };
 
-const response = await fetch('/api/gemini', {
+const getApiUrl = (typeof window !== 'undefined' && window.getApiUrl) || function(u) { return u; };
+const response = await fetch(getApiUrl('/api/gemini'), {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify(payload)

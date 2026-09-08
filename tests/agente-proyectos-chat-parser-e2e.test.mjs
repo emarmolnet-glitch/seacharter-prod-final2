@@ -8,7 +8,7 @@ const widgetCssSource = readFileSync(new URL('../src/components/AgenteProyectosW
 
 test('1. AgenteProyectosWidget connects handleSend and handleFileAttach directly to /.netlify/functions/project-parser via POST', () => {
   // Verifies POST endpoint invocation in both handlers
-  assert.match(widgetSource, /fetch\(\s*['"]\/\.netlify\/functions\/project-parser['"]/);
+  assert.match(widgetSource, /fetch\(\s*(?:getApiUrl\(\s*)?['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/project-parser['"]/);
   assert.match(widgetSource, /method:\s*['"]POST['"]/);
   assert.match(widgetSource, /['"]Content-Type['"]:\s*['"]application\/json['"]/);
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiUrl } from './src/utils/apiConfig.js';
 
 const STORAGE_KEY = 'sea_charter_v2_session';
 
@@ -317,7 +318,7 @@ export default function ShipComparison() {
     setMessage({ type: 'info', text: 'Extrayendo especificaciones del buque con IA...' });
 
     try {
-      const response = await fetch('/api/ship-search', {
+      const response = await fetch(getApiUrl('/api/ship-search'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

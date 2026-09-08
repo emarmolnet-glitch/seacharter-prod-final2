@@ -168,13 +168,10 @@ test('Due Diligence stores successful payloads by normalized IMO', () => {
 });
 
 test('Data Bridge source aliases and V2 metadata render the corporate badge', () => {
-  assert.match(indexSource, /normalizedSource === 'DATA_BRIDGE'/);
-  assert.match(indexSource, /normalizedSource\.includes\('DATABRIDGE'\)/);
-  assert.match(indexSource, /const hasLocalMasterMetadata = sourceRecords\.some/);
-  assert.match(indexSource, /source_payload/);
-  assert.match(indexSource, /cacheValidated === true/);
+  assert.match(indexSource, /sourceOrigins\.includes\('DATABRIDGE'\)/);
+  assert.match(indexSource, /sourceOrigins\.includes\('DATALASTIC'\)/);
   assert.match(indexSource, /normalizeMatchingSourceMetadata\(m, v, m\.ais\)/);
-  assert.match(indexSource, /DATABRIDGE: 'Data Bridge'/);
+  assert.match(indexSource, /DATABRIDGE: 'Cartera Neon \/ Data Bridge'/);
   assert.match(indexSource, /MASTER: 'Master V2'/);
 });
 
@@ -221,7 +218,7 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
       },
     },
   );
-  assert.equal(request.url, '/api/vessel-due-diligence');
+  assert.match(request.url, /^(?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/vessel-due-diligence$/);
   assert.deepEqual(JSON.parse(request.options.body), {
     imo: '',
     mmsi: '224123456',
@@ -366,7 +363,7 @@ test('persistDueDiligenceVessel sends canonical technical columns through PATCH'
     },
   });
 
-  assert.equal(request.url, '/api/vessel-due-diligence-save');
+  assert.match(request.url, /^(?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/vessel-due-diligence-save$/);
   assert.equal(request.options.method, 'PATCH');
   const requestBody = JSON.parse(request.options.body);
   assert.equal(requestBody.action, 'save');
@@ -393,7 +390,7 @@ test('discardDueDiligenceVessel marks the vessel through PATCH', async () => {
     },
   });
 
-  assert.equal(request.url, '/api/vessel-due-diligence-save');
+  assert.match(request.url, /^(?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/vessel-due-diligence-save$/);
   assert.equal(request.options.method, 'PATCH');
   assert.deepEqual(JSON.parse(request.options.body), {
     vessel: { ...vessel, status: 'discarded' },

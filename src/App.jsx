@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
-import './utils/apiConfig.js';
+import { getApiUrl } from './utils/apiConfig.js';
 
 /**
  * Normalizes reference identifiers for cross-module session matching.
@@ -161,7 +161,7 @@ export function executeImoHydration(imoValue) {
     if (typeof window !== 'undefined') {
       if (typeof window.openVesselDetailDrawer === 'function') {
         // Consultar ficha y abrir drawer para revisión intermedia
-        void fetch(`/api/vessel/${encodeURIComponent(cleanImo)}`)
+        void fetch(getApiUrl(`/api/vessel/${encodeURIComponent(cleanImo)}`))
           .then((res) => res.json())
           .then((payload) => {
             if (payload?.success && payload.vessel) {
@@ -178,7 +178,7 @@ export function executeImoHydration(imoValue) {
         if (typeof fetchFn === 'function') {
           void fetchFn(cleanImo);
         } else if (typeof fetch === 'function') {
-          void fetch(`/api/vessel/${encodeURIComponent(cleanImo)}`)
+          void fetch(getApiUrl(`/api/vessel/${encodeURIComponent(cleanImo)}`))
             .then((res) => res.json())
             .then((payload) => {
               if (payload?.success && payload.vessel) {
@@ -253,7 +253,7 @@ export function useSeaCharterSync() {
             .catch(() => {})
             .finally(() => { isSavingRef.current = false; });
         } else {
-          fetch('/api/app-state', {
+          fetch(getApiUrl('/api/app-state'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
@@ -404,17 +404,17 @@ export function usePendingImoSync() {
       } catch (_) {}
 
       if (typeof fetch === 'function') {
-        fetch('/api/app-state?key=core_pro_pending_imo', {
+        fetch(getApiUrl('/api/app-state?key=core_pro_pending_imo'), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' },
         }).catch(() => {});
 
-        fetch('/api/app-state?key=selected_imo', {
+        fetch(getApiUrl('/api/app-state?key=selected_imo'), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' },
         }).catch(() => {});
 
-        fetch('/api/app-state', {
+        fetch(getApiUrl('/api/app-state'), {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ key: 'core_pro_pending_imo' }),
@@ -511,7 +511,7 @@ export function usePendingImoSync() {
       if (isPollingRef.current || typeof fetch !== 'function') return;
       isPollingRef.current = true;
       try {
-        const res = await fetch('/api/app-state?key=core_pro_pending_imo', {
+        const res = await fetch(getApiUrl('/api/app-state?key=core_pro_pending_imo'), {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
         });

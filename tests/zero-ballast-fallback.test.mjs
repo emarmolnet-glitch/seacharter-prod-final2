@@ -21,7 +21,7 @@ test('backend short-circuits ballast routes inside the anchorage radius', () => 
 test('frontend avoids routing calls and accepts a two-point zero-ballast route', () => {
   assert.match(trackingSource, /isBallastAudit && directDistanceNm < 15/);
   assert.match(trackingSource, /isBallastRoute && directDistanceNm < 15/);
-  assert.match(trackingSource, /zeroBallastRoute \? null : await fetch\('\/api\/route'/);
+  assert.match(trackingSource, /zeroBallastRoute \? null : await fetch\(\s*(?:getApiUrl\(\s*)?['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/route['"]/);
   assert.match(trackingSource, /validZeroBallast/);
   assert.match(trackingSource, /routeKind: 'ballast'/);
 });

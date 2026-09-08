@@ -33,6 +33,8 @@ export function resolveApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
+export const getApiUrl = resolveApiUrl;
+
 export function installFetchInterceptor() {
   if (typeof window === 'undefined') return;
 
@@ -40,6 +42,7 @@ export function installFetchInterceptor() {
   window.NETLIFY_PRODUCTION_ORIGIN = NETLIFY_PRODUCTION_ORIGIN;
   window.NETLIFY_API_BASE_URL = base;
   window.getAbsoluteApiUrl = resolveApiUrl;
+  window.getApiUrl = getApiUrl;
 
   // Intercept window.fetch if executing under file: or Electron
   if (base && typeof window.fetch === 'function' && !window.__fetchInterceptorInstalled) {

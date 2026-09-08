@@ -112,7 +112,8 @@ export function ConnectionStatusBar() {
             .catch(() => {})
             .finally(() => { isSaving = false; });
         } else {
-          window.fetch("/api/app-state", {
+          const resolveUrl = typeof window.getApiUrl === "function" ? window.getApiUrl : (u) => u;
+          window.fetch(resolveUrl("/api/app-state"), {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify({

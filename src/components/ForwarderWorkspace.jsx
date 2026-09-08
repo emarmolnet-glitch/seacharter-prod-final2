@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getApiUrl } from '../utils/apiConfig.js';
 import { parsePackingList } from '../utils/packingListParser.js';
 import AgenteProyectosWidget from './AgenteProyectosWidget';
 import '../../dual-trading-chartering-view.js';
@@ -864,7 +865,7 @@ export function ForwarderWorkspace() {
   const fetchProjects = async () => {
     setIsLoading(true); setError(null);
     try {
-      const res = await fetch('/.netlify/functions/forwarder-projects', { method: 'GET', headers: { Accept: 'application/json' } });
+      const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), { method: 'GET', headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.projects || []);
@@ -1025,13 +1026,13 @@ export function ForwarderWorkspace() {
 
   const persistProjectToDatabase = async (projectToSave) => {
     try {
-      const res = await fetch('/.netlify/functions/forwarder-projects', {
+      const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(projectToSave)
       });
       if (!res.ok) {
-        await fetch('/.netlify/functions/forwarder-projects', {
+        await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(projectToSave)
@@ -1047,7 +1048,7 @@ export function ForwarderWorkspace() {
     if (!input || !input.trim()) return;
     setIsCreating(true);
     try {
-      const res = await fetch('/.netlify/functions/forwarder-projects', {
+      const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ client_name: input.trim(), documents: [] }),
       });
@@ -1131,7 +1132,7 @@ export function ForwarderWorkspace() {
 
     // 4. Ejecutar llamada de borrado en la base de datos
     try {
-      await fetch('/.netlify/functions/forwarder-projects', {
+      await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -1196,7 +1197,7 @@ export function ForwarderWorkspace() {
           ? dataBase64.split(',')[1].trim()
           : (typeof dataBase64 === 'string' ? dataBase64.trim() : '');
 
-        const response = await fetch('/.netlify/functions/project-parser', {
+        const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2271,7 +2272,7 @@ export function ForwarderWorkspace() {
 
       // 3. Sincronización remota con motor project-parser (con fallback seguro local)
       try {
-        const response = await fetch('/.netlify/functions/project-parser', {
+        const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
