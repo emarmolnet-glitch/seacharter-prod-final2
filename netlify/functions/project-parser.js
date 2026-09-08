@@ -841,6 +841,13 @@ function parseOperationalRate(text, type = 'load') {
  */
 function extractRouteAndOperationalOptions(text, explicitOptions = {}) {
   const result = { ...(explicitOptions || {}) };
+  if (explicitOptions.insuranceCost != null && !isNaN(Number(explicitOptions.insuranceCost))) {
+    result.insuranceCost = Number(explicitOptions.insuranceCost);
+  }
+  if (explicitOptions.seguroMercancia != null && !isNaN(Number(explicitOptions.seguroMercancia))) {
+    result.seguroMercancia = Number(explicitOptions.seguroMercancia);
+    result.insuranceCost = result.insuranceCost ?? result.seguroMercancia;
+  }
   if (!text || typeof text !== 'string') return result;
 
   const lower = text.toLowerCase();
@@ -1005,6 +1012,23 @@ function extractRouteAndOperationalOptions(text, explicitOptions = {}) {
     if (!isNaN(v)) {
       result.actualDischargingDays = v;
     }
+  }
+
+  // Seguro de Mercancía / CIF Insurance
+  const insuranceMatch = lower.match(/(?:seguro(?:\s*(?:de\s*)?mercanc[ií]a)?|insurance(?:\s*cost)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
+  if (insuranceMatch && insuranceMatch[1]) {
+    const v = parseFloat(insuranceMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v) && v >= 0) {
+      result.insuranceCost = v;
+      result.seguroMercancia = v;
+    }
+  }
+  if (explicitOptions.insuranceCost != null && !isNaN(Number(explicitOptions.insuranceCost))) {
+    result.insuranceCost = Number(explicitOptions.insuranceCost);
+  }
+  if (explicitOptions.seguroMercancia != null && !isNaN(Number(explicitOptions.seguroMercancia))) {
+    result.seguroMercancia = Number(explicitOptions.seguroMercancia);
+    result.insuranceCost = result.insuranceCost ?? result.seguroMercancia;
   }
 
   return result;
@@ -2233,6 +2257,7 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     surveyorCost = 1500;
   }
   const inlandCost = Math.max(0, Number(options.inlandCost || options.inlandTrucksCount) || 0);
+  const insuranceCost = Math.max(0, Number(options.insuranceCost ?? options.seguroMercancia ?? options.seguro_mercancia ?? options.insurance_cost) || 0);
   const customsCost = Math.max(0, Number(options.customsCost || options.merchandiseCost) || 0);
   const merchandiseValue = Math.max(0, Number(options.merchandiseValue || options.cargoValue) || 0);
 
@@ -2271,13 +2296,13 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
       description: 'Tarifa base de flete marítimo internacional en régimen de grupaje consolidado',
     });
   } else {
-    // Modalidad Fletamento Completo: Multiplicación estricta de D_total por la tarifa diaria del buque (USD/día) y el tipo de cambio aplicable
+    // Modalidad Fletamento Completo: Multiplicación estricta de D_total por la tarifa diaria del buque (USD/día) y el tipo de cambio aplicable si la divisa es EUR
     const rot = assessment?.rotationBreakdown || assessment?.timeCharterEquivalent;
     const D_total = rot?.totalRotationDays ?? rot?.totalVoyageDays ?? 10;
     const dailyHire = rot?.dailyHireRateUsd ?? rot?.dailyUsd ?? assessment?.tce ?? 8500;
-    const exRate = rot?.exchangeRateUsdToEur ?? (Number(options.exchangeRate || options.usdEurExchangeRate) || 0.92);
+    const exRate = currency === 'USD' ? 1.0 : (rot?.exchangeRateUsdToEur ?? (Number(options.exchangeRate || options.usdEurExchangeRate) || 0.92));
 
-    // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × Tipo de cambio aplicable
+    // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × (1.0 si es USD o Tipo de cambio si EUR)
     oceanFreightSubtotal = Math.round(D_total * dailyHire * exRate * 100) / 100;
     const vesselName = assessment?.suggestedVessel?.vesselType || 'Buque de Carga General / Coaster';
     const polName = rot?.pol || options.pol || 'Valencia';
@@ -2565,6 +2590,17 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     });
   }
 
+  // Seguro de Mercancía a Todo Riesgo (Transición a CIF)
+  if (insuranceCost > 0) {
+    fobPortOperationsItems.push({
+      concept: 'Seguro de Mercancía a Todo Riesgo',
+      units: 1,
+      amount: insuranceCost,
+      category: 'Servicios Asociados',
+      description: 'Póliza marítima de cobertura de seguro a todo riesgo para la mercancía bajo cláusulas ICC A del Instituto de Londres (condiciones CIF).',
+    });
+  }
+
   // Partida de Mercancía: sustituye permanentemente a Aduanas con el valor total de la mercancía gestionado internamente
   const totalMerchandiseValue = (options.merchandiseValue != null && options.customsCost != null && Number(options.merchandiseValue) !== Number(options.customsCost))
     ? (Number(options.merchandiseValue) + Number(options.customsCost))
@@ -2582,18 +2618,22 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
 
   // Gestión y penalización automática por demoras (Demurrage) en muelle
   const demurrage = assessment?.timeCharterEquivalent?.demurrage || assessment?.rotationBreakdown?.demurrage;
-  if (demurrage && demurrage.hasDemurrage && demurrage.totalPenaltyEur > 0) {
-    fobPortOperationsItems.push({
-      concept: 'Penalización por Demoras en Muelle (Demurrage)',
-      units: demurrage.demurrageDays,
-      unitCost: demurrage.demurrageRateDailyEur,
-      amount: demurrage.totalPenaltyEur,
-      category: 'Servicios Asociados',
-      subCategory: 'Demoras y Penalizaciones Portuarias',
-      basis: `${demurrage.demurrageDays.toFixed(2)} días demora (${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`,
-      status: demurrage.status,
-      description: `Sobrecoste automático por superar plazos de plancha en muelle (${demurrage.allowedTotalPortDays.toFixed(2)} d permitidos vs ${demurrage.actualTotalPortDays.toFixed(2)} d reales). Tarifa diaria de demora: ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día.`,
-    });
+  if (demurrage && demurrage.hasDemurrage) {
+    const demPenalty = currency === 'USD' ? demurrage.totalPenaltyUsd : (demurrage.totalPenaltyEur ?? demurrage.totalPenaltyUsd);
+    const demRateDaily = currency === 'USD' ? demurrage.demurrageRateDailyUsd : (demurrage.demurrageRateDailyEur ?? demurrage.demurrageRateDailyUsd);
+    if (demPenalty > 0) {
+      fobPortOperationsItems.push({
+        concept: 'Penalización por Demoras en Muelle (Demurrage)',
+        units: demurrage.demurrageDays,
+        unitCost: demRateDaily,
+        amount: demPenalty,
+        category: 'Servicios Asociados',
+        subCategory: 'Demoras y Penalizaciones Portuarias',
+        basis: `${demurrage.demurrageDays.toFixed(2)} días demora (${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`,
+        status: demurrage.status,
+        description: `Sobrecoste automático por superar plazos de plancha en muelle (${demurrage.allowedTotalPortDays.toFixed(2)} d permitidos vs ${demurrage.actualTotalPortDays.toFixed(2)} d reales). Tarifa diaria de demora: ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día.`,
+      });
+    }
   }
 
   // Suma exacta del Subtotal FOB y Operativa Portuaria
@@ -2653,23 +2693,32 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     valor_total_mercancia_usd = Math.round((totalMerchandiseValue / exRateUsdToEur) * 100) / 100;
   }
 
-  // 3. Ratios unitarios en USD/MT
-  const flete_unitario_usd_mt = toneladas > 0 ? Math.round((flete_total_usd / toneladas) * 100) / 100 : 0;
-  const fob_mas_mercancia_unitario_usd_mt = toneladas > 0 ? Math.round(((costes_fob_totales_usd + valor_total_mercancia_usd) / toneladas) * 100) / 100 : 0;
+  // Subtotal FOB y Operativa Portuaria en USD (incluye todas las partidas FOB y la mercancía)
+  const subtotalFobPortOperationsUsd = currency === 'USD'
+    ? fobPortOperationsSubtotal
+    : (options.costes_fob_totales_usd != null || options.valor_total_mercancia_usd != null
+        ? Math.round((costes_fob_totales_usd + valor_total_mercancia_usd) * 100) / 100
+        : Math.round((fobPortOperationsSubtotal / exRateUsdToEur) * 100) / 100);
 
-  const formatCurrency = (val) => `${Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  // 3. Ratios unitarios en USD/MT
+  // Ratio unitario FOB + Mercancía: exactamente (subtotalFobPortOperations en USD) / toneladas, eliminando cualquier duplicidad
+  const flete_unitario_usd_mt = toneladas > 0 ? Math.round((flete_total_usd / toneladas) * 100) / 100 : 0;
+  const fob_mas_mercancia_unitario_usd_mt = toneladas > 0 ? Math.round((subtotalFobPortOperationsUsd / toneladas) * 100) / 100 : 0;
+
+  const formatCurrency = (val) => `${currency === 'USD' ? '$' : ''}${Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 
   const summaryLines = [
     `📊 DESGLOSE FINANCIERO SEPARADO (SEACHARTER CORE PRO):`,
     `🌊 Subtotal Flete Marítimo / TCE: ${formatCurrency(oceanFreightSubtotal)} (${isUnderThreshold ? 'Grupaje LCL' : 'Fletamento Completo'}) · ${flete_unitario_usd_mt.toFixed(2)} USD/MT`,
-    `🏗️ Subtotal Costes FOB y Operativa Portuaria: ${formatCurrency(fobPortOperationsSubtotal)} (Manipulación muelle, estiba/trincaje, tasas y servicios asociados)`,
+    `🏗️ Subtotal Costes FOB y Operativa Portuaria: ${formatCurrency(fobPortOperationsSubtotal)} (Manipulación muelle, estiba/trincaje, tasas, seguro y servicios asociados)`,
     `💵 Ratios Unitarios Operativos (USD/MT):`,
     `   • Flete Unitario: ${flete_unitario_usd_mt.toFixed(2)} USD/MT`,
     `   • FOB + Mercancía Unitario: ${fob_mas_mercancia_unitario_usd_mt.toFixed(2)} USD/MT`,
   ];
 
   if (demurrage && demurrage.hasDemurrage) {
-    summaryLines.push(`⚠️ Demoras en Muelle (Demurrage): ${formatCurrency(demurrage.totalPenaltyEur)} (${demurrage.demurrageDays.toFixed(2)} días de sobrecoste a ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`);
+    const demPenalty = currency === 'USD' ? demurrage.totalPenaltyUsd : demurrage.totalPenaltyEur;
+    summaryLines.push(`⚠️ Demoras en Muelle (Demurrage): ${formatCurrency(demPenalty)} (${demurrage.demurrageDays.toFixed(2)} días de sobrecoste a ${demurrage.demurrageRateDailyUsd.toLocaleString('es-ES')} USD/día)`);
   }
 
   summaryLines.push(`💰 Coste Total Estimado All-In: ${formatCurrency(totalCostAllIn)}`);
@@ -2681,6 +2730,8 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
     currency,
     isSeparatedBreakdown: true,
     preStackingDays: isBigBagsCargoProfile ? Math.max(5, Number(options.preStackingDays) || storageDays || 5) : (storageDays > 0 ? storageDays : Math.max(5, Number(options.preStackingDays) || 5)),
+    insuranceCost,
+    seguroMercancia: insuranceCost,
     subtotalOceanFreight: oceanFreightSubtotal,
     subtotalFobPortOperations: fobPortOperationsSubtotal,
     subtotals: {
