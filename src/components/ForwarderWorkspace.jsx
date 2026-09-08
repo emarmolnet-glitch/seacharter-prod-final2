@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { parsePackingList } from '../utils/packingListParser.js';
 import AgenteProyectosWidget from './AgenteProyectosWidget';
+import '../../dual-trading-chartering-view.js';
+import {
+  buildCBAMCommercialAnalysis,
+  generateCBAMCommercialProformaPDF,
+  generateCBAMReportPDF,
+  generateCBAMRequirementsPDF,
+  updateCBAMState,
+  CBAM_FACTORS,
+  PRICE_2026,
+} from '../../cbam-module.js';
 
 function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   const numValue = Number(value) || 0;
@@ -752,6 +762,20 @@ export function ForwarderWorkspace() {
   const [editingLineItemId, setEditingLineItemId] = useState(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
 
+  // Herramientas Comerciales y Regulatorias (CBAM y Modo Dual)
+  const [isCbamOpen, setIsCbamOpen] = useState(false);
+  const [isDualTradingOpen, setIsDualTradingOpen] = useState(false);
+  const dualViewRef = useRef(null);
+
+  // Parámetros locales CBAM sincronizados con el proyecto
+  const [cbamSector, setCbamSector] = useState('');
+  const [cbamOrigin, setCbamOrigin] = useState('');
+  const [cbamDestination, setCbamDestination] = useState('');
+  const [cbamQuantity, setCbamQuantity] = useState(0);
+  const [cbamReportedEmissions, setCbamReportedEmissions] = useState('');
+  const [cbamCompetitorOrigin, setCbamCompetitorOrigin] = useState('');
+  const [cbamCompetitorFactor, setCbamCompetitorFactor] = useState('');
+
   const [showExecutiveReport, setShowExecutiveReport] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
@@ -762,6 +786,8 @@ export function ForwarderWorkspace() {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setShowExecutiveReport(false);
+        setIsCbamOpen(false);
+        setIsDualTradingOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1507,6 +1533,44 @@ export function ForwarderWorkspace() {
     actualDischargingDays,
     demurrageDailyRateUsd,
   ]);
+
+  useEffect(() => {
+    if (isDualTradingOpen && dualViewRef.current) {
+      const dualView = dualViewRef.current;
+      const fleteUnitario = Number(activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0);
+      const tons = Number(totals.totalWeightTons || totals.weightTons || (totals.weightKg ? totals.weightKg / 1000 : 0)) || 0;
+      const stowage = Number(totals.stowageFactor || (totals.m3 && tons > 0 ? totals.m3 / tons : 0)) || 0;
+
+      dualView.fleteJustoCalculado = fleteUnitario;
+      dualView.toneladasTotales = tons;
+      dualView.factorDeEstiba = stowage;
+      dualView.toleranciaCarga = 5;
+      dualView.getExportContext = () => ({
+        syncid: activeProject?.project_ref || 'PROJECT-FORWARDER',
+        id: activeProject?.project_ref || 'PROJECT-FORWARDER',
+        toleranceType: 'MOLOO / MOLCO'
+      });
+
+      let backLink = null;
+      const handleBackLink = (e) => {
+        e.preventDefault();
+        setIsDualTradingOpen(false);
+      };
+      const attachBackLink = () => {
+        backLink = dualView.shadowRoot?.querySelector?.('.back-link');
+        if (backLink) {
+          backLink.addEventListener('click', handleBackLink);
+        }
+      };
+      attachBackLink();
+      const timer = setTimeout(attachBackLink, 250);
+
+      return () => {
+        clearTimeout(timer);
+        backLink?.removeEventListener('click', handleBackLink);
+      };
+    }
+  }, [isDualTradingOpen, activeReport, financialBreakdown, totals, activeProject]);
 
   const handleApplyProjectPayload = async (payload) => {
     if (!payload) return;
@@ -3193,6 +3257,75 @@ export function ForwarderWorkspace() {
                     )}
                   </div>
                 </section>
+
+                {/* BARRA DE ACCIONES SECUNDARIA: HERRAMIENTAS COMERCIALES Y REGULATORIAS */}
+                <section className="pt-4 space-y-3" aria-label="Herramientas Comerciales y Regulatorias">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base" aria-hidden="true">🌐</span>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                        Herramientas Comerciales y Regulatorias
+                      </h3>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                      Módulos Satélite Especializados
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-100/90 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-slate-800">
+                        Simulaciones avanzadas y cumplimiento normativo en frontera
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Accede a la matriz de emisiones aduaneras CBAM o al simulador de arbitraje Dual Trading sin alterar ni perder los datos de tu cotización en curso.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        id="btn-open-cbam-modal"
+                        onClick={() => {
+                          const currentTons = Number(totals.totalWeightTons || totals.weightTons || (totals.weightKg ? totals.weightKg / 1000 : 0)) || 0;
+                          setCbamQuantity(currentTons);
+                          if (pol) setCbamOrigin(pol);
+                          if (pod) setCbamDestination(pod);
+                          if (!cbamSector) {
+                            const allItemsText = (cargoItems || []).map(i => `${i.type || ''} ${i.description || ''}`).join(' ').toLowerCase();
+                            if (allItemsText.includes('acero') || allItemsText.includes('hierro') || allItemsText.includes('steel') || allItemsText.includes('iron')) {
+                              setCbamSector('Acero');
+                            } else if (allItemsText.includes('cemento') || allItemsText.includes('cement') || allItemsText.includes('clinker')) {
+                              setCbamSector('Cemento');
+                            } else if (allItemsText.includes('aluminio') || allItemsText.includes('aluminum') || allItemsText.includes('aluminium')) {
+                              setCbamSector('Aluminio');
+                            } else if (allItemsText.includes('fertiliz') || allItemsText.includes('urea') || allItemsText.includes('abono')) {
+                              setCbamSector('Fertilizantes');
+                            }
+                          }
+                          setIsCbamOpen(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white text-xs font-bold shadow-sm transition-all duration-150 cursor-pointer"
+                        title="Calcular Impacto CBAM (UE)"
+                        aria-label="Calcular Impacto CBAM (UE)"
+                      >
+                        <span className="text-sm" aria-hidden="true">🌱</span>
+                        <span>Calcular Impacto CBAM (UE)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="btn-open-dual-trading-modal"
+                        onClick={() => setIsDualTradingOpen(true)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-[#002060] hover:bg-[#003380] active:bg-[#001845] text-white text-xs font-bold shadow-sm transition-all duration-150 cursor-pointer"
+                        title="Abrir Simulador Dual Trading"
+                        aria-label="Abrir Simulador Dual Trading"
+                      >
+                        <span className="text-sm" aria-hidden="true">⚖️</span>
+                        <span>Abrir Simulador Dual Trading</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">
@@ -3692,6 +3825,361 @@ export function ForwarderWorkspace() {
                   </div>
                 )}
               </section>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL MODO DUAL TRADING & CHARTERING */}
+      {isDualTradingOpen && (
+        <div
+          id="modal-dual-trading"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto animate-fadeIn print:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Simulador Dual Trading y Chartering"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsDualTradingOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-6xl h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-300">
+            {/* Header del Modal con título y botón de cierre claro */}
+            <div className="px-6 py-3.5 bg-[#002060] text-white flex items-center justify-between shrink-0 shadow-md">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl" aria-hidden="true">⚖️</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm uppercase tracking-wider text-white">Modo Dual · Trading &amp; Chartering</h3>
+                    <span className="text-[10px] bg-teal-500/20 text-teal-300 border border-teal-400/30 px-2 py-0.5 rounded font-mono uppercase font-bold">Módulo Integrado</span>
+                  </div>
+                  <p className="text-[11px] text-blue-200">Arbitraje comercial y cálculo de margen cruzado sobre flete marítimo</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="btn-close-dual-trading"
+                onClick={() => setIsDualTradingOpen(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition cursor-pointer"
+                aria-label="Cerrar Simulador Dual Trading"
+              >
+                <span className="text-base font-normal">✕</span>
+                <span>Cerrar</span>
+              </button>
+            </div>
+
+            {/* Contenedor del Componente Web Dual Trading */}
+            <div className="flex-1 overflow-auto bg-[#F8FAFC]">
+              <dual-trading-chartering-view ref={dualViewRef} style={{ display: 'block', minHeight: '100%' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CUMPLIMIENTO CBAM (UE) */}
+      {isCbamOpen && (() => {
+        const quantityNum = Number(cbamQuantity) || 0;
+        const analysis = buildCBAMCommercialAnalysis({
+          productType: cbamSector,
+          quantity: quantityNum,
+          certifiedFactor: cbamReportedEmissions,
+          competitorFactor: cbamCompetitorFactor
+        });
+
+        const formatEuro = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val || 0);
+
+        const handleExportProforma = () => {
+          const freightRate = Number(activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0);
+          generateCBAMCommercialProformaPDF({
+            productType: cbamSector,
+            quantity: quantityNum,
+            certifiedFactor: cbamReportedEmissions,
+            competitorFactor: cbamCompetitorFactor,
+            origin: cbamOrigin,
+            destination: cbamDestination,
+            freightRate,
+            freightTotal: freightRate * quantityNum
+          });
+        };
+
+        const handleExportReport = () => {
+          updateCBAMState({
+            sector: cbamSector,
+            origen: cbamOrigin,
+            destino: cbamDestination,
+            tonelaje: quantityNum,
+            factorManual: cbamReportedEmissions,
+            impuestoOrigen: 0
+          });
+          generateCBAMReportPDF();
+        };
+
+        const handleExportRequirements = () => {
+          updateCBAMState({
+            sector: cbamSector,
+            origen: cbamOrigin,
+            destino: cbamDestination,
+            tonelaje: quantityNum,
+            factorManual: cbamReportedEmissions,
+            impuestoOrigen: 0
+          });
+          generateCBAMRequirementsPDF();
+        };
+
+        return (
+          <div
+            id="modal-cbam"
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto animate-fadeIn print:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Módulo CBAM"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsCbamOpen(false);
+            }}
+          >
+            <div className="relative w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-300">
+              {/* Header del Modal con título y botón de cierre */}
+              <div className="px-6 py-4 bg-[#002060] text-white flex items-center justify-between shrink-0 shadow-md">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl" aria-hidden="true">🌱</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-sm uppercase tracking-wider text-white">Módulo CBAM · Mecanismo de Ajuste en Frontera por Carbono</h3>
+                      <span className="text-[10px] bg-teal-400/20 text-teal-300 border border-teal-400/30 px-2 py-0.5 rounded font-mono font-bold uppercase">UE 2026</span>
+                    </div>
+                    <p className="text-[11px] text-blue-200">Control informativo de impacto financiero aduanero para importaciones hacia la UE</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  id="btn-close-cbam"
+                  onClick={() => setIsCbamOpen(false)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition cursor-pointer"
+                  aria-label="Cerrar Módulo CBAM"
+                >
+                  <span className="text-base font-normal">✕</span>
+                  <span>Cerrar</span>
+                </button>
+              </div>
+
+              {/* Contenido Formulario y Cálculos */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8FAFC]">
+                {/* Parámetros de Operación */}
+                <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                  <h4 className="text-xs font-black text-[#002060] uppercase tracking-wider border-b border-slate-200 pb-2">
+                    Parámetros de la Operación (Sincronizados con el Proyecto)
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <label htmlFor="cbam-modal-sector" className="text-teal-700 font-bold uppercase text-[10px] block mb-1">Sector regulado</label>
+                      <select
+                        id="cbam-modal-sector"
+                        value={cbamSector}
+                        onChange={(e) => setCbamSector(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-teal-500 focus:bg-white"
+                      >
+                        <option value="">— Seleccionar sector —</option>
+                        <option value="Cemento">Cemento</option>
+                        <option value="Acero">Hierro/Acero</option>
+                        <option value="Aluminio">Aluminio</option>
+                        <option value="Fertilizantes">Fertilizantes</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="cbam-modal-origin" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Origen de la carga</label>
+                      <input
+                        type="text"
+                        id="cbam-modal-origin"
+                        value={cbamOrigin}
+                        onChange={(e) => setCbamOrigin(e.target.value)}
+                        placeholder="Ej: Marruecos"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cbam-modal-destination" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Destino (UE)</label>
+                      <input
+                        type="text"
+                        id="cbam-modal-destination"
+                        value={cbamDestination}
+                        onChange={(e) => setCbamDestination(e.target.value)}
+                        placeholder="Ej: España"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cbam-modal-quantity" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Tonelaje (TM)</label>
+                      <input
+                        type="number"
+                        id="cbam-modal-quantity"
+                        min="0"
+                        value={cbamQuantity}
+                        onChange={(e) => setCbamQuantity(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold font-mono focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cbam-modal-emissions" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Factor SEE certificado (tCO2e/t)</label>
+                      <input
+                        type="number"
+                        id="cbam-modal-emissions"
+                        min="0"
+                        step="0.01"
+                        value={cbamReportedEmissions}
+                        onChange={(e) => setCbamReportedEmissions(e.target.value)}
+                        placeholder="Opcional; usa valor UE"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="cbam-modal-competitor-origin" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Origen competidor</label>
+                      <input
+                        type="text"
+                        id="cbam-modal-competitor-origin"
+                        value={cbamCompetitorOrigin}
+                        onChange={(e) => setCbamCompetitorOrigin(e.target.value)}
+                        placeholder="Ej: Turquía"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label htmlFor="cbam-modal-competitor-factor" className="text-slate-700 font-bold uppercase text-[10px] block mb-1">Factor competidor (tCO2e/t)</label>
+                      <input
+                        type="number"
+                        id="cbam-modal-competitor-factor"
+                        min="0"
+                        step="0.01"
+                        value={cbamCompetitorFactor}
+                        onChange={(e) => setCbamCompetitorFactor(e.target.value)}
+                        placeholder="Valor UE por defecto"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* Tarjeta de Resultados o Estado Inicial */}
+                {analysis.status === 'ready' ? (
+                  <section className="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-md">
+                    <div className="bg-gradient-to-r from-[#002060] via-[#063b78] to-teal-700 p-5 text-white">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-200">Impacto Aduanero para el Comprador (Landed Cost)</span>
+                          <h3 className="mt-1 text-2xl font-black">Estimación de Pago en Aduana UE (Buyer)</h3>
+                          <p className="mt-1 text-xs text-blue-100">Cálculo comercial independiente. No se incorpora a OPEX, bunkers, PDAs, flete ni TOTAL COSTS.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            id="btn-export-cbam-proforma"
+                            onClick={handleExportProforma}
+                            className="rounded-lg bg-white px-3.5 py-2 text-xs font-black text-[#002060] shadow-md transition hover:bg-teal-50 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <span>📄</span> Exportar Proforma Comercial (PDF)
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-export-cbam-report"
+                            onClick={handleExportReport}
+                            className="rounded-lg bg-teal-800/80 border border-teal-300/40 px-3.5 py-2 text-xs font-black text-white shadow-md transition hover:bg-teal-900 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <span>📊</span> Informe Ejecutivo (PDF)
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-export-cbam-reqs"
+                            onClick={handleExportRequirements}
+                            className="rounded-lg bg-teal-800/80 border border-teal-300/40 px-3.5 py-2 text-xs font-black text-white shadow-md transition hover:bg-teal-900 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <span>📋</span> Requerimientos (PDF)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1.1fr_1fr]">
+                      <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-5">
+                        <span className="block text-[10px] font-black uppercase tracking-wide text-teal-700">Pago estimado del importador</span>
+                        <strong className="mt-1 block text-3xl sm:text-4xl font-black text-[#002060]">{formatEuro(analysis.customsPayment)}</strong>
+                        <p className="mt-2 text-xs font-semibold text-slate-600">
+                          {analysis.quantity.toLocaleString('es-ES')} TM × {analysis.certifiedFactor.toFixed(2)} tCO2e/t × {analysis.carbonPrice.toFixed(2)} EUR/tCO2e
+                        </p>
+                        <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-teal-800 ring-1 ring-teal-200">
+                          {analysis.calculationMode === 'certified' ? 'Factor SEE certificado' : 'Valor por defecto UE'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                          <span className="block text-[10px] font-black uppercase text-slate-500">{cbamOrigin || 'Su origen exportador'}</span>
+                          <strong className="mt-1 block text-xl text-[#002060]">{formatEuro(analysis.certifiedCost)}</strong>
+                          <span className="text-xs text-slate-500">Factor {analysis.certifiedFactor.toFixed(2)} tCO2e/t</span>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                          <span className="block text-[10px] font-black uppercase text-slate-500">{cbamCompetitorOrigin || 'Origen competidor'}</span>
+                          <strong className="mt-1 block text-xl text-slate-800">{formatEuro(analysis.competitorCost)}</strong>
+                          <span className="text-xs text-slate-500">Factor {analysis.competitorFactor.toFixed(2)} tCO2e/t</span>
+                        </div>
+                        <div className="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
+                          <span className="block text-[10px] font-black uppercase text-emerald-700">Ventaja comercial potencial</span>
+                          <strong className="mt-1 block text-2xl text-emerald-800">{formatEuro(analysis.competitiveSaving)}</strong>
+                          <span className="text-xs text-emerald-700">Menor landed cost frente al origen competidor indicado.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {analysis.validationMessage && (
+                      <div className="mx-5 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700">
+                        {analysis.validationMessage}
+                      </div>
+                    )}
+
+                    <div className="mx-5 mb-5 rounded-xl border-l-4 border-amber-400 bg-amber-50 p-4 text-xs text-amber-950">
+                      <strong className="block text-[10px] uppercase tracking-wide">Nota Comercial CBAM</strong>
+                      <p className="mt-1 leading-relaxed">
+                        Este es el sobrecoste estimado que el importador asumirá en frontera. Si su fábrica dispone de un certificado SEE inferior al valor por defecto ({analysis.defaultFactor.toFixed(2)}), su mercancía ganará competitividad directa frente a orígenes competidores.
+                      </p>
+                    </div>
+                  </section>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                    <strong className="block font-bold">Selecciona el sector regulado e introduce el tonelaje.</strong>
+                    <span className="text-[11px] text-amber-700">El cálculo comercial CBAM se activa automáticamente con el tipo de producto y la cantidad.</span>
+                  </div>
+                )}
+
+                {/* Referencia Oficial de Factores UE 2026 */}
+                <section className="space-y-2">
+                  <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Factores de Emisión Oficiales UE 2026 (Referencia)</h5>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                      <span className="block text-[10px] uppercase font-black text-slate-500">Cemento</span>
+                      <strong className="text-lg text-[#002060]">0.85</strong>
+                      <span className="text-[10px] text-slate-400 block">tCO2/TM</span>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                      <span className="block text-[10px] uppercase font-black text-slate-500">Hierro/Acero</span>
+                      <strong className="text-lg text-[#002060]">1.80</strong>
+                      <span className="text-[10px] text-slate-400 block">tCO2/TM</span>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                      <span className="block text-[10px] uppercase font-black text-slate-500">Aluminio</span>
+                      <strong className="text-lg text-[#002060]">6.50</strong>
+                      <span className="text-[10px] text-slate-400 block">tCO2/TM</span>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                      <span className="block text-[10px] uppercase font-black text-slate-500">Fertilizantes</span>
+                      <strong className="text-lg text-[#002060]">1.50</strong>
+                      <span className="text-[10px] text-slate-400 block">tCO2/TM</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
         );
