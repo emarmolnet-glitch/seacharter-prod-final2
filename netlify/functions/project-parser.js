@@ -2819,7 +2819,8 @@ function isWordFormat(mimeType = '', fileName = '') {
 
 async function extractTextFromSpreadsheet(buffer) {
   try {
-    const XLSX = await import('xlsx');
+    const XLSXModule = await import('xlsx');
+    const XLSX = XLSXModule?.default?.read ? XLSXModule.default : XLSXModule;
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const textParts = [];
     for (const sheetName of (workbook.SheetNames || [])) {
@@ -2839,7 +2840,8 @@ async function extractTextFromSpreadsheet(buffer) {
 
 async function extractTextFromWord(buffer) {
   try {
-    const mammoth = await import('mammoth');
+    const mammothModule = await import('mammoth');
+    const mammoth = mammothModule?.default?.extractRawText ? mammothModule.default : mammothModule;
     const res = await mammoth.extractRawText({ buffer });
     if (res?.value && res.value.trim()) {
       return res.value.trim();
