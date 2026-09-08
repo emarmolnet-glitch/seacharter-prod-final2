@@ -29827,14 +29827,19 @@ function createRouteAnchorElement(type) {
 
         let isGeoInputOpen = true;
 
-        function setIsGeoInputOpen(isNextOpen) {
+function setIsGeoInputOpen(isNextOpen) {
     const shell = document.getElementById('map-command-shell');
     if (!shell) return;
     isGeoInputOpen = typeof isNextOpen === 'boolean' ? isNextOpen : !isGeoInputOpen;
     shell.classList.toggle('is-input-collapsed', !isGeoInputOpen);
 
     const panel = document.getElementById('map-input-overlay');
-    if (panel) panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
+    if (panel) {
+        panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
+        if (panel.inert !== undefined) {
+            panel.inert = !isGeoInputOpen;
+        }
+    }
 
     const externalToggle = document.getElementById('btn-map-toggle-input');
     if (externalToggle) {
@@ -29847,7 +29852,10 @@ function createRouteAnchorElement(type) {
     if (collapseToggle) {
         collapseToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
         const icon = collapseToggle.querySelector('i');
-        if (icon) icon.classList.toggle('fa-chevron-left', isGeoInputOpen);
+        if (icon) {
+            icon.classList.toggle('fa-chevron-left', isGeoInputOpen);
+            icon.classList.toggle('fa-chevron-right', !isGeoInputOpen);
+        }
     }
 }
 
