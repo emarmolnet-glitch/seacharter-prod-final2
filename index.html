@@ -67920,13 +67920,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     </script>
 
 <script>
-// Función para calcular velocidades y consumos estimados según el tamaño del buque (DWT)
+// Función comodín con Proxy para evitar errores de estructura anidada en estrategias de navegación
 window.getSpeedConfigForDwt = function(dwt) {
     const numDwt = Number(dwt) || 0;
-    if (numDwt < 40000) return { speedLaden: 13.5, speedBallast: 14.0, ecoSpeed: 12.0 }; // Handysize
-    if (numDwt < 65000) return { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Supramax/Ultramax
-    if (numDwt < 120000) return { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Panamax
-    return { speedLaden: 14.5, speedBallast: 15.0, ecoSpeed: 13.0 }; // Capesize
+    
+    // Determinamos las velocidades base según el tamaño del buque
+    let speeds = { speedLaden: 14.5, speedBallast: 15.0, ecoSpeed: 13.0 }; // Capesize
+    if (numDwt < 40000) speeds = { speedLaden: 13.5, speedBallast: 14.0, ecoSpeed: 12.0 }; // Handysize
+    else if (numDwt < 65000) speeds = { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Supramax
+    else if (numDwt < 120000) speeds = { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Panamax
+
+    // El Proxy intercepta cualquier petición. Si la interfaz pide 'eco' o 'normal', devuelve las velocidades.
+    return new Proxy(speeds, {
+        get(target, prop) {
+            if (prop in target) return target[prop];
+            return target; 
+        }
+    });
 };
 
 // Función para manejar la visibilidad de los inputs de grúas/cucharas en la interfaz
