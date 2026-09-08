@@ -8,7 +8,7 @@ const assistantSource = await readFile(new URL('../netlify/functions/chat-assist
 const cerebroSource = await readFile(new URL('../netlify/functions/cerebro-ia.js', import.meta.url), 'utf8');
 const frontendAssistantSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 
-for (const asset of ['network-resilience.js', 'project-cargo-engine.js', 'dossiers.js', 'dossiers.css']) {
+for (const asset of ['src="./network-resilience.js"', 'project-cargo-engine.js', 'dossiers.js', 'dossiers.css']) {
   test(`${asset} is copied as a production legacy asset`, () => {
     assert.match(viteSource, new RegExp(`"${asset.replace('.', '\\.')}"`));
   });

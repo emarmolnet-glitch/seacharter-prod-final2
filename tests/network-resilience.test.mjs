@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const resilienceSource = readFileSync(new URL('../network-resilience.js', import.meta.url), 'utf8');
+const resilienceSource = readFileSync(new URL('../src="./network-resilience.js"', import.meta.url), 'utf8');
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const distIndexSource = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
 const bunkerFunctionSource = readFileSync(new URL('../netlify/functions/get-bunker-prices.js', import.meta.url), 'utf8');
