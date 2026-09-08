@@ -67919,6 +67919,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }, { once: true });
     </script>
 
+<script>
+// Función para calcular velocidades y consumos estimados según el tamaño del buque (DWT)
+window.getSpeedConfigForDwt = function(dwt) {
+    const numDwt = Number(dwt) || 0;
+    if (numDwt < 40000) return { speedLaden: 13.5, speedBallast: 14.0, ecoSpeed: 12.0 }; // Handysize
+    if (numDwt < 65000) return { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Supramax/Ultramax
+    if (numDwt < 120000) return { speedLaden: 14.0, speedBallast: 14.5, ecoSpeed: 12.5 }; // Panamax
+    return { speedLaden: 14.5, speedBallast: 15.0, ecoSpeed: 13.0 }; // Capesize
+};
+
+// Función para manejar la visibilidad de los inputs de grúas/cucharas en la interfaz
+window.actualizarGrabCapacityVisibility = function() {
+    try {
+        const gearedToggle = document.querySelector('[data-action="toggle-geared"]');
+        const grabPanel = document.querySelector('.grab-capacity-panel');
+        if (gearedToggle && grabPanel) {
+            const isGeared = gearedToggle.checked || gearedToggle.dataset.active === 'true';
+            grabPanel.style.display = isGeared ? 'block' : 'none';
+            grabPanel.setAttribute('aria-hidden', !isGeared);
+        }
+    } catch (e) {
+        console.warn("actualizarGrabCapacityVisibility ejecutada, pero los elementos UI no están listos.", e);
+    }
+};
+</script>
+
     <!-- SUBTLE FOOTER -->
     <!-- Control release version marker -->
     <footer class="app-footer px-4 py-2.5 text-center text-xs no-print shrink-0 flex flex-col sm:flex-row justify-between items-center z-50">
