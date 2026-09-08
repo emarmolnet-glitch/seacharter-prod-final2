@@ -498,6 +498,24 @@ function hydrateDecisionSupportState() {
     });
 }
 
+// Escuchar actualizaciones de ruta y cálculo en tiempo real
+if (typeof window !== "undefined") {
+    if (!window.__dssVoyageCalculatedListenerInstalled) {
+        window.__dssVoyageCalculatedListenerInstalled = true;
+        const onVoyageUpdated = (event) => {
+            const detail = event?.detail || window.activeVoyage || window.State || {};
+            if (typeof window.syncDecisionesFromCalculator === "function") {
+                window.syncDecisionesFromCalculator();
+            } else if (typeof window.actualizarDesdeFormulario === "function") {
+                window.actualizarDesdeFormulario();
+            }
+        };
+        window.addEventListener("voyageCalculated", onVoyageUpdated);
+        window.addEventListener("CALCULATION_EVENT", onVoyageUpdated);
+        window.addEventListener("AUTO_FLOW_CALCULATIONS_READY", onVoyageUpdated);
+    }
+}
+
 export function mountDecisionSupportModule(container) {
     if (!container || container.dataset.dssMounted === "true") return container;
 

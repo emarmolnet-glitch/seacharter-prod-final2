@@ -65,3 +65,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendVesselsForAudit: (liveSyncSignal) => ipcRenderer.send('enviar-a-auditoria', liveSyncSignal),
   onVesselsForAudit: (callback) => ipcRenderer.on('recibir-auditoria', (event, data) => callback(data)),
 });
+
+// Expose apiConfig to provide absolute API routes in Electron file:// runtime
+contextBridge.exposeInMainWorld('apiConfig', {
+  productionOrigin: 'https://neon-seachartercorepro-4ce09d.netlify.app',
+  isElectron: true,
+  resolveApiUrl: (path) => {
+    if (!path || typeof path !== 'string') return path;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `https://neon-seachartercorepro-4ce09d.netlify.app${cleanPath}`;
+  }
+});
+

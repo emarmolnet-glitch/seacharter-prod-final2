@@ -133,6 +133,133 @@
     <title>SeaCharter Core PRO - Flujo Completo RODAHMAR</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <script>
+        // Global State, Constants and Absolute API Shield for Electron & Netlify
+        (function initGlobalSafetyAndApiBridge(global) {
+            const PRODUCTION_ORIGIN = 'https://neon-seachartercorepro-4ce09d.netlify.app';
+            const isLocal = typeof window !== 'undefined' && (
+                window.location.protocol === 'file:' ||
+                window.location.origin === 'file://' ||
+                window.location.origin === 'null' ||
+                (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent)) ||
+                (typeof process !== 'undefined' && process.versions && Boolean(process.versions.electron))
+            );
+
+            // 1. Identifiers and Global State definitions
+            global.ASBATANKVOY = 'ASBATANKVOY';
+            global.GENCON = 'GENCON';
+            global.State = global.State || {};
+            global.CalculatedState = global.CalculatedState || {};
+            global.NETLIFY_PRODUCTION_ORIGIN = PRODUCTION_ORIGIN;
+            global.NETLIFY_API_BASE_URL = isLocal ? PRODUCTION_ORIGIN : '';
+
+            // 2. Navigation & View Switching stubs to prevent early ReferenceErrors
+            global.setAppView = global.setAppView || function(view) {
+                const norm = String(view || '').toUpperCase();
+                if (typeof global.switchTab === 'function') {
+                    global.switchTab(norm === 'FORWARDERS' ? 'FORWARDERS' : norm.toLowerCase());
+                } else if (typeof global.dispatchEvent === 'function') {
+                    global.dispatchEvent(new CustomEvent('navigation:view-change', { detail: { view: norm } }));
+                }
+            };
+            global.switchView = global.switchView || function(viewId) {
+                if (typeof global.switchTab === 'function') return global.switchTab(viewId);
+            };
+            global.switchAsbatankvoyView = global.switchAsbatankvoyView || function(viewId) {
+                document.querySelectorAll('.asbatankvoy-view').forEach(function(v) { v.classList.remove('active'); });
+                const target = document.getElementById(viewId);
+                if (target) target.classList.add('active');
+            };
+            global.switchGenconView = global.switchGenconView || function(viewId) {
+                document.querySelectorAll('.gencon-view').forEach(function(v) { v.classList.remove('active'); });
+                const target = document.getElementById(viewId);
+                if (target) target.classList.add('active');
+            };
+            global.syncAsbatankvoy = global.syncAsbatankvoy || function() {};
+            global.syncGencon = global.syncGencon || function() {};
+            global.loadFromAsbatankvoy = global.loadFromAsbatankvoy || function() {};
+            global.loadFromGencon = global.loadFromGencon || function() {};
+            global.aceptarContratoCliente = global.aceptarContratoCliente || function() {};
+
+            // 3. Global Engine & Calculation Function Stubs (prevents early ReferenceError before full scripts load)
+            global.runEngine = global.runEngine || function runEngineGlobal(...args) {
+                if (typeof global.__actualRunEngine === 'function') {
+                    return global.__actualRunEngine(...args);
+                }
+            };
+            global.getEffectiveDwtForSegmentDetection = global.getEffectiveDwtForSegmentDetection || function getEffectiveDwtForSegmentDetectionGlobal() {
+                if (typeof global.__actualGetEffectiveDwtForSegmentDetection === 'function') {
+                    return global.__actualGetEffectiveDwtForSegmentDetection();
+                }
+                const vesselDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+                return vesselDwt > 0 ? vesselDwt : cargoQty;
+            };
+            global.renderMethodPills = global.renderMethodPills || function renderMethodPillsGlobal(side = 'pol') {
+                if (typeof global.__actualRenderMethodPills === 'function') {
+                    return global.__actualRenderMethodPills(side);
+                }
+            };
+            global.updatePendingReportButton = global.updatePendingReportButton || function updatePendingReportButtonGlobal() {
+                if (typeof global.__actualUpdatePendingReportButton === 'function') {
+                    return global.__actualUpdatePendingReportButton();
+                }
+            };
+            global.updatePendingFrozenReportButton = global.updatePendingFrozenReportButton || global.updatePendingReportButton;
+
+            // 4. Absolute API Route Resolver & Fetch / XHR Interceptors
+            global.getAbsoluteApiUrl = function(endpoint) {
+                const base = global.NETLIFY_API_BASE_URL || '';
+                if (!base || typeof endpoint !== 'string') return endpoint;
+                if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) return endpoint;
+                return endpoint.startsWith('/') ? (base + endpoint) : (base + '/' + endpoint);
+            };
+
+            if (isLocal && typeof global.fetch === 'function') {
+                const nativeFetch = global.fetch;
+                global.fetch = function(input, init) {
+                    const base = global.NETLIFY_API_BASE_URL;
+                    if (base) {
+                        if (typeof input === 'string') {
+                            if (input.startsWith('/api/') || input.startsWith('/.netlify/functions/')) {
+                                input = base + input;
+                            } else if (input.startsWith('file://')) {
+                                const match = input.match(/(\/(?:api|\.netlify\/functions)\/.*)$/);
+                                if (match) input = base + match[1];
+                            }
+                        } else if (typeof Request !== 'undefined' && input instanceof Request) {
+                            const url = input.url;
+                            if (url.startsWith('/api/') || url.startsWith('/.netlify/functions/')) {
+                                input = new Request(base + url, input);
+                            } else if (url.startsWith('file://')) {
+                                const match = url.match(/(\/(?:api|\.netlify\/functions)\/.*)$/);
+                                if (match) input = new Request(base + match[1], input);
+                            }
+                        }
+                    }
+                    return nativeFetch.call(this, input, init);
+                };
+            }
+
+            if (isLocal && typeof global.XMLHttpRequest === 'function') {
+                const nativeOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    const base = global.NETLIFY_API_BASE_URL;
+                    var finalUrl = url;
+                    if (base && typeof finalUrl === 'string') {
+                        if (finalUrl.startsWith('/api/') || finalUrl.startsWith('/.netlify/functions/')) {
+                            finalUrl = base + finalUrl;
+                        } else if (finalUrl.startsWith('file://')) {
+                            const match = finalUrl.match(/(\/(?:api|\.netlify\/functions)\/.*)$/);
+                            if (match) finalUrl = base + match[1];
+                        }
+                    }
+                    var rest = Array.prototype.slice.call(arguments, 2);
+                    return nativeOpen.apply(this, [method, finalUrl].concat(rest));
+                };
+            }
+        })(typeof window !== 'undefined' ? window : globalThis);
+    </script>
+    <script>
         (function installContractReferenceSafetyNet(globalObject) {
             if (globalObject.ContractRefManager) return;
 
@@ -16353,6 +16480,9 @@
                 tugTotalCost: 0
             }
         };
+        if (typeof window !== 'undefined') {
+            window.State = State;
+        }
 
         function normalizeActiveVoyageState(partial = {}, baseState = State) {
             const source = partial && typeof partial === 'object' ? partial : {};
@@ -22090,6 +22220,16 @@ function createRouteAnchorElement(type) {
             } else {
                 label.textContent = 'Data Bridge';
             }
+        }
+
+        function updatePendingReportButton() {
+            return updatePendingFrozenReportButton();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.updatePendingReportButton = updatePendingReportButton;
+            window.updatePendingFrozenReportButton = updatePendingFrozenReportButton;
+            window.__actualUpdatePendingReportButton = updatePendingFrozenReportButton;
         }
 
         async function handleFeedbackFileUpload(event) {
@@ -29343,6 +29483,9 @@ function createRouteAnchorElement(type) {
             }
             if (tabId === 'decisiones') {
                 ensureDecisionSupportModule(targetView);
+                if (typeof window.syncDecisionesFromCalculator === 'function') {
+                    window.syncDecisionesFromCalculator();
+                }
             }
             if (tabId === 'compatibilidad') {
                 window.mountCompatibilityModule?.(targetView);
@@ -32082,6 +32225,10 @@ function createRouteAnchorElement(type) {
             const vesselDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
             const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
             return vesselDwt > 0 ? vesselDwt : cargoQty;
+        }
+        if (typeof window !== 'undefined') {
+            window.getEffectiveDwtForSegmentDetection = getEffectiveDwtForSegmentDetection;
+            window.__actualGetEffectiveDwtForSegmentDetection = getEffectiveDwtForSegmentDetection;
         }
 
         function markSpeedManualOverride(input) {
@@ -38955,9 +39102,17 @@ function scheduleReactiveEngine() {
             State.pol = document.getElementById('port-pol').value;
             State.pod = document.getElementById('port-pod').value;
             State.cargo = cargo;
+            State.cargoQty = cargo;
+            State.actualCargoIntake = cargo;
             State.stowageFactor = stowageFactor;
             State.cargoTolerance = cargoTolerance;
             State.cargoType = document.getElementById('cargo-type').value;
+            State.commodity = State.cargoTypeManual || State.cargoType || 'Carga General';
+            State.distBallast = distBal;
+            State.distLaden = distLaden;
+            State.totalMiles = distBal + distLaden;
+            State.seaDays = T_sea;
+            State.portDays = T_port;
             State.cargoProduct = document.getElementById('cargo-product')?.value || '';
             State.cargoTypeCode = document.getElementById('cargo-type-manual')?.value.trim() || '100';
             State.cargoTypeManual = window.getCargoTaxonomyLabel?.(State.cargoTypeCode) || 'Otros';
@@ -39274,11 +39429,48 @@ function scheduleReactiveEngine() {
 
             refreshVesselCompatibilityWarning();
 
+            const activeVoyagePayload = {
+                pol: State.pol,
+                pod: State.pod,
+                cargoQty: State.cargoQty,
+                cargo: State.cargo,
+                commodity: State.commodity,
+                cargoType: State.cargoType,
+                cargoTypeCode: State.cargoTypeCode,
+                freightRate: State.freightRate,
+                freightSell: State.freightSell,
+                fleteUnitario: State.fleteUnitario,
+                fleteEstimado: State.fleteEstimado,
+                breakEven: State.breakEven,
+                breakEvenArmador: State.breakEvenArmador,
+                distBallast: State.distBallast,
+                distLaden: State.distLaden,
+                totalMiles: State.totalMiles,
+                totalDays: State.totalDays,
+                seaDays: State.seaDays,
+                portDays: State.portDays,
+                loadRate: State.loadRate,
+                dischRate: State.dischRate,
+                vessel: State.vessel,
+                vesselName: State.vessel,
+                vesselDwt: State.dwt,
+                laycanDate: State.laycanDate,
+                cancellingDate: State.cancellingDate
+            };
+            if (typeof window !== 'undefined') {
+                window.activeVoyage = activeVoyagePayload;
+                if (window.State) {
+                    window.State.activeVoyage = activeVoyagePayload;
+                    window.State.cargoQty = State.cargoQty;
+                }
+            }
+
             if (!deferStoreCommit && typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.set === 'function') {
                 SeaCharterStore.set({
                     portBallast: State.portBallast,
                     pol: State.pol,
                     pod: State.pod,
+                    cargoQty: State.cargoQty,
                     distBallast: State.distBallast,
                     distLaden: State.distLaden,
                     totalMiles: State.totalMiles,
@@ -39302,10 +39494,19 @@ function scheduleReactiveEngine() {
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
                     cancellingDate: State.cancellingDate,
-                    cancellingTime: State.cancellingTime
+                    cancellingTime: State.cancellingTime,
+                    activeVoyage: activeVoyagePayload
                 });
             }
             if (typeof syncGlobalStateToForms === 'function') syncGlobalStateToForms();
+
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                try {
+                    window.dispatchEvent(new CustomEvent('voyageCalculated', { detail: activeVoyagePayload }));
+                } catch (evtErr) {
+                    console.warn('[runEngine] voyageCalculated dispatch warning:', evtErr);
+                }
+            }
             validateCoreTradingSafety({
                 totalBunkers,
                 adjustedCostTotal,
@@ -39402,6 +39603,10 @@ function scheduleReactiveEngine() {
             } finally {
                 isRunningEngine = false;
             }
+        }
+        if (typeof window !== 'undefined') {
+            window.runEngine = runEngine;
+            window.__actualRunEngine = runEngine;
         }
 
         function bindShadowEstimator() {
@@ -39832,33 +40037,57 @@ function scheduleReactiveEngine() {
 
         function syncDecisionesFromCalculator() {
             try {
-                const voyageData = window.SeaCharterStore?.getState?.() || {};
-                const pol = String(voyageData?.pol || '').trim();
-                const pod = String(voyageData?.pod || '').trim();
-                const cargoQty = Math.max(0, Number(voyageData?.cargoQty || voyageData?.cargo) || 0);
-                const cargoCode = voyageData?.cargoTypeCode || voyageData?.cargoType || voyageData?.commodity || '';
-                const commodity = cargoCode ? (window.getCargoTaxonomyLabel?.(cargoCode) || String(cargoCode)) : '';
+                const activeVoyageSource = (typeof window !== 'undefined' && window.activeVoyage) ? window.activeVoyage : {};
+                const storeData = (typeof window !== 'undefined' && window.SeaCharterStore?.getState?.()) ? window.SeaCharterStore.getState() : {};
+                const globalState = (typeof State !== 'undefined' && State) ? State : {};
+                const voyageData = { ...globalState, ...storeData, ...activeVoyageSource };
+
+                const pol = String(voyageData?.pol || document.getElementById('port-pol')?.value || '').trim();
+                const pod = String(voyageData?.pod || document.getElementById('port-pod')?.value || '').trim();
+                const cargoQty = Math.max(
+                    0,
+                    Number(voyageData?.cargoQty || voyageData?.cargo || voyageData?.actualCargoIntake) ||
+                    parseFloat(document.getElementById('cargo-qty')?.value) ||
+                    0
+                );
+                const cargoCode = voyageData?.cargoTypeCode || voyageData?.cargoType || voyageData?.commodity || document.getElementById('cargo-type-manual')?.value || document.getElementById('cargo-type')?.value || '';
+                const commodity = cargoCode ? (window.getCargoTaxonomyLabel?.(cargoCode) || String(cargoCode)) : 'Carga General';
                 const laycanDaysLeft = parseFloat(document.getElementById('laycan-dias-libres')?.value) || 0;
-                const loadRate = (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0)
+                const loadRate = Number(voyageData?.loadRate)
+                    || (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0)
                     || parseFloat(document.getElementById('rate-load')?.value) || parseFloat(document.getElementById('load-rate')?.value) || 0;
-                const dischargeRate = (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0)
+                const dischargeRate = Number(voyageData?.dischRate)
+                    || (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0)
                     || parseFloat(document.getElementById('rate-disch')?.value) || parseFloat(document.getElementById('rate-discharge')?.value) || parseFloat(document.getElementById('discharge-rate')?.value) || 0;
                 const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
                 const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
 
-                const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden))
-                    ? Number(State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden)
-                    : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 0);
+                const mainEngineSeaDays = Math.max(
+                    0,
+                    Number(voyageData?.seaDays || voyageData?.tSea || voyageData?.seaDaysLaden || voyageData?.ladenDays || voyageData?.dLaden) ||
+                    resDaysLadenParsed ||
+                    parseFloat(document.getElementById('shadow-navigation-days')?.value) ||
+                    0
+                );
 
-                const fleteEstimado = parseFloat(document.getElementById('freight-sell')?.value) || parseFloat(document.getElementById('selling-freight')?.value) || 0;
+                const fleteEstimado = Math.max(
+                    0,
+                    Number(voyageData?.freightSell || voyageData?.fleteEstimado || voyageData?.fleteUnitario || voyageData?.freightRate) ||
+                    parseFloat(document.getElementById('freight-sell')?.value) ||
+                    parseFloat(document.getElementById('selling-freight')?.value) ||
+                    0
+                );
 
                 // SSOT: break-even unitario ($/MT) y coste total de viaje desde el motor.
                 const canonical = getCanonicalVoyageFinancials();
-                const breakEven = canonical.breakEvenFreight;
+                const breakEven = canonical.breakEvenFreight || Number(voyageData?.breakEven) || 0;
 
-                const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
-                    ? Number(State.portDays || State.totalPortDays || State.tPort)
-                    : (parseFloat(document.getElementById('res-days-port')?.innerText) || 0);
+                const mainEnginePortDays = Math.max(
+                    0,
+                    Number(voyageData?.portDays || voyageData?.totalPortDays || voyageData?.tPort) ||
+                    parseFloat(document.getElementById('res-days-port')?.innerText) ||
+                    0
+                );
 
                 if (document.getElementById('input-pol')) document.getElementById('input-pol').value = pol;
                 if (document.getElementById('input-pod')) document.getElementById('input-pod').value = pod;
@@ -61171,6 +61400,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }).join('');
 
             actualizarSubmoduloGruas(side);
+        }
+        if (typeof window !== 'undefined') {
+            window.renderMethodPills = renderMethodPills;
+            window.__actualRenderMethodPills = renderMethodPills;
         }
 
         function selectMethodPill(side = 'pol', label) {
