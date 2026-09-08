@@ -1065,11 +1065,9 @@ export function ForwarderWorkspace() {
   };
 
   const handleDeleteProject = async (e, projToDelete) => {
-    // 🛡️ BLINDAJE NUCLEAR: Exigir que sea un clic físico humano.
-    // Si la llamada viene del chat de IA (texto/enter/payload), 'e.type' no será 'click' y se abortará.
-    if (!e || e.type !== 'click' || typeof e.stopPropagation !== 'function') {
-      console.warn("Bloqueado: Intento de borrado fantasma desde la IA detectado.");
-      console.trace("Origen del disparador fantasma:"); // Esto dejará un rastro en tu consola (F12)
+    // 🛡️ BLINDAJE ULTRA-ESTRICTO: Exigir que sea un clic humano real (isTrusted).
+    if (!e || !e.isTrusted || typeof e.stopPropagation !== 'function') {
+      console.warn("Bloqueado: Clic virtual o evento de IA detectado.");
       return; 
     }
     e.stopPropagation();
