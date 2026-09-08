@@ -2,11 +2,12 @@
   "name": "seacharter-core-pro",
   "version": "1.0.0",
   "description": "Voyage Estimator with custom maritime routing and preferred ocean weights",
-  "main": "main.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "electron:build": "vite build && electron-builder --win --x64",
     "db:generate": "drizzle-kit generate",
     "test": "node --test tests/*.test.mjs"
   },
@@ -56,10 +57,26 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3"
   },
   "engines": {
     "node": "20.x",
     "npm": "10.x"
+  },
+  "build": {
+    "appId": "com.seacharter.corepro",
+    "productName": "SeaCharter Core PRO",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ]
   }
 }
