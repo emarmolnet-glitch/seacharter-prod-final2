@@ -35842,7 +35842,7 @@ function createRouteAnchorElement(type) {
             }
         }
 
-        function hydrateBunkerIndexData() {
+        window.hydrateBunkerIndexData = function() {
             const cache = readBunkerIndexCache({ allowStale: true });
             if (cache) {
                 applyBunkerIndexData(cache);
