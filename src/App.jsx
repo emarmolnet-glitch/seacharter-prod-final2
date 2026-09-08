@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
+import './utils/apiConfig.js';
 
 /**
  * Normalizes reference identifiers for cross-module session matching.
@@ -664,7 +666,7 @@ export function useHeaderVisibility(defaultVisible = true) {
 /**
  * Main Application / Layout wrapper component for SeaCharter Core PRO.
  */
-export default function App({ children, currentView: initialView = 'MAP', defaultHeaderVisible = true }) {
+export function AppLayout({ children, currentView: initialView = 'MAP', defaultHeaderVisible = true }) {
   useSeaCharterSync();
   useUrlImoAutoLookup();
   usePendingImoSync();
@@ -679,12 +681,29 @@ export default function App({ children, currentView: initialView = 'MAP', defaul
         setCurrentView(String(nextView).toUpperCase());
       }
     };
+
+    const syncFromHash = () => {
+      if (typeof window !== 'undefined' && window.location && window.location.hash) {
+        const hash = window.location.hash.replace(/^#\/?/, '').toUpperCase();
+        if (hash === 'FORWARDERS' || hash === 'PROYECTOS') {
+          setCurrentView('FORWARDERS');
+        } else if (hash === 'MAP' || hash === 'CALCULATOR') {
+          setCurrentView(hash);
+        }
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('navigation:view-change', handleViewChange);
+      window.addEventListener('hashchange', syncFromHash);
+      syncFromHash();
       if (!window.setAppView) {
         window.setAppView = (view) => {
           const normalized = String(view).toUpperCase();
           setCurrentView(normalized);
+          if (typeof window !== 'undefined' && window.location) {
+            window.location.hash = `#/${normalized.toLowerCase()}`;
+          }
           window.dispatchEvent(new CustomEvent('navigation:view-change', { detail: { view: normalized } }));
         };
       }
@@ -692,6 +711,7 @@ export default function App({ children, currentView: initialView = 'MAP', defaul
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('navigation:view-change', handleViewChange);
+        window.removeEventListener('hashchange', syncFromHash);
       }
     };
   }, []);
@@ -719,3 +739,13 @@ export default function App({ children, currentView: initialView = 'MAP', defaul
     </div>
   );
 }
+
+export default function App(props) {
+  return (
+    <HashRouter>
+      <AppLayout {...props} />
+    </HashRouter>
+  );
+}
+
+export { HashRouter, HashRouter as BrowserRouter };
