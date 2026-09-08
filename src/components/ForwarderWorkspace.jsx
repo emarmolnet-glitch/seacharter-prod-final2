@@ -1065,16 +1065,22 @@ export function ForwarderWorkspace() {
   };
 
   const handleDeleteProject = async (e, projToDelete) => {
-    if (e && typeof e.stopPropagation === 'function') {
-      e.stopPropagation();
+    // 🛡️ BLINDAJE NUCLEAR: Exigir que sea un clic físico humano.
+    // Si la llamada viene del chat de IA (texto/enter/payload), 'e.type' no será 'click' y se abortará.
+    if (!e || e.type !== 'click' || typeof e.stopPropagation !== 'function') {
+      console.warn("Bloqueado: Intento de borrado fantasma desde la IA detectado.");
+      console.trace("Origen del disparador fantasma:"); // Esto dejará un rastro en tu consola (F12)
+      return; 
     }
+    e.stopPropagation();
 
-    // 🛡️ Blindaje: Si no hay un proyecto real y válido, se cancela sin mostrar la alerta
-    if (!projToDelete || typeof projToDelete !== 'object' || (!projToDelete.id && !projToDelete.project_ref)) {
+    // Extraer el proyecto de forma estricta
+    const targetProj = projToDelete;
+    if (!targetProj || typeof targetProj !== 'object' || (!targetProj.id && !targetProj.project_ref)) {
       return;
     }
 
-    const displayName = projToDelete.client_name || projToDelete.project_ref || 'este proyecto';
+    const displayName = targetProj.client_name || targetProj.project_ref || 'este proyecto';
     const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar el proyecto "${displayName}"?`);
     if (!confirmed) return;
 
