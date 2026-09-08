@@ -29827,30 +29827,29 @@ function createRouteAnchorElement(type) {
 
         let isGeoInputOpen = true;
 
-        function setRouteInputPanelOpen(nextOpen) {
-            const shell = document.getElementById('map-command-shell');
-            if (!shell) return;
-            isGeoInputOpen = Boolean(nextOpen);
-            shell.classList.toggle('input-collapsed', !isGeoInputOpen);
+        function setIsGeoInputOpen(isNextOpen) {
+    const shell = document.getElementById('map-command-shell');
+    if (!shell) return;
+    isGeoInputOpen = typeof isNextOpen === 'boolean' ? isNextOpen : !isGeoInputOpen;
+    shell.classList.toggle('is-input-collapsed', !isGeoInputOpen);
 
-            const panel = document.getElementById('map-input-overlay');
-            if (panel) panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
+    const panel = document.getElementById('map-input-overlay');
+    if (panel) panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
 
-            const externalToggle = document.getElementById('btn-map-toggle-input');
-            if (externalToggle) {
-                externalToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
-                externalToggle.setAttribute('aria-label', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
-                externalToggle.setAttribute('title', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
-            }
+    const externalToggle = document.getElementById('btn-map-toggle-input');
+    if (externalToggle) {
+        externalToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
+        externalToggle.setAttribute('aria-label', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
+        externalToggle.setAttribute('title', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
+    }
 
-            const collapseToggle = document.getElementById('btn-map-collapse-input');
-            if (collapseToggle) {
-                collapseToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
-                const icon = collapseToggle.querySelector('i');
-                icon?.classList.toggle('fa-chevron-left', isGeoInputOpen);
-                icon?.classList.toggle('fa-chevron-right', !isGeoInputOpen);
-            }
-        }
+    const collapseToggle = document.getElementById('btn-map-collapse-input');
+    if (collapseToggle) {
+        collapseToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
+        const icon = collapseToggle.querySelector('i');
+        if (icon) icon.classList.toggle('fa-chevron-left', isGeoInputOpen);
+    }
+}
 
         function toggleRouteInputPanel(forceCollapsed) {
             const nextOpen = typeof forceCollapsed === 'boolean'
