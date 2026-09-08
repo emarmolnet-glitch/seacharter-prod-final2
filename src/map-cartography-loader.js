@@ -1,7 +1,10 @@
 const GLOBE_SCRIPT_ID = 'global-fleet-globe-runtime';
 const GLOBE_STYLES_ID = 'global-fleet-globe-styles';
 const GLOBE_RUNTIME_URL = 'https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';
-const GLOBE_MODULE_URL = '/GlobalFleetGlobe.js?v=20260904-vessel-html-marker';
+
+// Usamos document.baseURI para que la ruta sea siempre relativa a index.html
+// Esto evita el conflicto entre la nube de Netlify y el disco local de Electron.
+const GLOBE_MODULE_URL = new URL('GlobalFleetGlobe.js?v=20260904-vessel-html-marker', document.baseURI).href;
 
 let cartographyPromise = null;
 
@@ -10,7 +13,8 @@ function ensureStylesheet() {
   const stylesheet = document.createElement('link');
   stylesheet.id = GLOBE_STYLES_ID;
   stylesheet.rel = 'stylesheet';
-  stylesheet.href = '/assets/css/density-globe.css?v=20260904-vessel-html-marker';
+  // Aplicamos la misma regla infalible para el CSS
+  stylesheet.href = new URL('assets/css/density-globe.css?v=20260904-vessel-html-marker', document.baseURI).href;
   document.head.appendChild(stylesheet);
 }
 
