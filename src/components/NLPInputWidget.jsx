@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getApiUrl } from "../utils/apiConfig.js";
 import { validateScenarioPortsWithWpi } from "../wpi-catalog-client.js";
 import {
   applyVoyageScenarioDefaults,
@@ -191,7 +192,7 @@ function normalizeScenarioPayload(payload) {
 async function requestScenarioExtraction(text) {
   let scenario;
   try {
-    const response = await fetch("/api/nlp-voyage-extract", {
+    const response = await fetch(getApiUrl("/api/nlp-voyage-extract"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),

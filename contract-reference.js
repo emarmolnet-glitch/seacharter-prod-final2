@@ -80,7 +80,8 @@
                 ...(extraPayload && typeof extraPayload === 'object' ? extraPayload : {})
             };
 
-            return globalObject.fetch('/api/app-state', {
+            const getApiUrl = globalObject.getApiUrl || function(url) { return url; };
+            return globalObject.fetch(getApiUrl('/api/app-state'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

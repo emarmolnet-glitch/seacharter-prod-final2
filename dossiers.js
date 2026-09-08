@@ -1,5 +1,6 @@
 (function () {
-    const DOSSIERS_API_URL = '/.netlify/functions/dossiers';
+    const getApiUrl = (typeof window !== 'undefined' && window.getApiUrl) || function(url) { return url; };
+    const DOSSIERS_API_URL = getApiUrl('/.netlify/functions/dossiers');
 
     const state = {
         activeId: null,

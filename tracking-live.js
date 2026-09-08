@@ -8,6 +8,7 @@ import { voyageStore, hasOperationalDraft } from './src/stores/voyage-store.js';
 import { normalizeAisDestination } from './src/tracking-destination.mjs';
 import { mountDatalasticCreditCounter } from './src/components/DatalasticCreditCounter.js';
 import { datalasticCreditStore } from './src/stores/datalastic-credit-store.js';
+import { getApiUrl } from './src/utils/apiConfig.js';
 
 const TRACKING_MAP_KEY = 'tracking';
 const hasFetchedMapData = { current: new Set() };
@@ -773,7 +774,7 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
     const zeroBallastRoute = isBallastAudit && directDistanceNm < 15
         ? createZeroBallastRoute(origin, destination, directDistanceNm)
         : null;
-    const response = zeroBallastRoute ? null : await fetch('/api/route', {
+    const response = zeroBallastRoute ? null : await fetch(getApiUrl('/api/route'), {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -824,7 +825,7 @@ async function requestTrackingMaritimeLeg(origin, destination, options = {}) {
     const zeroBallastRoute = isBallastRoute && directDistanceNm < 15
         ? createZeroBallastRoute(origin, destination, directDistanceNm)
         : null;
-    const response = zeroBallastRoute ? null : await fetch('/api/route', {
+    const response = zeroBallastRoute ? null : await fetch(getApiUrl('/api/route'), {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1270,7 +1271,7 @@ window.addEventListener('ais:consumption-updated', () => {
 async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
     const imo = getTrackingVesselImo(vessel, fallbackQuery);
     if (!imo) return vessel;
-    const response = await fetch(`/api/internal/ais/live-position?imo=${encodeURIComponent(imo)}`, {
+    const response = await fetch(getApiUrl(`/api/internal/ais/live-position?imo=${encodeURIComponent(imo)}`), {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
         signal,
@@ -1314,7 +1315,7 @@ async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
     if (pendingRequest) return pendingRequest;
 
     const request = (async () => {
-        const response = await fetch(`/api/v1/vessel/live-profile?q=${encodeURIComponent(query)}`, {
+        const response = await fetch(getApiUrl(`/api/v1/vessel/live-profile?q=${encodeURIComponent(query)}`), {
             headers: { Accept: 'application/json' },
         });
         const payload = await response.json().catch(() => ({}));
@@ -1788,7 +1789,7 @@ async function ensureLaytimeStatements(data) {
     trackingState.laytimeRequestController = controller;
     trackingState.laytimeRequestRef = contractRef;
     try {
-        const response = await fetch(`/api/v1/voyage/laytime/${encodeURIComponent(contractRef)}`, {
+        const response = await fetch(getApiUrl(`/api/v1/voyage/laytime/${encodeURIComponent(contractRef)}`), {
             signal: controller.signal,
             headers: { Accept: 'application/json' },
         });
@@ -1823,7 +1824,7 @@ async function saveLaytimeStatementFromUserAction(event, data) {
     if (!payload || !trackingState.contractRef) return;
     message.textContent = 'Calculando y guardando liquidación…';
     try {
-        const response = await fetch(`/api/v1/voyage/laytime/${encodeURIComponent(trackingState.contractRef)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+        const response = await fetch(getApiUrl(`/api/v1/voyage/laytime/${encodeURIComponent(trackingState.contractRef)}`), { method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success) throw new Error(result.error || 'No fue posible guardar la plancha.');
         const index = trackingState.laytimeStatements.findIndex((statement) => statement.operation === result.statement.operation);
@@ -1865,7 +1866,7 @@ async function loadActiveVoyage() {
     message.dataset.state = 'loading';
 
     try {
-        const response = await fetch('/api/voyage/active', {
+        const response = await fetch(getApiUrl('/api/voyage/active'), {
             cache: 'no-store',
             headers: { Accept: 'application/json' },
         });
@@ -1946,7 +1947,7 @@ async function loadTrackingContract(rawRef, silent = false, options = {}) {
     document.getElementById('tracking-live-refresh')?.classList.add('is-spinning');
     if (!silent) renderTrackingLoading();
     try {
-        const response = await fetch(`/api/v1/voyage/tracking/${encodeURIComponent(contractRef)}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(getApiUrl(`/api/v1/voyage/tracking/${encodeURIComponent(contractRef)}`), { headers: { Accept: 'application/json' } });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) throw new Error(payload.error || 'No fue posible recuperar el seguimiento operativo.');
         trackingState.data = payload;

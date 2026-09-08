@@ -26,7 +26,7 @@ test('recommendation service sends cargo requirements to the Data Bridge endpoin
     },
   );
 
-  assert.match(requestedUrl, /^\/api\/databridge\/vessels\/recommend\?/);
+  assert.match(requestedUrl, /^(?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/databridge\/vessels\/recommend\?/);
   assert.match(requestedUrl, /targetDwt=18500/);
   assert.match(requestedUrl, /vesselType=HANDYSIZE/);
   assert.match(requestedUrl, /loadLat=36\.13/);

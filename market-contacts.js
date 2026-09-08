@@ -238,7 +238,7 @@ async function loadContacts(force = false) {
     state.loading = true;
     renderDirectory();
     try {
-        const response = await fetch('/api/market-contacts', { headers: { Accept: 'application/json' } });
+        const response = await fetch((typeof window !== 'undefined' && window.getApiUrl ? window.getApiUrl('/api/market-contacts') : '/api/market-contacts'), { headers: { Accept: 'application/json' } });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudo cargar la agenda.');
         state.contacts = Array.isArray(payload.contacts) ? payload.contacts : [];
@@ -330,7 +330,7 @@ async function submitContact(event) {
     }
 
     try {
-        const response = await fetch('/api/market-contacts', {
+        const response = await fetch((typeof window !== 'undefined' && window.getApiUrl ? window.getApiUrl('/api/market-contacts') : '/api/market-contacts'), {
             method: state.editingId ? 'PATCH' : 'POST',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
             body: JSON.stringify(payload)

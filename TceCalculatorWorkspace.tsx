@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { voyageStore } from './src/stores/voyage-store.js';
+import { getApiUrl } from './src/utils/apiConfig.js';
 
 type ReverseCalculatorState = {
   tceTarget: number | '';
@@ -1082,7 +1083,7 @@ function FleetIntelligenceLibraryPanel() {
     setStatus(`Cargando buques para ${selectedLabel}...`);
 
     try {
-      const response = await fetch('/.netlify/functions/scrape', {
+      const response = await fetch(getApiUrl('/.netlify/functions/scrape'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -1439,13 +1440,13 @@ export function ReverseTceCalculator({
     setIsManualOverride(false);
     setIsFetchingBalticSpot(true);
     try {
-      let response = await fetch('/api/get-market-data', {
+      let response = await fetch(getApiUrl('/api/get-market-data'), {
         cache: 'no-store',
       });
       let payload = await response.json().catch(() => null);
       let marketRecord = findMarketLatestRecord(payload);
       if (!response.ok || !marketRecord) {
-        response = await fetch('/api/market/latest', {
+        response = await fetch(getApiUrl('/api/market/latest'), {
           cache: 'no-store',
         });
         payload = await response.json().catch(() => null);
@@ -1513,7 +1514,7 @@ export function ReverseTceCalculator({
     setBunkerFetchError('');
 
     try {
-      const response = await fetch('/api/get-market-data', {
+      const response = await fetch(getApiUrl('/api/get-market-data'), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         cache: 'no-store',
@@ -1582,14 +1583,14 @@ export function ReverseTceCalculator({
           targetPrice: results.suggestedChartererSale,
         },
       };
-      const response = await fetch('/api/coa-snapshot', {
+      const response = await fetch(getApiUrl('/api/coa-snapshot'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(snapshotPayload),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.success === false) {
-        const archiveResponse = await fetch('/api/voyage-archive', {
+        const archiveResponse = await fetch(getApiUrl('/api/voyage-archive'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(snapshotPayload),
@@ -2574,7 +2575,7 @@ export default function TceCalculatorWorkspace({
       } catch (_) {}
 
       if (typeof fetch === 'function') {
-        fetch('/api/app-state?key=core_pro_pending_imo', {
+        fetch(getApiUrl('/api/app-state?key=core_pro_pending_imo'), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' },
         }).catch(() => {});

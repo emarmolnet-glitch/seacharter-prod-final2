@@ -1,4 +1,6 @@
-const MARKET_DATA_ENDPOINT = '/api/get-market-data';
+import { getApiUrl } from './utils/apiConfig.js';
+
+const MARKET_DATA_ENDPOINT = getApiUrl('/api/get-market-data');
 const MARKET_INTELLIGENCE_EVENT = 'seacharter:market-intelligence-hydrated';
 const CACHE_KEY = 'seacharter_market_intelligence_snapshot_v1';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;

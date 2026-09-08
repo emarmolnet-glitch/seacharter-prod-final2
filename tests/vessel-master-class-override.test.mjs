@@ -121,7 +121,7 @@ test('la hidratación consulta vessels_master una sola vez por identificador', a
   const first = await hydrateVerifiedVesselClasses([DATALASTIC_VESSEL], { fetchImpl });
   assert.equal(first.changed, true);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].endpoint, '/api/vessels-master-classes');
+  assert.match(requests[0].endpoint, /^(?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/vessels-master-classes$/);
   assert.deepEqual(requests[0].body.imos, ['9447855']);
   assert.equal(getVerifiedVesselClass(DATALASTIC_VESSEL), 'Chemical/Oil Products Tanker');
 

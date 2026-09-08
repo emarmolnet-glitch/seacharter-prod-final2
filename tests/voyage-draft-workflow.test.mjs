@@ -93,7 +93,7 @@ test('Tracking keeps free, audit and contract data paths structurally separate',
 test('calculator confirms the final snapshot in Neon and clears the draft', () => {
   assert.doesNotMatch(indexSource, /Paso 9 · Cierre del Draft Voyage/);
   assert.match(routeConfiguratorSource, /Confirmar y Generar Charter Party/);
-  assert.match(routeConfiguratorSource, /fetch\("\/api\/v1\/charter-party"/);
+  assert.match(routeConfiguratorSource, /fetch\(\s*(?:getApiUrl\(\s*)?["'](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/v1\/charter-party["']/);
   assert.match(routeConfiguratorSource, /draftVoyage\.ballastDistanceNm/);
   assert.match(routeConfiguratorSource, /const sanitizedPayload: CharterPartyPayload = \{/);
   assert.match(routeConfiguratorSource, /body: JSON\.stringify\(sanitizedPayload\)/);
@@ -124,7 +124,7 @@ test('pre-fixture footer renders audited distance and AIS speed', () => {
 });
 
 test('pre-fixture ballast uses the shared maritime routing engine', () => {
-  assert.match(trackingSource, /fetch\('\/api\/route'/);
+  assert.match(trackingSource, /fetch\(\s*(?:getApiUrl\(\s*)?['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/route['"]/);
   assert.match(trackingSource, /\[origin\.lng, origin\.lat\]/);
   assert.match(trackingSource, /\[destination\.lng, destination\.lat\]/);
   assert.match(trackingSource, /coordinateOrder: 'lonLat'/);

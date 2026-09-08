@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { getApiUrl } from "../utils/apiConfig.js";
 import { voyageStore } from "../stores/voyage-store.js";
 import { workflowProgressStore } from "../stores/workflow-progress-store.js";
 
@@ -503,7 +504,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         throw new Error(`Faltan datos obligatorios: ${missingFields.join(", ")}.`);
       }
 
-      const response = await fetch("/api/v1/charter-party", {
+      const response = await fetch(getApiUrl("/api/v1/charter-party"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(sanitizedPayload),

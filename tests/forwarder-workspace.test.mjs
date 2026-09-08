@@ -22,7 +22,7 @@ test('1. ForwarderWorkspace.jsx defines two-column fullscreen layout with Tailwi
 test('2. ForwarderWorkspace.jsx implements "+ Nuevo Proyecto" with prompt and POST to forwarder-projects endpoint', () => {
   assert.match(forwarderComponentSource, /\+ Nuevo Proyecto/);
   assert.match(forwarderComponentSource, /window\.prompt\(/);
-  assert.match(forwarderComponentSource, /fetch\(['"]\/\.netlify\/functions\/forwarder-projects['"]/);
+  assert.match(forwarderComponentSource, /fetch\(['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/forwarder-projects['"]/);
   assert.match(forwarderComponentSource, /method:\s*['"]POST['"]/);
   assert.match(forwarderComponentSource, /client_name/);
 });

@@ -61,7 +61,7 @@ test("Charter Party confirmation persists the required voyage fields and reports
   const submitEnd = routeConfiguratorSource.indexOf("const isCleared =", submitStart);
   const submitSource = routeConfiguratorSource.slice(submitStart, submitEnd);
 
-  assert.match(routeConfiguratorSource, /fetch\("\/api\/v1\/charter-party", \{/);
+  assert.match(routeConfiguratorSource, /fetch\(\s*(?:getApiUrl\(\s*)?["'](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/api\/v1\/charter-party["']/);
   assert.match(routeConfiguratorSource, /contractRef:/);
   assert.match(routeConfiguratorSource, /imoNumber,/);
   assert.match(routeConfiguratorSource, /polName:/);

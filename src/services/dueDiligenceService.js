@@ -1,5 +1,12 @@
-const DEFAULT_ENDPOINT = '/api/vessel-due-diligence';
-const DEFAULT_PERSISTENCE_ENDPOINT = '/api/vessel-due-diligence-save';
+const resolveEndpoint = (path) => {
+  if (typeof window !== 'undefined' && typeof window.getApiUrl === 'function') {
+    return window.getApiUrl(path);
+  }
+  return path;
+};
+
+const DEFAULT_ENDPOINT = resolveEndpoint('/api/vessel-due-diligence');
+const DEFAULT_PERSISTENCE_ENDPOINT = resolveEndpoint('/api/vessel-due-diligence-save');
 
 function readText(value) {
   return value === null || value === undefined ? '' : String(value).trim();

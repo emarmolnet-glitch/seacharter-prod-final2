@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { getApiUrl } from '../utils/apiConfig.js';
 
 const CREDIT_CHANNEL_NAME = 'seacharter-datalastic-credit-balance';
 let creditChannel = null;
@@ -94,7 +95,7 @@ export const datalasticCreditStore = createStore((set, get) => ({
         if (get().status === 'loading') return null;
         set({ status: 'loading', error: null });
         try {
-            const response = await fetch('/api/credits/status', {
+            const response = await fetch(getApiUrl('/api/credits/status'), {
                 headers: { Accept: 'application/json' },
                 cache: 'no-store',
             });

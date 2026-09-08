@@ -1,4 +1,11 @@
-const DATA_BRIDGE_RECOMMENDATIONS_PROXY = '/api/databridge/vessels/recommend';
+const resolveEndpoint = (path) => {
+    if (typeof window !== 'undefined' && typeof window.getApiUrl === 'function') {
+        return window.getApiUrl(path);
+    }
+    return path;
+};
+
+const DATA_BRIDGE_RECOMMENDATIONS_PROXY = resolveEndpoint('/api/databridge/vessels/recommend');
 const DATA_BRIDGE_RECOMMENDATIONS_PATH = '/api/vessels/recommend';
 const DATA_BRIDGE_API_URL = typeof window !== 'undefined'
     ? String(window.DATA_BRIDGE_API_URL || '').trim()

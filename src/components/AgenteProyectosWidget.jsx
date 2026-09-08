@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getApiUrl } from '../utils/apiConfig.js';
 import './AgenteProyectosWidget.css';
 
 export default function AgenteProyectosWidget({
@@ -98,7 +99,7 @@ export default function AgenteProyectosWidget({
     setIsAnalyzing(true);
 
     try {
-      const response = await fetch('/.netlify/functions/project-parser', {
+      const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -319,7 +320,7 @@ export default function AgenteProyectosWidget({
         ? rawDataBase64.split(',')[1].trim()
         : (typeof rawDataBase64 === 'string' ? rawDataBase64.trim() : '');
 
-      const response = await fetch('/.netlify/functions/project-parser', {
+      const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
