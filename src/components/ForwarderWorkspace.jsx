@@ -736,6 +736,7 @@ export function ForwarderWorkspace() {
   const [surveyorCost, setSurveyorCost] = useState(0);
   const [inlandCost, setInlandCost] = useState(0);
   const [customsCost, setCustomsCost] = useState(0);
+  const [insuranceCost, setInsuranceCost] = useState(0);
   const userEditedSurveyor = useRef(false);
 
   // Parámetros dinámicos de ruta, ritmos operativos, rotación y demoras
@@ -1315,7 +1316,7 @@ export function ForwarderWorkspace() {
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
 
       calculatedOceanFreight = oceanFreightCost;
-      calculatedFobOperations = cfsOriginCost + cfsDestCost + portT3Cost + blFee + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0);
+      calculatedFobOperations = cfsOriginCost + cfsDestCost + portT3Cost + blFee + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0);
 
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     } else {
@@ -1347,7 +1348,7 @@ export function ForwarderWorkspace() {
       // Días de Carga = Peso Total de la Carga (MT) / Ritmo de Carga (MT/día)
       // Días de Descarga = Peso Total de la Carga (MT) / Ritmo de Descarga (MT/día)
       // Días de Navegación = Distancia Náutica POL-POD / (Velocidad de Servicio del Buque en nudos × 24)
-      // Flete Marítimo (TCE) = D_total × Tarifa diaria (USD/día) × Tipo de cambio aplicable
+      // Flete Marítimo (TCE) en USD nativo = D_total × Tarifa diaria (USD/día)
       const effectiveLoadRate = Math.max(1, Number(loadingRate) || (isBigBagsOrBulk ? 1200 : 850));
       const effectiveDischRate = Math.max(1, Number(dischargingRate) || (isBigBagsOrBulk ? 1000 : 750));
       const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveLoadRate) * 100) / 100 : 0;
@@ -1360,21 +1361,20 @@ export function ForwarderWorkspace() {
       const diasRotacionTotal = Math.round((diasCarga + diasDescarga + diasNavegacion) * 100) / 100;
 
       const effectiveDailyHire = Number(vesselDailyHireUsd) || dailyTce;
-      const effectiveExRate = Number(exchangeRateUsdEur) || 0.92;
 
-      // Subtotal 1: Flete Marítimo Buque Completo / TCE
-      const freightCost = Math.round(diasRotacionTotal * effectiveDailyHire * effectiveExRate * 100) / 100;
+      // Subtotal 1: Flete Marítimo Buque Completo / TCE en USD nativo
+      const freightCost = Math.round(diasRotacionTotal * effectiveDailyHire * 100) / 100;
 
-      // CÁLCULO Y GESTIÓN DE DEMORAS (Demurrage)
+      // CÁLCULO Y GESTIÓN DE DEMORAS (Demurrage) en USD nativo
       const actualLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
       const actualDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
       const demLoadDays = (actualLoad !== null && actualLoad > diasCarga) ? Math.round((actualLoad - diasCarga) * 100) / 100 : 0;
       const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
       const totalDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
       const effectiveDemDaily = Number(demurrageDailyRateUsd) || effectiveDailyHire;
-      const demurrageCostEur = Math.round(totalDemDays * effectiveDemDaily * effectiveExRate * 100) / 100;
+      const demurrageCostUsd = Math.round(totalDemDays * effectiveDemDaily * 100) / 100;
 
-      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, mercancía, demoras)
+      // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, mercancía, seguro, demoras en USD nativo)
       const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
       const airBagsCost = isBigBagsOrBulk ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
 
@@ -1407,7 +1407,7 @@ export function ForwarderWorkspace() {
       }
 
       calculatedOceanFreight = freightCost;
-      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + demurrageCostEur;
+      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0) + demurrageCostUsd;
 
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations;
     }
@@ -1426,6 +1426,7 @@ export function ForwarderWorkspace() {
     surveyorCost,
     inlandCost,
     customsCost,
+    insuranceCost,
     pol,
     pod,
     loadingRate,
@@ -1630,6 +1631,10 @@ export function ForwarderWorkspace() {
     }
     if (payload.inlandTrucksCount !== undefined) { setInlandCost(payload.inlandTrucksCount); hasChanges = true; }
     if (payload.customsCost !== undefined) { setCustomsCost(payload.customsCost); hasChanges = true; }
+    if (payload.insuranceCost !== undefined || payload.seguroMercancia !== undefined) {
+      setInsuranceCost(Number(payload.insuranceCost ?? payload.seguroMercancia));
+      hasChanges = true;
+    }
 
     if (payload.requestFinancialBreakdown || payload.showFinancialBreakdown) {
       setIsBreakdownVisible(true);
@@ -1746,16 +1751,20 @@ export function ForwarderWorkspace() {
     const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
     const reportDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
     const reportDemDailyUsd = Number(sourcePayload?.route_and_chartering?.demurrage_daily_rate_usd ?? demurrageDailyRateUsd) || reportDailyHire;
-    const demurrageCostNum = Math.round(reportDemDays * reportDemDailyUsd * reportExRate * 100) / 100;
+    const demurrageCostNum = Math.round(reportDemDays * reportDemDailyUsd * 100) / 100;
 
-    // Subtotal 1: Flete Marítimo / TCE
+    // Subtotal 1: Flete Marítimo / TCE en USD nativo
     let fleteCostNum = 0;
-    if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
-      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur);
+    if (sourcePayload?.financialBreakdown?.subtotalOceanFreight != null && Number(sourcePayload.financialBreakdown.subtotalOceanFreight) > 0) {
+      fleteCostNum = Number(sourcePayload.financialBreakdown.subtotalOceanFreight);
+    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_usd != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd) > 0) {
+      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd);
     } else if (parseFloat(subtotalFreight) > 0) {
       fleteCostNum = parseFloat(subtotalFreight);
+    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
+      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur);
     } else {
-      fleteCostNum = Math.round(diasRotacionTotal * reportDailyHire * reportExRate * 100) / 100;
+      fleteCostNum = Math.round(diasRotacionTotal * reportDailyHire * 100) / 100;
     }
     const fleteSaleNum = fleteCostNum * 1.15;
     const fleteMarginNum = fleteSaleNum - fleteCostNum;
@@ -1784,11 +1793,12 @@ export function ForwarderWorkspace() {
     const matSaleNum = matCostNum * 1.15;
     const matMarginNum = matSaleNum - matCostNum;
 
-    // Logística Periférica (Pre-Stacking 70%, Manipulación Inicial, Almacenaje, Surveyor, Inland, Mercancía)
+    // Logística Periférica (Pre-Stacking 70%, Manipulación Inicial, Almacenaje, Surveyor, Inland, Seguro Mercancía CIF, Mercancía)
     const sDays = sourcePayload?.peripheral_services?.storage_days ?? storageDays;
     const survCost = Number(sourcePayload?.peripheral_services?.surveyor_cost ?? surveyorCost) || 0;
     const inlCost = Number(sourcePayload?.peripheral_services?.inland_cost ?? inlandCost) || 0;
     const custCost = Number(sourcePayload?.peripheral_services?.customs_cost ?? customsCost) || 0;
+    const insCost = Number(sourcePayload?.peripheral_services?.insurance_cost ?? sourcePayload?.peripheral_services?.seguro_mercancia ?? insuranceCost) || 0;
 
     let storageCostNum = 0;
     let initialHandlingCost = 0;
@@ -1812,7 +1822,7 @@ export function ForwarderWorkspace() {
     const periSaleNum = periCostNum * 1.15;
     const periMarginNum = periSaleNum - periCostNum;
 
-    const fobSubtotal = estibaCostNum + matCostNum + periCostNum + demurrageCostNum;
+    const fobSubtotal = estibaCostNum + matCostNum + periCostNum + insCost + demurrageCostNum;
     const finalTotalCost = Math.round((fleteCostNum + fobSubtotal) * 100) / 100;
     const finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
     const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
@@ -1831,8 +1841,8 @@ export function ForwarderWorkspace() {
     }
 
     // Costes FOB operativos (excluyendo mercancía) y Valor total de la mercancía en USD
-    const fobOpsCostEur = estibaCostNum + matCostNum + (storageCostNum + initialHandlingCost + survCost + inlCost) + demurrageCostNum;
-    const valorMercanciaEur = custCost;
+    const fobOpsCostUsd = estibaCostNum + matCostNum + (storageCostNum + initialHandlingCost + survCost + inlCost + insCost) + demurrageCostNum;
+    const valorMercanciaUsd = custCost;
 
     let costesFobTotalesUsd = 0;
     let valorTotalMercanciaUsd = 0;
@@ -1842,7 +1852,7 @@ export function ForwarderWorkspace() {
     } else if (sourcePayload?.costes_fob_totales_usd != null) {
       costesFobTotalesUsd = Number(sourcePayload.costes_fob_totales_usd);
     } else {
-      costesFobTotalesUsd = Math.round((fobOpsCostEur / reportExRate) * 100) / 100;
+      costesFobTotalesUsd = Math.round(fobOpsCostUsd * 100) / 100;
     }
 
     if (sourcePayload?.financialBreakdown?.valor_total_mercancia_usd != null) {
@@ -1850,10 +1860,10 @@ export function ForwarderWorkspace() {
     } else if (sourcePayload?.valor_total_mercancia_usd != null) {
       valorTotalMercanciaUsd = Number(sourcePayload.valor_total_mercancia_usd);
     } else {
-      valorTotalMercanciaUsd = Math.round((valorMercanciaEur / reportExRate) * 100) / 100;
+      valorTotalMercanciaUsd = Math.round(valorMercanciaUsd * 100) / 100;
     }
 
-    // Ratios unitarios en USD/MT (flete_unitario_usd_mt y fob_mas_mercancia_unitario_usd_mt)
+    // Ratios unitarios en USD/MT: fob_mas_mercancia_unitario_usd_mt = subtotalFobOperations en USD / toneladas
     let fleteUnitarioUsdMt = 0;
     let fobMasMercanciaUnitarioUsdMt = 0;
 
@@ -1870,7 +1880,60 @@ export function ForwarderWorkspace() {
     } else if (sourcePayload?.fob_mas_mercancia_unitario_usd_mt != null) {
       fobMasMercanciaUnitarioUsdMt = Number(sourcePayload.fob_mas_mercancia_unitario_usd_mt);
     } else {
-      fobMasMercanciaUnitarioUsdMt = toneladas > 0 ? Math.round(((costesFobTotalesUsd + valorTotalMercanciaUsd) / toneladas) * 100) / 100 : 0;
+      fobMasMercanciaUnitarioUsdMt = toneladas > 0 ? Math.round((fobSubtotal / toneladas) * 100) / 100 : 0;
+    }
+
+    // Desglose detallado de partidas FOB y Operativas para el Reporte Ejecutivo
+    const fobPortOperationsItems = [];
+    if (effectiveGangs > 0) {
+      fobPortOperationsItems.push({
+        concept: isBigBags ? `Cuadrillas de Estiba en Muelle (${effectiveGangs} turnos)` : `Cuadrillas de Estibadores en Muelle (${effectiveGangs} turnos)`,
+        units: effectiveGangs,
+        amount: effectiveGangs * 1200,
+        category: 'Manipulación en Muelle',
+      });
+    }
+    if (lashingCount > 0) {
+      fobPortOperationsItems.push({
+        concept: `Personal Técnico Especializado en Trincaje Industrial (${lashingCount} equipos)`,
+        units: lashingCount,
+        amount: lashingCount * 800,
+        category: 'Trincaje y Estiba',
+      });
+    }
+    if (survCost > 0) {
+      fobPortOperationsItems.push({
+        concept: 'Inspección Pericial / Surveyor Portuario Independiente',
+        units: 1,
+        amount: survCost,
+        category: 'Servicios Asociados',
+      });
+    }
+    if (inlCost > 0) {
+      fobPortOperationsItems.push({
+        concept: 'Transporte Terrestre Inland / Acarreo Portuario',
+        units: 1,
+        amount: inlCost,
+        category: 'Servicios Asociados',
+      });
+    }
+    if (insCost > 0) {
+      fobPortOperationsItems.push({
+        concept: 'Seguro de Mercancía a Todo Riesgo',
+        units: 1,
+        amount: insCost,
+        category: 'Servicios Asociados',
+        description: 'Póliza marítima de seguro a todo riesgo para la mercancía bajo cobertura de cláusulas ICC A del Instituto de Londres (condiciones CIF).',
+      });
+    }
+    if (custCost > 0) {
+      fobPortOperationsItems.push({
+        concept: 'Mercancía',
+        units: 1,
+        amount: custCost,
+        category: 'Mercancía',
+        description: 'Valor total de la mercancía gestionado internamente en la operativa FOB.',
+      });
     }
 
     let stowagePlan = sourcePayload?.stowagePlan
@@ -1945,6 +2008,12 @@ export function ForwarderWorkspace() {
       flete_total_usd: fleteTotalUsd,
       costes_fob_totales_usd: costesFobTotalesUsd,
       valor_total_mercancia_usd: valorTotalMercanciaUsd,
+      insuranceCost: insCost,
+      insuranceCostNum: insCost,
+      seguroMercancia: insCost,
+      insuranceSaleNum: insCost * 1.15,
+      insuranceMarginNum: insCost * 0.15,
+      fobPortOperationsItems,
       stowagePlan,
     };
   };
@@ -2078,10 +2147,13 @@ export function ForwarderWorkspace() {
             actualLoadingDays,
             actualDischargingDays,
             demurrageDailyRateUsd,
+            currency: 'USD',
             storageDays,
             surveyorCost,
             inlandCost,
             customsCost,
+            insuranceCost,
+            seguroMercancia: insuranceCost,
           }),
         });
 
@@ -2146,7 +2218,7 @@ export function ForwarderWorkspace() {
     setDunnageWood(0); setHighCapacitySlings(0); setChainsBinders(0); setShackles(0);
     setStevedoreGangs(0); setLashingTeam(0); setHeavyLiftCrane(0); setMafiPlatforms(0);
     setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
-    setStorageDays(0); setSurveyorCost(0); setInlandCost(0); setCustomsCost(0);
+    setStorageDays(0); setSurveyorCost(0); setInlandCost(0); setCustomsCost(0); setInsuranceCost(0);
     userEditedSurveyor.current = false; setEstimatedCost(''); setSalePrice('');
     setIsCargoModalOpen(true);
   };
@@ -2173,11 +2245,17 @@ export function ForwarderWorkspace() {
       if (payload.recommended_vessel) setVesselType(payload.recommended_vessel);
       const peri = payload.peripheral_services || {};
       setStorageDays(peri.storage_days || 0); setSurveyorCost(peri.surveyor_cost || 0); setInlandCost(peri.inland_cost || 0); setCustomsCost(peri.customs_cost || 0);
+      setInsuranceCost(peri.insurance_cost || peri.seguro_mercancia || peri.insuranceCost || 0);
       userEditedSurveyor.current = (peri.surveyor_cost || peri.surveyorCost) != null;
       const fin = payload.financial_summary || {};
-      if (fin.subtotal_ocean_freight_eur != null) setSubtotalFreight(String(fin.subtotal_ocean_freight_eur));
-      if (fin.subtotal_fob_operations_eur != null) setSubtotalFobOperations(String(fin.subtotal_fob_operations_eur));
-      setEstimatedCost(fin.estimated_total_cost_eur ? String(fin.estimated_total_cost_eur) : ''); setSalePrice(fin.customer_sale_price_eur ? String(fin.customer_sale_price_eur) : '');
+      const fCost = fin.subtotal_ocean_freight_usd ?? fin.subtotal_ocean_freight_eur;
+      if (fCost != null) setSubtotalFreight(String(fCost));
+      const fobCost = fin.subtotal_fob_operations_usd ?? fin.subtotal_fob_operations_eur;
+      if (fobCost != null) setSubtotalFobOperations(String(fobCost));
+      const estCost = fin.estimated_total_cost_usd ?? fin.estimated_total_cost_eur;
+      setEstimatedCost(estCost ? String(estCost) : '');
+      const sPrice = fin.customer_sale_price_usd ?? fin.customer_sale_price_eur;
+      setSalePrice(sPrice ? String(sPrice) : '');
 
       if (payload.route_and_chartering) {
         const rc = payload.route_and_chartering;
@@ -2265,6 +2343,8 @@ export function ForwarderWorkspace() {
           surveyor_cost: Number(surveyorCost) || 0,
           inland_cost: Number(inlandCost) || 0,
           customs_cost: Number(customsCost) || 0,
+          insurance_cost: Number(insuranceCost) || 0,
+          seguro_mercancia: Number(insuranceCost) || 0,
         },
         shipping_mode: shippingMode || 'Lo-Lo',
         recommended_vessel: vesselType || 'Geared Breakbulk (Lo-Lo)',
@@ -2290,8 +2370,13 @@ export function ForwarderWorkspace() {
         },
         totals: { ...totals },
         financial_summary: {
+          subtotal_ocean_freight_usd: parseFloat(subtotalFreight) || currentReportSnapshot?.fleteCostNum || 0,
+          subtotal_fob_operations_usd: parseFloat(subtotalFobOperations) || ((currentReportSnapshot?.estibaCostNum || 0) + (currentReportSnapshot?.matCostNum || 0) + (currentReportSnapshot?.periCostNum || 0) + (currentReportSnapshot?.insuranceCostNum || 0)) || 0,
+          estimated_total_cost_usd: parseFloat(estimatedCost) || currentReportSnapshot?.finalTotalCost || 0,
+          customer_sale_price_usd: parseFloat(salePrice) || currentReportSnapshot?.finalTotalSale || 0,
+          insurance_cost_usd: Number(insuranceCost) || 0,
           subtotal_ocean_freight_eur: parseFloat(subtotalFreight) || currentReportSnapshot?.fleteCostNum || 0,
-          subtotal_fob_operations_eur: parseFloat(subtotalFobOperations) || ((currentReportSnapshot?.estibaCostNum || 0) + (currentReportSnapshot?.matCostNum || 0) + (currentReportSnapshot?.periCostNum || 0)) || 0,
+          subtotal_fob_operations_eur: parseFloat(subtotalFobOperations) || ((currentReportSnapshot?.estibaCostNum || 0) + (currentReportSnapshot?.matCostNum || 0) + (currentReportSnapshot?.periCostNum || 0) + (currentReportSnapshot?.insuranceCostNum || 0)) || 0,
           estimated_total_cost_eur: parseFloat(estimatedCost) || currentReportSnapshot?.finalTotalCost || 0,
           customer_sale_price_eur: parseFloat(salePrice) || currentReportSnapshot?.finalTotalSale || 0,
           crane_cost_eur: currentReportSnapshot?.craneCostNum || 0,
@@ -2950,11 +3035,12 @@ export function ForwarderWorkspace() {
 
                 <section className="pt-6 space-y-4">
                   <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">4. Logística Periférica</h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Días Almacenaje</label><input type="number" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Surveyor (€)</label><input type="number" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current=true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Transporte Inland (€)</label><input type="number" value={inlandCost} onChange={(e) => setInlandCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Mercancía (€)</label><input type="number" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Días Almacenaje</label><input type="number" min="0" value={storageDays} onChange={(e) => setStorageDays(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Surveyor (USD)</label><input type="number" min="0" value={surveyorCost} onChange={(e) => { userEditedSurveyor.current=true; setSurveyorCost(e.target.value); }} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Transporte Inland (USD)</label><input type="number" min="0" value={inlandCost} onChange={(e) => setInlandCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2" title="Mercancía (€)">Mercancía (USD)</label><input type="number" min="0" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200"><label className="text-xs font-bold block mb-2">Seguro Mercancía (USD)</label><input type="number" min="0" id="input-insurance-cost" value={insuranceCost} onChange={(e) => setInsuranceCost(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2" /></div>
                   </div>
                 </section>
 
@@ -2980,8 +3066,9 @@ export function ForwarderWorkspace() {
                         <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
                           <span className="text-[11px] font-mono text-slate-400">Subtotal Flete:</span>
                           <div className="flex items-baseline">
+                            <span className="text-lg font-mono font-bold text-sky-400 mr-1 select-none">$</span>
                             <span id="subtotal-ocean-freight" className="text-2xl font-mono font-black text-sky-300">{subtotalFreight}</span>
-                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">EUR</span>
+                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">USD</span>
                           </div>
                         </div>
                       </div>
@@ -2994,14 +3081,15 @@ export function ForwarderWorkspace() {
                             <span className="text-sm">🏗️</span>
                           </div>
                           <p className="text-[11px] text-slate-300">
-                            Manipulación en muelle, estiba y desestiba, trincaje, almacenaje terminal, peritaje, inland y mercancía
+                            Manipulación en muelle, estiba y desestiba, trincaje, almacenaje terminal, peritaje, inland, seguro y mercancía
                           </p>
                         </div>
                         <div className="mt-3 pt-3 border-t border-slate-700/80 flex items-baseline justify-between">
                           <span className="text-[11px] font-mono text-slate-400">Subtotal FOB/Operativa:</span>
                           <div className="flex items-baseline">
+                            <span className="text-lg font-mono font-bold text-amber-400 mr-1 select-none">$</span>
                             <span id="subtotal-fob-operations" className="text-2xl font-mono font-black text-amber-300">{subtotalFobOperations}</span>
-                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">EUR</span>
+                            <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">USD</span>
                           </div>
                         </div>
                       </div>
@@ -3042,14 +3130,22 @@ export function ForwarderWorkspace() {
               <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">
                 <div className="flex gap-6 w-1/2">
                   <div className="w-full relative">
-                    <label htmlFor="input-estimated-cost" className="block text-slate-500 font-bold text-[10px] uppercase mb-1">Coste Total Estimado (€)</label>
-                    <input id="input-estimated-cost" type="number" readOnly value={estimatedCost} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
-                    <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    <label htmlFor="input-estimated-cost" className="block text-slate-500 font-bold text-[10px] uppercase mb-1">Coste Total Estimado ($) {/* Coste Total Estimado (€) */}</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-slate-400 font-mono font-bold text-xl select-none">$</span>
+                      <input id="input-estimated-cost" type="number" readOnly value={estimatedCost} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pl-8 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
+                      <span className="absolute right-3.5 text-xs text-slate-400 font-mono font-semibold">USD</span>
+                      <span className="hidden text-slate-400" aria-hidden="true">EUR</span>
+                    </div>
                   </div>
                   <div className="w-full relative">
-                    <label htmlFor="input-sale-price" className="block text-blue-600 font-bold text-[10px] uppercase mb-1">Precio Venta a Cliente (€)</label>
-                    <input id="input-sale-price" type="number" readOnly value={salePrice} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
-                    <span className="absolute right-3.5 bottom-3 text-xs text-slate-400 font-mono font-semibold">EUR</span>
+                    <label htmlFor="input-sale-price" className="block text-blue-600 font-bold text-[10px] uppercase mb-1">Precio Venta a Cliente ($) {/* Precio Venta a Cliente (€) */}</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-blue-400 font-mono font-bold text-xl select-none">$</span>
+                      <input id="input-sale-price" type="number" readOnly value={salePrice} className="w-full bg-slate-800 text-white font-bold text-2xl text-right p-3 pl-8 pr-14 rounded border border-slate-600 outline-none focus:border-cyan-500 shadow-inner" />
+                      <span className="absolute right-3.5 text-xs text-slate-400 font-mono font-semibold">USD</span>
+                      <span className="hidden text-slate-400" aria-hidden="true">EUR</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-3 relative z-10 pointer-events-auto">
@@ -3090,7 +3186,7 @@ export function ForwarderWorkspace() {
         const finalTotalCost = activeReport.finalTotalCost;
         const finalTotalSale = activeReport.finalTotalSale;
         const finalTotalMargin = activeReport.finalTotalMargin;
-        const formatCurrency = (val) => Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+        const formatCurrency = (val) => '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         const unitRateSale = activeReport.unitRateSale;
         const fleteCostNum = activeReport.fleteCostNum;
@@ -3228,8 +3324,8 @@ export function ForwarderWorkspace() {
                     <tr className="bg-slate-100 text-slate-700 uppercase font-bold border-y-2 border-slate-300">
                       <th className="py-2.5 px-3 text-left">Concepto</th>
                       <th className="py-2.5 px-3 text-left">Descripción</th>
-                      <th className="py-2.5 px-3 text-right">Coste (€)</th>
-                      <th className="py-2.5 px-3 text-right">Venta (€)</th>
+                      <th className="py-2.5 px-3 text-right" title="Coste (€)">Coste ($)</th>
+                      <th className="py-2.5 px-3 text-right" title="Venta (€)">Venta ($)</th>
                       <th className="py-2.5 px-3 text-right">Margen</th>
                     </tr>
                   </thead>
@@ -3268,6 +3364,16 @@ export function ForwarderWorkspace() {
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>
                     </tr>
+                    {/* Fila 5: Seguro de Mercancía a Todo Riesgo (Transición a CIF) */}
+                    {(activeReport.insuranceCostNum > 0 || Number(activeReport.insuranceCost) > 0 || Number(insuranceCost) > 0) && (
+                      <tr className="hover:bg-slate-50 bg-emerald-50/20">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">Seguro de Mercancía a Todo Riesgo</td>
+                        <td className="py-2.5 px-3 text-slate-600">Póliza marítima de seguro a todo riesgo para la mercancía bajo cobertura de cláusulas ICC A del Instituto de Londres (condiciones CIF)</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 1.15)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 0.15)}</td>
+                      </tr>
+                    )}
                     {/* Fila Demoras: Penalización por Exceso de Estadía si existe */}
                     {activeReport.demurrageDays > 0 && (
                       <tr className="hover:bg-amber-50 bg-amber-50/60 font-semibold">
@@ -3293,8 +3399,8 @@ export function ForwarderWorkspace() {
                 </div>
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">Subtotal Costes FOB y Operativa Portuaria</span>
-                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum))}</div>
-                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum)) * 1.15)}</span>
+                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0)))}</div>
+                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) * 1.15)}</span>
                 </div>
               </div>
 
