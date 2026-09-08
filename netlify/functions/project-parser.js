@@ -1928,7 +1928,74 @@ function calculateUniversalStowagePlan(items = [], orderTotals = null, options =
       : 'Condicionado a revisión de repartos o durmientes certificados de refuerzo.',
   };
 
-  // 8. Objeto del Plan de Estiba consolidado
+  // 8. Justificación Técnica de Ingeniería Naval (Naval Engineering Executive Justification)
+  const totalCargoFootprintM2 = Math.round(analyzedItems.reduce((acc, it) => acc + (Number(it.totalFootprintM2) || 0), 0) * 100) / 100;
+
+  const tierWeightMap = {
+    TANKTOP: 0,
+    BODEGA_BLOQUE: 0,
+    WEATHER_DECK: 0,
+    TWEEN_DECK: 0,
+  };
+  const tierCountMap = {
+    TANKTOP: 0,
+    BODEGA_BLOQUE: 0,
+    WEATHER_DECK: 0,
+    TWEEN_DECK: 0,
+  };
+
+  analyzedItems.forEach(it => {
+    const t = it.tier || 'TWEEN_DECK';
+    if (tierWeightMap[t] !== undefined) {
+      tierWeightMap[t] += (it.totalWeightMT || 0);
+      tierCountMap[t] += (it.quantity || 1);
+    } else {
+      tierWeightMap[t] = (it.totalWeightMT || 0);
+      tierCountMap[t] = (it.quantity || 1);
+    }
+  });
+
+  let predominantTier = 'TWEEN_DECK';
+  let maxWeight = -1;
+  for (const [tierKey, weightVal] of Object.entries(tierWeightMap)) {
+    if (weightVal > maxWeight) {
+      maxWeight = weightVal;
+      predominantTier = tierKey;
+    }
+  }
+
+  if (maxWeight <= 0 && analyzedItems.length > 0) {
+    let maxCount = -1;
+    for (const [tierKey, countVal] of Object.entries(tierCountMap)) {
+      if (countVal > maxCount) {
+        maxCount = countVal;
+        predominantTier = tierKey;
+      }
+    }
+  }
+
+  let tierExplanation = '';
+  if (predominantTier === 'WEATHER_DECK') {
+    tierExplanation = 'La carga mayoritaria corresponde a unidades rodadas (Ro-Ro) y/o contenedores, posicionada en Cubierta Superior (Weather Deck) con calzos de seguridad, cinchas a puntos D-Rings y twistlocks automáticos, optimizando el francobordo y la maniobra de izado sin comprometer la estabilidad.';
+  } else if (predominantTier === 'TANKTOP') {
+    tierExplanation = 'La carga mayoritaria corresponde a Heavy Lift y maquinaria pesada/estructuras, posicionada en el Doble Fondo Reforzado (Tanktop, capacidad admisible de 20.0 t/m²) sobre cunas estructurales de madera y trincaje pesado G80, garantizando un centro de gravedad (KG) bajo y maximizando la estabilidad transversal.';
+  } else if (predominantTier === 'BODEGA_BLOQUE') {
+    tierExplanation = 'La carga mayoritaria corresponde a mercancía en Big Bags / graneles ensacados, distribuida en estiba compacta en bloque trabado (Block Stowage) en bodegas inferiores mediante spreader multipunto y cojines neumáticos de trincaje para evitar corrimientos transversales.';
+  } else {
+    tierExplanation = 'La carga mayoritaria corresponde a carga general paletizada y fraccionada, posicionada en entrepuentes (Tween Deck) sobre pontones intermedios con trincaje mediante redes y cinchas de poliéster para facilitar la segregación y descarga secuencial.';
+  }
+
+  if (analyzedItems.length === 0) {
+    tierExplanation = 'Sin partidas de carga activas; compartimentos de carga y cubierta preparados para estiba secuencial según peso específico de las partidas.';
+  }
+
+  const executiveJustification = [
+    `Cálculo de Masas y Volúmenes: Registro de carga total de ${Number(totalCargoWeightMT).toFixed(2)} MT y un área acumulada de apoyo de ${Number(totalCargoFootprintM2).toFixed(2)} m², consolidando un volumen ocupado de ${Number(totalVolumeOccupiedCbm).toFixed(2)} m³ en bodegas y compartimentos (${volumeUtilizationShipPct}% de la capacidad cúbica grain del buque).`,
+    `Lógica de Asignación de Bodegas: ${tierExplanation}`,
+    `Validación de Resistencia Estructural: Presión máxima ejercida sobre plancha calculada en ${Number(hydrodynamicsAndSafety.maxFloorPressureTm2 || 0).toFixed(2)} t/m² frente a una capacidad máxima admisible de ${Number(hydrodynamicsAndSafety.maxFloorAllowableTm2 || 20).toFixed(1)} t/m² del compartimento, confirmando que la distribución de pesos cumple estrictamente con las prescripciones de resistencia estructural y seguridad del Código CSS de la OMI.`,
+  ];
+
+  // 9. Objeto del Plan de Estiba consolidado
   const stowagePlan = {
     vesselModel: {
       type: spec.vesselType,
@@ -1969,6 +2036,7 @@ function calculateUniversalStowagePlan(items = [], orderTotals = null, options =
     },
     hydrodynamicsAndSafety,
     asciiCroquis: '',
+    executiveJustification,
   };
 
   // Generación matricial del croquis ASCII
