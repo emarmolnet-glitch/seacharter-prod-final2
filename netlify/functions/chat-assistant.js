@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as xlsx from "xlsx"; 
 import mammoth from "mammoth"; 
 import { Buffer } from "node:buffer";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
@@ -10,7 +9,28 @@ import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } f
 import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
 import { searchTavily, searchSerpApi, searchBrave } from "./_shared/web-search.mjs";
 
-export const CHAT_ASSISTANT_MODEL = "gemini-3.1-pro-preview";
+// CHAT_ASSISTANT_MODEL = "gemini-3.1-pro-preview" (legacy test fallback)
+export const CHAT_ASSISTANT_MODEL = "gemini-2.5-flash";
+
+export const searchToolDeclaration = {
+  functionDeclarations: [{
+    name: "searchWeb",
+    description: "Busca en la web en tiempo real para responder a cualquier pregunta del usuario sobre actualidad, tecnología, datos de empresas, mercados o información general.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        query: { type: "STRING", description: "La consulta de búsqueda optimizada para la web." }
+      },
+      required: ["query"]
+    }
+  }]
+};
+
+export async function executeWebSearch(query) {
+  if (!query || typeof query !== "string") return "No se especificó ninguna consulta de búsqueda válida.";
+  const result = await searchCommercialWeb(query.trim());
+  return result || "No se encontraron resultados relevantes en la web para la consulta realizada.";
+}
 
 export async function searchCommercialWeb(query) {
   const providers = [
@@ -89,16 +109,22 @@ export function extractLocateVesselAction(message) {
   return { action: "LOCATE_VESSEL", vessel_name: vesselName };
 }
 
-function resolvePdfDocumentLoader(pdfModule = pdfjsLib) {
-  const getDocument = pdfModule?.getDocument || pdfModule?.default?.getDocument;
+export async function resolvePdfDocumentLoader(pdfModule = null) {
+  if (pdfModule) {
+    const getDocument = pdfModule?.getDocument || pdfModule?.default?.getDocument;
+    if (typeof getDocument === "function") return getDocument;
+  }
+  const mod = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const getDocument = mod?.getDocument || mod?.default?.getDocument;
   if (typeof getDocument !== "function") throw new TypeError("pdfjs-dist no expone getDocument.");
   return getDocument;
 }
 
-async function extractTextFromPDF(buffer) {
+export async function extractTextFromPDF(buffer, customLoader = null) {
   try {
     const data = new Uint8Array(buffer);
-    const pdfDocument = await resolvePdfDocumentLoader()({ data }).promise;
+    const getDocument = customLoader || await resolvePdfDocumentLoader();
+    const pdfDocument = await getDocument({ data }).promise;
     let text = "";
     for (let i = 1; i <= pdfDocument.numPages; i++) {
       const page = await pdfDocument.getPage(i);
@@ -112,7 +138,7 @@ async function extractTextFromPDF(buffer) {
 }
 
 export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
-  const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
+  const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso total a internet y a fuentes externas en tiempo real (mediante la búsqueda web nativa de Google Search y herramientas web) para responder a cualquier pregunta o duda del usuario sobre actualidad, tecnología, datos de empresas, navieras, armadores, fletes, mercados o información general. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const vesselLocationInstruction = `
 \nREGLA ABSOLUTA Y DE MÁXIMA PRIORIDAD — LOCALIZACIÓN DE BUQUES:
 Cuando el usuario pida localizar, rastrear o buscar un barco, DEBES ABSTENERTE de dar explicaciones, confirmaciones, contexto, Markdown o cualquier texto conversacional. Tu respuesta completa debe contener ÚNICA Y EXCLUSIVAMENTE este JSON válido:
@@ -347,6 +373,49 @@ function jsonResponse(status, body) {
   });
 }
 
+export function processGroundedResponse(response) {
+  let responseText = "";
+  try {
+    responseText = typeof response?.text === "function" ? response.text() : "";
+  } catch (textErr) {
+    const parts = response?.candidates?.[0]?.content?.parts || [];
+    responseText = parts
+      .map((part) => part?.text || "")
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  const candidate = response?.candidates?.[0];
+  const groundingMetadata = candidate?.groundingMetadata;
+  if (groundingMetadata?.groundingChunks?.length > 0) {
+    const webSources = groundingMetadata.groundingChunks
+      .map((chunk) => chunk?.web)
+      .filter((web) => Boolean(web?.uri && web?.title));
+
+    if (webSources.length > 0) {
+      const seenUris = new Set();
+      const uniqueSources = [];
+      for (const source of webSources) {
+        if (!seenUris.has(source.uri)) {
+          seenUris.add(source.uri);
+          uniqueSources.push(source);
+        }
+      }
+
+      const hasExistingLinks = uniqueSources.some((src) => responseText.includes(src.uri));
+      if (!hasExistingLinks && uniqueSources.length > 0) {
+        const sourcesMarkdown = uniqueSources
+          .slice(0, 5)
+          .map((src) => `- [${src.title}](${src.uri})`)
+          .join("\n");
+        responseText += `\n\n**Fuentes consultadas en tiempo real:**\n${sourcesMarkdown}`;
+      }
+    }
+  }
+
+  return { responseText, groundingMetadata: groundingMetadata || null };
+}
+
 export default async (req) => {
   if (req.method === "OPTIONS") return jsonResponse(200, { ok: true });
   if (req.method !== "POST") return jsonResponse(405, { error: "Método no permitido" });
@@ -468,54 +537,62 @@ export default async (req) => {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: CHAT_ASSISTANT_MODEL,
+      model: "gemini-2.5-flash",
+      tools: [{ googleSearch: {} }],
       systemInstruction: finalInstruction,
-      tools: [...DATA_BRIDGE_TOOLS, ...WEATHER_TOOLS],
     });
 
     const chatHistory = buildGeminiHistory(normalizedHistory);
     const chat = model.startChat(chatHistory.length > 0 ? { history: chatHistory } : undefined);
 
     // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN/PDF OPCIONAL) ---
-    let messagePayload = (mensaje || "").trim();
-    if (imagenData?.data && imagenData?.mimeType) {
-      messagePayload = [
-        messagePayload || "Analiza esta imagen y valida los cálculos o datos mostrados en pantalla:",
-        {
-          inlineData: {
-            data: imagenData.data,
-            mimeType: imagenData.mimeType,
-          },
-        },
-      ];
+    const userParts = [];
+    const textPrompt = (mensaje || "").trim() || (imagenData?.data ? "Analiza esta imagen y valida los cálculos o datos mostrados en pantalla:" : (multimodalParts.length > 0 ? "Analiza estos documentos adjuntos y extrae las partidas del proyecto:" : ""));
+    if (textPrompt) {
+      userParts.push({ text: textPrompt });
     }
-
+    if (imagenData?.data && imagenData?.mimeType) {
+      userParts.push({
+        inlineData: {
+          data: imagenData.data,
+          mimeType: imagenData.mimeType,
+        },
+      });
+    }
     if (multimodalParts.length > 0) {
-      if (typeof messagePayload === "string") {
-        messagePayload = [messagePayload || "Analiza estos documentos adjuntos y extrae las partidas del proyecto:"];
-      }
-      if (Array.isArray(messagePayload)) {
-        messagePayload.push(...multimodalParts);
-      }
+      userParts.push(...multimodalParts);
     }
     // -------------------------------------------------------------------
 
+    const messagePayload = userParts.length === 1 && typeof userParts[0].text === "string"
+      ? userParts[0].text
+      : userParts;
+
     let result = await chat.sendMessage(messagePayload);
     const functionCalls = result.response.functionCalls() || [];
-
     if (functionCalls.length > 0) {
-      const functionResponses = await Promise.all(functionCalls.map(async (functionCall) => ({
-        functionResponse: {
-          name: functionCall.name,
-          response: functionCall.name === "getWeatherForecast"
-            ? await executeWeatherTool(functionCall, normalizedContext)
-            : await executeDataBridgeTool(functionCall),
-        },
-      })));
-      result = await chat.sendMessage(functionResponses);
+      const functionResponseParts = await Promise.all(
+        functionCalls.map(async (functionCall) => {
+          let output = "";
+          if (functionCall.name === "searchWeb") {
+            const query = functionCall.args?.query || "";
+            output = await executeWebSearch(query);
+          } else {
+            output = "Función no reconocida.";
+          }
+          return {
+            functionResponse: {
+              name: functionCall.name,
+              response: { output },
+            },
+          };
+        })
+      );
+
+      result = await chat.sendMessage(functionResponseParts);
     }
 
-    let responseText = result.response.text();
+    const { responseText, groundingMetadata } = processGroundedResponse(result.response);
     let parsedAction = action;
     try {
       const jsonMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"IMPORT_PROJECT_ITEMS"[\s\S]*\}/);
@@ -525,7 +602,13 @@ export default async (req) => {
       }
     } catch (e) {}
 
-    return jsonResponse(200, { success: true, intent, respuesta: responseText, action: parsedAction });
+    return jsonResponse(200, {
+      success: true,
+      intent,
+      respuesta: responseText,
+      action: parsedAction,
+      groundingMetadata: groundingMetadata || null,
+    });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);
