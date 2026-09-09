@@ -118,232 +118,48 @@ export default function AgenteProyectosWidget({
         stowage: currentStowagePlan // Reemplazar con la variable real
       });
 
-      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente, idéntico en capacidad y libertad a la interfaz principal de Gemini.
+      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente.
+
+REGLA CERO - SALUDOS Y MENSAJES CASUALES:
+Si el usuario te saluda ("hola", "buenos días", "qué tal") o hace una pregunta informal, responde ÚNICAMENTE con un saludo natural, humano y cercano, abriendo la puerta a la conversación. ¡PROHIBIDO! No escupas desgloses financieros, costes ni datos del JSON a menos que el usuario te pida explícitamente números, cálculos o análisis específicos.
 
 REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
-1. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL: Habla de tú a tú con el usuario. Tienes permiso absoluto para debatir, opinar, aconsejar sobre negociaciones con clientes, analizar tendencias macroeconómicas (ej. impacto del precio del combustible en fletes terrestres o marítimos) o responder a cualquier pregunta general.
-2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, identifica riesgos comerciales u operativos, y da tu recomendación profesional como un bróker senior.
-3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, pero mantén siempre un tono de diálogo abierto, colaborativo y proactivo. No actúes como un robot lector de datos.
+1. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL: Habla de tú a tú con el usuario. Tienes permiso absoluto para debatir, opinar, aconsejar sobre negociaciones con clientes, analizar tendencias macroeconómicas (ej. impacto del precio del combustible en fletes) o buscar cualquier dato en la web en tiempo real.
+2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
+3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
 
-CONTEXTO EN VIVO DEL PROYECTO (TU BASE DE DATOS MENTAL):
-Tienes acceso en tiempo real a los datos que el usuario está operando. Úsalos de forma invisible e intégralos naturalmente en tus razonamientos:
+CONTEXTO EN VIVO DEL PROYECTO (USO INTERNO):
+Tienes acceso en tiempo real a los datos que el usuario está operando, pero consúltalos solo cuando te hagan una pregunta técnica o financiera:
 - Para consultas financieras, márgenes o viabilidad, evalúa la sección 'financials'.
 - Para opinar sobre la viabilidad física, estiba o riesgos, analiza la sección 'stowage.executiveJustification'.
 - NUNCA expongas el JSON crudo en tu respuesta.
 
 Contexto actual del proyecto: ${projectContext}`;
 
-      const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
+      const response = await fetch(getApiUrl('/api/project-chat'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          modulo: 'proyectos',
+          isProjectMode: true,
+          message: raw,
           text: raw,
-          fileBase64: null,
           systemInstruction,
-          systemPrompt: systemInstruction,
           projectContext,
           history: messages,
-          items: (Array.isArray(currentProjectItems) && currentProjectItems.length > 0) ? currentProjectItems : undefined,
-          pol: routeData?.pol,
-          pod: routeData?.pod,
-          loadingRate: routeData?.loadingRate,
-          dischargingRate: routeData?.dischargingRate,
-          distanceNm: routeData?.distanceNm,
-          actualLoadingDays: routeData?.actualLoadingDays,
-          actualDischargingDays: routeData?.actualDischargingDays,
-          demurrageDailyRateUsd: routeData?.demurrageDailyRateUsd,
-          financialBreakdown: currentFinancialBreakdown,
-          stowagePlan: currentStowagePlan,
         }),
       });
 
       const data = await response.json();
-      const formattedItems = (data.success && Array.isArray(data.items)) ? data.items : [];
+      const agentReply = data.reply || data.respuesta || data.text || (data.error ? `⚠️ ${data.error}` : 'No se pudo obtener respuesta del consultor.');
 
-      if (formattedItems.length > 0) {
-        const totalKg = formattedItems.reduce((acc, it) => acc + ((Number(it.quantity) || 1) * (parseFloat(it.weight) || 0)), 0);
-        const totalTons = totalKg / 1000;
-        const charterModeLabel = totalTons < 40 ? 'Grupaje LCL (TCE buque desactivado)' : 'Fletamento Completo (TCE buque activo)';
-        const fleteSub = data.financialBreakdown?.subtotals?.oceanFreight ?? (totalTons * 65);
-        const fobSub = data.financialBreakdown?.subtotals?.fobAndPortOperations ?? 0;
-        const totalAllIn = data.financialBreakdown?.totalQuotationAllIn ?? ((fleteSub + fobSub) * 1.15);
-
-        const agentReply = `✅ Orden procesada: ${formattedItems.length} partida(s) analizada(s) (${totalTons.toFixed(2)} t acumuladas).\nModalidad: ${charterModeLabel}.\n\n📊 Desglose Financiero Separado:\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB / Operativa: ${Number(fobSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Total Cotización (All-In): ${Number(totalAllIn).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nLista de empaque y operativa actualizadas automáticamente.`;
-
-        setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
-        speakText(agentReply);
-
-        if (onUpdatePayload) {
-          onUpdatePayload({
-            items: formattedItems,
-            cargo_items: formattedItems,
-            category: formattedItems[0]?.category || 'Maquinaria',
-            orderTotals: data.orderTotals,
-            charteringAssessment: data.charteringAssessment,
-            rotationBreakdown: data.charteringAssessment?.rotationBreakdown,
-            operationalProfile: data.operationalProfile,
-            financialBreakdown: data.financialBreakdown,
-            stowagePlan: data.stowagePlan,
-            forceOpenModal: true,
-          });
-        }
-      } else {
-        const text = raw.toLowerCase();
-        let payloadObj = { instruction: raw };
-
-        const extractNumber = (str) => {
-          const match = str.match(/(\d+([.,]\d+)?)/);
-          return match ? parseFloat(match[0].replace(',', '.')) : null;
-        };
-
-        const val = extractNumber(text);
-        const isBreakdownReq = /(desglose|desglos|flete\s*vs|flete\s*y\s*fob|fob\s*y\s*flete|separar\s*flete|subtotal|all-in|costes?\s*separados?|desglose\s*financiero)/i.test(text);
-
-        if (text.includes('dónde') || text.includes('donde') || text.includes('integrado')) {
-          payloadObj.infoReply = "Los archivos adjuntos y datos procesados se integran directamente en la tabla de la Lista de Empaque (Project Cargo Builder) y actualizan los cálculos de flete y estiba de forma automática.";
-        } else if (isBreakdownReq) {
-          payloadObj.requestFinancialBreakdown = true;
-          payloadObj.showFinancialBreakdown = true;
-          payloadObj.forceOpenModal = true;
-          if (data.financialBreakdown) {
-            payloadObj.financialBreakdown = data.financialBreakdown;
-          }
-          const fleteVal = data.financialBreakdown?.subtotals?.oceanFreight ?? (financialData?.subtotalFreight || '0.00');
-          const fobVal = data.financialBreakdown?.subtotals?.fobAndPortOperations ?? (financialData?.subtotalFobOperations || '0.00');
-          const allInVal = data.financialBreakdown?.totalQuotationAllIn ?? (financialData?.salePrice || '0.00');
-          payloadObj.breakdownReply = `📊 Desglose Financiero Separado (SeaCharter Core PRO):\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB y Operativa Portuaria: ${Number(fobVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Importe Total Cotización (All-In): ${Number(allInVal).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nEstado financiero de la interfaz actualizado: los subtotales son visibles de forma transparente.`;
-        } else if (text.includes('almacen') || text.includes('dias') || text.includes('días')) {
-          if (val !== null) payloadObj.storageDays = val;
-        } else if (text.includes('surveyor') || text.includes('perito') || text.includes('inspeccion')) {
-          if (val !== null) payloadObj.surveyorCost = val;
-        } else if (text.includes('inland') || text.includes('transporte') || text.includes('camion')) {
-          if (val !== null) payloadObj.inlandTrucksCount = val;
-        } else if (text.includes('mercancía') || text.includes('mercancia') || text.includes('aduana')) {
-          if (val !== null) payloadObj.customsCost = val;
-        } else if (text.includes('madera') || text.includes('dunnage')) {
-          if (val !== null) payloadObj.dunnageUnits = val;
-        } else if (text.includes('eslinga')) {
-          if (val !== null) payloadObj.slingsUnits = val;
-        } else if (text.includes('cadena')) {
-          if (val !== null) payloadObj.lashingChains = val;
-        }
-
-        const isStowageReq = /(croquis|estiba|stowage|justificaci[oó]n|plano\s*de\s*estiba)/i.test(text);
-        if (isStowageReq && currentStowagePlan?.executiveJustification) {
-          const justification = currentStowagePlan.executiveJustification;
-          const formattedJustification = Array.isArray(justification)
-            ? justification.join('\n• ')
-            : String(justification);
-          payloadObj.stowageReply = `📦 Justificación Técnica del Croquis de Estiba (SeaCharter Core PRO):\n• ${formattedJustification}`;
-        }
-
-        const polMatch = text.match(/(?:pol|puerto\s*de\s*(?:origen|carga)|cargar\s*en|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pod|\s+hasta|\s+a\s+|\s+ritmo|\s+demora|$)/i);
-        if (polMatch && polMatch[1]) {
-          let p = polMatch[1].replace(/\s+(?:con|y|hacia|a|para|en)\b.*$/i, '').trim();
-          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas', 'días'].includes(p.toLowerCase())) {
-            payloadObj.pol = p.charAt(0).toUpperCase() + p.slice(1);
-          }
-        }
-        const podMatch = text.match(/(?:pod|puerto\s*de\s*(?:destino|descarga)|descargar\s*en|hasta|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pol|\s+ritmo|\s+demora|$)/i);
-        if (podMatch && podMatch[1]) {
-          let p = podMatch[1].replace(/\s+(?:con|y|hacia|a|para|en)\b.*$/i, '').trim();
-          if (p.length > 2 && !['dias', 'euros', 'turnos', 'toneladas', 'días'].includes(p.toLowerCase())) {
-            payloadObj.pod = p.charAt(0).toUpperCase() + p.slice(1);
-          }
-        }
-        const loadMatch = text.match(/(?:ritmo\s*(?:de)?\s*carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (loadMatch && loadMatch[1]) {
-          const v = parseFloat(loadMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v > 0) {
-            payloadObj.loadingRate = v;
-            payloadObj.loadingRateMtDay = v;
-          }
-        }
-        const dischMatch = text.match(/(?:ritmo\s*(?:de)?\s*descarga|discharging\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (dischMatch && dischMatch[1]) {
-          const v = parseFloat(dischMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v > 0) {
-            payloadObj.dischargingRate = v;
-            payloadObj.dischargingRateMtDay = v;
-          }
-        }
-        const distMatch = text.match(/(?:distancia(?:\s*n[aá]utica)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (distMatch && distMatch[1]) {
-          const v = parseFloat(distMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v > 0) payloadObj.distanceNm = v;
-        }
-        const actualLoadMatch = text.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*carga|actual\s*loading\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (actualLoadMatch && actualLoadMatch[1]) {
-          const v = parseFloat(actualLoadMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v)) payloadObj.actualLoadingDays = v;
-        }
-        const actualDischMatch = text.match(/(?:d[ií]as\s*reales\s*(?:de)?\s*descarga|actual\s*discharging\s*days)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (actualDischMatch && actualDischMatch[1]) {
-          const v = parseFloat(actualDischMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v)) payloadObj.actualDischargingDays = v;
-        }
-        const demMatch = text.match(/(?:demoras?|demurrage|retraso(?:\s*en\s*muelle)?)\s*[:=]?\s*(\d+[\d.,]*)/i);
-        if (demMatch && demMatch[1]) {
-          const v = parseFloat(demMatch[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(v) && v >= 0) payloadObj.demurrageDays = v;
-        }
-
-        // Conectar el charteringAssessment / rotationBreakdown del backend o sintetizarlo
-        if (data.charteringAssessment) {
-          payloadObj.charteringAssessment = data.charteringAssessment;
-          payloadObj.rotationBreakdown = data.charteringAssessment.rotationBreakdown || data.charteringAssessment.timeCharterEquivalent;
-          if (payloadObj.rotationBreakdown) {
-            if (payloadObj.rotationBreakdown.pol) payloadObj.pol = payloadObj.rotationBreakdown.pol;
-            if (payloadObj.rotationBreakdown.pod) payloadObj.pod = payloadObj.rotationBreakdown.pod;
-            if (payloadObj.rotationBreakdown.loadingRateMtDay) payloadObj.loadingRate = payloadObj.rotationBreakdown.loadingRateMtDay;
-            if (payloadObj.rotationBreakdown.dischargingRateMtDay) payloadObj.dischargingRate = payloadObj.rotationBreakdown.dischargingRateMtDay;
-            if (payloadObj.rotationBreakdown.distanceNm) payloadObj.distanceNm = payloadObj.rotationBreakdown.distanceNm;
-          }
-        } else if (payloadObj.pol || payloadObj.pod || payloadObj.loadingRate || payloadObj.dischargingRate || payloadObj.demurrageDays) {
-          const rot = {
-            pol: payloadObj.pol || routeData?.pol || 'Valencia',
-            pod: payloadObj.pod || routeData?.pod || 'Houston',
-            loadingRateMtDay: payloadObj.loadingRate || routeData?.loadingRate || 1200,
-            dischargingRateMtDay: payloadObj.dischargingRate || routeData?.dischargingRate || 1000,
-            distanceNm: payloadObj.distanceNm || routeData?.distanceNm || 4850,
-            actualLoadingDays: payloadObj.actualLoadingDays,
-            actualDischargingDays: payloadObj.actualDischargingDays,
-            demurrage: payloadObj.demurrageDays !== undefined ? { demurrageDays: payloadObj.demurrageDays } : undefined
-          };
-          payloadObj.rotationBreakdown = rot;
-          payloadObj.charteringAssessment = { rotationBreakdown: rot };
-        }
-
-        const hasRouteParams = payloadObj.pol || payloadObj.pod || payloadObj.loadingRate || payloadObj.dischargingRate || payloadObj.demurrageDays || payloadObj.distanceNm;
-        if (hasRouteParams) {
-          payloadObj.forceOpenModal = true;
-        }
-        const agentReply = data.error
-          ? `⚠️ ${data.error}`
-          : payloadObj.breakdownReply
-            ? payloadObj.breakdownReply
-            : payloadObj.stowageReply
-              ? payloadObj.stowageReply
-              : payloadObj.infoReply
-                ? payloadObj.infoReply
-                : hasRouteParams
-                  ? `🗺️ Ruta marítima y ritmos operativos actualizados: POL ${payloadObj.pol || 'mantenido'} → POD ${payloadObj.pod || 'mantenido'}${payloadObj.loadingRate ? `, Carga: ${payloadObj.loadingRate} MT/d` : ''}${payloadObj.dischargingRate ? `, Descarga: ${payloadObj.dischargingRate} MT/d` : ''}. Contadores sincronizados.`
-                  : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
-                    ? `⚙️ Parámetros actualizados en el proyecto.`
-                    : (data.reply && !data.reply.includes('0.00 t') ? data.reply : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`);
-
-        setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
-        speakMessage(agentReply);
-
-        if (onUpdatePayload) {
-          onUpdatePayload(payloadObj);
-        }
-      }
+      setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
+      speakMessage(agentReply);
     } catch (err) {
-      console.error('Error al enviar orden a project-parser:', err);
-      const errorMsg = '⚠️ Error de comunicación con el motor de análisis project-parser.';
+      console.error('Error al enviar mensaje a asistente conversacional:', err);
+      const errorMsg = '⚠️ Error de comunicación con el consultor conversacional de proyectos.';
       setMessages(prev => [...prev, { sender: 'agent', text: errorMsg }]);
       speakMessage(errorMsg);
     } finally {
@@ -377,15 +193,18 @@ Contexto actual del proyecto: ${projectContext}`;
         stowage: currentStowagePlan
       });
 
-      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente, idéntico en capacidad y libertad a la interfaz principal de Gemini.
+      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente.
+
+REGLA CERO - SALUDOS Y MENSAJES CASUALES:
+Si el usuario te saluda ("hola", "buenos días", "qué tal") o hace una pregunta informal, responde ÚNICAMENTE con un saludo natural, humano y cercano, abriendo la puerta a la conversación. ¡PROHIBIDO! No escupas desgloses financieros, costes ni datos del JSON a menos que el usuario te pida explícitamente números, cálculos o análisis específicos.
 
 REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
-1. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL: Habla de tú a tú con el usuario. Tienes permiso absoluto para debatir, opinar, aconsejar sobre negociaciones con clientes, analizar tendencias macroeconómicas (ej. impacto del precio del combustible en fletes terrestres o marítimos) o responder a cualquier pregunta general.
-2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, identifica riesgos comerciales u operativos, y da tu recomendación profesional como un bróker senior.
-3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, pero mantén siempre un tono de diálogo abierto, colaborativo y proactivo. No actúes como un robot lector de datos.
+1. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL: Habla de tú a tú con el usuario. Tienes permiso absoluto para debatir, opinar, aconsejar sobre negociaciones con clientes, analizar tendencias macroeconómicas (ej. impacto del precio del combustible en fletes) o buscar cualquier dato en la web en tiempo real.
+2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
+3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
 
-CONTEXTO EN VIVO DEL PROYECTO (TU BASE DE DATOS MENTAL):
-Tienes acceso en tiempo real a los datos que el usuario está operando. Úsalos de forma invisible e intégralos naturalmente en tus razonamientos:
+CONTEXTO EN VIVO DEL PROYECTO (USO INTERNO):
+Tienes acceso en tiempo real a los datos que el usuario está operando, pero consúltalos solo cuando te hagan una pregunta técnica o financiera:
 - Para consultas financieras, márgenes o viabilidad, evalúa la sección 'financials'.
 - Para opinar sobre la viabilidad física, estiba o riesgos, analiza la sección 'stowage.executiveJustification'.
 - NUNCA expongas el JSON crudo en tu respuesta.

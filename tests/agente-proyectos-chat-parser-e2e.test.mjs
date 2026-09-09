@@ -6,17 +6,19 @@ const widgetSource = readFileSync(new URL('../src/components/AgenteProyectosWidg
 const workspaceSource = readFileSync(new URL('../src/components/ForwarderWorkspace.jsx', import.meta.url), 'utf8');
 const widgetCssSource = readFileSync(new URL('../src/components/AgenteProyectosWidget.css', import.meta.url), 'utf8');
 
-test('1. AgenteProyectosWidget connects handleSend and handleFileAttach directly to /.netlify/functions/project-parser via POST', () => {
-  // Verifies POST endpoint invocation in both handlers
+test('1. AgenteProyectosWidget separates chat interface from parser: chat connects to /api/project-chat and file attach connects to project-parser', () => {
+  // Verifies handleSend routes to conversational AI endpoint without invoking project-parser
+  assert.match(widgetSource, /fetch\(\s*(?:getApiUrl\(\s*)?['"]\/api\/project-chat['"]/);
+  // Verifies handleFileAttach routes to project-parser
   assert.match(widgetSource, /fetch\(\s*(?:getApiUrl\(\s*)?['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/project-parser['"]/);
   assert.match(widgetSource, /method:\s*['"]POST['"]/);
   assert.match(widgetSource, /['"]Content-Type['"]:\s*['"]application\/json['"]/);
 });
 
-test('2. AgenteProyectosWidget sends JSON body structured with text and fileBase64', () => {
-  // Verifies handleSend sends { text: raw, fileBase64: null }
-  assert.match(widgetSource, /body:\s*JSON\.stringify\(\s*\{\s*text:\s*raw,\s*fileBase64:\s*null/);
-  // Verifies handleFileAttach sends clean Base64 and text with file metadata
+test('2. AgenteProyectosWidget separates chat payload from file parser payload', () => {
+  // Verifies handleSend sends pure chat message and context without invoking automatic calculation
+  assert.match(widgetSource, /body:\s*JSON\.stringify\(\s*\{[\s\S]*?modulo:\s*['"]proyectos['"][\s\S]*?message:\s*raw/);
+  // Verifies handleFileAttach sends clean Base64 and text with file metadata to project-parser
   assert.match(widgetSource, /cleanBase64\s*=[\s\S]*?split\(','\)\[1\]/);
   assert.match(widgetSource, /body:\s*JSON\.stringify\(\s*\{[\s\S]*?fileBase64:\s*cleanBase64/);
 });
