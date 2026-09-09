@@ -62,11 +62,17 @@ export async function handler(eventOrRequest) {
             "}"
         ].join("\n");
 
-        const userMessage = body.message || body.UserContext || "Calcula los costes de esta operativa.";
+        const userMessage = body.message || body.UserContext || body.text || "Calcula los costes de esta operativa.";
+
+        const effectiveSystemPrompt = body.systemInstruction
+            ? `${body.systemInstruction}\n\n${systemPrompt}`
+            : (body.projectContext
+                ? `Contexto del Proyecto:\n${typeof body.projectContext === 'string' ? body.projectContext : JSON.stringify(body.projectContext)}\n\n${systemPrompt}`
+                : systemPrompt);
 
         const response = await ai.models.generateContent({
             model: DEFAULT_GEMINI_MODEL,
-            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n--- ENTRADA ---\n${userMessage}` }] }],
+            contents: [{ role: "user", parts: [{ text: `${effectiveSystemPrompt}\n\n--- ENTRADA ---\n${userMessage}` }] }],
             config: {
                 responseMimeType: "application/json",
                 temperature: 0.1,

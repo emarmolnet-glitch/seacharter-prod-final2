@@ -94,3 +94,29 @@ test('9. AgenteProyectosWidget collapsed floating button is elevated (bottom-24 
   assert.match(widgetCssSource, /bottom-24/);
 });
 
+test('10. AgenteProyectosWidget injects dynamic projectContext and systemInstruction into Gemini API payload', () => {
+  // Verifies capture and serialization of items, financials, and stowage
+  assert.match(widgetSource, /const\s+projectContext\s*=\s*JSON\.stringify\(\s*\{\s*items:\s*currentProjectItems,\s*(?:financials:\s*currentFinancialBreakdown|financialBreakdown:\s*currentFinancialBreakdown),\s*(?:stowage:\s*currentStowagePlan|stowagePlan:\s*currentStowagePlan)\s*\}\s*\)/);
+  
+  // Verifies systemInstruction with strict context prompt and executiveJustification instruction
+  assert.match(widgetSource, /const\s+systemInstruction\s*=\s*`Eres el Agente de Proyectos de SeaCharter\. Responde a las preguntas basándote ESTRICTAMENTE en este contexto del proyecto actual\. Si te preguntan por el croquis de estiba, usa la executiveJustification\. Contexto: \$\{projectContext\}`/);
+  
+  // Verifies systemInstruction, projectContext, and history sent in handleSend payload
+  assert.match(widgetSource, /systemInstruction/);
+  assert.match(widgetSource, /projectContext/);
+  assert.match(widgetSource, /history:\s*messages/);
+});
+
+test('11. AgenteProyectosWidget fixes audio mute: cancels native speech when muted and early returns in speakMessage', () => {
+  // Verifies toggleMute explicitly cancels window.speechSynthesis when muted
+  assert.match(widgetSource, /const\s+toggleMute\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*newMutedState\s*===\s*true\s*\)\s*\{[\s\S]*?window\.speechSynthesis\.cancel\(\);?[\s\S]*?\}/);
+
+  // Verifies speakMessage early returns if isMuted is true
+  assert.match(widgetSource, /const\s+speakMessage\s*=\s*\([^\)]*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*isMuted\s*\)\s*return;/);
+});
+
+test('12. ForwarderWorkspace binds items, financialBreakdown, and stowagePlan into AgenteProyectosWidget', () => {
+  assert.match(workspaceSource, /<AgenteProyectosWidget[\s\S]*?items=\{cargoItems\}[\s\S]*?financialBreakdown=\{financialBreakdown\}[\s\S]*?stowagePlan=\{/);
+});
+
+

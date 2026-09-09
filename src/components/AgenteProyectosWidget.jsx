@@ -7,10 +7,19 @@ export default function AgenteProyectosWidget({
   isOpen: controlledIsOpen,
   onToggleOpen,
   cargoItems = [],
+  items = null,
   financialData = null,
+  financialBreakdown = null,
   charteringAssessment = null,
   routeData = null,
+  stowagePlan = null,
 }) {
+  const currentProjectItems = (Array.isArray(items) && items.length > 0)
+    ? items
+    : (Array.isArray(cargoItems) ? cargoItems : []);
+  const currentFinancialBreakdown = financialBreakdown || financialData || null;
+  const currentStowagePlan = stowagePlan || charteringAssessment?.stowagePlan || null;
+
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -27,7 +36,8 @@ export default function AgenteProyectosWidget({
   const [inputValue, setInputValue] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const isAudioEnabled = !isMuted;
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -75,8 +85,9 @@ export default function AgenteProyectosWidget({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAnalyzing]);
 
-  const speakText = (text) => {
-    if (!isAudioEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+  const speakMessage = (text) => {
+    if (isMuted) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
       const clean = text.replace(/[✅📂📎🎙️🔊🔇●✕🗕•]/g, '').trim();
@@ -89,6 +100,8 @@ export default function AgenteProyectosWidget({
     }
   };
 
+  const speakText = speakMessage;
+
   const handleSend = async (e) => {
     if (e) e.preventDefault();
     const raw = inputValue.trim();
@@ -99,6 +112,14 @@ export default function AgenteProyectosWidget({
     setIsAnalyzing(true);
 
     try {
+      const projectContext = JSON.stringify({
+        items: currentProjectItems, // Reemplazar con la variable real de tu estado
+        financials: currentFinancialBreakdown, // Reemplazar con la variable real
+        stowage: currentStowagePlan // Reemplazar con la variable real
+      });
+
+      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter. Responde a las preguntas basándote ESTRICTAMENTE en este contexto del proyecto actual. Si te preguntan por el croquis de estiba, usa la executiveJustification. Contexto: ${projectContext}`;
+
       const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
         method: 'POST',
         headers: {
@@ -107,7 +128,11 @@ export default function AgenteProyectosWidget({
         body: JSON.stringify({
           text: raw,
           fileBase64: null,
-          items: (Array.isArray(cargoItems) && cargoItems.length > 0) ? cargoItems : undefined,
+          systemInstruction,
+          systemPrompt: systemInstruction,
+          projectContext,
+          history: messages,
+          items: (Array.isArray(currentProjectItems) && currentProjectItems.length > 0) ? currentProjectItems : undefined,
           pol: routeData?.pol,
           pod: routeData?.pod,
           loadingRate: routeData?.loadingRate,
@@ -116,6 +141,8 @@ export default function AgenteProyectosWidget({
           actualLoadingDays: routeData?.actualLoadingDays,
           actualDischargingDays: routeData?.actualDischargingDays,
           demurrageDailyRateUsd: routeData?.demurrageDailyRateUsd,
+          financialBreakdown: currentFinancialBreakdown,
+          stowagePlan: currentStowagePlan,
         }),
       });
 
@@ -188,6 +215,15 @@ export default function AgenteProyectosWidget({
           if (val !== null) payloadObj.slingsUnits = val;
         } else if (text.includes('cadena')) {
           if (val !== null) payloadObj.lashingChains = val;
+        }
+
+        const isStowageReq = /(croquis|estiba|stowage|justificaci[oó]n|plano\s*de\s*estiba)/i.test(text);
+        if (isStowageReq && currentStowagePlan?.executiveJustification) {
+          const justification = currentStowagePlan.executiveJustification;
+          const formattedJustification = Array.isArray(justification)
+            ? justification.join('\n• ')
+            : String(justification);
+          payloadObj.stowageReply = `📦 Justificación Técnica del Croquis de Estiba (SeaCharter Core PRO):\n• ${formattedJustification}`;
         }
 
         const polMatch = text.match(/(?:pol|puerto\s*de\s*(?:origen|carga)|cargar\s*en|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+?)(?:,|\.|\s+pod|\s+hasta|\s+a\s+|\s+ritmo|\s+demora|$)/i);
@@ -275,16 +311,18 @@ export default function AgenteProyectosWidget({
           ? `⚠️ ${data.error}`
           : payloadObj.breakdownReply
             ? payloadObj.breakdownReply
-            : payloadObj.infoReply
-              ? payloadObj.infoReply
-              : hasRouteParams
-                ? `🗺️ Ruta marítima y ritmos operativos actualizados: POL ${payloadObj.pol || 'mantenido'} → POD ${payloadObj.pod || 'mantenido'}${payloadObj.loadingRate ? `, Carga: ${payloadObj.loadingRate} MT/d` : ''}${payloadObj.dischargingRate ? `, Descarga: ${payloadObj.dischargingRate} MT/d` : ''}. Contadores sincronizados.`
-                : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
-                  ? `⚙️ Parámetros actualizados en el proyecto.`
-                  : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`;
+            : payloadObj.stowageReply
+              ? payloadObj.stowageReply
+              : payloadObj.infoReply
+                ? payloadObj.infoReply
+                : hasRouteParams
+                  ? `🗺️ Ruta marítima y ritmos operativos actualizados: POL ${payloadObj.pol || 'mantenido'} → POD ${payloadObj.pod || 'mantenido'}${payloadObj.loadingRate ? `, Carga: ${payloadObj.loadingRate} MT/d` : ''}${payloadObj.dischargingRate ? `, Descarga: ${payloadObj.dischargingRate} MT/d` : ''}. Contadores sincronizados.`
+                  : (payloadObj.storageDays || payloadObj.surveyorCost || payloadObj.inlandTrucksCount || payloadObj.customsCost || payloadObj.dunnageUnits || payloadObj.slingsUnits || payloadObj.lashingChains)
+                    ? `⚙️ Parámetros actualizados en el proyecto.`
+                    : (data.reply && !data.reply.includes('0.00 t') ? data.reply : `He procesado tu instrucción: "${raw}". Workspace sincronizado con el motor de análisis.`);
 
         setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
-        speakText(agentReply);
+        speakMessage(agentReply);
 
         if (onUpdatePayload) {
           onUpdatePayload(payloadObj);
@@ -294,7 +332,7 @@ export default function AgenteProyectosWidget({
       console.error('Error al enviar orden a project-parser:', err);
       const errorMsg = '⚠️ Error de comunicación con el motor de análisis project-parser.';
       setMessages(prev => [...prev, { sender: 'agent', text: errorMsg }]);
-      speakText(errorMsg);
+      speakMessage(errorMsg);
     } finally {
       setIsAnalyzing(false);
     }
@@ -320,6 +358,14 @@ export default function AgenteProyectosWidget({
         ? rawDataBase64.split(',')[1].trim()
         : (typeof rawDataBase64 === 'string' ? rawDataBase64.trim() : '');
 
+      const projectContext = JSON.stringify({
+        items: currentProjectItems,
+        financials: currentFinancialBreakdown,
+        stowage: currentStowagePlan
+      });
+
+      const systemInstruction = `Eres el Agente de Proyectos de SeaCharter. Responde a las preguntas basándote ESTRICTAMENTE en este contexto del proyecto actual. Si te preguntan por el croquis de estiba, usa la executiveJustification. Contexto: ${projectContext}`;
+
       const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
         method: 'POST',
         headers: {
@@ -330,6 +376,10 @@ export default function AgenteProyectosWidget({
           fileBase64: cleanBase64,
           fileName: file.name,
           mimeType: file.type || 'application/pdf',
+          systemInstruction,
+          systemPrompt: systemInstruction,
+          projectContext,
+          history: messages,
         })
       });
       const data = await response.json();
@@ -355,7 +405,7 @@ export default function AgenteProyectosWidget({
 
         const text = `📁 Documento "${file.name}" procesado con éxito: ${formattedItems.length} partida(s) de carga detectada(s) (${totalTons.toFixed(2)} t).\nModalidad: ${charterModeLabel}.\n\n📊 Desglose Financiero Separado:\n• 🌊 Subtotal Flete Marítimo / TCE: ${Number(fleteSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 🏗️ Subtotal Costes FOB / Operativa: ${Number(fobSub).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n• 💰 Total Cotización (All-In): ${Number(totalAllIn).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €\n\nLista de empaque y operativa actualizadas automáticamente.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
-        speakText(text);
+        speakMessage(text);
 
         if (onUpdatePayload) {
           onUpdatePayload({
@@ -376,7 +426,7 @@ export default function AgenteProyectosWidget({
           ? `⚠️ Error al procesar: ${data.error}`
           : `📁 Documento "${file.name}" analizado: no se encontraron partidas de carga.`;
         setMessages(prev => [...prev, { sender: 'agent', text }]);
-        speakText(text);
+        speakMessage(text);
 
         if (onUpdatePayload) {
           onUpdatePayload({
@@ -390,7 +440,7 @@ export default function AgenteProyectosWidget({
       console.error('Error analizando archivo en agente:', err);
       const text = `⚠️ Hubo un error al procesar el archivo.`;
       setMessages(prev => [...prev, { sender: 'agent', text }]);
-      speakText(text);
+      speakMessage(text);
     } finally {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -436,9 +486,15 @@ export default function AgenteProyectosWidget({
     }
   };
 
-  const toggleAudio = () => {
-    setIsAudioEnabled(!isAudioEnabled);
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    if (newMutedState === true) {
+      window.speechSynthesis.cancel();
+    }
   };
+
+  const toggleAudio = toggleMute;
 
   const handleMinimize = () => {
     setIsMinimized(true);
@@ -490,12 +546,12 @@ export default function AgenteProyectosWidget({
         <div className="widget-controls">
           <button 
             type="button" 
-            onClick={toggleAudio} 
-            title={isAudioEnabled ? "Altavoz activado" : "Altavoz silenciado"}
-            className={`control-icon-btn ${isAudioEnabled ? 'active' : ''}`}
+            onClick={toggleMute} 
+            title={!isMuted ? "Altavoz activado" : "Altavoz silenciado"}
+            className={`control-icon-btn ${!isMuted ? 'active' : ''}`}
             aria-label="Alternar audio"
           >
-            {isAudioEnabled ? '🔊' : '🔇'}
+            {!isMuted ? '🔊' : '🔇'}
           </button>
           <button 
             type="button" 

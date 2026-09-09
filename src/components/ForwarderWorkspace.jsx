@@ -4201,9 +4201,12 @@ export function ForwarderWorkspace() {
         isOpen={isAgentVisible}
         onToggleOpen={setIsAgentVisible}
         cargoItems={cargoItems}
+        items={cargoItems}
         charteringAssessment={charteringAssessment}
         routeData={{ pol, pod, loadingRate, dischargingRate, distanceNm, actualLoadingDays, actualDischargingDays, demurrageDailyRateUsd }}
         financialData={{ subtotalFreight, subtotalFobOperations, estimatedCost, salePrice }}
+        financialBreakdown={financialBreakdown}
+        stowagePlan={activeReport?.stowagePlan || reportData?.stowagePlan || calculateUniversalStowagePlan(cargoItems, totals, { shippingMode, pol, pod })}
       />
     </>
   );

@@ -3451,6 +3451,19 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       ];
     }
 
+    if (body?.systemInstruction || body?.systemPrompt) {
+      const instructionText = body.systemInstruction || body.systemPrompt;
+      contentParts.push(`\nINSTRUCCIÓN DE SISTEMA Y CONTEXTO DEL PROYECTO ACTUAL:\n${instructionText}`);
+    }
+    if (body?.projectContext) {
+      const pContext = typeof body.projectContext === 'string' ? body.projectContext : JSON.stringify(body.projectContext);
+      contentParts.push(`\nESTADO ACTUAL DEL PROYECTO (CONTEXTO):\n${pContext}`);
+    }
+    if (Array.isArray(body?.history) && body.history.length > 0) {
+      const histText = body.history.map(m => `${m.sender === 'user' ? 'Usuario' : 'Agente'}: ${m.text}`).join('\n');
+      contentParts.push(`\nHISTORIAL DE MENSAJES PREVIO:\n${histText}`);
+    }
+
     const result = await model.generateContent(contentParts);
     const responseText = result.response.text();
 
@@ -3572,7 +3585,7 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
       flete_unitario_usd_mt: financialBreakdown.flete_unitario_usd_mt,
       fob_mas_mercancia_unitario_usd_mt: financialBreakdown.fob_mas_mercancia_unitario_usd_mt,
       unitRatios: financialBreakdown.unitRatios,
-      reply: financialBreakdown.summaryText,
+      reply: parsedData?.reply || parsedData?.agentReply || financialBreakdown.summaryText,
       documentMeta: {
         name: fileName,
         size: fileBuffer.length,
