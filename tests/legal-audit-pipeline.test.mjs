@@ -30,15 +30,18 @@ test("background worker claims once and publishes progress", () => {
   assert.match(pullSource, /17 \* 60 \* 1000/);
 });
 
-test("server prompt enforces every complete legal deliverable", () => {
+test("server prompt enforces every complete legal deliverable and Gemini model configuration", () => {
   assert.match(auditSource, /COMPARATIVA CLÁUSULA POR CLÁUSULA/);
   assert.match(auditSource, /MAPA DE RED FLAGS/);
   assert.match(auditSource, /ESTRATEGIA DE NEGOCIACIÓN/);
   assert.match(auditSource, /EMAIL FINAL/);
   assert.match(auditSource, /comparativa_clausulas/);
   assert.match(auditSource, /getLegalAuditIntegrityErrors/);
-  assert.match(auditSource, /max_completion_tokens: isStrictAudit \? 32_000/);
-  assert.match(auditSource, /maximumContextTokens = 200_000/);
+  assert.match(auditSource, /GoogleGenerativeAI/);
+  assert.match(auditSource, /gemini-2\.5-flash/);
+  assert.match(auditSource, /maxOutputTokens:\s*8192/);
+  assert.doesNotMatch(auditSource, /openai/i);
+  assert.doesNotMatch(auditSource, /32000|32_000/);
 });
 
 test("contract audits are not blocked by unrelated stale vessel sync state", () => {

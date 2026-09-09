@@ -1,6 +1,5 @@
 import type { Config } from "@netlify/functions";
-import OpenAI from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createIaReport, failIaReport, getVesselSyncContext } from "../../db/ia-reports.js";
 
 type GeminiPart = {
@@ -209,7 +208,7 @@ function extractSessionInstructions(payload: GeminiPayload) {
   return toPromptText(payload.sessionInstructions || legacyInstruction, "").trim();
 }
 
-function buildStrictAuditMessages(payload: GeminiPayload): ChatCompletionMessageParam[] {
+function buildStrictAuditContext(payload: GeminiPayload): { systemInstruction: string; userPrompt: string } {
   const data = payload.data as Record<string, unknown>;
   const position = toPromptText(data.posicion, "Fletador").trim() || "Fletador";
   const policy = data.polizaAnalizada && typeof data.polizaAnalizada === "object"
@@ -225,25 +224,19 @@ function buildStrictAuditMessages(payload: GeminiPayload): ChatCompletionMessage
   });
   const sessionInstructions = extractSessionInstructions(payload);
 
-  assertAuditContextCapacity(LEGAL_AUDIT_SYSTEM_PROMPT, sessionInstructions, context, documentText);
+  const systemInstruction = `${LEGAL_AUDIT_SYSTEM_PROMPT}\n\nPOSICIÓN NEGOCIADORA: ${position}.\n\nINSTRUCCIONES DE SESIÓN DE LA APLICACIÓN:\n${sessionInstructions || "Sin instrucciones adicionales."}`;
+  const userPrompt = `CONTEXTO OPERATIVO VALIDADO:\n${context}\n\nDOCUMENTO A AUDITAR ÍNTEGRAMENTE:\n${documentText}`;
 
-  return [
-    {
-      role: "system",
-      content: `${LEGAL_AUDIT_SYSTEM_PROMPT}\n\nPOSICIÓN NEGOCIADORA: ${position}.\n\nINSTRUCCIONES DE SESIÓN DE LA APLICACIÓN:\n${sessionInstructions || "Sin instrucciones adicionales."}`,
-    },
-    {
-      role: "user",
-      content: `CONTEXTO OPERATIVO VALIDADO:\n${context}\n\nDOCUMENTO A AUDITAR ÍNTEGRAMENTE:\n${documentText}`,
-    },
-  ];
+  assertAuditContextCapacity(systemInstruction, userPrompt);
+
+  return { systemInstruction, userPrompt };
 }
 
 function assertAuditContextCapacity(...parts: string[]) {
   const totalCharacters = parts.reduce((sum, part) => sum + part.length, 0);
   const estimatedInputTokens = Math.ceil(totalCharacters / 4);
-  const reservedOutputTokens = 32_000;
-  const maximumContextTokens = 200_000;
+  const reservedOutputTokens = 8_192;
+  const maximumContextTokens = 1_000_000;
   if (estimatedInputTokens + reservedOutputTokens > maximumContextTokens) {
     const error = new Error("El documento excede la ventana de contexto segura para una auditoría completa. Divide únicamente anexos no contractuales o aporta una versión de texto sin imágenes incrustadas.") as Error & { code?: string };
     error.code = "AUDIT_CONTEXT_TOO_LARGE";
@@ -419,15 +412,10 @@ async function getRealTimePortContext(portName: string) {
   return `No se pudo obtener contexto web en tiempo real para la búsqueda: "${query}". Usa conocimiento experto como respaldo.`;
 }
 
-function buildMessages(prompt: string, jsonOnly: boolean, contexto_tiempo_real: string, puerto: string, calado_requerido: number | null): ChatCompletionMessageParam[] {
-  const system = jsonOnly
+function buildSystemInstruction(prompt: string, jsonOnly: boolean, contexto_tiempo_real: string, puerto: string, calado_requerido: number | null): string {
+  return jsonOnly
     ? buildPortInfoSystemPrompt(contexto_tiempo_real, puerto, calado_requerido)
     : "Eres el motor backend de SeaCharter Core PRO. Responde con precisión, sin exponer configuración interna ni credenciales.\n\nREGLA DE CONSISTENCIA ESTRICTA: Eres un sistema de consulta de datos, no un asistente conversacional. Nunca resumas, abrevies o cambies el formato de tu respuesta, sin importar cuántas veces el usuario consulte el mismo puerto. Debes devolver siempre el JSON completo con absolutamente todas las terminales y detalles requeridos, cada vez que se te pregunte.";
-
-  return [
-    { role: "system", content: system },
-    { role: "user", content: prompt },
-  ];
 }
 
 export async function processLegalAuditPayload(payload: GeminiPayload, onProgress?: (progress: number) => Promise<void>) {
@@ -452,21 +440,47 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
   const contexto_tiempo_real = jsonOnly && !isStrictAudit
     ? await getRealTimePortContext(portName)
     : "";
-  const openai = new OpenAI();
-  const messages = isStrictAudit
-    ? buildStrictAuditMessages(payload)
-    : buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido);
+
+  const apiKey = (typeof Netlify !== "undefined" && (Netlify.env?.get?.("GEMINI_API_KEY") || Netlify.env?.get?.("GOOGLE_API_KEY") || Netlify.env?.get?.("GOOGLE_GENAI_API_KEY")))
+    || process.env.GEMINI_API_KEY
+    || process.env.GOOGLE_API_KEY
+    || process.env.GOOGLE_GENAI_API_KEY
+    || "";
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  const { systemInstruction, initialUserContent } = isStrictAudit
+    ? (() => {
+        const strictContext = buildStrictAuditContext(payload);
+        return {
+          systemInstruction: strictContext.systemInstruction,
+          initialUserContent: strictContext.userPrompt,
+        };
+      })()
+    : {
+        systemInstruction: buildSystemInstruction(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
+        initialUserContent: prompt,
+      };
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction,
+    generationConfig: {
+      ...(jsonOnly ? { responseMimeType: "application/json" } : {}),
+      maxOutputTokens: 8192,
+      temperature: 0.1,
+    },
+  });
+
   let text = "";
+  const contentsHistory: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [
+    { role: "user", parts: [{ text: initialUserContent }] },
+  ];
 
   for (let attempt = 0; attempt < (isStrictAudit ? 2 : 1); attempt += 1) {
     await onProgress?.(attempt === 0 ? 30 : 80);
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5.4",
-      response_format: jsonOnly ? { type: "json_object" } : undefined,
-      max_completion_tokens: isStrictAudit ? 32_000 : 8_000,
-      messages,
-    });
-    text = completion.choices[0]?.message?.content || "";
+    const result = await model.generateContent({ contents: contentsHistory });
+    text = result.response?.text?.() || "";
 
     if (!isStrictAudit) break;
     const parsed = parseLegalAuditResult(text);
@@ -479,11 +493,11 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
     if (attempt === 1) {
       throw new Error(`La auditoría quedó incompleta tras la validación final: ${integrityErrors.join("; ")}.`);
     }
-    messages.push(
-      { role: "assistant", content: text },
+    contentsHistory.push(
+      { role: "model", parts: [{ text }] },
       {
         role: "user",
-        content: `Rehaz y devuelve el objeto JSON COMPLETO, no un parche. Corrige obligatoriamente: ${integrityErrors.join("; ")}. Conserva todo el análisis válido y amplía lo necesario sin truncar ninguna sección.`,
+        parts: [{ text: `Rehaz y devuelve el objeto JSON COMPLETO, no un parche. Corrige obligatoriamente: ${integrityErrors.join("; ")}. Conserva todo el análisis válido y amplía lo necesario sin truncar ninguna sección.` }],
       },
     );
   }
