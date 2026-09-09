@@ -41,7 +41,7 @@ test('4. Frontend immediately removes project from local state and handles activ
 });
 
 test('5. Deletion triggers DELETE request to /.netlify/functions/forwarder-projects with project credentials', () => {
-  assert.match(forwarderComponentSource, /fetch\(['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/forwarder-projects['"]/);
+  assert.match(forwarderComponentSource, /fetch\((?:getApiUrl\()?['"](?:https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app)?\/\.netlify\/functions\/forwarder-projects['"]/);
   assert.match(forwarderComponentSource, /method:\s*['"]DELETE['"]/);
   assert.match(forwarderComponentSource, /id:\s*projToDelete\.id/);
   assert.match(forwarderComponentSource, /project_ref:\s*projToDelete\.project_ref/);

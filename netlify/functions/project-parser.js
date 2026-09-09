@@ -769,15 +769,16 @@ function sanitizePortName(raw) {
     'dias', 'días', 'euros', 'turnos', 'toneladas', 'horas', 'nudos', 'millas',
     'sacos', 'piezas', 'grúas', 'gruas', 'buque', 'flete', 'coste', 'orden',
     'barco', 'muelle', 'terminal', 'puerto', 'origen', 'destino', 'carga', 'descarga',
-    'ritmo', 'demora', 'plancha', 'fletamento', 'tce'
+    'cargas', 'descargas', 'ritmo', 'ritmos', 'demora', 'demoras', 'plancha', 'fletamento', 'tce',
+    'loading', 'discharging', 'rate', 'rates', 'pol', 'pod'
   ];
   if (p.length <= 2 || forbidden.includes(lower)) return null;
   return p.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
 /**
- * Extrae ritmos operativos (MT/día) buscando tanto prefijos ("ritmo de carga 1500")
- * como números seguidos de unidades ("1500 t/d de carga", "1500 toneladas al día", etc.).
+ * Extrae ritmos operativos (MT/día) buscando prefijos ("ritmo de carga 1500", "ritmos carga: 1500", etc.)
+ * y expresiones flexibles con soporte para plurales ("ritmos", "tasas", "rates"), números y unidades.
  *
  * @param {string} text Texto o mensaje conversacional
  * @param {'load'|'discharge'} type Tipo de ritmo operativo
@@ -787,34 +788,47 @@ function parseOperationalRate(text, type = 'load') {
   if (!text || typeof text !== 'string') return null;
   const isLoad = type === 'load';
 
+  // 0. Si se especifican ritmos emparejados tipo "ritmos: 1500 / 1200", "ritmos 1500 / 1200 t/d", "ritmos de carga y descarga: 1500 y 1200"
+  const pairedSlash = text.match(/(?:ritmos?|rates?|tasas?)(?:\s*(?:operativos?|de\s*carga\s*(?:y|\/)\s*descarga))?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:mt|t|tons?|toneladas?)?(?:\s*\/\s*d(?:[ií]as?)?)?\s*(?:\/|\s+y\s+|\s*-\s*)\s*(\d+(?:[.,]\d+)?)/i);
+  if (pairedSlash) {
+    const v1 = parseFloat(pairedSlash[1].replace(/\./g, '').replace(',', '.'));
+    const v2 = parseFloat(pairedSlash[2].replace(/\./g, '').replace(',', '.'));
+    if (isLoad && !isNaN(v1) && v1 > 0) return v1;
+    if (!isLoad && !isNaN(v2) && v2 > 0) return v2;
+  }
+
   const patterns = isLoad ? [
-    // 1. "ritmo de carga 1500", "ritmo carga: 1500", "loading rate 1500"
-    /(?:ritmo\s*(?:de\s*)?carga|loading\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i,
-    // 2. Número seguido de t/d, mt/d, toneladas día, etc. y "carga"
-    /(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*carga\b/i,
-    // 3. Número seguido de "t/d de carga", "t/día carga", "mt/d carga"
-    /(\d+[\d.,]*)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*carga\b/i,
-    // 4. Número seguido de "ritmo de carga"
-    /(\d+[\d.,]*)\s*(?:de\s+)?ritmo\s*(?:de\s+)?carga\b/i,
-    // 5. "carga de 1500 t/d", "carga: 1500 t/d", "carga 1500 toneladas al día", "carga 1500 mt/d"
-    /(?:carga|cargar)\s*(?:a\s*raz[oó]n\s*de|de|en)?\s*[:=]?\s*(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?/i,
-    // 6. "carga: 1500" o pares como "ritmos 1500 carga"
-    /(?:ritmos?\s*[:=]?\s*)?(\d+[\d.,]*)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?carga\b/i,
-    /(?:carga|cargar)\s*[:=]\s*(\d+[\d.,]*)/i,
+    // 1. "ritmo(s)/tasas/rates de carga [de] 1500", "ritmos carga: 1500", "loading rate(s) 1500", "load rate 1500"
+    /(?:ritmos?|tasas?|rates?|velocidad(?:es)?)\s*(?:operativos?)?\s*(?:de\s*)?(?:carga|cargar|embarque)\s*(?:de|en|a)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    /(?:loading|load)\s*rates?\s*(?:of)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    // 2. "ritmos? ... carga: 1500" o "ritmos?: carga 1500"
+    /(?:ritmos?|rates?|tasas?)\s*[:=]?\s*(?:de\s*)?(?:carga|cargar|embarque)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    // 3. "carga: 1500" o "carga 1500"
+    /(?:cargas?|cargar|embarque)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:mt|t|tons?|toneladas?)?(?:\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?)?/i,
+    // 4. Número seguido de t/d, mt/d, toneladas día, etc. y "carga(s)"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*(?:carga|cargar|embarque)\b/i,
+    // 5. Número seguido de "t/d de carga", "t/día carga", "mt/d carga"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*(?:carga|cargar|embarque)\b/i,
+    // 6. Número seguido de "ritmo(s) de carga"
+    /(\d+(?:[.,]\d+)?)\s*(?:de\s+)?ritmos?\s*(?:de\s+)?(?:carga|cargar|embarque)\b/i,
+    // 7. Número seguido de "carga"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?(?:carga|cargar|embarque)\b/i,
   ] : [
-    // 1. "ritmo de descarga 1200", "ritmo descarga: 1200", "discharging rate 1200", "discharge rate 1200"
-    /(?:ritmo\s*(?:de\s*)?descarga|discharging\s*rate|discharge\s*rate)\s*[:=]?\s*(\d+[\d.,]*)/i,
-    // 2. Número seguido de t/d, mt/d, toneladas día, etc. y "descarga"
-    /(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*descarga\b/i,
-    // 3. Número seguido de "t/d de descarga", "t/día descarga", "mt/d descarga"
-    /(\d+[\d.,]*)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*descarga\b/i,
-    // 4. Número seguido de "ritmo de descarga"
-    /(\d+[\d.,]*)\s*(?:de\s+)?ritmo\s*(?:de\s+)?descarga\b/i,
-    // 5. "descarga de 1200 t/d", "descarga: 1200 t/d", "descarga 1200 toneladas al día"
-    /(?:descarga|descargar)\s*(?:a\s*raz[oó]n\s*de|de|en)?\s*[:=]?\s*(\d+[\d.,]*)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?/i,
-    // 6. "descarga: 1200" o pares como "... 1200 descarga"
-    /(?:ritmos?\s*[:=]?\s*)?(\d+[\d.,]*)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?descarga\b/i,
-    /(?:descarga|descargar)\s*[:=]\s*(\d+[\d.,]*)/i,
+    // 1. "ritmo(s)/tasas/rates de descarga [de] 1200", "ritmos descarga: 1200", "discharging rate(s) 1200", "discharge rate(s) 1200"
+    /(?:ritmos?|tasas?|rates?|velocidad(?:es)?)\s*(?:operativos?)?\s*(?:de\s*)?(?:descarga|descargar|desembarque)\s*(?:de|en|a)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    /(?:discharging|discharge)\s*rates?\s*(?:of)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    // 2. "ritmos? ... descarga: 1200" o "ritmos?: descarga 1200"
+    /(?:ritmos?|rates?|tasas?)\s*[:=]?\s*(?:de\s*)?(?:descarga|descargar|desembarque)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i,
+    // 3. "descarga: 1200" o "descarga 1200"
+    /(?:descargas?|descargar|desembarque)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:mt|t|tons?|toneladas?)?(?:\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?)?/i,
+    // 4. Número seguido de t/d, mt/d, toneladas día, etc. y "descarga(s)"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t|tons?|toneladas?)?\s*(?:\/|\s*al?\s*|\s*por\s*|\s+)\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*(?:descarga|descargar|desembarque)\b/i,
+    // 5. Número seguido de "t/d de descarga", "t/día descarga", "mt/d descarga"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t)\s*\/\s*d(?:[ií]as?)?\s*(?:de|en|para)?\s*(?:descarga|descargar|desembarque)\b/i,
+    // 6. Número seguido de "ritmo(s) de descarga"
+    /(\d+(?:[.,]\d+)?)\s*(?:de\s+)?ritmos?\s*(?:de\s+)?(?:descarga|descargar|desembarque)\b/i,
+    // 7. Número seguido de "descarga"
+    /(\d+(?:[.,]\d+)?)\s*(?:mt|t|toneladas?)?\s*(?:de\s*)?(?:descarga|descargar|desembarque)\b/i,
   ];
 
   for (const regex of patterns) {
@@ -860,9 +874,9 @@ function extractRouteAndOperationalOptions(text, explicitOptions = {}) {
   // Lista de patrones para POL:
   // "POL [Puerto]", "puerto de carga [Puerto]", "puerto carga [Puerto]", "cargar en [Puerto]", "desde [Puerto]", etc.
   const polRegexes = [
-    /\b(?:p\.?o\.?l\.?|puerto\s*(?:de\s*)?(?:origen|carga)|puerto\s*(?:origen|carga)|cargar?\s*(?:en)?|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bp\.?o\.?d\.?\b|\bpuerto\s*(?:de\s*)?(?:descarga|destino)\b|\bhasta\b|\ba\b|\bhacia\b|\bpara\b|\bdestino\b|\bdescargar?\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
-    /\bde\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)\s+(?:a|hasta|hacia|para)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|$))/i,
-    /\borigen\s*[:=]\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bdestino\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|$))/i,
+    /\b(?:p\.?o\.?l\.?|puerto\s*(?:de\s*)?(?:origen|carga)|puerto\s*(?:origen|carga)|cargar?\s*(?:en)?|desde)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bp\.?o\.?d\.?\b|\bpuerto\s*(?:de\s*)?(?:descarga|destino)\b|\bhasta\b|\ba\b|\bhacia\b|\bpara\b|\bdestino\b|\bdescargar?\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|\bcon\s*ritmos?\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\bde\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)\s+(?:a|hasta|hacia|para)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|$))/i,
+    /\borigen\s*[:=]\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpod\b|\bdestino\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|$))/i,
   ];
 
   for (const regex of polRegexes) {
@@ -884,9 +898,9 @@ function extractRouteAndOperationalOptions(text, explicitOptions = {}) {
   // Lista de patrones para POD:
   // "POD [Puerto]", "puerto de descarga [Puerto]", "puerto descarga [Puerto]", "descargar en [Puerto]", "hasta [Puerto]", "a [Puerto]", etc.
   const podRegexes = [
-    /\b(?:p\.?o\.?d\.?|puerto\s*(?:de\s*)?(?:destino|descarga)|puerto\s*(?:destino|descarga)|descargar?\s*(?:en)?|con\s*destino\s*(?:a\s*)?|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
-    /\b(?:hasta|hacia)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
-    /\ba\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmo\b|\bcarga\b|\bdescarga\b|\bdemora\b|\bcon\s*ritmo\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\b(?:p\.?o\.?d\.?|puerto\s*(?:de\s*)?(?:destino|descarga)|puerto\s*(?:destino|descarga)|descargar?\s*(?:en)?|con\s*destino\s*(?:a\s*)?|destino)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|\bcon\s*ritmos?\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\b(?:hasta|hacia)\s*[:=]?\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|\bcon\s*ritmos?\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
+    /\ba\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]+?)(?=\s*(?:,|\.|\bcon\b|\by\b|\bpol\b|\bp\.?o\.?l\.?\b|\bpuerto\s*(?:de\s*)?(?:carga|origen)\b|\britmos?\b|\bcargas?\b|\bdescargas?\b|\bdemoras?\b|\bcon\s*ritmos?\b|\btoneladas\b|\bt\/d\b|\bmt\/d\b|$))/i,
   ];
 
   if (!extractedPod) {
@@ -3375,9 +3389,20 @@ REGLAS DE NEGOCIO ESTRICTAS PARA CADA ÍTEM EXTRAÍDO:
 CERO DATOS PREGRABADOS:
 Está totalmente prohibido inventar datos o usar funciones de respaldo con datos fijos (como plantas desaladoras o ítems por defecto). Si un campo numérico no aparece en el documento, devuelve 0; si es texto, cadena vacía "". Todo debe salir exclusivamente de la lectura real del documento analizado. Si el documento no contiene partidas de carga, devuelve una lista de items vacía [].
 
+EXTRACCIÓN DIRECTA DE PARÁMETROS OPERATIVOS Y DE RUTA:
+Exige e identifica directamente los siguientes parámetros operativos si se mencionan o deducen en el documento o instrucción:
+- pol: Puerto de origen o carga (Port of Loading). Cadena con el nombre del puerto identificado (ej: "Valencia", "Gijón", "Bilbao") o "" si no se menciona.
+- pod: Puerto de destino o descarga (Port of Discharge). Cadena con el nombre del puerto identificado (ej: "Houston", "Rotterdam", "Dakar") o "" si no se menciona.
+- loadingRate: Ritmo operativo de carga en toneladas métricas al día (MT/día). Número entero o decimal positivo (ej: 1500) o null si no se menciona.
+- dischargingRate: Ritmo operativo de descarga en toneladas métricas al día (MT/día). Número entero o decimal positivo (ej: 1200) o null si no se menciona.
+
 Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estructura:
 {
   "success": true,
+  "pol": "Valencia",
+  "pod": "Houston",
+  "loadingRate": 1500,
+  "dischargingRate": 1200,
   "items": [
     {
       "category": "Maquinaria / Equipos Industriales",
@@ -3477,6 +3502,45 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
 
     const orderTotals = calculateOrderTotals(items);
     const operationalOptions = extractRouteAndOperationalOptions(conversationalText, body || {});
+
+    // Integrar parámetros operativos extraídos directamente por Gemini si están presentes
+    if (parsedData?.pol && !operationalOptions.explicitPol && typeof parsedData.pol === 'string' && parsedData.pol.trim()) {
+      const sanitized = sanitizePortName(parsedData.pol.trim());
+      if (sanitized) {
+        operationalOptions.pol = sanitized;
+        operationalOptions.port_of_loading = sanitized;
+        operationalOptions.polPort = sanitized;
+        operationalOptions.explicitPol = true;
+      }
+    }
+    if (parsedData?.pod && !operationalOptions.explicitPod && typeof parsedData.pod === 'string' && parsedData.pod.trim()) {
+      const sanitized = sanitizePortName(parsedData.pod.trim());
+      if (sanitized) {
+        operationalOptions.pod = sanitized;
+        operationalOptions.port_of_discharge = sanitized;
+        operationalOptions.podPort = sanitized;
+        operationalOptions.explicitPod = true;
+      }
+    }
+    if (parsedData?.loadingRate != null && !operationalOptions.explicitLoadingRate) {
+      const lr = Number(parsedData.loadingRate);
+      if (!isNaN(lr) && lr > 0) {
+        operationalOptions.loadingRate = lr;
+        operationalOptions.loadingRateMtDay = lr;
+        operationalOptions.loadRate = lr;
+        operationalOptions.explicitLoadingRate = true;
+      }
+    }
+    if (parsedData?.dischargingRate != null && !operationalOptions.explicitDischargingRate) {
+      const dr = Number(parsedData.dischargingRate);
+      if (!isNaN(dr) && dr > 0) {
+        operationalOptions.dischargingRate = dr;
+        operationalOptions.dischargingRateMtDay = dr;
+        operationalOptions.dischargeRate = dr;
+        operationalOptions.explicitDischargingRate = true;
+      }
+    }
+
     if (!operationalOptions.distanceNm || isNaN(Number(operationalOptions.distanceNm)) || Number(operationalOptions.distanceNm) <= 0) {
       const pLoad = operationalOptions.pol || 'Valencia';
       const pDisch = operationalOptions.pod || 'Houston';
@@ -3491,6 +3555,10 @@ Devuelve la respuesta EXCLUSIVAMENTE en formato JSON cumpliendo con esta estruct
 
     return new Response(JSON.stringify({
       success: true,
+      pol: operationalOptions.pol || parsedData?.pol || null,
+      pod: operationalOptions.pod || parsedData?.pod || null,
+      loadingRate: operationalOptions.loadingRate ?? (parsedData?.loadingRate != null ? Number(parsedData.loadingRate) : null),
+      dischargingRate: operationalOptions.dischargingRate ?? (parsedData?.dischargingRate != null ? Number(parsedData.dischargingRate) : null),
       items,
       orderTotals,
       charteringAssessment: { ...charteringAssessment, stowagePlan },

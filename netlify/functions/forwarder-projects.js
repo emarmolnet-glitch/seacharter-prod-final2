@@ -10,6 +10,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, X-Requested-With',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 exports.handler = async (event) => {
@@ -27,10 +28,17 @@ exports.handler = async (event) => {
       
       // MODO ACTUALIZACIÓN (Si ya existe ID o REF)
       if (data.id || data.project_ref) {
+        const statusValue = (data.status !== undefined && data.status !== null && String(data.status).trim())
+          ? String(data.status).trim()
+          : null;
+        const marginValue = (data.global_margin_percentage !== undefined && data.global_margin_percentage !== null)
+          ? String(data.global_margin_percentage)
+          : null;
+
         const updateQuery = `
           UPDATE forwarder_projects 
-          SET documents = $1::jsonb,
-              items = $2::jsonb,
+          SET documents = COALESCE($1::jsonb, documents),
+              items = COALESCE($2::jsonb, items),
               client_name = COALESCE($3, client_name),
               status = COALESCE($6, status),
               global_margin_percentage = COALESCE($7, global_margin_percentage)
@@ -38,43 +46,50 @@ exports.handler = async (event) => {
           RETURNING *;
         `;
         const updateValues = [
-          JSON.stringify(data.documents || []),
-          JSON.stringify(data.items || data.line_items || data.services || []),
+          data.documents !== undefined ? JSON.stringify(data.documents) : null,
+          (data.items || data.line_items || data.services) !== undefined
+            ? JSON.stringify(data.items || data.line_items || data.services)
+            : null,
           data.client_name || null,
           data.id ? parseInt(data.id, 10) : null,
           data.project_ref || null,
-          data.status || null,                 // AÑADIDO: Guardar el estado
-          data.global_margin_percentage || '0' // AÑADIDO: Guardar el margen
+          statusValue,
+          marginValue
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
         return {
           statusCode: 200,
-          headers: CORS_HEADERS,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: updateResult.rows[0] })
         };
       }
 
       // MODO CREACIÓN (Nuevo Proyecto)
-      const { client_name, documents, items, global_margin_percentage } = data;
+      const { client_name, status, documents, items, line_items, services, global_margin_percentage } = data;
       const projectRef = `EXP-${Date.now().toString().slice(-6)}`;
+      const projectStatus = (status && typeof status === 'string' && status.trim()) ? status.trim() : 'BORRADOR';
+      const marginPercentage = (global_margin_percentage !== undefined && global_margin_percentage !== null)
+        ? String(global_margin_percentage)
+        : '0';
 
       const insertQuery = `
         INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
-        VALUES ($1, $2, 'BORRADOR', $3, $4::jsonb, $5::jsonb)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
         RETURNING *;
       `;
       const insertValues = [
         projectRef, 
         client_name || 'Nuevo Cliente', 
-        global_margin_percentage || '0', // Guardar el margen inicial
+        projectStatus,
+        marginPercentage,
         JSON.stringify(documents || []),
-        JSON.stringify(items || [])
+        JSON.stringify(items || line_items || services || [])
       ];
       const result = await pool.query(insertQuery, insertValues);
 
       return {
         statusCode: 201,
-        headers: CORS_HEADERS,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: 'Expediente creado con éxito',
           project: result.rows[0]
@@ -86,10 +101,17 @@ exports.handler = async (event) => {
     if (httpMethod === 'PUT') {
       const data = JSON.parse(body || '{}');
       
+      const statusValue = (data.status !== undefined && data.status !== null && String(data.status).trim())
+        ? String(data.status).trim()
+        : null;
+      const marginValue = (data.global_margin_percentage !== undefined && data.global_margin_percentage !== null)
+        ? String(data.global_margin_percentage)
+        : null;
+
       const query = `
         UPDATE forwarder_projects 
-        SET documents = $1::jsonb,
-            items = $2::jsonb,
+        SET documents = COALESCE($1::jsonb, documents),
+            items = COALESCE($2::jsonb, items),
             client_name = COALESCE($3, client_name),
             status = COALESCE($6, status),
             global_margin_percentage = COALESCE($7, global_margin_percentage)
@@ -97,13 +119,15 @@ exports.handler = async (event) => {
         RETURNING *;
       `;
       const values = [
-        JSON.stringify(data.documents || []),
-        JSON.stringify(data.items || data.line_items || data.services || []),
+        data.documents !== undefined ? JSON.stringify(data.documents) : null,
+        (data.items || data.line_items || data.services) !== undefined
+          ? JSON.stringify(data.items || data.line_items || data.services)
+          : null,
         data.client_name || null,
         data.id ? parseInt(data.id, 10) : null,
         data.project_ref || null,
-        data.status || null,
-        data.global_margin_percentage || null
+        statusValue,
+        marginValue
       ];
       
       const result = await pool.query(query, values);
@@ -111,14 +135,14 @@ exports.handler = async (event) => {
       if (result.rows.length === 0) {
         return {
           statusCode: 404,
-          headers: CORS_HEADERS,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
           body: JSON.stringify({ error: 'Proyecto no encontrado para actualizar' })
         };
       }
 
       return {
         statusCode: 200,
-        headers: CORS_HEADERS,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: 'Expediente actualizado con éxito',
           project: result.rows[0]
@@ -138,7 +162,7 @@ exports.handler = async (event) => {
 
       return {
         statusCode: 200,
-        headers: CORS_HEADERS,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify(result.rows),
       };
     }
@@ -189,7 +213,7 @@ exports.handler = async (event) => {
 
     return { 
       statusCode: 405, 
-      headers: CORS_HEADERS, 
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ error: 'Method Not Allowed' }) 
     };
 
@@ -197,7 +221,7 @@ exports.handler = async (event) => {
     console.error('Error crítico en forwarder-projects:', error);
     return {
       statusCode: 500,
-      headers: CORS_HEADERS,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: error.message || 'Error interno del servidor' }),
     };
   }
