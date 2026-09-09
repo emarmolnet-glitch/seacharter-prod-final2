@@ -153,10 +153,57 @@ Contexto actual del proyecto: ${projectContext}`;
       });
 
       const data = await response.json();
-      const agentReply = data.reply || data.respuesta || data.text || (data.error ? `⚠️ ${data.error}` : 'No se pudo obtener respuesta del consultor.');
+      let rawReply = data.reply || data.respuesta || data.text || (data.error ? `⚠️ ${data.error}` : 'No se pudo obtener respuesta del consultor.');
 
-      setMessages(prev => [...prev, { sender: 'agent', text: agentReply }]);
-      speakMessage(agentReply);
+      // Procesar bloque json-action para actualizar la interfaz automáticamente
+      let actionData = data.payload || null;
+      const jsonActionRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?"action"\s*:\s*"update_form"[\s\S]*?\})\s*```/i;
+      const match = rawReply.match(jsonActionRegex);
+
+      if (match && match[1]) {
+        try {
+          const parsedAction = JSON.parse(match[1]);
+          if (parsedAction.data) {
+            actionData = parsedAction.data;
+          }
+        } catch (err) {
+          console.warn('Error al parsear bloque json-action:', err);
+        }
+      }
+
+      // Limpiar el texto mostrado al usuario eliminando el bloque json-action
+      const cleanReply = rawReply.replace(jsonActionRegex, '').trim();
+      const userDisplayReply = cleanReply || 'He actualizado los campos del proyecto según lo indicado.';
+
+      setMessages(prev => [...prev, { sender: 'agent', text: userDisplayReply }]);
+      speakMessage(userDisplayReply);
+
+      // Ejecutar la actualización de los campos del formulario del proyecto
+      if (actionData && onUpdatePayload) {
+        onUpdatePayload({
+          action: 'update_form',
+          pol: actionData.portOfLoading,
+          pod: actionData.portOfDischarge,
+          loadingRate: actionData.loadingRate,
+          dischargingRate: actionData.dischargeRate,
+          cargoDescription: actionData.cargoDescription,
+          quantityMT: actionData.quantityMT,
+          forceOpenModal: true,
+          ...actionData
+        });
+      } else if (data.functionCall && onUpdatePayload) {
+        const args = data.functionCall.args || {};
+        onUpdatePayload({
+          pol: args.portOfLoading,
+          pod: args.portOfDischarge,
+          loadingRate: args.loadingRate,
+          dischargingRate: args.dischargeRate,
+          cargoDescription: args.cargoDescription,
+          quantityMT: args.quantityMT,
+          forceOpenModal: true,
+          ...args
+        });
+      }
     } catch (err) {
       console.error('Error al enviar mensaje a asistente conversacional:', err);
       const errorMsg = '⚠️ Error de comunicación con el consultor conversacional de proyectos.';

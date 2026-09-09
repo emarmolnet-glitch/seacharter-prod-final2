@@ -1687,15 +1687,39 @@ export function ForwarderWorkspace() {
       }
     }
 
-    if (payload.pol) { setPol(payload.pol); hasChanges = true; }
-    if (payload.pod) { setPod(payload.pod); hasChanges = true; }
+    if (payload.pol || payload.portOfLoading) { setPol(payload.pol || payload.portOfLoading); hasChanges = true; }
+    if (payload.pod || payload.portOfDischarge) { setPod(payload.pod || payload.portOfDischarge); hasChanges = true; }
     if (payload.loadingRate || payload.loadingRateMtDay) {
       setLoadingRate(Number(payload.loadingRate || payload.loadingRateMtDay));
       hasChanges = true;
     }
-    if (payload.dischargingRate || payload.dischargingRateMtDay) {
-      setDischargingRate(Number(payload.dischargingRate || payload.dischargingRateMtDay));
+    if (payload.dischargingRate || payload.dischargeRate || payload.dischargingRateMtDay) {
+      setDischargingRate(Number(payload.dischargingRate || payload.dischargeRate || payload.dischargingRateMtDay));
       hasChanges = true;
+    }
+    if (payload.cargoDescription || payload.quantityMT) {
+      const description = String(payload.cargoDescription || 'Carga de Proyecto').trim();
+      const qtyTons = Number(payload.quantityMT) || 0;
+      const weightKg = qtyTons > 0 ? qtyTons * 1000 : 25000;
+      const isBigBags = /bag|big[- ]?bag|saco|cemento|clinker|grano/i.test(description);
+
+      const newItem = {
+        id: `item-${Date.now()}-ai`,
+        category: isBigBags ? 'Big Bags' : 'Equipos de Proceso',
+        quantity: 1,
+        type: description,
+        length: 12,
+        width: 2.5,
+        height: 2.5,
+        weight: weightKg,
+        shipping_mode_supported: qtyTons >= 40 ? 'Break Bulk / Proyecto' : 'Contenedor (FCL / LCL)'
+      };
+
+      setCargoItems([newItem]);
+      updatedProject.items = [newItem];
+      hasChanges = true;
+      setIsCargoModalOpen(true);
+      autoCalculateEstimates([newItem]);
     }
     if (payload.distanceNm || payload.distance_nm) {
       setDistanceNm(Number(payload.distanceNm || payload.distance_nm));

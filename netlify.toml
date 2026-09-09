@@ -58,6 +58,16 @@
 
 [[redirects]]
   from = "/api/project-chat"
+  to = "/.netlify/functions/project-chat"
+  status = 200
+
+[[redirects]]
+  from = "/project-chat"
+  to = "/.netlify/functions/project-chat"
+  status = 200
+
+[[redirects]]
+  from = "/api/agente-proyectos"
   to = "/.netlify/functions/agente-proyectos"
   status = 200
 
