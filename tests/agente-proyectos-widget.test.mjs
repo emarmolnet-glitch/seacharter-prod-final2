@@ -98,8 +98,8 @@ test('10. AgenteProyectosWidget injects dynamic projectContext and systemInstruc
   // Verifies capture and serialization of items, financials, and stowage
   assert.match(widgetSource, /const\s+projectContext\s*=\s*JSON\.stringify\(\s*\{\s*items:\s*currentProjectItems,\s*(?:financials:\s*currentFinancialBreakdown|financialBreakdown:\s*currentFinancialBreakdown),\s*(?:stowage:\s*currentStowagePlan|stowagePlan:\s*currentStowagePlan)\s*\}\s*\)/);
   
-  // Verifies systemInstruction with strict context prompt and executiveJustification instruction
-  assert.match(widgetSource, /const\s+systemInstruction\s*=\s*`Eres el Agente de Proyectos de SeaCharter\. Responde a las preguntas basándote ESTRICTAMENTE en este contexto del proyecto actual\. Si te preguntan por el croquis de estiba, usa la executiveJustification\. Contexto: \$\{projectContext\}`/);
+  // Verifies systemInstruction with conversational strategic consultant prompt and executiveJustification instruction
+  assert.match(widgetSource, /const\s+systemInstruction\s*=\s*`Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini\. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente, idéntico en capacidad y libertad a la interfaz principal de Gemini\.[\s\S]*?REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:[\s\S]*?Contexto actual del proyecto: \$\{projectContext\}`/);
   
   // Verifies systemInstruction, projectContext, and history sent in handleSend payload
   assert.match(widgetSource, /systemInstruction/);
