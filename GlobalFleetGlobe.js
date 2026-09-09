@@ -28,8 +28,8 @@
     const VESSEL_VECTOR_SURFACE_OFFSET = 0.08;
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
-    const EARTH_IMAGE_URL = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-    const EARTH_TOPOLOGY_URL = '//unpkg.com/three-globe/example/img/earth-topology.png';
+    const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+    const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
     const GLOBE_FALLBACK_COLOR = '#1a202c';
     const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
 
