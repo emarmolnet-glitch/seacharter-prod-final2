@@ -8,8 +8,60 @@ import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-route
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
 import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } from "./_shared/data-bridge-tooling.mjs";
 import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
+import { searchTavily, searchSerpApi, searchBrave } from "./_shared/web-search.mjs";
 
 export const CHAT_ASSISTANT_MODEL = "gemini-3.1-pro-preview";
+
+export async function searchCommercialWeb(query) {
+  const providers = [
+    typeof searchTavily === "function" ? searchTavily : null,
+    typeof searchSerpApi === "function" ? searchSerpApi : null,
+    typeof searchBrave === "function" ? searchBrave : null,
+  ].filter(Boolean);
+  for (const provider of providers) {
+    try {
+      const result = await provider(query);
+      if (result && typeof result === "string" && result.trim().length > 0) {
+        return result.trim();
+      }
+    } catch {}
+  }
+  return "";
+}
+
+export function isCommercialEntitiesQuery(message) {
+  const text = String(message || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const patterns = [
+    /\b(armador(?:es)?|dueno[s]?|dueño[s]?|propietari[oa]s?|shipowner[s]?|owner[s]?)\b/i,
+    /\b(consignatari[oa]s?|consignee[s]?)\b/i,
+    /\b(agente[s]?|shipping agent[s]?|port agent[s]?)\b/i,
+    /\b(operador(?:es)? comercial(?:es)?|commercial operator[s]?|disponent owner[s]?)\b/i,
+    /\b(chartering desk)\b/i,
+  ];
+  return patterns.some((p) => p.test(text));
+}
+
+export function buildGeminiHistory(historyEntries = []) {
+  if (!Array.isArray(historyEntries)) return [];
+  const valid = [];
+  let expectedRole = "user";
+  for (const entry of historyEntries) {
+    const role = (entry?.role === "assistant" || entry?.role === "model") ? "model" : "user";
+    const text = String(entry?.content || entry?.text || "").trim();
+    if (!text) continue;
+    if (role === expectedRole) {
+      valid.push({ role, parts: [{ text }] });
+      expectedRole = role === "user" ? "model" : "user";
+    }
+  }
+  if (valid.length > 0 && valid[valid.length - 1].role === "user") {
+    valid.pop();
+  }
+  return valid;
+}
 
 function cleanRequestedVesselName(value) {
   return String(value || "")
@@ -125,6 +177,14 @@ Esta regla prevalece sobre el enrutador de intenciones, las herramientas, el his
       a) El Precio Ofertado es Correcto: Argumenta que el precio del usuario es el real de mercado apoyándote en los costes de ruta, disponibilidad limitada de buques (DWT), fechas de Laycan y costes portuarios.
       b) Precio COA (Contract of Affreightment): Dile al usuario: "Te está presionando para que bajes el precio comparando con un contrato de volumen. Si realmente tuviera esa tarifa disponible hoy, no te estaría contactando. Seguramente tiene problemas operativos, retrasos o falta de espacio con su armador o fletador habitual".
       c) Precio Backhaul (Viaje de Retorno): Explica que el cliente está exigiendo un precio irreal basado en un golpe de suerte del pasado, cuando probablemente encontró un barco que aceptó un flete muy bajo para no volver en lastre. Esa excepción no aplica a un viaje normal.
+
+6. Inteligencia Comercial y Operadores (Commercial Operator / Chartering Desk / Armadores / Consignatarios):
+   - Al buscar o informar sobre armadores, propietarios, operadores o gestión comercial de un buque o puerto:
+      a) IGNORAR 'Registered Owner': El Registered Owner (propietario registral) suele ser una sociedad instrumental o sociedad de tenencia (SPV / Single Ship Company) constituida por motivos legales, fiscales o de bandera de conveniencia (Liberia, Panamá, Islas Marshall, Malta, etc.) sin operativa comercial ni capacidad de fletamento directo. Ignora al Registered Owner para gestiones comerciales.
+      b) BUSCAR Y PRIORIZAR 'Commercial Operator' / 'Disponent Owner': Identifica siempre al Operador Comercial real que gestiona la explotación del buque en el mercado, comercializa su bodega, toma decisiones de fletamento y fija viajes (Chartering Desk / Commercial Manager).
+      c) BUSCAR 'Chartering Desk' / Mesa de Fletamentos: Para negociaciones, peticiones de flete o disponibilidad, identifica el contacto directo del departamento de Chartering, corredores comerciales (brokers) o la oficina comercial operativa.
+      d) CONSIGNATARIOS Y AGENTES PORTUARIOS: Identifica al Agente Portuario (Port Agent) o Consignatario local con representación en el puerto consultado, verificando sus facultades para emitir PDAs, tramitar despacho aduanero y asistir la escala operativa.
+      e) PRESENTACIÓN RIGUROSA: Presenta con claridad el nombre de la entidad comercial, país/sede, rol específico (Operador Comercial, Gestor Técnico o Consignatario), y datos de contacto profesional verificados (emails de chartering/operaciones, teléfonos y web) si están disponibles.
 `;
 
   const dualModeRules = `
@@ -377,6 +437,28 @@ export default async (req) => {
     // ------------------------------------------------------------
 
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
+
+    // --- INTELIGENCIA COMERCIAL: BÚSQUEDA WEB CONDICIONAL ---
+    let webSearchResult = "";
+    if (isCommercialEntitiesQuery(mensaje)) {
+      try {
+        webSearchResult = await searchCommercialWeb(mensaje);
+      } catch (searchError) {
+        console.warn("[chat-assistant] Error en búsqueda web comercial:", searchError);
+      }
+    }
+
+    if (webSearchResult) {
+      normalizedHistory.push({
+        role: "user",
+        content: `[RESULTADOS DE BÚSQUEDA WEB EN TIEMPO REAL - INTELIGENCIA COMERCIAL / ARMADORES / CONSIGNATARIOS]:\n${webSearchResult}`,
+      });
+      normalizedHistory.push({
+        role: "assistant",
+        content: "Información comercial web recopilada y verificada. Procedo a identificar al Commercial Operator, Chartering Desk o agentes correspondientes según las reglas comerciales.",
+      });
+    }
+
     const intent = classifyChatIntent(mensaje || "Analiza esta imagen", { context: normalizedContext });
     const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
     const action = intent === CHAT_INTENTS.SIMULATION
@@ -391,7 +473,8 @@ export default async (req) => {
       tools: [...DATA_BRIDGE_TOOLS, ...WEATHER_TOOLS],
     });
 
-    const chat = model.startChat();
+    const chatHistory = buildGeminiHistory(normalizedHistory);
+    const chat = model.startChat(chatHistory.length > 0 ? { history: chatHistory } : undefined);
 
     // --- CONSTRUCCIÓN MULTIMODAL DEL MENSAJE (TEXTO + IMAGEN/PDF OPCIONAL) ---
     let messagePayload = (mensaje || "").trim();
