@@ -119,4 +119,33 @@ test('12. ForwarderWorkspace binds items, financialBreakdown, and stowagePlan in
   assert.match(workspaceSource, /<AgenteProyectosWidget[\s\S]*?items=\{cargoItems\}[\s\S]*?financialBreakdown=\{financialBreakdown\}[\s\S]*?stowagePlan=\{/);
 });
 
+test('13. AgenteProyectosWidget CSS enables user-select: text on messages and bubbles while keeping header protected with user-select: none', () => {
+  // Verifies header has user-select: none and -webkit-user-select: none
+  assert.match(widgetCssSource, /\.project-agent-header\s*\{[\s\S]*?user-select:\s*none;/);
+  assert.match(widgetCssSource, /\.project-agent-header\s*\{[\s\S]*?-webkit-user-select:\s*none;/);
+
+  // Verifies messages container has user-select: text and -webkit-user-select: text
+  assert.match(widgetCssSource, /\.project-agent-messages\s*\{[\s\S]*?user-select:\s*text;/);
+  assert.match(widgetCssSource, /\.project-agent-messages\s*\{[\s\S]*?-webkit-user-select:\s*text;/);
+
+  // Verifies bubbles have user-select: text
+  assert.match(widgetCssSource, /\.pa-bubble\s*\{[\s\S]*?user-select:\s*text;/);
+  assert.match(widgetCssSource, /\.pa-bubble\.agent\s+\.pa-bubble-text\s*\{[\s\S]*?user-select:\s*text;/);
+  assert.match(widgetCssSource, /\.pa-bubble\.user\s+\.pa-bubble-text\s*\{[\s\S]*?user-select:\s*text;/);
+});
+
+test('14. AgenteProyectosWidget JSX applies select-text and userSelect text to chat messages while keeping header select-none', () => {
+  // Verifies draggable header explicitly protects drag with select-none / userSelect: 'none'
+  assert.match(widgetSource, /className="project-agent-header select-none"/);
+  assert.match(widgetSource, /userSelect:\s*'none'/);
+
+  // Verifies chat messages container has select-text and userSelect: 'text'
+  assert.match(widgetSource, /className="project-agent-messages select-text"/);
+  assert.match(widgetSource, /userSelect:\s*'text'/);
+
+  // Verifies message text bubbles have select-text
+  assert.match(widgetSource, /className="pa-bubble-text select-text"/);
+});
+
+
 

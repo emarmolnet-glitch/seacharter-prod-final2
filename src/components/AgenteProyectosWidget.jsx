@@ -691,7 +691,8 @@ Contexto actual del proyecto: ${projectContext}`;
       style={{ left: `${position.x}px`, top: `${position.y}px`, position: 'fixed' }}
     >
       <div 
-        className="project-agent-header"
+        className="project-agent-header select-none"
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
         onMouseDown={handleMouseDown}
       >
         <div className="project-agent-title-group">
@@ -732,16 +733,28 @@ Contexto actual del proyecto: ${projectContext}`;
         </div>
       </div>
 
-      <div className="project-agent-messages">
+      <div 
+        className="project-agent-messages select-text"
+        style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+      >
         {messages.map((msg, idx) => (
-          <div key={idx} className={`pa-bubble ${msg.sender}`}>
-            {msg.sender === 'agent' && <span className="pa-avatar">📂</span>}
-            <div className="pa-bubble-text">{msg.text}</div>
+          <div 
+            key={idx} 
+            className={`pa-bubble ${msg.sender} select-text`}
+            style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+          >
+            {msg.sender === 'agent' && <span className="pa-avatar" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>📂</span>}
+            <div 
+              className="pa-bubble-text select-text"
+              style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+            >
+              {msg.text}
+            </div>
           </div>
         ))}
         {isAnalyzing && (
           <div className="pa-bubble agent pa-loading-bubble" role="status" aria-live="polite">
-            <span className="pa-avatar">📂</span>
+            <span className="pa-avatar" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>📂</span>
             <div className="pa-bubble-text pa-loading-text">
               <span className="pa-spinner">⏳</span> Analizando orden y calculando parámetros...
             </div>
