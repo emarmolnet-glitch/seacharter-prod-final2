@@ -10,6 +10,11 @@ export default function AgenteProyectosWidget({
   items = null,
   setCargoItems,
   setPackingList,
+  setPol,
+  setPod,
+  setLoadingRate,
+  setDischargeRate,
+  setDischargingRate,
   financialData = null,
   financialBreakdown = null,
   charteringAssessment = null,
@@ -149,6 +154,48 @@ Ejemplo para añadir piezas a la Lista de Empaque:
 }
 \`\`\`
 
+Si el usuario pide actualizar puertos de carga/descarga o ritmos operativos, emite este JSON al final de tu respuesta:
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Barcelona",
+    "pod": "Casablanca",
+    "loadingRate": 1500,
+    "dischargeRate": 2000
+  }
+}
+\`\`\`
+
+Si el usuario pide realizar varias acciones en un mismo mensaje (ej. añadir mercancía Y cambiar puertos), debes agruparlas en un array dentro de un bloque JSON al final de tu respuesta:
+\`\`\`json
+{
+  "actions": [
+    {
+      "action": "add_packing_list_item",
+      "payload": {
+        "category": "Mercancía General / Paletizada",
+        "type": "Big Bags Cemento",
+        "quantity": 3334,
+        "length": 1.15,
+        "width": 1.10,
+        "height": 1.0,
+        "unitWeight": 1500
+      }
+    },
+    {
+      "action": "update_route_rates",
+      "payload": {
+        "pol": "Barcelona",
+        "pod": "Tampa",
+        "loadingRate": 1500,
+        "dischargeRate": 2000
+      }
+    }
+  ]
+}
+\`\`\`
+
 CONTEXTO EN VIVO DEL PROYECTO (USO INTERNO):
 Tienes acceso en tiempo real a los datos que el usuario está operando, pero consúltalos solo cuando te hagan una pregunta técnica o financiera:
 - Para consultas financieras, márgenes o viabilidad, evalúa la sección 'financials'.
@@ -180,72 +227,162 @@ Contexto actual del proyecto: ${projectContext}`;
       let actionType = data.action || 'none';
       let actionData = data.payload || null;
       let actionPayload = data.payload || null;
+      let actionsList = Array.isArray(data.actions) && data.actions.length > 0 ? [...data.actions] : [];
+
       const jsonActionRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?\})\s*```/i;
       const match = rawReply.match(jsonActionRegex);
 
       if (match && match[1]) {
         try {
           const parsedAction = JSON.parse(match[1]);
-          if (parsedAction.action) {
-            actionType = parsedAction.action;
-          }
-          if (parsedAction.payload) {
-            actionPayload = parsedAction.payload;
-            actionData = parsedAction.payload;
-          } else if (parsedAction.data) {
-            actionPayload = parsedAction.data;
-            actionData = parsedAction.data;
+          if (Array.isArray(parsedAction.actions) && parsedAction.actions.length > 0) {
+            actionsList = parsedAction.actions.map(act => ({
+              action: act.action || 'none',
+              payload: act.payload !== undefined ? act.payload : (act.data !== undefined ? act.data : act)
+            }));
+            if (actionsList.length > 0) {
+              actionType = actionsList[0].action;
+              actionPayload = actionsList[0].payload;
+              actionData = actionsList[0].payload;
+            }
+          } else {
+            if (parsedAction.action) {
+              actionType = parsedAction.action;
+            }
+            if (parsedAction.payload) {
+              actionPayload = parsedAction.payload;
+              actionData = parsedAction.payload;
+            } else if (parsedAction.data) {
+              actionPayload = parsedAction.data;
+              actionData = parsedAction.data;
+            }
+            if (actionType !== 'none') {
+              actionsList = [{ action: actionType, payload: actionPayload }];
+            }
           }
         } catch (err) {
           console.warn('Error al parsear bloque json-action:', err);
         }
       }
 
+      // Si actionsList aún está vacío pero tenemos actionType definido en data
+      if (actionsList.length === 0 && actionType !== 'none') {
+        actionsList = [{ action: actionType, payload: actionPayload }];
+      }
+
       // Limpiar el texto mostrado al usuario eliminando el bloque json-action
       const cleanReply = rawReply.replace(jsonActionRegex, '').trim();
-      const userDisplayReply = cleanReply || (actionType === 'add_packing_list_item' ? 'He añadido las piezas a la Lista de Empaque.' : 'He actualizado los campos del proyecto según lo indicado.');
+      const userDisplayReply = cleanReply || (
+        actionsList.length > 1
+          ? 'He actualizado los datos y la configuración del proyecto según lo indicado.'
+          : (actionType === 'add_packing_list_item'
+            ? 'He añadido las piezas a la Lista de Empaque.'
+            : (actionType === 'update_route_rates'
+              ? 'He actualizado los puertos y los ritmos operativos en la sección de ruta marítima.'
+              : 'He actualizado los campos del proyecto según lo indicado.'))
+      );
 
       setMessages(prev => [...prev, { sender: 'agent', text: userDisplayReply }]);
       speakMessage(userDisplayReply);
 
-      // Inyección y actualización reactiva para Lista de Empaque (Packing List)
-      if (actionType === 'add_packing_list_item' || data.action === 'add_packing_list_item') {
-        const itemPayload = actionPayload || data.payload || {};
-        const qty = Number(itemPayload.quantity) || 1;
-        const unitWeight = Number(itemPayload.unitWeight ?? itemPayload.weight ?? 1500);
-        const totalWeightKg = qty * unitWeight;
-        const isBigBags = /bag|big[- ]?bag|saco|cemento|clinker|grano/i.test(itemPayload.type || itemPayload.category || '');
+      // Iteración secuencial sobre el array actions para ejecutar las actualizaciones de estado correspondientes
+      if (actionsList.length > 0) {
+        for (const singleAct of actionsList) {
+          const actType = singleAct.action;
+          const actPayload = singleAct.payload || {};
 
-        const newPackingItem = {
-          id: itemPayload.id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          category: itemPayload.category || (isBigBags ? 'Big Bags' : 'Mercancía General / Paletizada'),
-          type: itemPayload.type || itemPayload.name || 'Big Bags Cemento',
-          quantity: qty,
-          length: itemPayload.length != null ? Number(itemPayload.length) : 1.15,
-          width: itemPayload.width != null ? Number(itemPayload.width) : 1.10,
-          height: itemPayload.height != null ? Number(itemPayload.height) : 1.0,
-          weight: unitWeight,
-          unitWeight: unitWeight,
-          shipping_mode_supported: totalWeightKg >= 40000 ? 'Break Bulk / Proyecto' : "Contenedor (FCL / LCL)"
-        };
+          // Inyección y actualización reactiva para update_route_rates (Ruta Marítima, Ritmos Operativos y Gestión de Demoras)
+          if (actType === 'update_route_rates' || actionType === 'update_route_rates' || data.action === 'update_route_rates') {
+            const routePayload = actPayload;
+            const pol = routePayload.pol !== undefined ? routePayload.pol : routePayload.portOfLoading;
+            const pod = routePayload.pod !== undefined ? routePayload.pod : routePayload.portOfDischarge;
+            const loadingRate = routePayload.loadingRate !== undefined ? Number(routePayload.loadingRate) : (routePayload.loadingRateMtDay !== undefined ? Number(routePayload.loadingRateMtDay) : undefined);
+            const dischargeRate = routePayload.dischargeRate !== undefined ? Number(routePayload.dischargeRate) : (routePayload.dischargingRate !== undefined ? Number(routePayload.dischargingRate) : undefined);
 
-        // Inyecta directamente en el estado de la Lista de Empaque (setPackingList o similar)
-        if (typeof setPackingList === 'function') {
-          setPackingList(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
-        } else if (typeof setCargoItems === 'function') {
-          setCargoItems(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
-        }
+            // Inyectar directamente en las funciones de estado correspondientes en el formulario de React para los inputs de la sección "Ruta Marítima, Ritmos Operativos y Gestión de Demoras"
+            if (pol !== undefined && typeof setPol === 'function') {
+              setPol(pol);
+            }
+            if (pod !== undefined && typeof setPod === 'function') {
+              setPod(pod);
+            }
+            if (loadingRate !== undefined && !isNaN(loadingRate) && typeof setLoadingRate === 'function') {
+              setLoadingRate(loadingRate);
+            }
+            if (dischargeRate !== undefined && !isNaN(dischargeRate)) {
+              if (typeof setDischargeRate === 'function') {
+                setDischargeRate(dischargeRate);
+              }
+              if (typeof setDischargingRate === 'function') {
+                setDischargingRate(dischargeRate);
+              }
+            }
 
-        if (onUpdatePayload) {
-          onUpdatePayload({
-            action: 'add_packing_list_item',
-            payload: itemPayload,
-            item: newPackingItem,
-            newItem: newPackingItem,
-            items: [...currentProjectItems, newPackingItem],
-            forceOpenModal: true,
-            ...itemPayload
-          });
+            if (onUpdatePayload) {
+              onUpdatePayload({
+                action: 'update_route_rates',
+                pol,
+                pod,
+                loadingRate,
+                dischargeRate,
+                dischargingRate: dischargeRate,
+                payload: routePayload,
+                ...routePayload
+              });
+            }
+          } else if (actType === 'add_packing_list_item' || actionType === 'add_packing_list_item' || data.action === 'add_packing_list_item') {
+            const itemPayload = actPayload;
+            const qty = Number(itemPayload.quantity) || 1;
+            const unitWeight = Number(itemPayload.unitWeight ?? itemPayload.weight ?? 1500);
+            const totalWeightKg = qty * unitWeight;
+            const isBigBags = /bag|big[- ]?bag|saco|cemento|clinker|grano/i.test(itemPayload.type || itemPayload.category || '');
+
+            const newPackingItem = {
+              id: itemPayload.id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              category: itemPayload.category || (isBigBags ? 'Big Bags' : 'Mercancía General / Paletizada'),
+              type: itemPayload.type || itemPayload.name || 'Big Bags Cemento',
+              quantity: qty,
+              length: itemPayload.length != null ? Number(itemPayload.length) : 1.15,
+              width: itemPayload.width != null ? Number(itemPayload.width) : 1.10,
+              height: itemPayload.height != null ? Number(itemPayload.height) : 1.0,
+              weight: unitWeight,
+              unitWeight: unitWeight,
+              shipping_mode_supported: totalWeightKg >= 40000 ? 'Break Bulk / Proyecto' : "Contenedor (FCL / LCL)"
+            };
+
+            // Inyecta directamente en el estado de la Lista de Empaque (setPackingList o similar)
+            if (typeof setPackingList === 'function') {
+              setPackingList(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
+            } else if (typeof setCargoItems === 'function') {
+              setCargoItems(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
+            }
+
+            if (onUpdatePayload) {
+              onUpdatePayload({
+                action: 'add_packing_list_item',
+                payload: itemPayload,
+                item: newPackingItem,
+                newItem: newPackingItem,
+                items: [...currentProjectItems, newPackingItem],
+                forceOpenModal: true,
+                ...itemPayload
+              });
+            }
+          } else if (actType === 'update_form') {
+            if (onUpdatePayload) {
+              onUpdatePayload({
+                action: 'update_form',
+                pol: actPayload.portOfLoading || actPayload.pol,
+                pod: actPayload.portOfDischarge || actPayload.pod,
+                loadingRate: actPayload.loadingRate,
+                dischargingRate: actPayload.dischargeRate || actPayload.dischargingRate,
+                cargoDescription: actPayload.cargoDescription,
+                quantityMT: actPayload.quantityMT,
+                forceOpenModal: true,
+                ...actPayload
+              });
+            }
+          }
         }
       } else if (actionData && onUpdatePayload) {
         onUpdatePayload({
@@ -334,6 +471,48 @@ Ejemplo para añadir piezas a la Lista de Empaque:
     "height": 1.0,
     "unitWeight": 1500
   }
+}
+\`\`\`
+
+Si el usuario pide actualizar puertos de carga/descarga o ritmos operativos, emite este JSON al final de tu respuesta:
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Barcelona",
+    "pod": "Casablanca",
+    "loadingRate": 1500,
+    "dischargeRate": 2000
+  }
+}
+\`\`\`
+
+Si el usuario pide realizar varias acciones en un mismo mensaje (ej. añadir mercancía Y cambiar puertos), debes agruparlas en un array dentro de un bloque JSON al final de tu respuesta:
+\`\`\`json
+{
+  "actions": [
+    {
+      "action": "add_packing_list_item",
+      "payload": {
+        "category": "Mercancía General / Paletizada",
+        "type": "Big Bags Cemento",
+        "quantity": 3334,
+        "length": 1.15,
+        "width": 1.10,
+        "height": 1.0,
+        "unitWeight": 1500
+      }
+    },
+    {
+      "action": "update_route_rates",
+      "payload": {
+        "pol": "Barcelona",
+        "pod": "Tampa",
+        "loadingRate": 1500,
+        "dischargeRate": 2000
+      }
+    }
+  ]
 }
 \`\`\`
 

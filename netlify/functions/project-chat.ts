@@ -55,6 +55,48 @@ Ejemplo para añadir piezas a la Lista de Empaque:
 }
 \`\`\`
 
+Si el usuario pide actualizar puertos de carga/descarga o ritmos operativos, emite este JSON al final de tu respuesta:
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Barcelona",
+    "pod": "Casablanca",
+    "loadingRate": 1500,
+    "dischargeRate": 2000
+  }
+}
+\`\`\`
+
+Si el usuario pide realizar varias acciones en un mismo mensaje (ej. añadir mercancía Y cambiar puertos), debes agruparlas en un array dentro de un bloque JSON al final de tu respuesta:
+\`\`\`json
+{
+  "actions": [
+    {
+      "action": "add_packing_list_item",
+      "payload": {
+        "category": "Mercancía General / Paletizada",
+        "type": "Big Bags Cemento",
+        "quantity": 3334,
+        "length": 1.15,
+        "width": 1.10,
+        "height": 1.0,
+        "unitWeight": 1500
+      }
+    },
+    {
+      "action": "update_route_rates",
+      "payload": {
+        "pol": "Barcelona",
+        "pod": "Tampa",
+        "loadingRate": 1500,
+        "dischargeRate": 2000
+      }
+    }
+  ]
+}
+\`\`\`
+
 ACCIONES DE CONTROL DE FORMULARIO DEL PROYECTO:
 Si el usuario te da una orden para modificar campos del proyecto (como cantidad, puertos, ritmos de carga/descarga), además de responder de forma conversacional como consultor, debes incluir al final de tu respuesta un bloque JSON oculto con esta estructura exacta para que la interfaz pueda actualizarse automáticamente:
 \`\`\`json-action
@@ -82,15 +124,32 @@ Contexto actual del proyecto: ${pContext}`;
 export function extractStructuredAction(responseText: string): {
   action: string;
   payload: any;
+  actions: Array<{ action: string; payload: any }>;
   cleanedText: string;
 } {
   let action = "none";
   let payload: any = {};
+  let actions: Array<{ action: string; payload: any }> = [];
   let cleanedText = responseText;
 
   if (!responseText || typeof responseText !== 'string') {
-    return { action, payload, cleanedText: "" };
+    return { action, payload, actions, cleanedText: "" };
   }
+
+  const normalizeActions = (parsed: any): Array<{ action: string; payload: any }> => {
+    if (Array.isArray(parsed?.actions) && parsed.actions.length > 0) {
+      return parsed.actions.map((act: any) => ({
+        action: act?.action || "none",
+        payload: act?.payload !== undefined ? act.payload : (act?.data !== undefined ? act.data : act)
+      }));
+    }
+    const singleAction = parsed?.action || "none";
+    const singlePayload = parsed?.payload !== undefined ? parsed.payload : (parsed?.data !== undefined ? parsed.data : parsed);
+    if (singleAction !== "none") {
+      return [{ action: singleAction, payload: singlePayload }];
+    }
+    return [];
+  };
 
   // Robust regex to capture any JSON code block (```json, ```json-action, or ```)
   const jsonCodeBlockRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?\})\s*```/i;
@@ -100,32 +159,62 @@ export function extractStructuredAction(responseText: string): {
     try {
       const parsed = JSON.parse(match[1].trim());
       if (parsed && typeof parsed === 'object') {
-        action = parsed.action || "none";
-        payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        actions = normalizeActions(parsed);
+        if (actions.length > 0) {
+          action = actions[0].action;
+          payload = actions[0].payload;
+        } else {
+          action = parsed.action || "none";
+          payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        }
         cleanedText = responseText.replace(match[0], '').trim();
-        return { action, payload, cleanedText };
+        return { action, payload, actions, cleanedText };
       }
     } catch (parseErr) {
       console.warn("[project-chat] Failed to parse JSON code block:", parseErr);
     }
   }
 
-  // Fallback: search for unfenced JSON with action if no code fence matched
+  // Fallback 1: search for unfenced JSON with "actions" array
+  const rawActionsJsonRegex = /\{[\s\S]*?"actions"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/i;
+  const rawActionsMatch = responseText.match(rawActionsJsonRegex);
+  if (rawActionsMatch) {
+    try {
+      const parsed = JSON.parse(rawActionsMatch[0].trim());
+      if (parsed && typeof parsed === 'object') {
+        actions = normalizeActions(parsed);
+        if (actions.length > 0) {
+          action = actions[0].action;
+          payload = actions[0].payload;
+        }
+        cleanedText = responseText.replace(rawActionsMatch[0], '').trim();
+        return { action, payload, actions, cleanedText };
+      }
+    } catch {}
+  }
+
+  // Fallback 2: search for unfenced JSON with action if no code fence matched
   const rawJsonRegex = /\{[\s\S]*?"action"\s*:\s*"([a-zA-Z0-9_-]+)"[\s\S]*?\}/i;
   const rawMatch = responseText.match(rawJsonRegex);
   if (rawMatch) {
     try {
       const parsed = JSON.parse(rawMatch[0].trim());
       if (parsed && typeof parsed === 'object') {
-        action = parsed.action || "none";
-        payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        actions = normalizeActions(parsed);
+        if (actions.length > 0) {
+          action = actions[0].action;
+          payload = actions[0].payload;
+        } else {
+          action = parsed.action || "none";
+          payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        }
         cleanedText = responseText.replace(rawMatch[0], '').trim();
-        return { action, payload, cleanedText };
+        return { action, payload, actions, cleanedText };
       }
     } catch {}
   }
 
-  return { action, payload, cleanedText };
+  return { action, payload, actions, cleanedText };
 }
 
 export function buildGeminiHistory(historyEntries: any[] = []): Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> {
@@ -410,8 +499,24 @@ export async function handler(eventOrRequest: any, context?: any): Promise<Respo
     let { responseText, groundingMetadata } = processGroundedResponse(result.response);
 
     // Extract structured JSON action if emitted by model, and clean conversational text
-    const { action, payload, cleanedText } = extractStructuredAction(responseText);
-    const finalReply = cleanedText || (action === 'add_packing_list_item' ? 'He añadido las piezas a la Lista de Empaque.' : (action === 'update_form' ? 'He actualizado los datos del proyecto.' : responseText));
+    const { action, payload, actions, cleanedText } = extractStructuredAction(responseText);
+    const finalReply = cleanedText || (
+      actions.length > 1
+        ? 'He aplicado las acciones solicitadas en el proyecto.'
+        : (action === 'add_packing_list_item'
+          ? 'He añadido las piezas a la Lista de Empaque.'
+          : (action === 'update_route_rates'
+            ? 'He actualizado los puertos y los ritmos operativos del proyecto.'
+            : (action === 'update_form' ? 'He actualizado los datos del proyecto.' : responseText)))
+    );
+
+    const intent = actions.length > 1
+      ? 'MULTI_ACTIONS'
+      : (action === 'add_packing_list_item'
+        ? 'ADD_PACKING_LIST_ITEM'
+        : (action === 'update_route_rates'
+          ? 'UPDATE_ROUTE_RATES'
+          : (action === 'update_form' ? 'UPDATE_PROJECT_FORM' : (action !== 'none' ? action.toUpperCase() : 'PROJECT_CONSULTANT'))));
 
     return new Response(JSON.stringify({
       success: true,
@@ -420,10 +525,9 @@ export async function handler(eventOrRequest: any, context?: any): Promise<Respo
       respuesta: finalReply,
       action: action,
       payload: payload,
+      actions: actions,
       groundingMetadata: groundingMetadata || null,
-      intent: action === 'add_packing_list_item'
-        ? 'ADD_PACKING_LIST_ITEM'
-        : (action === 'update_form' ? 'UPDATE_PROJECT_FORM' : (action !== 'none' ? action.toUpperCase() : 'PROJECT_CONSULTANT'))
+      intent: intent
     }), { status: 200, headers });
 
   } catch (error) {

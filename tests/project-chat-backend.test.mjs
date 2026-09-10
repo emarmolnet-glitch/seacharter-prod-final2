@@ -501,3 +501,311 @@ test('21. ForwarderWorkspace connects setPackingList and handles add_packing_lis
   assert.match(workspaceSource, /setCargoItems\(prev\s*=>/);
   assert.match(workspaceSource, /setIsCargoModalOpen\(true\)/);
 });
+
+test('22. buildAgenteProyectosSystemInstruction enforces update_route_rates schema with pol, pod, loadingRate, dischargeRate', () => {
+  const prompt = buildAgenteProyectosSystemInstruction();
+  assert.match(prompt, /Si el usuario pide actualizar puertos de carga\/descarga o ritmos operativos, emite este JSON al final de tu respuesta:/);
+  assert.match(prompt, /"action":\s*"update_route_rates"/);
+  assert.match(prompt, /"pol":\s*"Barcelona"/);
+  assert.match(prompt, /"pod":\s*"Casablanca"/);
+  assert.match(prompt, /"loadingRate":\s*1500/);
+  assert.match(prompt, /"dischargeRate":\s*2000/);
+});
+
+test('23. extractStructuredAction extracts update_route_rates action and payload and cleans conversational reply', () => {
+  const rawText = `He recalculado el flete y modificado los puertos y ritmos operativos solicitados.
+
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Barcelona",
+    "pod": "Casablanca",
+    "loadingRate": 1500,
+    "dischargeRate": 2000
+  }
+}
+\`\`\``;
+
+  const result = extractStructuredAction(rawText);
+  assert.equal(result.action, 'update_route_rates');
+  assert.equal(result.payload.pol, 'Barcelona');
+  assert.equal(result.payload.pod, 'Casablanca');
+  assert.equal(result.payload.loadingRate, 1500);
+  assert.equal(result.payload.dischargeRate, 2000);
+  assert.equal(result.cleanedText, 'He recalculado el flete y modificado los puertos y ritmos operativos solicitados.');
+  assert.ok(!result.cleanedText.includes('```'));
+  assert.ok(!result.cleanedText.includes('update_route_rates'));
+});
+
+test('24. handler processes update_route_rates response from model, setting action, intent, payload, and clean reply', async () => {
+  const simulatedText = `He actualizado la ruta con carga en Barcelona y descarga en Casablanca a ritmos de 1500/2000 MT/día.
+
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Barcelona",
+    "pod": "Casablanca",
+    "loadingRate": 1500,
+    "dischargeRate": 2000
+  }
+}
+\`\`\``;
+
+  const actionModule = [
+    `function GoogleGenerativeAI() {
+      return {
+        getGenerativeModel: () => {
+          return {
+            startChat: () => {
+              return {
+                sendMessage: async () => {
+                  return {
+                    response: {
+                      text: () => ${JSON.stringify(simulatedText)},
+                      candidates: [{
+                        content: {
+                          parts: [{
+                            text: ${JSON.stringify(simulatedText)}
+                          }]
+                        }
+                      }]
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+    }`,
+    transpiled.split('\n').filter((line) => !line.startsWith('import ')).join('\n')
+  ].join('\n');
+
+  const { handler: fnHandler } = await import(
+    `data:text/javascript;base64,${Buffer.from(actionModule, 'utf8').toString('base64')}`
+  );
+
+  const req = new Request('https://neon-seachartercorepro-4ce09d.netlify.app/.netlify/functions/project-chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Actualiza la ruta: carga Barcelona, descarga Casablanca, ritmos 1500 carga y 2000 descarga',
+      projectContext: {}
+    })
+  });
+
+  const res = await fnHandler(req);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.equal(data.action, 'update_route_rates');
+  assert.equal(data.intent, 'UPDATE_ROUTE_RATES');
+  assert.equal(data.payload.pol, 'Barcelona');
+  assert.equal(data.payload.pod, 'Casablanca');
+  assert.equal(data.payload.loadingRate, 1500);
+  assert.equal(data.payload.dischargeRate, 2000);
+  assert.equal(data.reply, 'He actualizado la ruta con carga en Barcelona y descarga en Casablanca a ritmos de 1500/2000 MT/día.');
+  assert.ok(!data.reply.includes('```'));
+  assert.ok(!data.reply.includes('update_route_rates'));
+});
+
+test('25. Frontend AgenteProyectosWidget listens to update_route_rates, extracts payload and invokes state setters and onUpdatePayload', async () => {
+  const widgetSource = await readFile(
+    new URL('../src/components/AgenteProyectosWidget.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(widgetSource, /setPol/);
+  assert.match(widgetSource, /setPod/);
+  assert.match(widgetSource, /setLoadingRate/);
+  assert.match(widgetSource, /setDischargeRate/);
+  assert.match(widgetSource, /actionType\s*===\s*['"]update_route_rates['"]\s*\|\|\s*data\.action\s*===\s*['"]update_route_rates['"]/);
+  assert.match(widgetSource, /setPol\(pol\)/);
+  assert.match(widgetSource, /setPod\(pod\)/);
+  assert.match(widgetSource, /setLoadingRate\(loadingRate\)/);
+  assert.match(widgetSource, /setDischargeRate\(dischargeRate\)/);
+  assert.match(widgetSource, /onUpdatePayload\(\s*\{[\s\S]*?action:\s*['"]update_route_rates['"]/);
+});
+
+test('26. ForwarderWorkspace binds route setters to AgenteProyectosWidget and handles update_route_rates in handleApplyProjectPayload', async () => {
+  const workspaceSource = await readFile(
+    new URL('../src/components/ForwarderWorkspace.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(workspaceSource, /setPol=\{setPol\}/);
+  assert.match(workspaceSource, /setPod=\{setPod\}/);
+  assert.match(workspaceSource, /setLoadingRate=\{setLoadingRate\}/);
+  assert.match(workspaceSource, /setDischargeRate=\{setDischargingRate\}/);
+  assert.match(workspaceSource, /payload\.action\s*===\s*['"]update_route_rates['"]/);
+});
+
+test('27. buildAgenteProyectosSystemInstruction enforces Multi-Actions array schema with add_packing_list_item and update_route_rates', () => {
+  const prompt = buildAgenteProyectosSystemInstruction();
+  assert.match(prompt, /Si el usuario pide realizar varias acciones en un mismo mensaje/);
+  assert.match(prompt, /"actions":\s*\[/);
+  assert.match(prompt, /"action":\s*"add_packing_list_item"/);
+  assert.match(prompt, /"quantity":\s*3334/);
+  assert.match(prompt, /"action":\s*"update_route_rates"/);
+  assert.match(prompt, /"pod":\s*"Tampa"/);
+});
+
+test('28. extractStructuredAction extracts Multi-Actions array and cleans conversational text', () => {
+  const rawText = `He añadido la partida de sacos y he actualizado la ruta del buque hacia Tampa.
+
+\`\`\`json
+{
+  "actions": [
+    {
+      "action": "add_packing_list_item",
+      "payload": {
+        "category": "Mercancía General / Paletizada",
+        "type": "Big Bags Cemento",
+        "quantity": 3334,
+        "length": 1.15,
+        "width": 1.10,
+        "height": 1.0,
+        "unitWeight": 1500
+      }
+    },
+    {
+      "action": "update_route_rates",
+      "payload": {
+        "pol": "Barcelona",
+        "pod": "Tampa",
+        "loadingRate": 1500,
+        "dischargeRate": 2000
+      }
+    }
+  ]
+}
+\`\`\``;
+
+  const result = extractStructuredAction(rawText);
+  assert.ok(Array.isArray(result.actions));
+  assert.equal(result.actions.length, 2);
+  assert.equal(result.actions[0].action, 'add_packing_list_item');
+  assert.equal(result.actions[0].payload.quantity, 3334);
+  assert.equal(result.actions[1].action, 'update_route_rates');
+  assert.equal(result.actions[1].payload.pod, 'Tampa');
+  assert.equal(result.cleanedText, 'He añadido la partida de sacos y he actualizado la ruta del buque hacia Tampa.');
+  assert.ok(!result.cleanedText.includes('```'));
+  assert.ok(!result.cleanedText.includes('actions'));
+});
+
+test('29. extractStructuredAction wraps single action into actions array for backwards compatibility', () => {
+  const rawText = `Actualizando ruta:
+\`\`\`json
+{
+  "action": "update_route_rates",
+  "payload": {
+    "pol": "Bilbao",
+    "pod": "Rotterdam"
+  }
+}
+\`\`\``;
+
+  const result = extractStructuredAction(rawText);
+  assert.ok(Array.isArray(result.actions));
+  assert.equal(result.actions.length, 1);
+  assert.equal(result.actions[0].action, 'update_route_rates');
+  assert.equal(result.actions[0].payload.pol, 'Bilbao');
+  assert.equal(result.action, 'update_route_rates');
+});
+
+test('30. handler returns actions array in API response for Multi-Actions', async () => {
+  const simulatedText = `Procesando orden combinada.
+
+\`\`\`json
+{
+  "actions": [
+    {
+      "action": "add_packing_list_item",
+      "payload": {
+        "category": "Mercancía General / Paletizada",
+        "type": "Big Bags Cemento",
+        "quantity": 3334,
+        "unitWeight": 1500
+      }
+    },
+    {
+      "action": "update_route_rates",
+      "payload": {
+        "pol": "Barcelona",
+        "pod": "Tampa",
+        "loadingRate": 1500,
+        "dischargeRate": 2000
+      }
+    }
+  ]
+}
+\`\`\``;
+
+  const actionModule = [
+    `function GoogleGenerativeAI() {
+      return {
+        getGenerativeModel: () => {
+          return {
+            startChat: () => {
+              return {
+                sendMessage: async () => {
+                  return {
+                    response: {
+                      text: () => ${JSON.stringify(simulatedText)},
+                      candidates: [{
+                        content: {
+                          parts: [{
+                            text: ${JSON.stringify(simulatedText)}
+                          }]
+                        }
+                      }]
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+    }`,
+    transpiled.split('\n').filter((line) => !line.startsWith('import ')).join('\n')
+  ].join('\n');
+
+  const { handler: fnHandler } = await import(
+    `data:text/javascript;base64,${Buffer.from(actionModule, 'utf8').toString('base64')}`
+  );
+
+  const req = new Request('https://neon-seachartercorepro-4ce09d.netlify.app/.netlify/functions/project-chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Añade 3334 big bags y pon ruta Barcelona a Tampa',
+      projectContext: {}
+    })
+  });
+
+  const res = await fnHandler(req);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.ok(Array.isArray(data.actions));
+  assert.equal(data.actions.length, 2);
+  assert.equal(data.actions[0].action, 'add_packing_list_item');
+  assert.equal(data.actions[1].action, 'update_route_rates');
+  assert.equal(data.intent, 'MULTI_ACTIONS');
+  assert.ok(!data.reply.includes('```'));
+});
+
+test('31. Frontend AgenteProyectosWidget iterates over actions array and sequentially executes state updates', async () => {
+  const widgetSource = await readFile(
+    new URL('../src/components/AgenteProyectosWidget.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(widgetSource, /actionsList\s*=\s*Array\.isArray\(data\.actions\)/);
+  assert.match(widgetSource, /parsedAction\.actions\.map/);
+  assert.match(widgetSource, /for\s*\(\s*const\s+singleAct\s+of\s+actionsList\s*\)/);
+  assert.match(widgetSource, /setPackingList/);
+  assert.match(widgetSource, /setPol\(pol\)/);
+  assert.match(widgetSource, /setPod\(pod\)/);
+});
+
