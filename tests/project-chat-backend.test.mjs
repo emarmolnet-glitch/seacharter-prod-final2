@@ -54,7 +54,8 @@ const stubbedModule = [
         }
       };
     }
-  }`,
+  }
+  globalThis.TestGoogleGenerativeAI = GoogleGenerativeAI;`,
   transpiled.split('\n').filter((line) => !line.startsWith('import ')).join('\n')
 ].join('\n');
 
@@ -104,6 +105,8 @@ test('3. buildAgenteProyectosSystemInstruction establishes strategic consultant 
   assert.match(prompt, /1\. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL/);
   assert.match(prompt, /2\. OPINIÓN CRÍTICA Y ASESORAMIENTO/);
   assert.match(prompt, /3\. TONO NATURAL/);
+  assert.match(prompt, /REGLA DE FORMATO DE FUENTES \(BÚSQUEDA WEB\)/);
+  assert.match(prompt, /NUNCA incluyas URLs crudas, enlaces HTTP, ni metadatos de redirección/);
   assert.match(prompt, /Contexto actual del proyecto: \{"items":\[\{"name":"Turbina"/);
 });
 
@@ -178,7 +181,8 @@ test('8. handler processes plain text message without attached file and returns 
   const data = await res.json();
   assert.equal(data.success, true);
   assert.match(data.reply, /consultor estratégico marítimo/);
-  assert.match(data.reply, /Fuentes consultadas en tiempo real/);
+  assert.doesNotMatch(data.reply, /Fuentes consultadas en tiempo real/);
+  assert.doesNotMatch(data.reply, /https:\/\/balticexchange\.com/);
   assert.equal(data.intent, 'PROJECT_CONSULTANT');
 });
 
@@ -808,4 +812,48 @@ test('31. Frontend AgenteProyectosWidget iterates over actions array and sequent
   assert.match(widgetSource, /setPol\(pol\)/);
   assert.match(widgetSource, /setPod\(pod\)/);
 });
+
+test('32. processGroundedResponse extracts clean response.text() without concatenating web grounding URLs or metadata', () => {
+  const fakeResponse = {
+    text: () => "El flete spot de Rotterdam a Houston está en 42 USD/MT según Baltic Exchange.",
+    candidates: [{
+      content: { parts: [{ text: "El flete spot de Rotterdam a Houston está en 42 USD/MT según Baltic Exchange." }] },
+      groundingMetadata: {
+        webSearchQueries: ["Rotterdam to Houston freight rate"],
+        groundingChunks: [
+          { web: { uri: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc123xyz", title: "Baltic Exchange" } },
+          { web: { uri: "https://reuters.com/maritime/rates", title: "Reuters" } }
+        ]
+      }
+    }]
+  };
+
+  const { responseText, groundingMetadata } = processGroundedResponse(fakeResponse);
+  assert.equal(responseText, "El flete spot de Rotterdam a Houston está en 42 USD/MT según Baltic Exchange.");
+  assert.doesNotMatch(responseText, /vertexaisearch/);
+  assert.doesNotMatch(responseText, /https?:\/\//);
+  assert.doesNotMatch(responseText, /Fuentes consultadas en tiempo real/);
+  assert.ok(groundingMetadata);
+  assert.equal(groundingMetadata.webSearchQueries[0], "Rotterdam to Houston freight rate");
+});
+
+test('33. handler injects REGLA DE FORMATO DE FUENTES into custom systemInstruction if missing', async () => {
+  process.env.GEMINI_API_KEY = 'test-key-rule-check';
+
+  const req = new Request('https://neon-seachartercorepro-4ce09d.netlify.app/.netlify/functions/project-chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Consulta rápida de mercado',
+      systemInstruction: 'Eres un asistente marítimo genérico.',
+      projectContext: {}
+    })
+  });
+
+  const res = await handler(req);
+  assert.equal(res.status, 200);
+  assert.match(globalThis.TestGoogleGenerativeAI.lastConfig.systemInstruction, /REGLA DE FORMATO DE FUENTES \(BÚSQUEDA WEB\)/);
+  assert.match(globalThis.TestGoogleGenerativeAI.lastConfig.systemInstruction, /NUNCA incluyas URLs crudas, enlaces HTTP, ni metadatos de redirección/);
+});
+
 
