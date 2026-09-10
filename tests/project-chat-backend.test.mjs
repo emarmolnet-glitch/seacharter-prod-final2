@@ -61,6 +61,7 @@ const stubbedModule = [
 const {
   AGENTE_PROYECTOS_MODEL,
   buildAgenteProyectosSystemInstruction,
+  extractStructuredAction,
   formatProjectContext,
   buildGeminiHistory,
   processGroundedResponse,
@@ -361,4 +362,142 @@ test('16. ForwarderWorkspace handleApplyProjectPayload consumes updateProjectFor
   assert.match(workspaceSource, /payload\.dischargingRate\s*\|\|\s*payload\.dischargeRate/);
   assert.match(workspaceSource, /payload\.cargoDescription\s*\|\|\s*payload\.quantityMT/);
   assert.match(workspaceSource, /setCargoItems\(\[newItem\]\)/);
+});
+
+test('17. buildAgenteProyectosSystemInstruction enforces REGLA DE AUTOMATIZACIÓN DE INTERFAZ (OBLIGATORIA) and add_packing_list_item schema', () => {
+  const prompt = buildAgenteProyectosSystemInstruction();
+  assert.match(prompt, /REGLA DE AUTOMATIZACIÓN DE INTERFAZ \(OBLIGATORIA\):/);
+  assert.match(prompt, /Si el usuario te pide añadir mercancía, dimensiones, pesos o actualizar rutas, DEBES incluir al final de tu respuesta un bloque de código JSON estándar que el sistema leerá\./);
+  assert.match(prompt, /"action":\s*"add_packing_list_item"/);
+  assert.match(prompt, /"type":\s*"Big Bags Cemento"/);
+  assert.match(prompt, /"quantity":\s*6666/);
+  assert.match(prompt, /"unitWeight":\s*1500/);
+});
+
+test('18. extractStructuredAction extracts JSON action and payload and cleans the conversational reply text', () => {
+  const rawText = `He analizado tu solicitud y he agregado las piezas solicitadas a la lista de empaque.
+
+\`\`\`json
+{
+  "action": "add_packing_list_item",
+  "payload": {
+    "category": "Mercancía General / Paletizada",
+    "type": "Big Bags Cemento",
+    "quantity": 6666,
+    "length": 1.15,
+    "width": 1.10,
+    "height": 1.0,
+    "unitWeight": 1500
+  }
+}
+\`\`\``;
+
+  const result = extractStructuredAction(rawText);
+  assert.equal(result.action, 'add_packing_list_item');
+  assert.equal(result.payload.type, 'Big Bags Cemento');
+  assert.equal(result.payload.quantity, 6666);
+  assert.equal(result.payload.length, 1.15);
+  assert.equal(result.payload.width, 1.10);
+  assert.equal(result.payload.height, 1.0);
+  assert.equal(result.payload.unitWeight, 1500);
+  assert.equal(result.cleanedText, 'He analizado tu solicitud y he agregado las piezas solicitadas a la lista de empaque.');
+  assert.ok(!result.cleanedText.includes('```'));
+  assert.ok(!result.cleanedText.includes('add_packing_list_item'));
+});
+
+test('19. handler processes add_packing_list_item response from model, setting action, payload, and clean reply', async () => {
+  const simulatedText = `Listo, he incorporado la partida de Big Bags a tu Lista de Empaque.
+
+\`\`\`json
+{
+  "action": "add_packing_list_item",
+  "payload": {
+    "category": "Mercancía General / Paletizada",
+    "type": "Big Bags Cemento",
+    "quantity": 6666,
+    "length": 1.15,
+    "width": 1.10,
+    "height": 1.0,
+    "unitWeight": 1500
+  }
+}
+\`\`\``;
+
+  const actionModule = [
+    `function GoogleGenerativeAI() {
+      return {
+        getGenerativeModel: () => {
+          return {
+            startChat: () => {
+              return {
+                sendMessage: async () => {
+                  return {
+                    response: {
+                      text: () => ${JSON.stringify(simulatedText)},
+                      candidates: [{
+                        content: {
+                          parts: [{
+                            text: ${JSON.stringify(simulatedText)}
+                          }]
+                        }
+                      }]
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+    }`,
+    transpiled.split('\n').filter((line) => !line.startsWith('import ')).join('\n')
+  ].join('\n');
+
+  const { handler: fnHandler } = await import(
+    `data:text/javascript;base64,${Buffer.from(actionModule, 'utf8').toString('base64')}`
+  );
+
+  const req = new Request('https://neon-seachartercorepro-4ce09d.netlify.app/.netlify/functions/project-chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Añade 6666 Big Bags de cemento de 1500 kg',
+      projectContext: {}
+    })
+  });
+
+  const res = await fnHandler(req);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.equal(data.action, 'add_packing_list_item');
+  assert.equal(data.intent, 'ADD_PACKING_LIST_ITEM');
+  assert.equal(data.payload.type, 'Big Bags Cemento');
+  assert.equal(data.payload.quantity, 6666);
+  assert.equal(data.payload.unitWeight, 1500);
+  assert.equal(data.reply, 'Listo, he incorporado la partida de Big Bags a tu Lista de Empaque.');
+  assert.ok(!data.reply.includes('```'));
+  assert.ok(!data.reply.includes('add_packing_list_item'));
+});
+
+test('20. Frontend AgenteProyectosWidget listens to add_packing_list_item and injects into setPackingList and onUpdatePayload', async () => {
+  const widgetSource = await readFile(
+    new URL('../src/components/AgenteProyectosWidget.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(widgetSource, /setPackingList/);
+  assert.match(widgetSource, /actionType\s*===\s*['"]add_packing_list_item['"]\s*\|\|\s*data\.action\s*===\s*['"]add_packing_list_item['"]/);
+  assert.match(widgetSource, /setPackingList\(prev\s*=>\s*\[\.\.\.\(Array\.isArray\(prev\)\s*\?\s*prev\s*:\s*\[\]\),\s*newPackingItem\]\)/);
+  assert.match(widgetSource, /onUpdatePayload\(\s*\{[\s\S]*?action:\s*['"]add_packing_list_item['"]/);
+});
+
+test('21. ForwarderWorkspace connects setPackingList and handles add_packing_list_item in handleApplyProjectPayload', async () => {
+  const workspaceSource = await readFile(
+    new URL('../src/components/ForwarderWorkspace.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(workspaceSource, /setPackingList=\{setCargoItems\}/);
+  assert.match(workspaceSource, /payload\.action\s*===\s*['"]add_packing_list_item['"]/);
+  assert.match(workspaceSource, /setCargoItems\(prev\s*=>/);
+  assert.match(workspaceSource, /setIsCargoModalOpen\(true\)/);
 });

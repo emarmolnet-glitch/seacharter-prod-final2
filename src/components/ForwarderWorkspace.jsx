@@ -1738,6 +1738,39 @@ export function ForwarderWorkspace() {
       hasChanges = true;
     }
 
+    if (payload.action === 'add_packing_list_item' || payload.add_packing_list_item) {
+      const p = payload.item || payload.newItem || payload.payload || payload;
+      const qty = Number(p.quantity) || 1;
+      const unitWeight = Number(p.unitWeight ?? p.weight ?? 1500);
+      const totalWeightKg = qty * unitWeight;
+      const isBigBags = /bag|big[- ]?bag|saco|cemento|clinker|grano/i.test(p.type || p.category || '');
+
+      const newItem = {
+        id: p.id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        category: p.category || (isBigBags ? 'Big Bags' : 'Mercancía General / Paletizada'),
+        type: p.type || p.name || 'Big Bags Cemento',
+        quantity: qty,
+        length: p.length != null ? Number(p.length) : 1.15,
+        width: p.width != null ? Number(p.width) : 1.10,
+        height: p.height != null ? Number(p.height) : 1.0,
+        weight: unitWeight,
+        unitWeight: unitWeight,
+        shipping_mode_supported: totalWeightKg >= 40000 ? 'Break Bulk / Proyecto' : 'Contenedor (FCL / LCL)'
+      };
+
+      setCargoItems(prev => {
+        const currentList = Array.isArray(prev) ? prev : [];
+        const alreadyExists = currentList.some(it => it.id === newItem.id);
+        const updatedList = alreadyExists ? currentList : [...currentList, newItem];
+        updatedProject.items = updatedList;
+        autoCalculateEstimates(updatedList);
+        return updatedList;
+      });
+
+      hasChanges = true;
+      setIsCargoModalOpen(true);
+    }
+
     const incomingItems = payload.items || payload.cargo_items;
     if (Array.isArray(incomingItems) && incomingItems.length > 0) {
       const mappedItems = incomingItems.map((ci, idx) => ({
@@ -4226,6 +4259,8 @@ export function ForwarderWorkspace() {
         onToggleOpen={setIsAgentVisible}
         cargoItems={cargoItems}
         items={cargoItems}
+        setCargoItems={setCargoItems}
+        setPackingList={setCargoItems}
         charteringAssessment={charteringAssessment}
         routeData={{ pol, pod, loadingRate, dischargingRate, distanceNm, actualLoadingDays, actualDischargingDays, demurrageDailyRateUsd }}
         financialData={{ subtotalFreight, subtotalFobOperations, estimatedCost, salePrice }}
