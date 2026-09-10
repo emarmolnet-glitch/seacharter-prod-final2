@@ -36,6 +36,25 @@ REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
 2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
 3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
 
+REGLA DE AUTOMATIZACIÓN DE INTERFAZ (OBLIGATORIA):
+Si el usuario te pide añadir mercancía, dimensiones, pesos o actualizar rutas, DEBES incluir al final de tu respuesta un bloque de código JSON estándar que el sistema leerá. 
+
+Ejemplo para añadir piezas a la Lista de Empaque:
+\`\`\`json
+{
+  "action": "add_packing_list_item",
+  "payload": {
+    "category": "Mercancía General / Paletizada",
+    "type": "Big Bags Cemento",
+    "quantity": 6666,
+    "length": 1.15,
+    "width": 1.10,
+    "height": 1.0,
+    "unitWeight": 1500
+  }
+}
+\`\`\`
+
 ACCIONES DE CONTROL DE FORMULARIO DEL PROYECTO:
 Si el usuario te da una orden para modificar campos del proyecto (como cantidad, puertos, ritmos de carga/descarga), además de responder de forma conversacional como consultor, debes incluir al final de tu respuesta un bloque JSON oculto con esta estructura exacta para que la interfaz pueda actualizarse automáticamente:
 \`\`\`json-action
@@ -58,6 +77,55 @@ Tienes acceso en tiempo real a los datos que el usuario está operando, pero con
 - NUNCA expongas el JSON crudo en tu respuesta.
 
 Contexto actual del proyecto: ${pContext}`;
+}
+
+export function extractStructuredAction(responseText: string): {
+  action: string;
+  payload: any;
+  cleanedText: string;
+} {
+  let action = "none";
+  let payload: any = {};
+  let cleanedText = responseText;
+
+  if (!responseText || typeof responseText !== 'string') {
+    return { action, payload, cleanedText: "" };
+  }
+
+  // Robust regex to capture any JSON code block (```json, ```json-action, or ```)
+  const jsonCodeBlockRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?\})\s*```/i;
+  const match = responseText.match(jsonCodeBlockRegex);
+
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (parsed && typeof parsed === 'object') {
+        action = parsed.action || "none";
+        payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        cleanedText = responseText.replace(match[0], '').trim();
+        return { action, payload, cleanedText };
+      }
+    } catch (parseErr) {
+      console.warn("[project-chat] Failed to parse JSON code block:", parseErr);
+    }
+  }
+
+  // Fallback: search for unfenced JSON with action if no code fence matched
+  const rawJsonRegex = /\{[\s\S]*?"action"\s*:\s*"([a-zA-Z0-9_-]+)"[\s\S]*?\}/i;
+  const rawMatch = responseText.match(rawJsonRegex);
+  if (rawMatch) {
+    try {
+      const parsed = JSON.parse(rawMatch[0].trim());
+      if (parsed && typeof parsed === 'object') {
+        action = parsed.action || "none";
+        payload = parsed.payload !== undefined ? parsed.payload : (parsed.data !== undefined ? parsed.data : parsed);
+        cleanedText = responseText.replace(rawMatch[0], '').trim();
+        return { action, payload, cleanedText };
+      }
+    } catch {}
+  }
+
+  return { action, payload, cleanedText };
 }
 
 export function buildGeminiHistory(historyEntries: any[] = []): Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> {
@@ -341,29 +409,21 @@ export async function handler(eventOrRequest: any, context?: any): Promise<Respo
     const result = await chat.sendMessage(partsToSend);
     let { responseText, groundingMetadata } = processGroundedResponse(result.response);
 
-    // Detect structured json-action block if emitted by model
-    let structuredAction: any = null;
-    const jsonActionRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?"action"\s*:\s*"update_form"[\s\S]*?\})\s*```/i;
-    const match = responseText.match(jsonActionRegex);
-    if (match && match[1]) {
-      try {
-        structuredAction = JSON.parse(match[1]);
-      } catch (parseErr) {
-        console.warn("[project-chat] Failed to parse json-action block:", parseErr);
-      }
-    }
-
-    const payload = structuredAction?.data || {};
+    // Extract structured JSON action if emitted by model, and clean conversational text
+    const { action, payload, cleanedText } = extractStructuredAction(responseText);
+    const finalReply = cleanedText || (action === 'add_packing_list_item' ? 'He añadido las piezas a la Lista de Empaque.' : (action === 'update_form' ? 'He actualizado los datos del proyecto.' : responseText));
 
     return new Response(JSON.stringify({
       success: true,
-      reply: responseText,
-      text: responseText,
-      respuesta: responseText,
-      action: structuredAction?.action || "none",
+      reply: finalReply,
+      text: finalReply,
+      respuesta: finalReply,
+      action: action,
       payload: payload,
       groundingMetadata: groundingMetadata || null,
-      intent: structuredAction ? "UPDATE_PROJECT_FORM" : "PROJECT_CONSULTANT"
+      intent: action === 'add_packing_list_item'
+        ? 'ADD_PACKING_LIST_ITEM'
+        : (action === 'update_form' ? 'UPDATE_PROJECT_FORM' : (action !== 'none' ? action.toUpperCase() : 'PROJECT_CONSULTANT'))
     }), { status: 200, headers });
 
   } catch (error) {

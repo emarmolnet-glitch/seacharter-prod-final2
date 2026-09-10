@@ -8,6 +8,8 @@ export default function AgenteProyectosWidget({
   onToggleOpen,
   cargoItems = [],
   items = null,
+  setCargoItems,
+  setPackingList,
   financialData = null,
   financialBreakdown = null,
   charteringAssessment = null,
@@ -128,6 +130,25 @@ REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
 2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
 3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
 
+REGLA DE AUTOMATIZACIÓN DE INTERFAZ (OBLIGATORIA):
+Si el usuario te pide añadir mercancía, dimensiones, pesos o actualizar rutas, DEBES incluir al final de tu respuesta un bloque de código JSON estándar que el sistema leerá. 
+
+Ejemplo para añadir piezas a la Lista de Empaque:
+\`\`\`json
+{
+  "action": "add_packing_list_item",
+  "payload": {
+    "category": "Mercancía General / Paletizada",
+    "type": "Big Bags Cemento",
+    "quantity": 6666,
+    "length": 1.15,
+    "width": 1.10,
+    "height": 1.0,
+    "unitWeight": 1500
+  }
+}
+\`\`\`
+
 CONTEXTO EN VIVO DEL PROYECTO (USO INTERNO):
 Tienes acceso en tiempo real a los datos que el usuario está operando, pero consúltalos solo cuando te hagan una pregunta técnica o financiera:
 - Para consultas financieras, márgenes o viabilidad, evalúa la sección 'financials'.
@@ -156,14 +177,23 @@ Contexto actual del proyecto: ${projectContext}`;
       let rawReply = data.reply || data.respuesta || data.text || (data.error ? `⚠️ ${data.error}` : 'No se pudo obtener respuesta del consultor.');
 
       // Procesar bloque json-action para actualizar la interfaz automáticamente
+      let actionType = data.action || 'none';
       let actionData = data.payload || null;
-      const jsonActionRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?"action"\s*:\s*"update_form"[\s\S]*?\})\s*```/i;
+      let actionPayload = data.payload || null;
+      const jsonActionRegex = /```(?:json-action|json)?\s*(\{[\s\S]*?\})\s*```/i;
       const match = rawReply.match(jsonActionRegex);
 
       if (match && match[1]) {
         try {
           const parsedAction = JSON.parse(match[1]);
-          if (parsedAction.data) {
+          if (parsedAction.action) {
+            actionType = parsedAction.action;
+          }
+          if (parsedAction.payload) {
+            actionPayload = parsedAction.payload;
+            actionData = parsedAction.payload;
+          } else if (parsedAction.data) {
+            actionPayload = parsedAction.data;
             actionData = parsedAction.data;
           }
         } catch (err) {
@@ -173,13 +203,51 @@ Contexto actual del proyecto: ${projectContext}`;
 
       // Limpiar el texto mostrado al usuario eliminando el bloque json-action
       const cleanReply = rawReply.replace(jsonActionRegex, '').trim();
-      const userDisplayReply = cleanReply || 'He actualizado los campos del proyecto según lo indicado.';
+      const userDisplayReply = cleanReply || (actionType === 'add_packing_list_item' ? 'He añadido las piezas a la Lista de Empaque.' : 'He actualizado los campos del proyecto según lo indicado.');
 
       setMessages(prev => [...prev, { sender: 'agent', text: userDisplayReply }]);
       speakMessage(userDisplayReply);
 
-      // Ejecutar la actualización de los campos del formulario del proyecto
-      if (actionData && onUpdatePayload) {
+      // Inyección y actualización reactiva para Lista de Empaque (Packing List)
+      if (actionType === 'add_packing_list_item' || data.action === 'add_packing_list_item') {
+        const itemPayload = actionPayload || data.payload || {};
+        const qty = Number(itemPayload.quantity) || 1;
+        const unitWeight = Number(itemPayload.unitWeight ?? itemPayload.weight ?? 1500);
+        const totalWeightKg = qty * unitWeight;
+        const isBigBags = /bag|big[- ]?bag|saco|cemento|clinker|grano/i.test(itemPayload.type || itemPayload.category || '');
+
+        const newPackingItem = {
+          id: itemPayload.id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          category: itemPayload.category || (isBigBags ? 'Big Bags' : 'Mercancía General / Paletizada'),
+          type: itemPayload.type || itemPayload.name || 'Big Bags Cemento',
+          quantity: qty,
+          length: itemPayload.length != null ? Number(itemPayload.length) : 1.15,
+          width: itemPayload.width != null ? Number(itemPayload.width) : 1.10,
+          height: itemPayload.height != null ? Number(itemPayload.height) : 1.0,
+          weight: unitWeight,
+          unitWeight: unitWeight,
+          shipping_mode_supported: totalWeightKg >= 40000 ? 'Break Bulk / Proyecto' : "Contenedor (FCL / LCL)"
+        };
+
+        // Inyecta directamente en el estado de la Lista de Empaque (setPackingList o similar)
+        if (typeof setPackingList === 'function') {
+          setPackingList(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
+        } else if (typeof setCargoItems === 'function') {
+          setCargoItems(prev => [...(Array.isArray(prev) ? prev : []), newPackingItem]);
+        }
+
+        if (onUpdatePayload) {
+          onUpdatePayload({
+            action: 'add_packing_list_item',
+            payload: itemPayload,
+            item: newPackingItem,
+            newItem: newPackingItem,
+            items: [...currentProjectItems, newPackingItem],
+            forceOpenModal: true,
+            ...itemPayload
+          });
+        }
+      } else if (actionData && onUpdatePayload) {
         onUpdatePayload({
           action: 'update_form',
           pol: actionData.portOfLoading,
@@ -249,6 +317,25 @@ REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
 1. LIBERTAD ESTRATÉGICA Y CONVERSACIONAL: Habla de tú a tú con el usuario. Tienes permiso absoluto para debatir, opinar, aconsejar sobre negociaciones con clientes, analizar tendencias macroeconómicas (ej. impacto del precio del combustible en fletes) o buscar cualquier dato en la web en tiempo real.
 2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
 3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
+
+REGLA DE AUTOMATIZACIÓN DE INTERFAZ (OBLIGATORIA):
+Si el usuario te pide añadir mercancía, dimensiones, pesos o actualizar rutas, DEBES incluir al final de tu respuesta un bloque de código JSON estándar que el sistema leerá. 
+
+Ejemplo para añadir piezas a la Lista de Empaque:
+\`\`\`json
+{
+  "action": "add_packing_list_item",
+  "payload": {
+    "category": "Mercancía General / Paletizada",
+    "type": "Big Bags Cemento",
+    "quantity": 6666,
+    "length": 1.15,
+    "width": 1.10,
+    "height": 1.0,
+    "unitWeight": 1500
+  }
+}
+\`\`\`
 
 CONTEXTO EN VIVO DEL PROYECTO (USO INTERNO):
 Tienes acceso en tiempo real a los datos que el usuario está operando, pero consúltalos solo cuando te hagan una pregunta técnica o financiera:
