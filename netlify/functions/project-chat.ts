@@ -36,6 +36,9 @@ REGLAS DE COMPORTAMIENTO Y PERSONALIDAD:
 2. OPINIÓN CRÍTICA Y ASESORAMIENTO: Si el usuario te pregunta "¿qué opinas de este croquis?" o "¿debería informar al cliente de esta subida?", no te limites a repetir datos. Analiza la situación, cruza la información con la web si es necesario, y da tu recomendación profesional como un bróker senior.
 3. TONO NATURAL: Responde de forma directa, analítica y fluida. Usa formato markdown para estructurar ideas complejas, manteniendo un tono de diálogo abierto y proactivo.
 
+REGLA DE FORMATO DE FUENTES (BÚSQUEDA WEB): 
+Cuando consultes información en internet, NUNCA incluyas URLs crudas, enlaces HTTP, ni metadatos de redirección en tu respuesta. Si debes citar de dónde has sacado el dato, menciona ÚNICAMENTE el nombre del sitio web en texto plano (por ejemplo: "Según Rome2Rio..." o "Fuente: Reuters"). La respuesta debe ser 100% conversacional y limpia.
+
 REGLA DE AUTOMATIZACIÓN DE INTERFAZ (OBLIGATORIA):
 Si el usuario te pide añadir mercancía, dimensiones, pesos o actualizar rutas, DEBES incluir al final de tu respuesta un bloque de código JSON estándar que el sistema leerá. 
 
@@ -249,34 +252,9 @@ export function processGroundedResponse(response: any): { responseText: string; 
   }
 
   const candidate = response?.candidates?.[0];
-  const groundingMetadata = candidate?.groundingMetadata;
-  if (groundingMetadata?.groundingChunks?.length > 0) {
-    const webSources = groundingMetadata.groundingChunks
-      .map((chunk: any) => chunk?.web)
-      .filter((web: any) => Boolean(web?.uri && web?.title));
+  const groundingMetadata = candidate?.groundingMetadata || null;
 
-    if (webSources.length > 0) {
-      const seenUris = new Set<string>();
-      const uniqueSources: Array<{ uri: string; title: string }> = [];
-      for (const source of webSources) {
-        if (!seenUris.has(source.uri)) {
-          seenUris.add(source.uri);
-          uniqueSources.push(source);
-        }
-      }
-
-      const hasExistingLinks = uniqueSources.some((src) => responseText.includes(src.uri));
-      if (!hasExistingLinks && uniqueSources.length > 0) {
-        const sourcesMarkdown = uniqueSources
-          .slice(0, 5)
-          .map((src) => `- [${src.title}](${src.uri})`)
-          .join("\n");
-        responseText += `\n\n**Fuentes consultadas en tiempo real:**\n${sourcesMarkdown}`;
-      }
-    }
-  }
-
-  return { responseText, groundingMetadata: groundingMetadata || null };
+  return { responseText, groundingMetadata };
 }
 
 export function extractFileParts(body: any): Array<Part> {
@@ -462,7 +440,11 @@ export async function handler(eventOrRequest: any, context?: any): Promise<Respo
     const requestOptions = baseUrl ? { baseUrl } : undefined;
 
     const projectContext = formatProjectContext(body);
-    const systemInstruction = body.systemInstruction || buildAgenteProyectosSystemInstruction(projectContext);
+    const systemInstruction = body.systemInstruction
+      ? (body.systemInstruction.includes('REGLA DE FORMATO DE FUENTES (BÚSQUEDA WEB)')
+          ? body.systemInstruction
+          : `${body.systemInstruction}\n\nREGLA DE FORMATO DE FUENTES (BÚSQUEDA WEB): \nCuando consultes información en internet, NUNCA incluyas URLs crudas, enlaces HTTP, ni metadatos de redirección en tu respuesta. Si debes citar de dónde has sacado el dato, menciona ÚNICAMENTE el nombre del sitio web en texto plano (por ejemplo: "Según Rome2Rio..." o "Fuente: Reuters"). La respuesta debe ser 100% conversacional y limpia.`)
+      : buildAgenteProyectosSystemInstruction(projectContext);
 
     // Extract any file parts (if empty/missing, text order runs with complete normality)
     const fileParts = extractFileParts(body);
