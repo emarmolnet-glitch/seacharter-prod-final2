@@ -1687,6 +1687,14 @@ export function ForwarderWorkspace() {
       }
     }
 
+    if (payload.action === 'update_route_rates' || payload.update_route_rates) {
+      const rp = payload.payload || payload;
+      if (rp.pol || rp.portOfLoading) { setPol(rp.pol || rp.portOfLoading); hasChanges = true; }
+      if (rp.pod || rp.portOfDischarge) { setPod(rp.pod || rp.portOfDischarge); hasChanges = true; }
+      if (rp.loadingRate != null || rp.loadingRateMtDay != null) { setLoadingRate(Number(rp.loadingRate ?? rp.loadingRateMtDay)); hasChanges = true; }
+      if (rp.dischargeRate != null || rp.dischargingRate != null || rp.dischargingRateMtDay != null) { setDischargingRate(Number(rp.dischargeRate ?? rp.dischargingRate ?? rp.dischargingRateMtDay)); hasChanges = true; }
+    }
+
     if (payload.pol || payload.portOfLoading) { setPol(payload.pol || payload.portOfLoading); hasChanges = true; }
     if (payload.pod || payload.portOfDischarge) { setPod(payload.pod || payload.portOfDischarge); hasChanges = true; }
     if (payload.loadingRate || payload.loadingRateMtDay) {
@@ -4261,6 +4269,11 @@ export function ForwarderWorkspace() {
         items={cargoItems}
         setCargoItems={setCargoItems}
         setPackingList={setCargoItems}
+        setPol={setPol}
+        setPod={setPod}
+        setLoadingRate={setLoadingRate}
+        setDischargeRate={setDischargingRate}
+        setDischargingRate={setDischargingRate}
         charteringAssessment={charteringAssessment}
         routeData={{ pol, pod, loadingRate, dischargingRate, distanceNm, actualLoadingDays, actualDischargingDays, demurrageDailyRateUsd }}
         financialData={{ subtotalFreight, subtotalFobOperations, estimatedCost, salePrice }}
