@@ -20,7 +20,10 @@ export default async function proxyRequest(request) {
         
         const fetchOptions = {
             method: request.method,
-            headers: {},
+            headers: {
+                // INYECCIÓN DE CONTEXTO: Le decimos a Data Bridge que somos de barcos
+                "X-App-Context": "maritime"
+            },
         };
 
         if (contentType) {
