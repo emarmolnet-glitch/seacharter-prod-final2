@@ -48,6 +48,86 @@
         }
     }
 
+    function extractCurrentPortGeographicState() {
+        if (!globalObject.document) return {};
+        try {
+            const doc = globalObject.document;
+            const state = globalObject.State || {};
+            const polName = (doc.getElementById('map-port-pol')?.value || doc.getElementById('port-pol')?.value || state.pol || state.portPol || '').trim();
+            const podName = (doc.getElementById('map-port-pod')?.value || doc.getElementById('port-pod')?.value || state.pod || state.portPod || '').trim();
+            const ballastName = (doc.getElementById('map-port-ballast')?.value || doc.getElementById('port-ballast')?.value || state.portBallast || '').trim();
+            const laydaysStart = (doc.getElementById('map-laycan-date')?.value || doc.getElementById('laycan-date')?.value || state.laydaysDate || state.laydays || '').trim();
+            const cancelling = (doc.getElementById('map-cancelling-date')?.value || doc.getElementById('cancelling-date')?.value || state.cancellingDate || state.cancelling || '').trim();
+            const vesselName = (doc.getElementById('vessel-name')?.value || state.vesselName || globalObject.currentSelectedVesselName || '').trim();
+            const imo = (doc.getElementById('vessel-imo')?.value || state.imo || globalObject.currentSelectedVesselImo || '').trim();
+            const cargoName = (doc.getElementById('cargo-name')?.value || state.cargoName || '').trim();
+            const cargoQty = parseFloat(doc.getElementById('cargo-quantity')?.value || state.cargoQuantity || 0) || 0;
+
+            let polLat = parseFloat(doc.getElementById('match-load-lat')?.value || '') || 0;
+            let polLng = parseFloat(doc.getElementById('match-load-lon')?.value || '') || 0;
+            let podLat = parseFloat(doc.getElementById('match-discharge-lat')?.value || '') || 0;
+            let podLng = parseFloat(doc.getElementById('match-discharge-lon')?.value || '') || 0;
+
+            if (globalObject.activeMaritimeRoute?.coordinates) {
+                const cPol = globalObject.activeMaritimeRoute.coordinates.pol;
+                const cPod = globalObject.activeMaritimeRoute.coordinates.pod;
+                if (!polLat && cPol) polLat = Number(cPol.lat ?? cPol.latitude) || 0;
+                if (!polLng && cPol) polLng = Number(cPol.lng ?? cPol.lon ?? cPol.longitude) || 0;
+                if (!podLat && cPod) podLat = Number(cPod.lat ?? cPod.latitude) || 0;
+                if (!podLng && cPod) podLng = Number(cPod.lng ?? cPod.lon ?? cPod.longitude) || 0;
+            }
+
+            const geo = {};
+            if (polName) {
+                geo.pol = polName;
+                geo.pol_name = polName;
+                geo.loadPortName = polName;
+                geo.load_port = polName;
+            }
+            if (podName) {
+                geo.pod = podName;
+                geo.pod_name = podName;
+                geo.dischargePortName = podName;
+                geo.discharge_port = podName;
+            }
+            if (ballastName) {
+                geo.ballast = ballastName;
+                geo.port_ballast = ballastName;
+            }
+            if (polLat) geo.pol_latitude = polLat;
+            if (polLng) geo.pol_longitude = polLng;
+            if (podLat) geo.pod_latitude = podLat;
+            if (podLng) geo.pod_longitude = podLng;
+            if (laydaysStart) {
+                geo.laydays_start_at = laydaysStart;
+                geo.laydaysStartAt = laydaysStart;
+            }
+            if (cancelling) {
+                geo.cancelling_at = cancelling;
+                geo.cancellingAt = cancelling;
+            }
+            if (vesselName) {
+                geo.vessel_name = vesselName;
+                geo.vesselName = vesselName;
+            }
+            if (imo) {
+                geo.imo_number = imo;
+                geo.imoNumber = imo;
+            }
+            if (cargoName) {
+                geo.cargo_name = cargoName;
+                geo.cargoName = cargoName;
+            }
+            if (cargoQty) {
+                geo.cargo_quantity_mt = cargoQty;
+                geo.cargoQuantityMt = cargoQty;
+            }
+            return geo;
+        } catch (_err) {
+            return {};
+        }
+    }
+
     function persistSessionToDatabase(reference, extraPayload, immediate = false) {
         const normalized = normalizeReference(reference) || getCurrentReference();
         if (!normalized) return Promise.resolve(null);
@@ -70,6 +150,7 @@
             if (typeof globalObject.fetch !== 'function') return Promise.resolve(null);
 
             isSaving = true;
+            const geoState = extractCurrentPortGeographicState();
             const payload = {
                 id: 'current_session',
                 key: 'current_session',
@@ -77,10 +158,54 @@
                 currentSessionRef: normalized,
                 reference: normalized,
                 timestamp: Date.now(),
+                ...geoState,
                 ...(extraPayload && typeof extraPayload === 'object' ? extraPayload : {})
             };
 
             const getApiUrl = globalObject.getApiUrl || function(url) { return url; };
+
+            // Direct structural UPSERT to session_sync if geographic ports are present
+            if (payload.pol || payload.pod) {
+                try {
+                    const sessionSyncPayload = {
+                        user_id: '1c8db801b-b053-4847-bbc4-edd7d0abbe0e',
+                        sync_id: normalized,
+                        last_action_module: 'CORE_PRO_MATCHING',
+                        last_sync_data: {
+                            format: 'v2',
+                            syncId: normalized,
+                            reference: normalized,
+                            pol: payload.pol || payload.pol_name || '',
+                            pod: payload.pod || payload.pod_name || '',
+                            pol_name: payload.pol_name || payload.pol || '',
+                            pod_name: payload.pod_name || payload.pod || '',
+                            load_port: payload.pol_name || payload.pol || '',
+                            discharge_port: payload.pod_name || payload.pod || '',
+                            pol_latitude: payload.pol_latitude || 0,
+                            pol_longitude: payload.pol_longitude || 0,
+                            pod_latitude: payload.pod_latitude || 0,
+                            pod_longitude: payload.pod_longitude || 0,
+                            laydays_start_at: payload.laydays_start_at || payload.laydaysStartAt || null,
+                            cancelling_at: payload.cancelling_at || payload.cancellingAt || null,
+                            vessel_name: payload.vessel_name || payload.vesselName || '',
+                            imo_number: payload.imo_number || payload.imoNumber || '',
+                            cargo_name: payload.cargo_name || payload.cargoName || '',
+                            cargo_quantity_mt: payload.cargo_quantity_mt || payload.cargoQuantityMt || 0,
+                            vessels: [],
+                            updated_at: new Date().toISOString()
+                        }
+                    };
+                    globalObject.fetch(getApiUrl('/api/session-sync'), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(sessionSyncPayload)
+                    }).catch(function() {});
+                } catch (_) {}
+            }
+
             return globalObject.fetch(getApiUrl('/api/app-state'), {
                 method: 'POST',
                 headers: {

@@ -60,7 +60,94 @@ export default async (request: Request, context: Context) => {
           .orderBy(desc(voyagesTracking.updatedAt))
           .limit(1);
 
-    const voyage = rows[0];
+    let voyage = rows[0];
+
+    // Fallback estructural: si voyages_tracking no tiene el viaje o carece de puertos,
+    // recuperar desde charter_dossiers, session_sync o app_state
+    if (!voyage || (!voyage.loadPortName && !voyage.dischargePortName)) {
+      try {
+        const { getPool } = await import("../../db/index.js");
+        const pool = getPool();
+        const targetRef = contractRef || "";
+        let fallbackPol = "";
+        let fallbackPod = "";
+        let fallbackRef = targetRef;
+        let fallbackVessel = "TBA VESSEL";
+        let fallbackCargo = "General Cargo";
+        let fallbackVolume = 0;
+
+        if (targetRef) {
+          const dossierRes = await pool.query(
+            `SELECT pol, pod, reference, cargo_name, cargo_volume, updated_at FROM charter_dossiers WHERE upper(reference) = $1 LIMIT 1`,
+            [targetRef]
+          );
+          if (dossierRes.rows[0]) {
+            fallbackPol = dossierRes.rows[0].pol || "";
+            fallbackPod = dossierRes.rows[0].pod || "";
+            fallbackRef = dossierRes.rows[0].reference || targetRef;
+            if (dossierRes.rows[0].cargo_name) fallbackCargo = dossierRes.rows[0].cargo_name;
+            if (Number(dossierRes.rows[0].cargo_volume) > 0) fallbackVolume = Number(dossierRes.rows[0].cargo_volume);
+          }
+        }
+
+        if (!fallbackPol && !fallbackPod) {
+          const syncRes = targetRef
+            ? await pool.query(
+                `SELECT sync_id, last_sync_data FROM session_sync WHERE upper(sync_id) = $1 LIMIT 1`,
+                [targetRef]
+              )
+            : await pool.query(
+                `SELECT sync_id, last_sync_data FROM session_sync ORDER BY updated_at DESC LIMIT 1`
+              );
+          if (syncRes.rows[0]) {
+            const syncData = (syncRes.rows[0].last_sync_data || {}) as Record<string, any>;
+            fallbackPol = syncData.pol || syncData.pol_name || syncData.load_port || syncData.loadPortName || "";
+            fallbackPod = syncData.pod || syncData.pod_name || syncData.discharge_port || syncData.dischargePortName || "";
+            fallbackRef = syncRes.rows[0].sync_id || targetRef;
+            if (syncData.vessel_name) fallbackVessel = syncData.vessel_name;
+            if (syncData.cargo_name) fallbackCargo = syncData.cargo_name;
+            if (Number(syncData.cargo_quantity_mt) > 0) fallbackVolume = Number(syncData.cargo_quantity_mt);
+          }
+        }
+
+        if (!fallbackPol && !fallbackPod) {
+          const appStateRes = await pool.query(
+            `SELECT value, session_ref FROM app_state WHERE key = 'core_pro_active_session' LIMIT 1`
+          );
+          if (appStateRes.rows[0]) {
+            fallbackRef = appStateRes.rows[0].value || appStateRes.rows[0].session_ref || targetRef;
+          }
+        }
+
+        if (fallbackPol || fallbackPod || fallbackRef) {
+          voyage = {
+            reference: voyage?.reference || fallbackRef || "RDM/2026-ACTIVE",
+            vesselName: voyage?.vesselName || fallbackVessel,
+            imo: voyage?.imo || null,
+            mmsi: voyage?.mmsi || null,
+            cargoType: voyage?.cargoType || fallbackCargo,
+            cargoQty: voyage?.cargoQty || fallbackVolume,
+            loadPortCode: voyage?.loadPortCode || null,
+            loadPortName: voyage?.loadPortName || fallbackPol || "POL",
+            loadPortLatitude: voyage?.loadPortLatitude || 0,
+            loadPortLongitude: voyage?.loadPortLongitude || 0,
+            dischargePortCode: voyage?.dischargePortCode || null,
+            dischargePortName: voyage?.dischargePortName || fallbackPod || "POD",
+            dischargePortLatitude: voyage?.dischargePortLatitude || 0,
+            dischargePortLongitude: voyage?.dischargePortLongitude || 0,
+            laydaysStartAt: voyage?.laydaysStartAt || null,
+            cancellingAt: voyage?.cancellingAt || null,
+            operationalPhase: voyage?.operationalPhase || "APPROACHING_POL",
+            currentPhase: voyage?.currentPhase || 1,
+            routeProgressPct: voyage?.routeProgressPct || 0,
+            updatedAt: voyage?.updatedAt || new Date(),
+          };
+        }
+      } catch (fallbackError) {
+        console.warn("[voyage-active] Fallback lookup warning:", fallbackError);
+      }
+    }
+
     if (!voyage) {
       return Response.json({ error: "No existe un viaje activo." }, { status: 404 });
     }

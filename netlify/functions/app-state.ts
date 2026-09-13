@@ -482,6 +482,155 @@ export default async (req: Request) => {
 
     const persisted = result.rows[0];
 
+    // ---------------------------------------------------------
+    // UPSERT estructural de datos de viaje (POL/POD) en Neon DB
+    // ---------------------------------------------------------
+    const pol = String(parsedBody.pol || parsedBody.pol_name || parsedBody.loadPortName || parsedBody.load_port || parsedBody.loadPort || "").trim();
+    const pod = String(parsedBody.pod || parsedBody.pod_name || parsedBody.dischargePortName || parsedBody.discharge_port || parsedBody.dischargePort || "").trim();
+    const polLat = Number(parsedBody.pol_latitude ?? parsedBody.polLatitude ?? parsedBody.pol_lat ?? 0);
+    const polLng = Number(parsedBody.pol_longitude ?? parsedBody.polLongitude ?? parsedBody.pol_lng ?? parsedBody.pol_lon ?? 0);
+    const podLat = Number(parsedBody.pod_latitude ?? parsedBody.podLatitude ?? parsedBody.pod_lat ?? 0);
+    const podLng = Number(parsedBody.pod_longitude ?? parsedBody.podLongitude ?? parsedBody.pod_lng ?? parsedBody.pod_lon ?? 0);
+    const vesselName = String(parsedBody.vessel_name || parsedBody.vesselName || "TBA VESSEL").trim();
+    const imoNumber = String(parsedBody.imo_number || parsedBody.imoNumber || parsedBody.imo || "").trim();
+    const cargoName = String(parsedBody.cargo_name || parsedBody.cargoName || "General Cargo").trim();
+    const cargoQty = Number(parsedBody.cargo_quantity_mt ?? parsedBody.cargoQuantityMt ?? parsedBody.cargoQty ?? 0);
+    const laydaysStart = parsedBody.laydays_start_at || parsedBody.laydaysStartAt ? new Date(String(parsedBody.laydays_start_at || parsedBody.laydaysStartAt)) : null;
+    const cancelling = parsedBody.cancelling_at || parsedBody.cancellingAt ? new Date(String(parsedBody.cancelling_at || parsedBody.cancellingAt)) : null;
+
+    if (currentSessionRef && (pol || pod)) {
+      // 1. UPSERT estructural en voyages_tracking
+      try {
+        await pool.query(
+          `INSERT INTO voyages_tracking (
+            contract_ref,
+            pol_name,
+            pol_code,
+            pol_latitude,
+            pol_longitude,
+            pod_name,
+            pod_code,
+            pod_latitude,
+            pod_longitude,
+            laydays_start_at,
+            cancelling_at,
+            vessel_name,
+            imo_number,
+            cargo_name,
+            cargo_quantity_mt,
+            current_status,
+            current_phase,
+            route_progress_pct,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'APPROACHING_POL', 1, 0, NOW())
+          ON CONFLICT ((upper(contract_ref))) DO UPDATE
+          SET pol_name = COALESCE(NULLIF(EXCLUDED.pol_name, ''), voyages_tracking.pol_name),
+              pol_code = COALESCE(EXCLUDED.pol_code, voyages_tracking.pol_code),
+              pol_latitude = CASE WHEN EXCLUDED.pol_latitude <> 0 THEN EXCLUDED.pol_latitude ELSE voyages_tracking.pol_latitude END,
+              pol_longitude = CASE WHEN EXCLUDED.pol_longitude <> 0 THEN EXCLUDED.pol_longitude ELSE voyages_tracking.pol_longitude END,
+              pod_name = COALESCE(NULLIF(EXCLUDED.pod_name, ''), voyages_tracking.pod_name),
+              pod_code = COALESCE(EXCLUDED.pod_code, voyages_tracking.pod_code),
+              pod_latitude = CASE WHEN EXCLUDED.pod_latitude <> 0 THEN EXCLUDED.pod_latitude ELSE voyages_tracking.pod_latitude END,
+              pod_longitude = CASE WHEN EXCLUDED.pod_longitude <> 0 THEN EXCLUDED.pod_longitude ELSE voyages_tracking.pod_longitude END,
+              laydays_start_at = COALESCE(EXCLUDED.laydays_start_at, voyages_tracking.laydays_start_at),
+              cancelling_at = COALESCE(EXCLUDED.cancelling_at, voyages_tracking.cancelling_at),
+              vessel_name = COALESCE(NULLIF(EXCLUDED.vessel_name, ''), voyages_tracking.vessel_name),
+              imo_number = COALESCE(NULLIF(EXCLUDED.imo_number, ''), voyages_tracking.imo_number),
+              cargo_name = COALESCE(NULLIF(EXCLUDED.cargo_name, ''), voyages_tracking.cargo_name),
+              cargo_quantity_mt = CASE WHEN EXCLUDED.cargo_quantity_mt > 0 THEN EXCLUDED.cargo_quantity_mt ELSE voyages_tracking.cargo_quantity_mt END,
+              updated_at = NOW()`,
+          [
+            currentSessionRef,
+            pol || "POL",
+            (parsedBody.pol_code || parsedBody.polCode || null) as string | null,
+            Number.isFinite(polLat) ? polLat : 0,
+            Number.isFinite(polLng) ? polLng : 0,
+            pod || "POD",
+            (parsedBody.pod_code || parsedBody.podCode || null) as string | null,
+            Number.isFinite(podLat) ? podLat : 0,
+            Number.isFinite(podLng) ? podLng : 0,
+            laydaysStart && !isNaN(laydaysStart.getTime()) ? laydaysStart : null,
+            cancelling && !isNaN(cancelling.getTime()) ? cancelling : null,
+            vesselName || "TBA VESSEL",
+            imoNumber || null,
+            cargoName || "General Cargo",
+            Number.isFinite(cargoQty) && cargoQty > 0 ? cargoQty : 0,
+          ]
+        );
+      } catch (voyageErr: any) {
+        console.warn("[app-state] Failed to upsert voyages_tracking:", voyageErr?.message);
+      }
+
+      // 2. UPSERT estructural en session_sync
+      try {
+        const sessionSyncData = {
+          format: "v2",
+          syncId: currentSessionRef,
+          reference: currentSessionRef,
+          pol,
+          pod,
+          pol_name: pol,
+          pod_name: pod,
+          load_port: pol,
+          discharge_port: pod,
+          pol_latitude: polLat,
+          pol_longitude: polLng,
+          pod_latitude: podLat,
+          pod_longitude: podLng,
+          laydays_start_at: laydaysStart && !isNaN(laydaysStart.getTime()) ? laydaysStart.toISOString() : null,
+          cancelling_at: cancelling && !isNaN(cancelling.getTime()) ? cancelling.toISOString() : null,
+          vessel_name: vesselName,
+          imo_number: imoNumber,
+          cargo_name: cargoName,
+          cargo_quantity_mt: cargoQty,
+          vessels: [],
+          updated_at: new Date().toISOString(),
+        };
+
+        await pool.query(
+          `INSERT INTO session_sync (user_id, sync_id, last_sync_data, last_action_module, updated_at)
+           VALUES ('1c8db801b-b053-4847-bbc4-edd7d0abbe0e', $1, $2::jsonb, 'CORE_PRO_MATCHING', NOW())
+           ON CONFLICT (user_id) DO UPDATE
+           SET sync_id = EXCLUDED.sync_id,
+               last_sync_data = session_sync.last_sync_data || EXCLUDED.last_sync_data,
+               last_action_module = EXCLUDED.last_action_module,
+               updated_at = NOW()`,
+          [currentSessionRef, JSON.stringify(sessionSyncData)]
+        );
+      } catch (syncErr: any) {
+        console.warn("[app-state] Failed to upsert session_sync:", syncErr?.message);
+      }
+
+      // 3. UPSERT estructural en charter_dossiers
+      try {
+        await pool.query(
+          `INSERT INTO charter_dossiers (account_key, reference, pol, pod, cargo_name, cargo_volume, status, session_payload, updated_at)
+           VALUES ('default-account', $1, $2, $3, $4, $5, 'BORRADOR', $6::jsonb, NOW())
+           ON CONFLICT (account_key, reference) DO UPDATE
+           SET pol = COALESCE(NULLIF(EXCLUDED.pol, ''), charter_dossiers.pol),
+               pod = COALESCE(NULLIF(EXCLUDED.pod, ''), charter_dossiers.pod),
+               cargo_name = COALESCE(NULLIF(EXCLUDED.cargo_name, ''), charter_dossiers.cargo_name),
+               cargo_volume = CASE WHEN EXCLUDED.cargo_volume > 0 THEN EXCLUDED.cargo_volume ELSE charter_dossiers.cargo_volume END,
+               session_payload = charter_dossiers.session_payload || EXCLUDED.session_payload,
+               updated_at = NOW()`,
+          [currentSessionRef, pol, pod, cargoName, cargoQty, JSON.stringify(parsedBody)]
+        );
+      } catch (dossierErr: any) {
+        console.warn("[app-state] Failed to upsert charter_dossiers:", dossierErr?.message);
+      }
+
+      // 4. Update forwarder_projects if exists
+      try {
+        await pool.query(
+          `UPDATE forwarder_projects
+           SET items = jsonb_set(COALESCE(items, '[]'::jsonb), '{0}', jsonb_build_object('pol', $2::text, 'pod', $3::text, 'reference', $1::text), true)
+           WHERE project_ref = $1`,
+          [currentSessionRef, pol, pod]
+        );
+      } catch (_) {}
+    }
+
     // Mirror to appConfig for legacy readers if table exists
     if (currentSessionRef) {
       try {
