@@ -387,3 +387,19 @@ export const clientApiUsage = pgTable("client_api_usage", {
   voyageReference: varchar("voyage_reference", { length: 255 }),
   createdAt: createdAt(),
 });
+
+export const forwarderProjects = pgTable("forwarder_projects", {
+  id: serial("id").primaryKey(),
+  projectRef: varchar("project_ref", { length: 255 }).unique(),
+  clientName: varchar("client_name", { length: 255 }),
+  status: varchar("status", { length: 50 }).default("Borrador"),
+  globalMarginPercentage: numeric("global_margin_percentage").default("15"),
+  documents: jsonb("documents").default([]),
+  items: jsonb("items").default([]),
+  landOrigin: varchar("land_origin", { length: 255 }),
+  landDestination: varchar("land_destination", { length: 255 }),
+  landDistance: numeric("land_distance"),
+  landFreightCost: numeric("land_freight_cost"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
