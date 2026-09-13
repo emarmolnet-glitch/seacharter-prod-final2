@@ -156,6 +156,7 @@
             const path = url.pathname;
             if (/^\/api\/route\/?$/i.test(path)) return 'routing';
             if (/^\/api\/get-bunker-prices\/?$/i.test(path)) return 'bunker-prices';
+            if (/^\/(?:api|\.netlify\/functions)\/cerebro-ia\/?$/i.test(path)) return 'cerebro-ai';
             if (/^\/(?:api|\.netlify\/functions)\/databridge-/i.test(path)) return 'databridge';
             if (/^\/(?:api|\.netlify\/functions)\/(?:get-vessels|vessels-filter|audit-vessels|matching-local|trigger-ais-sweep)\/?$/i.test(path)) return 'radar';
             return '';
