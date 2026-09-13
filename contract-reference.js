@@ -365,6 +365,78 @@
         return persistReference(generateNextVoyageRef(getActiveContractRef()), true);
     }
 
+    function extractCurrentVoyageReference() {
+        try {
+            const currentRef = getCurrentReference() || (typeof getActiveContractRef === 'function' ? getActiveContractRef() : '');
+            if (currentRef && String(currentRef).trim() && String(currentRef).trim() !== '—') {
+                return String(currentRef).trim();
+            }
+        } catch (_e) {}
+
+        try {
+            if (globalObject.document) {
+                const domCandidates = [
+                    globalObject.document.getElementById('contract-reference'),
+                    globalObject.document.getElementById('audit-contract-reference'),
+                    globalObject.document.getElementById('current-voyage-reference'),
+                    globalObject.document.getElementById('voyage-reference'),
+                    globalObject.document.getElementById('new-estimation-current-reference'),
+                    globalObject.document.getElementById('dossier-modal-reference'),
+                    globalObject.document.getElementById('databridge-session-badge'),
+                    globalObject.document.querySelector?.('[data-contract-reference]'),
+                    globalObject.document.querySelector?.('[data-voyage-reference]'),
+                    globalObject.document.querySelector?.('input[name="contract_ref"]'),
+                    globalObject.document.querySelector?.('input[name="reference"]')
+                ];
+                for (const el of domCandidates) {
+                    if (!el) continue;
+                    const val = (el.value || el.dataset?.reference || el.textContent || '').trim();
+                    if (!val || val === '—' || val === '-') continue;
+                    const match = val.match(/RDM\/[A-Z0-9_-]+/i);
+                    if (match) return match[0];
+                    const clean = val.replace(/^REF:\s*/i, '').trim();
+                    if (clean && clean !== '—') return clean;
+                }
+            }
+        } catch (_e) {}
+
+        return '';
+    }
+
+    function buildEcosystemUrl(baseUrl, currentReference) {
+        const rawRef = String(currentReference !== undefined ? (currentReference || '') : extractCurrentVoyageReference()).trim();
+        const cleanBase = baseUrl.replace(/\/?$/, '/');
+        if (!rawRef) {
+            return cleanBase;
+        }
+        return `${cleanBase}?ref=${encodeURI(rawRef)}`;
+    }
+
+    function handleEcosystemLinkClick(event, baseUrl) {
+        const currentReference = extractCurrentVoyageReference();
+        const targetUrl = buildEcosystemUrl(baseUrl, currentReference);
+        if (event?.currentTarget) {
+            event.currentTarget.setAttribute('href', targetUrl);
+            event.currentTarget.href = targetUrl;
+        }
+        if (typeof globalObject.closeMobileSessionMenu === 'function') {
+            setTimeout(globalObject.closeMobileSessionMenu, 0);
+        }
+    }
+
+    function updateEcosystemMenuLinks() {
+        if (!globalObject.document) return;
+        const currentRef = extractCurrentVoyageReference();
+        const dataBridgeLink = globalObject.document.getElementById('btn-toggle-databridge');
+        const landCharterLink = globalObject.document.getElementById('btn-open-land-charter');
+        if (dataBridgeLink) {
+            dataBridgeLink.setAttribute('href', buildEcosystemUrl('https://calm-shortbread-55bcfc.netlify.app/', currentRef));
+        }
+        if (landCharterLink) {
+            landCharterLink.setAttribute('href', buildEcosystemUrl('https://landchartercorepro.netlify.app/', currentRef));
+        }
+    }
+
     const contractReferenceManager = Object.freeze({
         SESSION_KEY,
         SHARED_STORAGE_KEY,
@@ -389,6 +461,10 @@
         setActiveContractRef,
         setInjectionLock,
         writeSharedActiveSession,
+        buildEcosystemUrl,
+        extractCurrentVoyageReference,
+        handleEcosystemLinkClick,
+        updateEcosystemMenuLinks,
     });
 
     globalObject.ContractRefManager = contractReferenceManager;
@@ -401,12 +477,17 @@
     globalObject.emitActiveSession = broadcastCoreSessionActive;
     globalObject.persistSessionToDatabase = persistSessionToDatabase;
     globalObject.saveSessionState = persistSessionToDatabase;
+    globalObject.extractCurrentVoyageReference = extractCurrentVoyageReference;
+    globalObject.buildEcosystemUrl = buildEcosystemUrl;
+    globalObject.handleEcosystemLinkClick = handleEcosystemLinkClick;
+    globalObject.updateEcosystemMenuLinks = updateEcosystemMenuLinks;
 
     function initializeOnMount() {
         if (isInitializedOnMount) return;
         isInitializedOnMount = true;
         getOrCreateSyncChannel();
         getActiveContractRef();
+        updateEcosystemMenuLinks();
     }
 
     try {

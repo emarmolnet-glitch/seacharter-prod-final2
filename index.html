@@ -746,7 +746,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
-    <script defer src="./contract-reference.js"></script>
+    <script defer src="/contract-reference.js"></script>
     <script defer src="./npl-data-analysis-engine.js"></script>
     <script defer src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
@@ -6125,6 +6125,7 @@
             font-size: 0.78rem !important;
             font-weight: 600 !important;
             text-align: left !important;
+            text-decoration: none !important;
             cursor: pointer !important;
         }
 
@@ -6133,6 +6134,7 @@
             background: #f8fafc !important;
             color: #003366 !important;
             outline: none !important;
+            text-decoration: none !important;
         }
 
         header .tools-dropdown-action.hidden {
@@ -8830,7 +8832,7 @@
                             <circle cx="12" cy="19" r="1.5" />
                         </svg>
                     </button>
-                    <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button')) setTimeout(closeMobileSessionMenu, 0);">
+                    <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button, a')) setTimeout(closeMobileSessionMenu, 0);">
                         <li class="tools-dropdown-item">
                             <button id="btn-market-report-nav" type="button" onclick="generateMarketReport(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Generar Reporte de Mercado Actual" aria-label="Generar Reporte de Mercado Actual">
                                 <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -8864,34 +8866,34 @@
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
-                            <button id="btn-toggle-databridge" onclick="openDataBridgeDashboard(); closeMobileSessionMenu();" class="hidden tools-dropdown-action" title="Abrir Data Bridge" aria-label="Abrir Data Bridge">
-                                <svg id="icon-toggle-databridge" class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <ellipse cx="12" cy="5" rx="7" ry="3" />
-                                    <path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5" />
-                                    <path d="M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" />
-                                    <path d="M12 14v3" />
-                                    <path d="M8 18.5l-2 2" />
-                                    <path d="M16 18.5l2 2" />
-                                </svg>
-                                <span class="inline-flex items-center gap-2">
-                                    <span id="databridge-connection-dot" class="hidden h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]" aria-hidden="true"></span>
-                                    <span>Data Bridge</span>
-	                                    <span id="databridge-http-polling" class="hidden items-center gap-1 text-[9px] font-black uppercase text-slate-500" role="status" aria-live="polite">
-	                                        <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i>
-	                                        <span data-databridge-transport-label>Bajo demanda</span>
-                                    </span>
-                                </span>
-                            </button>
+                            <a
+                                id="btn-toggle-databridge"
+                                href="https://calm-shortbread-55bcfc.netlify.app/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="tools-dropdown-action"
+                                title="Data Bridge"
+                                aria-label="Data Bridge"
+                                onclick="handleEcosystemLinkClick(event, 'https://calm-shortbread-55bcfc.netlify.app/')"
+                            >
+                                <span id="icon-toggle-databridge" class="hidden" style="display:none !important;" aria-hidden="true"></span>
+                                <span id="databridge-connection-dot" class="hidden" style="display:none !important;" aria-hidden="true"></span>
+                                <span>Data Bridge</span>
+                            </a>
                         </li>
                         <li class="tools-dropdown-item">
-                            <button id="btn-open-databridge-direct" type="button" class="tools-dropdown-action" title="Conectar Data Bridge" aria-label="Conectar Data Bridge">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M7 7h10v10" />
-                                    <path d="M7 17 17 7" />
-                                    <path d="M5 21h14a2 2 0 0 0 2-2V5" />
-                                </svg>
-                                <span>Data Bridge Link</span>
-                            </button>
+                            <a
+                                id="btn-open-land-charter"
+                                href="https://landchartercorepro.netlify.app/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="tools-dropdown-action"
+                                title="Land Charter Core PRO"
+                                aria-label="Land Charter Core PRO"
+                                onclick="handleEcosystemLinkClick(event, 'https://landchartercorepro.netlify.app/')"
+                            >
+                                <span>Land Charter Core PRO</span>
+                            </a>
                         </li>
                         <li class="tools-dropdown-item">
                             <button onclick="exitAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Salir" aria-label="Salir">
@@ -29536,6 +29538,9 @@ function createRouteAnchorElement(type) {
             const isOpen = menu.classList.toggle('is-open');
             if (legacyMenu) legacyMenu.classList.toggle('mobile-open', isOpen);
             if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen && typeof updateEcosystemMenuLinks === 'function') {
+                updateEcosystemMenuLinks();
+            }
         }
 
         document.addEventListener('click', function(event) {
@@ -64726,6 +64731,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
 	        document.addEventListener('DOMContentLoaded', async () => {
             const btn = document.getElementById('btn-toggle-databridge');
+            const landCharterLink = document.getElementById('btn-open-land-charter');
+            if (typeof updateEcosystemMenuLinks === 'function') {
+                updateEcosystemMenuLinks();
+            }
+            ['mouseenter', 'focusin', 'pointerdown'].forEach((evtType) => {
+                btn?.addEventListener(evtType, () => updateEcosystemMenuLinks());
+                landCharterLink?.addEventListener(evtType, () => updateEcosystemMenuLinks());
+            });
             const directLinkButton = document.getElementById('btn-open-databridge-direct');
             directLinkButton?.addEventListener('click', () => {
                 openDataBridgeLinkModal();
@@ -65131,9 +65144,131 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }));
         }
 
-        function openDataBridgeDashboard() {
-            window.open(DATA_BRIDGE_FRONTEND_URL, '_blank', 'noopener');
+        function extractCurrentVoyageReference() {
+            try {
+                const mgrRef = window.ContractRefManager?.getActiveContractRef?.() ||
+                               window.ContractReference?.getActiveContractRef?.() ||
+                               (typeof window.getActiveContractRef === 'function' ? window.getActiveContractRef() : null);
+                if (mgrRef && typeof mgrRef === 'string' && mgrRef.trim()) {
+                    const clean = mgrRef.trim();
+                    if (clean !== '—' && clean !== '-') return clean;
+                }
+            } catch (_e) {}
+
+            try {
+                if (typeof window !== 'undefined' && window.location?.search) {
+                    const params = new URLSearchParams(window.location.search);
+                    const urlRef = params.get('ref') || params.get('contract_ref') || params.get('reference') || params.get('target_session_id');
+                    if (urlRef && urlRef.trim()) return urlRef.trim();
+                }
+            } catch (_e) {}
+
+            try {
+                const sessionRef = window.sessionStorage?.getItem('active_contract_ref');
+                if (sessionRef && sessionRef.trim()) return sessionRef.trim();
+            } catch (_e) {}
+
+            try {
+                const localRef = window.localStorage?.getItem('active_contract_ref');
+                if (localRef && localRef.trim()) return localRef.trim();
+            } catch (_e) {}
+
+            try {
+                const sharedSession = window.localStorage?.getItem('active_core_pro_session');
+                if (sharedSession) {
+                    const parsed = JSON.parse(sharedSession);
+                    const ref = parsed?.reference || parsed?.target_session_id;
+                    if (ref && typeof ref === 'string' && ref.trim()) return ref.trim();
+                }
+            } catch (_e) {}
+
+            try {
+                const scState = window.SeaCharterStore?.getState?.();
+                const scRef = scState?.contractReference || scState?.contractRef || scState?.reference;
+                if (scRef && typeof scRef === 'string' && scRef.trim()) return scRef.trim();
+            } catch (_e) {}
+
+            try {
+                const draftState = window.VoyageDraftStore?.getState?.()?.draft;
+                const draftRef = draftState?.contractReference || draftState?.reference;
+                if (draftRef && typeof draftRef === 'string' && draftRef.trim()) return draftRef.trim();
+            } catch (_e) {}
+
+            try {
+                const domCandidates = [
+                    document.getElementById('contract-reference'),
+                    document.getElementById('audit-contract-reference'),
+                    document.getElementById('current-voyage-reference'),
+                    document.getElementById('voyage-reference'),
+                    document.getElementById('new-estimation-current-reference'),
+                    document.getElementById('dossier-modal-reference'),
+                    document.getElementById('databridge-session-badge'),
+                    document.querySelector('[data-contract-reference]'),
+                    document.querySelector('[data-voyage-reference]'),
+                    document.querySelector('input[name="contract_ref"]'),
+                    document.querySelector('input[name="reference"]')
+                ];
+                for (const el of domCandidates) {
+                    if (!el) continue;
+                    const val = (el.value || el.dataset?.reference || el.textContent || '').trim();
+                    if (!val || val === '—' || val === '-') continue;
+                    const match = val.match(/RDM\/[A-Z0-9_-]+/i);
+                    if (match) return match[0];
+                    const clean = val.replace(/^REF:\s*/i, '').trim();
+                    if (clean && clean !== '—') return clean;
+                }
+            } catch (_e) {}
+
+            return '';
         }
+        window.extractCurrentVoyageReference = extractCurrentVoyageReference;
+
+        function buildEcosystemUrl(baseUrl, currentReference) {
+            const rawRef = String(currentReference !== undefined ? (currentReference || '') : extractCurrentVoyageReference()).trim();
+            const cleanBase = baseUrl.replace(/\/?$/, '/');
+            if (!rawRef) {
+                return cleanBase;
+            }
+            return `${cleanBase}?ref=${encodeURI(rawRef)}`;
+        }
+        window.buildEcosystemUrl = buildEcosystemUrl;
+
+        function handleEcosystemLinkClick(event, baseUrl) {
+            const currentReference = extractCurrentVoyageReference();
+            const targetUrl = buildEcosystemUrl(baseUrl, currentReference);
+            if (event?.currentTarget) {
+                event.currentTarget.setAttribute('href', targetUrl);
+                event.currentTarget.href = targetUrl;
+            }
+            if (typeof closeMobileSessionMenu === 'function') {
+                setTimeout(closeMobileSessionMenu, 0);
+            }
+        }
+        window.handleEcosystemLinkClick = handleEcosystemLinkClick;
+
+        function updateEcosystemMenuLinks() {
+            const currentRef = extractCurrentVoyageReference();
+            const dataBridgeLink = document.getElementById('btn-toggle-databridge');
+            const landCharterLink = document.getElementById('btn-open-land-charter');
+            if (dataBridgeLink) {
+                dataBridgeLink.setAttribute('href', buildEcosystemUrl('https://calm-shortbread-55bcfc.netlify.app/', currentRef));
+            }
+            if (landCharterLink) {
+                landCharterLink.setAttribute('href', buildEcosystemUrl('https://landchartercorepro.netlify.app/', currentRef));
+            }
+        }
+        window.updateEcosystemMenuLinks = updateEcosystemMenuLinks;
+
+        function openDataBridgeDashboard() {
+            const targetUrl = buildEcosystemUrl(DATA_BRIDGE_FRONTEND_URL);
+            window.open(targetUrl, '_blank', 'noopener');
+        }
+
+        function openLandCharterDashboard() {
+            const targetUrl = buildEcosystemUrl('https://landchartercorepro.netlify.app/');
+            window.open(targetUrl, '_blank', 'noopener');
+        }
+        window.openLandCharterDashboard = openLandCharterDashboard;
 
         export function openDataBridgeLinkModal() {
             const modal = document.getElementById('databridge-link-modal');
@@ -65335,10 +65470,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.toggleDataBridge = toggleDataBridge;
         window.openDataBridgeDashboard = openDataBridgeDashboard;
+        window.openLandCharterDashboard = openLandCharterDashboard;
+        window.updateEcosystemMenuLinks = updateEcosystemMenuLinks;
+        window.extractCurrentVoyageReference = extractCurrentVoyageReference;
+        window.buildEcosystemUrl = buildEcosystemUrl;
+        window.handleEcosystemLinkClick = handleEcosystemLinkClick;
         window.closeDataBridgeLinkModal = closeDataBridgeLinkModal;
         window.updateConnectionStatusBar = updateConnectionStatusBar;
         window.hideWebDataBridge = hideWebDataBridge;
         window.toggleWebDataBridgeFullScreen = toggleWebDataBridgeFullScreen;
+
+        window.addEventListener('contract-reference:changed', () => {
+            if (typeof updateEcosystemMenuLinks === 'function') updateEcosystemMenuLinks();
+        });
+        window.addEventListener('contract-reference:cleared', () => {
+            if (typeof updateEcosystemMenuLinks === 'function') updateEcosystemMenuLinks();
+        });
     </script>
 
     <!-- SeaCharter Calculations Engine Adjustments with IndexedDB cache (Diferido en idle) -->
