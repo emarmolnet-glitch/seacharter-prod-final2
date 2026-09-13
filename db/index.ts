@@ -330,6 +330,27 @@ export async function ensureApplicationSchema() {
       ON pda_estimations (estimation_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS pda_estimations_session_updated_idx
       ON pda_estimations (session_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS forwarder_projects (
+      id SERIAL PRIMARY KEY,
+      project_ref VARCHAR(255) UNIQUE,
+      client_name VARCHAR(255),
+      status VARCHAR(50) DEFAULT 'Borrador',
+      global_margin_percentage NUMERIC DEFAULT 15,
+      documents JSONB DEFAULT '[]'::jsonb,
+      items JSONB DEFAULT '[]'::jsonb,
+      land_origin VARCHAR(255),
+      land_destination VARCHAR(255),
+      land_distance NUMERIC,
+      land_freight_cost NUMERIC,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_origin VARCHAR(255);
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_destination VARCHAR(255);
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_distance NUMERIC;
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_cost NUMERIC;
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;
