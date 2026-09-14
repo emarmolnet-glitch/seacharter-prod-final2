@@ -1,5 +1,5 @@
 import type { Config } from "@netlify/functions";
-import { DatalasticPortError, findDatalasticPorts, getDatalasticPort } from "./_shared/datalastic-port-client.js";
+import { DatalasticPortError, resolvePortsWithFailover, getDatalasticPort } from "./_shared/datalastic-port-client.js";
 import { validatePortDraft } from "./_shared/draft-validation.js";
 import { getOrSetCachedJson } from "./_shared/response-cache.js";
 
@@ -69,7 +69,7 @@ export default async function validateDraftHandler(request: Request) {
         key: portName.toLowerCase(),
         ttlMs: 7 * 24 * 60 * 60 * 1000,
         staleTtlMs: 30 * 24 * 60 * 60 * 1000,
-        producer: () => findDatalasticPorts(portName),
+        producer: () => resolvePortsWithFailover(portName),
       });
       const finderPort = finderCache.value.find((candidate) => (
         (port.uuid && candidate.uuid === port.uuid)
