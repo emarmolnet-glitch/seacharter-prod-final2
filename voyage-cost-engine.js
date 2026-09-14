@@ -338,6 +338,10 @@
         );
 
         if (!hasVoyageDefinition) {
+            if (typeof root !== 'undefined') {
+                root.executiveOperationalTimes = null;
+                if (root.State) root.State.executiveOperationalTimes = null;
+            }
             setText('exec-operation-icon', '⚪');
             setText('exec-operation-status', 'OPERACIÓN PENDIENTE');
             setText('exec-pol', 'N/D');
@@ -379,6 +383,16 @@
         setText('exec-sell-freight', formatRate(calcResults.sellFreight));
         setText('exec-charterer-profit', formatMoney(calcResults.chartererProfit));
         setText('exec-spread-mt', `${formatMoney(toNumber(calcResults.sellFreight) - toNumber(calcResults.buyFreight), 2)} / MT`);
+
+        const execTimes = {
+            seaDays: toNumber(calcResults.seaDays),
+            portDays: toNumber(calcResults.portDays),
+            totalDays: toNumber(calcResults.totalDays),
+        };
+        if (typeof root !== 'undefined') {
+            root.executiveOperationalTimes = execTimes;
+            if (root.State) root.State.executiveOperationalTimes = execTimes;
+        }
 
         const riskLevel = ['BAJO', 'MODERADO', 'ALTO'].includes(riskData.riskLevel) ? riskData.riskLevel : 'BAJO';
         const riskElement = documentRef.getElementById('exec-risk-level');

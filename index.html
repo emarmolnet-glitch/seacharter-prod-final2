@@ -39765,6 +39765,13 @@ function scheduleReactiveEngine() {
                     projectCargoAssessment
                 }, operationalRisk);
             }
+            if (typeof window !== 'undefined') {
+                window.executiveOperationalTimes = {
+                    seaDays: T_sea,
+                    portDays: T_port,
+                    totalDays: totalDays
+                };
+            }
 
             // Actualizar el aviso de cumplimiento CBAM (encapsulado: nunca interrumpe el motor)
             if (typeof updateCBAMResult === 'function') {
