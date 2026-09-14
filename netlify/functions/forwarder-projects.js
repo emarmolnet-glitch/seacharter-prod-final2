@@ -37,6 +37,7 @@ async function ensureForwarderSchema() {
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_destination VARCHAR(255);
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_distance NUMERIC;
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_cost NUMERIC;
+      ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
     `);
     schemaEnsured = true;
   } catch (_err) {
@@ -71,6 +72,9 @@ exports.handler = async (event) => {
         const landDestination = data.land_destination !== undefined ? data.land_destination : null;
         const landDistance = data.land_distance !== undefined && data.land_distance !== null ? Number(data.land_distance) : null;
         const landFreightCost = data.land_freight_cost !== undefined && data.land_freight_cost !== null ? Number(data.land_freight_cost) : null;
+        const routeAndChartering = (data.route_and_chartering !== undefined && data.route_and_chartering !== null)
+          ? JSON.stringify(data.route_and_chartering)
+          : ((data.routeAndChartering !== undefined && data.routeAndChartering !== null) ? JSON.stringify(data.routeAndChartering) : null);
 
         const updateQuery = `
           UPDATE forwarder_projects 
@@ -82,7 +86,8 @@ exports.handler = async (event) => {
               land_origin = COALESCE($8, land_origin),
               land_destination = COALESCE($9, land_destination),
               land_distance = COALESCE($10, land_distance),
-              land_freight_cost = COALESCE($11, land_freight_cost)
+              land_freight_cost = COALESCE($11, land_freight_cost),
+              route_and_chartering = COALESCE($12::jsonb, route_and_chartering)
           WHERE id = $4 OR project_ref = $5
           RETURNING *;
         `;
@@ -99,7 +104,8 @@ exports.handler = async (event) => {
           landOrigin,
           landDestination,
           landDistance,
-          landFreightCost
+          landFreightCost,
+          routeAndChartering
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
         return {
@@ -132,14 +138,15 @@ exports.handler = async (event) => {
       ];
       const result = await pool.query(insertQuery, insertValues);
 
-      if (data.land_origin || data.land_destination || data.land_distance != null || data.land_freight_cost != null) {
+      if (data.land_origin || data.land_destination || data.land_distance != null || data.land_freight_cost != null || data.route_and_chartering || data.routeAndChartering) {
         try {
           const landUpdate = await pool.query(
             `UPDATE forwarder_projects
              SET land_origin = COALESCE($1, land_origin),
                  land_destination = COALESCE($2, land_destination),
                  land_distance = COALESCE($3, land_distance),
-                 land_freight_cost = COALESCE($4, land_freight_cost)
+                 land_freight_cost = COALESCE($4, land_freight_cost),
+                 route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
              WHERE id = $5
              RETURNING *;`,
             [
@@ -147,7 +154,8 @@ exports.handler = async (event) => {
               data.land_destination || null,
               data.land_distance != null ? Number(data.land_distance) : null,
               data.land_freight_cost != null ? Number(data.land_freight_cost) : null,
-              result.rows[0].id
+              result.rows[0].id,
+              (data.route_and_chartering || data.routeAndChartering) ? JSON.stringify(data.route_and_chartering || data.routeAndChartering) : null
             ]
           );
           return {
@@ -185,6 +193,9 @@ exports.handler = async (event) => {
       const landDestination = data.land_destination !== undefined ? data.land_destination : null;
       const landDistance = data.land_distance !== undefined && data.land_distance !== null ? Number(data.land_distance) : null;
       const landFreightCost = data.land_freight_cost !== undefined && data.land_freight_cost !== null ? Number(data.land_freight_cost) : null;
+      const routeAndChartering = (data.route_and_chartering !== undefined && data.route_and_chartering !== null)
+        ? JSON.stringify(data.route_and_chartering)
+        : ((data.routeAndChartering !== undefined && data.routeAndChartering !== null) ? JSON.stringify(data.routeAndChartering) : null);
 
       const query = `
         UPDATE forwarder_projects 
@@ -196,7 +207,8 @@ exports.handler = async (event) => {
             land_origin = COALESCE($8, land_origin),
             land_destination = COALESCE($9, land_destination),
             land_distance = COALESCE($10, land_distance),
-            land_freight_cost = COALESCE($11, land_freight_cost)
+            land_freight_cost = COALESCE($11, land_freight_cost),
+            route_and_chartering = COALESCE($12::jsonb, route_and_chartering)
         WHERE id = $4 OR project_ref = $5
         RETURNING *;
       `;
@@ -213,7 +225,8 @@ exports.handler = async (event) => {
         landOrigin,
         landDestination,
         landDistance,
-        landFreightCost
+        landFreightCost,
+        routeAndChartering
       ];
       
       const result = await pool.query(query, values);
@@ -246,6 +259,7 @@ exports.handler = async (event) => {
         const singleQuery = `
           SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
                  land_origin, land_destination, land_distance, land_freight_cost,
+                 route_and_chartering,
                  TO_CHAR(created_at, 'DD/MM/YYYY') as date 
           FROM forwarder_projects 
           WHERE (id = $1 OR UPPER(project_ref) = UPPER($2))
@@ -269,6 +283,7 @@ exports.handler = async (event) => {
       const query = `
         SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
                land_origin, land_destination, land_distance, land_freight_cost,
+               route_and_chartering,
                TO_CHAR(created_at, 'DD/MM/YYYY') as date 
         FROM forwarder_projects 
         ORDER BY created_at DESC;
