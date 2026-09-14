@@ -971,6 +971,44 @@ export function ForwarderWorkspace() {
       cleanCargoPacking === 'standard'
     );
 
+    // Días de la Vista Ejecutiva (fuente de verdad definitiva para tiempos operativos)
+    const parseDaysText = (el) => {
+      if (!el) return null;
+      const text = String(el.textContent || el.innerText || el.value || '').trim();
+      const num = parseFloat(text.replace(/[^0-9.-]/g, ''));
+      return Number.isFinite(num) && num > 0 ? num : null;
+    };
+
+    const domExecSea = parseDaysText(document.getElementById('exec-sea-days'));
+    const domExecPort = parseDaysText(document.getElementById('exec-port-days'));
+    const domExecTotal = parseDaysText(document.getElementById('exec-total-days'));
+
+    const winExec = (typeof window !== 'undefined' && window.executiveOperationalTimes)
+      || sessionSource.executiveOperationalTimes
+      || {};
+
+    const rawSea = domExecSea
+      ?? (Number.isFinite(Number(winExec.seaDays)) && Number(winExec.seaDays) > 0 ? Number(winExec.seaDays) : null)
+      ?? (Number.isFinite(Number(sessionSource.seaDays)) && Number(sessionSource.seaDays) > 0 ? Number(sessionSource.seaDays) : null)
+      ?? (Number.isFinite(Number(sessionSource.daysSea)) && Number(sessionSource.daysSea) > 0 ? Number(sessionSource.daysSea) : null)
+      ?? parseDaysText(document.getElementById('res-days-laden'));
+
+    const rawPort = domExecPort
+      ?? (Number.isFinite(Number(winExec.portDays)) && Number(winExec.portDays) > 0 ? Number(winExec.portDays) : null)
+      ?? (Number.isFinite(Number(sessionSource.portDays)) && Number(sessionSource.portDays) > 0 ? Number(sessionSource.portDays) : null)
+      ?? (Number.isFinite(Number(sessionSource.daysPort)) && Number(sessionSource.daysPort) > 0 ? Number(sessionSource.daysPort) : null)
+      ?? parseDaysText(document.getElementById('res-days-port'));
+
+    const rawTotal = domExecTotal
+      ?? (Number.isFinite(Number(winExec.totalDays)) && Number(winExec.totalDays) > 0 ? Number(winExec.totalDays) : null)
+      ?? (Number.isFinite(Number(sessionSource.totalDays)) && Number(sessionSource.totalDays) > 0 ? Number(sessionSource.totalDays) : null)
+      ?? parseDaysText(document.getElementById('res-days-total'))
+      ?? (rawSea !== null && rawPort !== null ? Math.round((rawSea + rawPort) * 100) / 100 : null);
+
+    const execSeaDays = rawSea !== null ? Math.round(rawSea * 100) / 100 : null;
+    const execPortDays = rawPort !== null ? Math.round(rawPort * 100) / 100 : null;
+    const execTotalDays = rawTotal !== null ? Math.round(rawTotal * 100) / 100 : (execSeaDays !== null && execPortDays !== null ? Math.round((execSeaDays + execPortDays) * 100) / 100 : null);
+
     return {
       hasActiveSession: Boolean(cleanPol || cleanPod || cleanCargoQty > 0 || cleanLoadRate > 0 || cleanDischRate > 0 || cleanDistance > 0 || cleanTce > 0),
       pol: cleanPol,
@@ -996,6 +1034,53 @@ export function ForwarderWorkspace() {
       metodoCarga: cleanMetodoCarga,
       metodoDescarga: cleanMetodoDescarga,
       charterPartyStandard: cleanCharterParty,
+      execSeaDays,
+      execPortDays,
+      execTotalDays,
+      seaDays: execSeaDays,
+      portDays: execPortDays,
+      totalDays: execTotalDays,
+      diasNavegacion: execSeaDays,
+      diasMuelle: execPortDays,
+      diasPuerto: execPortDays,
+      diasRotacionTotal: execTotalDays,
+    };
+  };
+
+  // Helper para consultar los días calculados de la Vista Ejecutiva (fuente de verdad definitiva)
+  const getExecutiveOperationalTimes = (sourceRoute = null) => {
+    if (sourceRoute && typeof sourceRoute === 'object') {
+      const rNav = Number(sourceRoute.dias_navegacion ?? sourceRoute.navigationDays ?? sourceRoute.sea_days ?? sourceRoute.seaDays);
+      const rPort = Number(sourceRoute.dias_muelle ?? sourceRoute.dias_muelle_total ?? sourceRoute.port_days ?? sourceRoute.portDays);
+      const rTotal = Number(sourceRoute.dias_rotacion_total ?? sourceRoute.totalRotationDays ?? sourceRoute.total_days ?? sourceRoute.totalDays);
+      if (Number.isFinite(rNav) && rNav > 0 && Number.isFinite(rTotal) && rTotal > 0) {
+        return {
+          hasExecutiveTimes: true,
+          seaDays: Math.round(rNav * 100) / 100,
+          portDays: Number.isFinite(rPort) && rPort > 0 ? Math.round(rPort * 100) / 100 : Math.round((rTotal - rNav) * 100) / 100,
+          totalDays: Math.round(rTotal * 100) / 100,
+          source: 'route',
+        };
+      }
+    }
+
+    const session = readActiveCalculatorSession();
+    if (session.execSeaDays !== null || session.execPortDays !== null || session.execTotalDays !== null) {
+      return {
+        hasExecutiveTimes: true,
+        seaDays: session.execSeaDays,
+        portDays: session.execPortDays,
+        totalDays: session.execTotalDays ?? (session.execSeaDays !== null && session.execPortDays !== null ? Math.round((session.execSeaDays + session.execPortDays) * 100) / 100 : null),
+        source: 'executive_view',
+      };
+    }
+
+    return {
+      hasExecutiveTimes: false,
+      seaDays: null,
+      portDays: null,
+      totalDays: null,
+      source: 'fallback',
     };
   };
 
@@ -1081,12 +1166,38 @@ export function ForwarderWorkspace() {
     const dailyHireRateUsd = Number(rc.daily_hire_rate_usd ?? rc.dailyHireRateUsd ?? sessionData.tce ?? 0) || 0;
     const exchangeRate = Number(rc.exchange_rate ?? rc.exchangeRate ?? 0.92) || 0.92;
 
-    // Días calculados de muelle y navegación
-    const diasCarga = Number(rc.dias_carga ?? rc.loadingDays ?? 0) || 0;
-    const diasDescarga = Number(rc.dias_descarga ?? rc.dischargingDays ?? 0) || 0;
-    const diasMuelle = Number(rc.dias_muelle ?? rc.dias_muelle_total ?? (diasCarga + diasDescarga)) || (diasCarga + diasDescarga);
-    const diasNavegacion = Number(rc.dias_navegacion ?? rc.navigationDays ?? 0) || 0;
-    const diasRotacionTotal = Number(rc.dias_rotacion_total ?? rc.totalRotationDays ?? (diasMuelle + diasNavegacion)) || (diasMuelle + diasNavegacion);
+    // Días calculados de muelle y navegación: sincronizados con la Vista Ejecutiva como fuente de verdad definitiva
+    const execTimes = getExecutiveOperationalTimes(rc);
+
+    const diasCargaRaw = Number(rc.dias_carga ?? rc.loadingDays ?? 0) || 0;
+    const diasDescargaRaw = Number(rc.dias_descarga ?? rc.dischargingDays ?? 0) || 0;
+    const rawPortTotal = diasCargaRaw + diasDescargaRaw;
+
+    const savedNav = Number(rc.dias_navegacion ?? rc.navigationDays ?? rc.sea_days ?? rc.seaDays ?? 0);
+    const diasNavegacion = (savedNav > 0)
+      ? savedNav
+      : (execTimes.seaDays !== null && execTimes.seaDays > 0 ? execTimes.seaDays : (distanceNm > 0 && vesselSpeedKnots > 0 ? Math.round((distanceNm / (vesselSpeedKnots * 24)) * 100) / 100 : 0));
+
+    const savedPort = Number(rc.dias_muelle ?? rc.dias_muelle_total ?? rc.port_days ?? rc.portDays ?? 0);
+    const diasMuelle = (savedPort > 0)
+      ? savedPort
+      : (execTimes.portDays !== null && execTimes.portDays > 0 ? execTimes.portDays : rawPortTotal);
+
+    const savedRot = Number(rc.dias_rotacion_total ?? rc.totalRotationDays ?? rc.total_days ?? rc.totalDays ?? 0);
+    const diasRotacionTotal = (savedRot > 0)
+      ? savedRot
+      : (execTimes.totalDays !== null && execTimes.totalDays > 0 ? execTimes.totalDays : Math.round((diasMuelle + diasNavegacion) * 100) / 100);
+
+    let diasCarga = diasCargaRaw;
+    let diasDescarga = diasDescargaRaw;
+    if (diasCarga === 0 && diasDescarga === 0 && diasMuelle > 0) {
+      diasCarga = Math.round((diasMuelle / 2) * 100) / 100;
+      diasDescarga = Math.round((diasMuelle - diasCarga) * 100) / 100;
+    } else if (diasMuelle > 0 && rawPortTotal > 0 && (diasCarga + diasDescarga) !== diasMuelle) {
+      diasCarga = Math.round((diasCargaRaw / rawPortTotal) * diasMuelle * 100) / 100;
+      diasDescarga = Math.round((diasMuelle - diasCarga) * 100) / 100;
+    }
+
     const actualLoadingDays = (rc.actual_loading_days !== undefined && rc.actual_loading_days !== null && rc.actual_loading_days !== '') ? Number(rc.actual_loading_days) : null;
     const actualDischargingDays = (rc.actual_discharging_days !== undefined && rc.actual_discharging_days !== null && rc.actual_discharging_days !== '') ? Number(rc.actual_discharging_days) : null;
 
@@ -1124,6 +1235,9 @@ export function ForwarderWorkspace() {
       diasMuelle,
       diasNavegacion,
       diasRotacionTotal,
+      seaDays: diasNavegacion,
+      portDays: diasMuelle,
+      totalDays: diasRotacionTotal,
       actualLoadingDays,
       actualDischargingDays,
       demurrageDailyRateUsd,
@@ -1178,6 +1292,7 @@ export function ForwarderWorkspace() {
     if (typeof window !== 'undefined') {
       window.getProjectDetails = getProjectDetails;
       window.getMaritimeRouteData = getMaritimeRouteData;
+      window.getExecutiveOperationalTimes = getExecutiveOperationalTimes;
       window.handleSyncCalculatorData = (...args) => handleSyncCalculatorDataRef.current?.(...args);
     }
   }, []);
@@ -1529,12 +1644,34 @@ export function ForwarderWorkspace() {
         11500
       );
 
-      // Cálculos náuticos y de rotación
-      const diasCarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedLoadRate) * 100) / 100 : 0;
-      const diasDescarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedDischRate) * 100) / 100 : 0;
-      const diasNavegacion = Math.round((capturedDistance / (capturedSpeed * 24)) * 100) / 100;
-      const diasMuelle = Math.round((diasCarga + diasDescarga) * 100) / 100;
-      const diasRotacionTotal = Math.round((diasMuelle + diasNavegacion) * 100) / 100;
+      // Cálculos náuticos y de rotación sincronizados con la Vista Ejecutiva (fuente de verdad definitiva)
+      const execTimes = getExecutiveOperationalTimes();
+      const rawDiasCarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedLoadRate) * 100) / 100 : 0;
+      const rawDiasDescarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedDischRate) * 100) / 100 : 0;
+      const rawPortTotal = Math.round((rawDiasCarga + rawDiasDescarga) * 100) / 100;
+
+      const diasNavegacion = (execTimes.seaDays !== null && execTimes.seaDays > 0)
+        ? execTimes.seaDays
+        : Math.round((capturedDistance / (capturedSpeed * 24)) * 100) / 100;
+
+      const diasMuelle = (execTimes.portDays !== null && execTimes.portDays > 0)
+        ? execTimes.portDays
+        : rawPortTotal;
+
+      const diasRotacionTotal = (execTimes.totalDays !== null && execTimes.totalDays > 0)
+        ? execTimes.totalDays
+        : Math.round((diasMuelle + diasNavegacion) * 100) / 100;
+
+      let diasCarga = rawDiasCarga;
+      let diasDescarga = rawDiasDescarga;
+      if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal > 0) {
+        diasCarga = Math.round((rawDiasCarga / rawPortTotal) * execTimes.portDays * 100) / 100;
+        diasDescarga = Math.round((execTimes.portDays - diasCarga) * 100) / 100;
+      } else if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal === 0) {
+        diasCarga = Math.round((execTimes.portDays / 2) * 100) / 100;
+        diasDescarga = Math.round((execTimes.portDays - diasCarga) * 100) / 100;
+      }
+
       const oceanFreightTceUsd = Math.round(diasRotacionTotal * capturedTce * 100) / 100;
       const oceanFreightTceEur = Math.round(oceanFreightTceUsd * exchangeRateUsdEur * 100) / 100;
 
@@ -1601,6 +1738,15 @@ export function ForwarderWorkspace() {
           vessel_speed_knots: capturedSpeed,
           daily_hire_rate_usd: capturedTce,
           exchange_rate: exchangeRateUsdEur,
+          dias_carga: diasCarga,
+          dias_descarga: diasDescarga,
+          dias_muelle: diasMuelle,
+          dias_muelle_total: diasMuelle,
+          dias_navegacion: diasNavegacion,
+          dias_rotacion_total: diasRotacionTotal,
+          sea_days: diasNavegacion,
+          port_days: diasMuelle,
+          total_days: diasRotacionTotal,
         }
       });
 
@@ -1642,6 +1788,9 @@ export function ForwarderWorkspace() {
         dias_muelle_total: diasMuelle,
         dias_navegacion: diasNavegacion,
         dias_rotacion_total: diasRotacionTotal,
+        sea_days: diasNavegacion,
+        port_days: diasMuelle,
+        total_days: diasRotacionTotal,
         actual_loading_days: actualLoadingDays,
         actual_discharging_days: actualDischargingDays,
         demurrage_daily_rate_usd: capturedTce,
@@ -2197,20 +2346,39 @@ export function ForwarderWorkspace() {
       const RT = Math.max(totalWeightTons, totalVolumeM3);
 
       // MOTOR DE CÁLCULO DINÁMICO DE ROTACIÓN Y FLETE (TCE):
-      // Días de Carga = Peso Total de la Carga (MT) / Ritmo de Carga (MT/día)
-      // Días de Descarga = Peso Total de la Carga (MT) / Ritmo de Descarga (MT/día)
-      // Días de Navegación = Distancia Náutica POL-POD / (Velocidad de Servicio del Buque en nudos × 24)
-      // Flete Marítimo (TCE) en USD nativo = D_total × Tarifa diaria (USD/día)
+      // Sincronización de tiempos operativos con la Vista Ejecutiva como fuente de verdad definitiva
+      const execTimes = getExecutiveOperationalTimes(activeProject?.route_and_chartering);
       const effectiveLoadRate = Math.max(1, Number(loadingRate) || (isBigBagsOrBulk ? 1200 : 850));
       const effectiveDischRate = Math.max(1, Number(dischargingRate) || (isBigBagsOrBulk ? 1000 : 750));
-      const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveLoadRate) * 100) / 100 : 0;
-      const diasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveDischRate) * 100) / 100 : 0;
+      const rawDiasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveLoadRate) * 100) / 100 : 0;
+      const rawDiasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / effectiveDischRate) * 100) / 100 : 0;
+      const rawPortTotal = Math.round((rawDiasCarga + rawDiasDescarga) * 100) / 100;
 
       const effectiveDistance = Math.max(10, Number(distanceNm) || 1500);
       const defaultSpeed = totalWeightTons >= 35000 ? 13.5 : (totalWeightTons >= 10000 ? 13.0 : (totalWeightTons >= 3000 ? 12.0 : 10.5));
       const effectiveSpeed = Math.max(1, Number(vesselSpeedKnots) || defaultSpeed);
-      const diasNavegacion = Math.round((effectiveDistance / (effectiveSpeed * 24)) * 100) / 100;
-      const diasRotacionTotal = Math.round((diasCarga + diasDescarga + diasNavegacion) * 100) / 100;
+
+      const diasNavegacion = (execTimes.seaDays !== null && execTimes.seaDays > 0)
+        ? execTimes.seaDays
+        : Math.round((effectiveDistance / (effectiveSpeed * 24)) * 100) / 100;
+
+      const diasMuelle = (execTimes.portDays !== null && execTimes.portDays > 0)
+        ? execTimes.portDays
+        : rawPortTotal;
+
+      const diasRotacionTotal = (execTimes.totalDays !== null && execTimes.totalDays > 0)
+        ? execTimes.totalDays
+        : Math.round((diasMuelle + diasNavegacion) * 100) / 100;
+
+      let diasCarga = rawDiasCarga;
+      let diasDescarga = rawDiasDescarga;
+      if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal > 0) {
+        diasCarga = Math.round((rawDiasCarga / rawPortTotal) * execTimes.portDays * 100) / 100;
+        diasDescarga = Math.round((execTimes.portDays - diasCarga) * 100) / 100;
+      } else if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal === 0) {
+        diasCarga = Math.round((execTimes.portDays / 2) * 100) / 100;
+        diasDescarga = Math.round((execTimes.portDays - diasCarga) * 100) / 100;
+      }
 
       const effectiveDailyHire = Number(vesselDailyHireUsd) || dailyTce;
 
@@ -2703,10 +2871,40 @@ export function ForwarderWorkspace() {
     const reportDailyHire = Number(sourcePayload?.route_and_chartering?.daily_hire_rate_usd ?? vesselDailyHireUsd ?? sessionData.tce) || (totalWeightTons >= 35000 ? 16500 : (totalWeightTons >= 10000 ? 13800 : (totalWeightTons >= 3000 ? 11500 : 8500)));
     const reportExRate = Number(sourcePayload?.route_and_chartering?.exchange_rate ?? exchangeRateUsdEur) || 0.92;
 
-    const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportLoadRate) * 100) / 100 : 0;
-    const diasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportDischRate) * 100) / 100 : 0;
-    const diasNavegacion = Math.round((reportDistance / (reportSpeed * 24)) * 100) / 100;
-    const diasRotacionTotal = Math.round((diasCarga + diasDescarga + diasNavegacion) * 100) / 100;
+    // Días de la Vista Ejecutiva como fuente de verdad definitiva
+    const execTimes = getExecutiveOperationalTimes(sourcePayload?.route_and_chartering);
+    const rawDiasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportLoadRate) * 100) / 100 : 0;
+    const rawDiasDescarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportDischRate) * 100) / 100 : 0;
+    const rawPortTotal = Math.round((rawDiasCarga + rawDiasDescarga) * 100) / 100;
+
+    const savedNav = Number(sourcePayload?.route_and_chartering?.dias_navegacion ?? sourcePayload?.route_and_chartering?.navigationDays ?? sourcePayload?.route_and_chartering?.sea_days ?? sourcePayload?.route_and_chartering?.seaDays);
+    const savedPort = Number(sourcePayload?.route_and_chartering?.dias_muelle ?? sourcePayload?.route_and_chartering?.dias_muelle_total ?? sourcePayload?.route_and_chartering?.port_days ?? sourcePayload?.route_and_chartering?.portDays);
+    const savedRot = Number(sourcePayload?.route_and_chartering?.dias_rotacion_total ?? sourcePayload?.route_and_chartering?.totalRotationDays ?? sourcePayload?.route_and_chartering?.total_days ?? sourcePayload?.route_and_chartering?.totalDays);
+
+    const diasNavegacion = (Number.isFinite(savedNav) && savedNav > 0)
+      ? savedNav
+      : (execTimes.seaDays !== null && execTimes.seaDays > 0 ? execTimes.seaDays : Math.round((reportDistance / (reportSpeed * 24)) * 100) / 100);
+
+    const diasMuelle = (Number.isFinite(savedPort) && savedPort > 0)
+      ? savedPort
+      : (execTimes.portDays !== null && execTimes.portDays > 0 ? execTimes.portDays : rawPortTotal);
+
+    const diasRotacionTotal = (Number.isFinite(savedRot) && savedRot > 0)
+      ? savedRot
+      : (execTimes.totalDays !== null && execTimes.totalDays > 0 ? execTimes.totalDays : Math.round((diasMuelle + diasNavegacion) * 100) / 100);
+
+    let diasCarga = rawDiasCarga;
+    let diasDescarga = rawDiasDescarga;
+    if (sourcePayload?.route_and_chartering?.dias_carga != null && Number(sourcePayload.route_and_chartering.dias_carga) > 0) {
+      diasCarga = Number(sourcePayload.route_and_chartering.dias_carga);
+      diasDescarga = Number(sourcePayload.route_and_chartering.dias_descarga ?? (diasMuelle - diasCarga));
+    } else if (diasMuelle > 0 && rawPortTotal > 0) {
+      diasCarga = Math.round((rawDiasCarga / rawPortTotal) * diasMuelle * 100) / 100;
+      diasDescarga = Math.round((diasMuelle - diasCarga) * 100) / 100;
+    } else if (diasMuelle > 0 && rawPortTotal === 0) {
+      diasCarga = Math.round((diasMuelle / 2) * 100) / 100;
+      diasDescarga = Math.round((diasMuelle - diasCarga) * 100) / 100;
+    }
 
     // Demoras
     const actualLoad = sourcePayload?.route_and_chartering?.actual_loading_days ?? (actualLoadingDays !== '' ? Number(actualLoadingDays) : null);
@@ -2935,8 +3133,12 @@ export function ForwarderWorkspace() {
       exchangeRateUsdEur: reportExRate,
       diasCarga,
       diasDescarga,
+      diasMuelle,
       diasNavegacion,
       diasRotacionTotal,
+      seaDays: diasNavegacion,
+      portDays: diasMuelle,
+      totalDays: diasRotacionTotal,
       demurrageDays: reportDemDays,
       demurrageCostNum,
       demurrageDailyRateUsd: reportDemDailyUsd,
@@ -4278,17 +4480,40 @@ export function ForwarderWorkspace() {
                       </div>
                     </div>
 
-                    {/* Resumen dinámico en vivo */}
+                    {/* Resumen dinámico en vivo sincronizado con la Vista Ejecutiva */}
                     {(() => {
                       const wTons = (totals.weight || 0) / 1000;
                       const effLoad = Math.max(1, Number(loadingRate) || 1200);
                       const effDisch = Math.max(1, Number(dischargingRate) || 1000);
-                      const dCarga = wTons > 0 ? Math.round((wTons / effLoad) * 100) / 100 : 0;
-                      const dDescarga = wTons > 0 ? Math.round((wTons / effDisch) * 100) / 100 : 0;
+                      const rawDCarga = wTons > 0 ? Math.round((wTons / effLoad) * 100) / 100 : 0;
+                      const rawDDescarga = wTons > 0 ? Math.round((wTons / effDisch) * 100) / 100 : 0;
+                      const rawPortTotal = Math.round((rawDCarga + rawDDescarga) * 100) / 100;
                       const effDist = Math.max(10, Number(distanceNm) || 1500);
                       const effSpd = Math.max(1, Number(vesselSpeedKnots) || 12.0);
-                      const dNav = Math.round((effDist / (effSpd * 24)) * 100) / 100;
-                      const dRot = Math.round((dCarga + dDescarga + dNav) * 100) / 100;
+
+                      const execTimes = getExecutiveOperationalTimes(activeProject?.route_and_chartering);
+                      const dNav = (execTimes.seaDays !== null && execTimes.seaDays > 0)
+                        ? execTimes.seaDays
+                        : Math.round((effDist / (effSpd * 24)) * 100) / 100;
+
+                      const dPortTotal = (execTimes.portDays !== null && execTimes.portDays > 0)
+                        ? execTimes.portDays
+                        : rawPortTotal;
+
+                      let dCarga = rawDCarga;
+                      let dDescarga = rawDDescarga;
+                      if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal > 0) {
+                        dCarga = Math.round((rawDCarga / rawPortTotal) * execTimes.portDays * 100) / 100;
+                        dDescarga = Math.round((execTimes.portDays - dCarga) * 100) / 100;
+                      } else if (execTimes.portDays !== null && execTimes.portDays > 0 && rawPortTotal === 0) {
+                        dCarga = Math.round((execTimes.portDays / 2) * 100) / 100;
+                        dDescarga = Math.round((execTimes.portDays - dCarga) * 100) / 100;
+                      }
+
+                      const dRot = (execTimes.totalDays !== null && execTimes.totalDays > 0)
+                        ? execTimes.totalDays
+                        : Math.round((dCarga + dDescarga + dNav) * 100) / 100;
+
                       const aLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
                       const aDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
                       const demLoad = (aLoad !== null && aLoad > dCarga) ? Math.round((aLoad - dCarga) * 100) / 100 : 0;
@@ -5092,7 +5317,7 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
+                      {activeReport.stowagePlan.holds?.map((hold, holdIdx) => (
                         <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
