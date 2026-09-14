@@ -754,6 +754,7 @@ function calculateUniversalStowagePlan(items = [], orderTotals = null, options =
 export function ForwarderWorkspace() {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
   const [activeProject, setActiveProject] = useState(null);
@@ -1129,8 +1130,13 @@ export function ForwarderWorkspace() {
     }
   }, []);
 
-  const fetchProjects = async () => {
-    setIsLoading(true); setError(null);
+  const fetchProjects = async (options = {}) => {
+    const silent = typeof options === 'boolean' ? options : Boolean(options?.silent);
+    if (!silent) {
+      setIsRefreshing(true);
+      setIsLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), { method: 'GET', headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1144,10 +1150,15 @@ export function ForwarderWorkspace() {
           setprojectDocuments(updated.documents || updated.files || []);
         }
       }
+      return list;
     } catch (err) {
-      console.error(err); setError(err?.message || 'Error de conexión');
+      console.error(err);
+      if (!silent) setError(err?.message || 'Error de conexión');
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   };
 
@@ -2990,6 +3001,7 @@ export function ForwarderWorkspace() {
         setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
         await persistProjectToDatabase(updatedProject);
       }
+      await fetchProjects({ silent: true });
     } catch (err) {
       console.error('Error al guardar flete y estiba:', err);
     } finally {
@@ -3011,8 +3023,41 @@ export function ForwarderWorkspace() {
     <>
       <div className={`w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
         <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
-          <div className="p-4 border-b border-slate-800">
-            <button onClick={handleCreateProject} disabled={isCreating} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase rounded-lg shadow-md cursor-pointer">{isCreating ? 'Creando...' : '+ Nuevo Proyecto'}</button>
+          <div className="p-4 border-b border-slate-800 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCreateProject}
+              disabled={isCreating}
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase rounded-lg shadow-md cursor-pointer transition-colors"
+            >
+              {isCreating ? 'Creando...' : '+ Nuevo Proyecto'}
+            </button>
+            <button
+              type="button"
+              id="btn-refresh-projects"
+              onClick={() => fetchProjects()}
+              disabled={isRefreshing}
+              title="Actualizar lista de proyectos"
+              aria-label="Actualizar proyectos"
+              className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-850 border border-slate-700 hover:border-slate-600 text-slate-200 hover:text-white rounded-lg shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 text-xs font-bold shrink-0 disabled:opacity-50"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`w-3.5 h-3.5 text-sky-400 ${isRefreshing ? 'animate-spin' : ''}`}
+              >
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+              <span>Actualizar</span>
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {projects.map((proj) => {
