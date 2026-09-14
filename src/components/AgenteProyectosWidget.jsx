@@ -217,6 +217,10 @@ Contexto actual del proyecto: ${projectContext}`;
           isProjectMode: true,
           message: raw,
           text: raw,
+          pol: routeData?.pol,
+          pod: routeData?.pod,
+          loadingRate: routeData?.loadingRate,
+          dischargingRate: routeData?.dischargingRate,
           systemInstruction,
           projectContext,
           history: messages,
@@ -225,6 +229,13 @@ Contexto actual del proyecto: ${projectContext}`;
 
       const data = await response.json();
       let rawReply = data.reply || data.respuesta || data.text || (data.error ? `⚠️ ${data.error}` : 'No se pudo obtener respuesta del consultor.');
+
+      if (data.charteringAssessment && onUpdatePayload) {
+        onUpdatePayload({
+          charteringAssessment: data.charteringAssessment,
+          rotationBreakdown: data.charteringAssessment?.rotationBreakdown,
+        });
+      }
 
       // Procesar bloque json-action para actualizar la interfaz automáticamente
       let actionType = data.action || 'none';

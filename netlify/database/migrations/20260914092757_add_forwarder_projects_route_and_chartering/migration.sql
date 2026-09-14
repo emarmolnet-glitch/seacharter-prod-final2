@@ -1,0 +1,1 @@
+ALTER TABLE "forwarder_projects" ADD COLUMN "route_and_chartering" jsonb DEFAULT '{}';

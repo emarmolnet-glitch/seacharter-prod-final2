@@ -834,18 +834,139 @@ export function ForwarderWorkspace() {
   const [insuranceCost, setInsuranceCost] = useState(0);
   const userEditedSurveyor = useRef(false);
 
-  // Parámetros dinámicos de ruta, ritmos operativos, rotación y demoras
-  const [pol, setPol] = useState('Valencia');
-  const [pod, setPod] = useState('Houston');
-  const [loadingRate, setLoadingRate] = useState(1200);
-  const [dischargingRate, setDischargingRate] = useState(1000);
-  const [distanceNm, setDistanceNm] = useState(4850);
-  const [vesselSpeedKnots, setVesselSpeedKnots] = useState(12.0);
-  const [vesselDailyHireUsd, setVesselDailyHireUsd] = useState(11500);
+  // Helper centralizado para capturar el estado activo de la calculadora y de la sesión (sin valores mock)
+  const readActiveCalculatorSession = () => {
+    if (typeof window === 'undefined') return {};
+
+    const activeVoyageSource = window.activeVoyage || {};
+    const storeState = window.SeaCharterStore?.getState?.() || {};
+    const globalState = window.State || {};
+    const calcState = window.CalculatedState || window.GlobalStore?.calculatedState || {};
+
+    let draftState = {};
+    try {
+      const rawDraft = window.sessionStorage?.getItem('seacharter_session_draft') || window.localStorage?.getItem('seacharter_session_draft');
+      if (rawDraft) {
+        const parsed = JSON.parse(rawDraft);
+        if (parsed?.state && typeof parsed.state === 'object') {
+          draftState = parsed.state;
+        }
+      }
+    } catch (_) {}
+
+    const sessionSource = {
+      ...globalState,
+      ...storeState,
+      ...activeVoyageSource,
+      ...calcState,
+      ...draftState,
+    };
+
+    const polEl = document.getElementById('port-pol') || document.getElementById('map-port-pol');
+    const podEl = document.getElementById('port-pod') || document.getElementById('map-port-pod');
+    const loadRateEl = document.getElementById('rate-load') || document.getElementById('load-rate') || document.getElementById('input-loadRate');
+    const dischRateEl = document.getElementById('rate-disch') || document.getElementById('disch-rate') || document.getElementById('rate-discharge') || document.getElementById('input-dischRate');
+    const distEl = document.getElementById('dist-laden') || document.getElementById('dist-total');
+    const speedEl = document.getElementById('spd-laden') || document.getElementById('vessel-speed');
+    const cargoQtyEl = document.getElementById('cargo-qty') || document.getElementById('cargo-quantity');
+    const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight');
+    const freightRateEl = document.getElementById('freight-rate');
+    const cargoTypeEl = document.getElementById('cargo-type') || document.getElementById('cargo-type-manual');
+
+    const cleanPol = String(polEl?.value || sessionSource.pol || sessionSource.portPol || sessionSource.port_pol || sessionSource.origin || '').trim();
+    const cleanPod = String(podEl?.value || sessionSource.pod || sessionSource.portPod || sessionSource.port_pod || sessionSource.destination || '').trim();
+
+    const cleanCargoQty = Math.max(
+      0,
+      parseFloat(cargoQtyEl?.value) ||
+      Number(sessionSource.cargo || sessionSource.cargoQty || sessionSource.cargoQuantity || sessionSource.quantityMT || sessionSource.actualCargoIntake) ||
+      0
+    );
+
+    const cleanLoadRate = Math.max(
+      0,
+      parseFloat(loadRateEl?.value) ||
+      Number(sessionSource.loadRate || sessionSource.rateLoad || sessionSource.loadingRate) ||
+      0
+    );
+
+    const cleanDischRate = Math.max(
+      0,
+      parseFloat(dischRateEl?.value) ||
+      Number(sessionSource.dischRate || sessionSource.rateDisch || sessionSource.dischargingRate || sessionSource.dischargeRate) ||
+      0
+    );
+
+    const cleanDistance = Math.max(
+      0,
+      parseFloat(distEl?.value) ||
+      Number(sessionSource.distLaden || sessionSource.distanceNm || sessionSource.totalMiles || sessionSource.distance) ||
+      0
+    );
+
+    const cleanSpeed = Math.max(
+      0,
+      parseFloat(speedEl?.value) ||
+      Number(sessionSource.speedLaden || sessionSource.vesselSpeedKnots || sessionSource.speed) ||
+      0
+    );
+
+    const cleanCargoType = String(cargoTypeEl?.value || sessionSource.cargoType || sessionSource.cargo_type || sessionSource.commodity || '').trim();
+
+    // Captura del TCE exacto activo de la calculadora
+    const tceFromLabel = parseFloat(String(document.getElementById('res-tce-label')?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+    const tceFromPrint = parseFloat(String(document.getElementById('print-tce-owner')?.innerText || document.getElementById('print-tce-owner')?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+    const cleanTce = Math.max(
+      0,
+      Number(sessionSource.tceOwner || sessionSource.tce || sessionSource.tceDaily || sessionSource.dailyRateUsd || sessionSource.vesselDailyHireUsd) ||
+      tceFromLabel ||
+      tceFromPrint ||
+      0
+    );
+
+    const freightSell = Math.max(
+      0,
+      parseFloat(freightSellEl?.value) ||
+      Number(sessionSource.freightSell || sessionSource.fleteVenta || sessionSource.sellingFreight) ||
+      0
+    );
+
+    const freightCost = Math.max(
+      0,
+      parseFloat(freightRateEl?.value) ||
+      Number(sessionSource.freightRate || sessionSource.fleteCoste || sessionSource.ownerFreight) ||
+      0
+    );
+
+    return {
+      hasActiveSession: Boolean(cleanPol || cleanPod || cleanCargoQty > 0 || cleanLoadRate > 0 || cleanDischRate > 0 || cleanDistance > 0 || cleanTce > 0),
+      pol: cleanPol,
+      pod: cleanPod,
+      cargoQty: cleanCargoQty,
+      cargoType: cleanCargoType,
+      loadRate: cleanLoadRate,
+      dischRate: cleanDischRate,
+      distanceNm: cleanDistance,
+      speedKnots: cleanSpeed,
+      tce: cleanTce,
+      freightSell,
+      freightCost,
+    };
+  };
+
+  // Parámetros dinámicos de ruta, ritmos operativos, rotación y demoras (capturan el estado de sesión si existe)
+  const initialSession = readActiveCalculatorSession();
+  const [pol, setPol] = useState(initialSession.pol || '');
+  const [pod, setPod] = useState(initialSession.pod || '');
+  const [loadingRate, setLoadingRate] = useState(initialSession.loadRate > 0 ? initialSession.loadRate : 1200);
+  const [dischargingRate, setDischargingRate] = useState(initialSession.dischRate > 0 ? initialSession.dischRate : 1000);
+  const [distanceNm, setDistanceNm] = useState(initialSession.distanceNm > 0 ? initialSession.distanceNm : 1500);
+  const [vesselSpeedKnots, setVesselSpeedKnots] = useState(initialSession.speedKnots > 0 ? initialSession.speedKnots : 12.0);
+  const [vesselDailyHireUsd, setVesselDailyHireUsd] = useState(initialSession.tce > 0 ? initialSession.tce : 11500);
   const [exchangeRateUsdEur, setExchangeRateUsdEur] = useState(0.92);
   const [actualLoadingDays, setActualLoadingDays] = useState('');
   const [actualDischargingDays, setActualDischargingDays] = useState('');
-  const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(11500);
+  const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(initialSession.tce > 0 ? initialSession.tce : 11500);
   const [charteringAssessment, setCharteringAssessment] = useState(null);
 
   const [subtotalFreight, setSubtotalFreight] = useState('0.00');
@@ -885,6 +1006,93 @@ export function ForwarderWorkspace() {
     };
   };
 
+  const getMaritimeRouteData = (project, payload = null) => {
+    const p = project || {};
+    const pl = payload || {};
+    const rc = p.route_and_chartering || p.routeAndChartering ||
+      pl.route_and_chartering || pl.routeAndChartering ||
+      p.line_items?.[0]?.payload_data?.route_and_chartering ||
+      p.services?.[0]?.payload_data?.route_and_chartering ||
+      p.items?.[0]?.payload_data?.route_and_chartering ||
+      (p.items?.[0] && typeof p.items[0] === 'object' && p.items[0].route_and_chartering ? p.items[0].route_and_chartering : null) ||
+      null;
+
+    if (!rc) {
+      return { hasData: false };
+    }
+
+    const sessionData = readActiveCalculatorSession();
+    const pol = (rc.pol || '').trim() || sessionData.pol || '';
+    const pod = (rc.pod || '').trim() || sessionData.pod || '';
+    const loadingRate = Number(rc.loading_rate_mt_day ?? rc.loadingRate ?? sessionData.loadRate ?? 0) || 0;
+    const dischargingRate = Number(rc.discharging_rate_mt_day ?? rc.dischargingRate ?? sessionData.dischRate ?? 0) || 0;
+    const distanceNm = Number(rc.distance_nm ?? rc.distanceNm ?? sessionData.distanceNm ?? 0) || 0;
+    const vesselSpeedKnots = Number(rc.vessel_speed_knots ?? rc.vesselSpeedKnots ?? sessionData.speedKnots ?? 12.0) || 12.0;
+    const dailyHireRateUsd = Number(rc.daily_hire_rate_usd ?? rc.dailyHireRateUsd ?? sessionData.tce ?? 0) || 0;
+    const exchangeRate = Number(rc.exchange_rate ?? rc.exchangeRate ?? 0.92) || 0.92;
+
+    // Días calculados de muelle y navegación
+    const diasCarga = Number(rc.dias_carga ?? rc.loadingDays ?? 0) || 0;
+    const diasDescarga = Number(rc.dias_descarga ?? rc.dischargingDays ?? 0) || 0;
+    const diasMuelle = Number(rc.dias_muelle ?? rc.dias_muelle_total ?? (diasCarga + diasDescarga)) || (diasCarga + diasDescarga);
+    const diasNavegacion = Number(rc.dias_navegacion ?? rc.navigationDays ?? 0) || 0;
+    const diasRotacionTotal = Number(rc.dias_rotacion_total ?? rc.totalRotationDays ?? (diasMuelle + diasNavegacion)) || (diasMuelle + diasNavegacion);
+    const actualLoadingDays = (rc.actual_loading_days !== undefined && rc.actual_loading_days !== null && rc.actual_loading_days !== '') ? Number(rc.actual_loading_days) : null;
+    const actualDischargingDays = (rc.actual_discharging_days !== undefined && rc.actual_discharging_days !== null && rc.actual_discharging_days !== '') ? Number(rc.actual_discharging_days) : null;
+
+    // Tarifa de demoras y plancha
+    const demurrageDailyRateUsd = Number(rc.demurrage_daily_rate_usd ?? rc.demurrageDailyRateUsd ?? dailyHireRateUsd) || 0;
+    const demurrageDays = Number(rc.demurrage_days ?? rc.demurrageDays ?? 0) || 0;
+    const demurrageCostEur = Number(rc.demurrage_cost_eur ?? rc.demurrageCostEur ?? 0) || 0;
+    const demurrageCostUsd = Number(rc.demurrage_cost_usd ?? rc.demurrageCostUsd ?? (demurrageDays * demurrageDailyRateUsd)) || 0;
+    const demurrageStatus = rc.demurrage_status || (demurrageDays > 0 ? 'EXCESO DE ESTADÍA (ON DEMURRAGE)' : 'DENTRO DE PLANCHA (ON SCHEDULE)');
+    const planchaDiasPermitidos = Number(rc.plancha_dias_permitidos ?? (diasCarga + diasDescarga)) || (diasCarga + diasDescarga);
+
+    // Valor exacto del TCE obtenido
+    const tceValue = Number(rc.tce_value ?? rc.tceValue ?? rc.tce_daily_rate_usd ?? dailyHireRateUsd) || 0;
+    const oceanFreightTceUsd = Number(rc.ocean_freight_tce_usd ?? rc.oceanFreightTceUsd ?? rc.tce_freight_usd ?? (diasRotacionTotal * (tceValue || dailyHireRateUsd))) || 0;
+    const oceanFreightTceEur = Number(rc.ocean_freight_tce_eur ?? rc.oceanFreightTceEur ?? rc.tce_freight_eur ?? (oceanFreightTceUsd * exchangeRate)) || 0;
+    const vesselType = rc.vessel_type || rc.recommended_vessel || 'Geared Breakbulk (Lo-Lo)';
+    const totalWeightTons = Number(rc.total_weight_tons ?? 0) || 0;
+    const totalVolumeM3 = Number(rc.total_volume_m3 ?? 0) || 0;
+    const reportRt = Number(rc.report_rt ?? 0) || 0;
+
+    const hasData = Boolean(pol || pod || distanceNm > 0 || tceValue > 0 || loadingRate > 0 || dischargingRate > 0 || diasRotacionTotal > 0);
+
+    return {
+      hasData,
+      pol: pol || (rc.pol ? rc.pol : ''),
+      pod: pod || (rc.pod ? rc.pod : ''),
+      loadingRate,
+      dischargingRate,
+      distanceNm,
+      vesselSpeedKnots,
+      dailyHireRateUsd,
+      exchangeRate,
+      diasCarga,
+      diasDescarga,
+      diasMuelle,
+      diasNavegacion,
+      diasRotacionTotal,
+      actualLoadingDays,
+      actualDischargingDays,
+      demurrageDailyRateUsd,
+      demurrageDays,
+      demurrageCostEur,
+      demurrageCostUsd,
+      demurrageStatus,
+      planchaDiasPermitidos,
+      tceValue,
+      oceanFreightTceUsd,
+      oceanFreightTceEur,
+      vesselType,
+      totalWeightTons,
+      totalVolumeM3,
+      reportRt,
+      isRealEstimate: true
+    };
+  };
+
   const getProjectDetails = async (projectRefOrId) => {
     try {
       const param = typeof projectRefOrId === 'object'
@@ -917,6 +1125,7 @@ export function ForwarderWorkspace() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.getProjectDetails = getProjectDetails;
+      window.getMaritimeRouteData = getMaritimeRouteData;
     }
   }, []);
 
@@ -948,6 +1157,7 @@ export function ForwarderWorkspace() {
     if (activeProject) {
       setprojectDocuments(activeProject.documents || activeProject.files || []);
       const projectRoute = activeProject.route_and_chartering ||
+        activeProject.routeAndChartering ||
         activeProject.line_items?.[0]?.payload_data?.route_and_chartering ||
         activeProject.services?.[0]?.payload_data?.route_and_chartering;
       if (projectRoute) {
@@ -967,6 +1177,14 @@ export function ForwarderWorkspace() {
         if (projectRoute.demurrage_daily_rate_usd) {
           setDemurrageDailyRateUsd(Number(projectRoute.demurrage_daily_rate_usd));
         }
+        if (projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd) {
+          const tceVal = Number(projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd);
+          setTceValue(tceVal);
+          setTceActive(true);
+        }
+        if (projectRoute.vessel_type) {
+          setVesselType(projectRoute.vessel_type);
+        }
       }
       const projectAssessment = activeProject.charteringAssessment ||
         activeProject.chartering_assessment ||
@@ -977,6 +1195,21 @@ export function ForwarderWorkspace() {
       }
     } else {
       setprojectDocuments([]);
+      const sessionData = readActiveCalculatorSession();
+      if (sessionData.hasActiveSession) {
+        if (sessionData.pol) setPol(sessionData.pol);
+        if (sessionData.pod) setPod(sessionData.pod);
+        if (sessionData.loadRate > 0) setLoadingRate(sessionData.loadRate);
+        if (sessionData.dischRate > 0) setDischargingRate(sessionData.dischRate);
+        if (sessionData.distanceNm > 0) setDistanceNm(sessionData.distanceNm);
+        if (sessionData.speedKnots > 0) setVesselSpeedKnots(sessionData.speedKnots);
+        if (sessionData.tce > 0) {
+          setTceValue(sessionData.tce);
+          setVesselDailyHireUsd(sessionData.tce);
+          setDemurrageDailyRateUsd(sessionData.tce);
+          setTceActive(true);
+        }
+      }
     }
   }, [activeProject]);
 
@@ -2005,13 +2238,14 @@ export function ForwarderWorkspace() {
     }) || isBigBagsCargo;
 
     // Parámetros de Ruta, Ritmos Operativos y Demoras
-    const reportPol = sourcePayload?.route_and_chartering?.pol || pol || 'Valencia';
-    const reportPod = sourcePayload?.route_and_chartering?.pod || pod || 'Houston';
-    const reportLoadRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.loading_rate_mt_day ?? loadingRate) || (isBigBags ? 1200 : 850));
-    const reportDischRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.discharging_rate_mt_day ?? dischargingRate) || (isBigBags ? 1000 : 750));
-    const reportDistance = Math.max(10, Number(sourcePayload?.route_and_chartering?.distance_nm ?? distanceNm) || 1500);
-    const reportSpeed = Math.max(1, Number(sourcePayload?.route_and_chartering?.vessel_speed_knots ?? vesselSpeedKnots) || 12.0);
-    const reportDailyHire = Number(sourcePayload?.route_and_chartering?.daily_hire_rate_usd ?? vesselDailyHireUsd) || (totalWeightTons >= 35000 ? 16500 : (totalWeightTons >= 10000 ? 13800 : (totalWeightTons >= 3000 ? 11500 : 8500)));
+    const sessionData = readActiveCalculatorSession();
+    const reportPol = sourcePayload?.route_and_chartering?.pol || pol || sessionData.pol || 'Valencia';
+    const reportPod = sourcePayload?.route_and_chartering?.pod || pod || sessionData.pod || 'Houston';
+    const reportLoadRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.loading_rate_mt_day ?? loadingRate ?? sessionData.loadRate) || (isBigBags ? 1200 : 850));
+    const reportDischRate = Math.max(1, Number(sourcePayload?.route_and_chartering?.discharging_rate_mt_day ?? dischargingRate ?? sessionData.dischRate) || (isBigBags ? 1000 : 750));
+    const reportDistance = Math.max(10, Number(sourcePayload?.route_and_chartering?.distance_nm ?? distanceNm ?? sessionData.distanceNm) || 1500);
+    const reportSpeed = Math.max(1, Number(sourcePayload?.route_and_chartering?.vessel_speed_knots ?? vesselSpeedKnots ?? sessionData.speedKnots) || 12.0);
+    const reportDailyHire = Number(sourcePayload?.route_and_chartering?.daily_hire_rate_usd ?? vesselDailyHireUsd ?? sessionData.tce) || (totalWeightTons >= 35000 ? 16500 : (totalWeightTons >= 10000 ? 13800 : (totalWeightTons >= 3000 ? 11500 : 8500)));
     const reportExRate = Number(sourcePayload?.route_and_chartering?.exchange_rate ?? exchangeRateUsdEur) || 0.92;
 
     const diasCarga = totalWeightTons > 0 ? Math.round((totalWeightTons / reportLoadRate) * 100) / 100 : 0;
@@ -2506,6 +2740,38 @@ export function ForwarderWorkspace() {
     setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
     setStorageDays(0); setSurveyorCost(0); setInlandCost(0); setCustomsCost(0); setInsuranceCost(0);
     userEditedSurveyor.current = false; setEstimatedCost(''); setSalePrice('');
+
+    // Pre-poblar dinámicamente con los inputs reales de la sesión del usuario
+    const sessionData = readActiveCalculatorSession();
+    if (sessionData.hasActiveSession) {
+      if (sessionData.pol) setPol(sessionData.pol);
+      if (sessionData.pod) setPod(sessionData.pod);
+      if (sessionData.loadRate > 0) setLoadingRate(sessionData.loadRate);
+      if (sessionData.dischRate > 0) setDischargingRate(sessionData.dischRate);
+      if (sessionData.distanceNm > 0) setDistanceNm(sessionData.distanceNm);
+      if (sessionData.speedKnots > 0) setVesselSpeedKnots(sessionData.speedKnots);
+      if (sessionData.tce > 0) {
+        setTceValue(sessionData.tce);
+        setVesselDailyHireUsd(sessionData.tce);
+        setDemurrageDailyRateUsd(sessionData.tce);
+        setTceActive(true);
+      }
+      if (sessionData.cargoQty > 0) {
+        const itemType = sessionData.cargoType || 'Carga General';
+        setCargoItems([{
+          id: `item-${Date.now()}`,
+          category: 'Mercancía General / Paletizada',
+          quantity: 1,
+          type: itemType,
+          length: '',
+          width: '',
+          height: '',
+          weight: sessionData.cargoQty * 1000,
+          shipping_mode_supported: 'Buque Completo (Fletamento)'
+        }]);
+      }
+    }
+
     setIsCargoModalOpen(true);
   };
 
@@ -2635,24 +2901,39 @@ export function ForwarderWorkspace() {
         shipping_mode: shippingMode || 'Lo-Lo',
         recommended_vessel: vesselType || 'Geared Breakbulk (Lo-Lo)',
         route_and_chartering: {
-          pol: pol || 'Valencia',
-          pod: pod || 'Houston',
-          distance_nm: Number(distanceNm) || 1500,
-          loading_rate_mt_day: Number(loadingRate) || 1200,
-          discharging_rate_mt_day: Number(dischargingRate) || 1000,
-          vessel_speed_knots: Number(vesselSpeedKnots) || 12.0,
-          daily_hire_rate_usd: Number(vesselDailyHireUsd) || 11500,
+          pol: pol || readActiveCalculatorSession().pol || '',
+          pod: pod || readActiveCalculatorSession().pod || '',
+          distance_nm: Number(distanceNm) || readActiveCalculatorSession().distanceNm || 1500,
+          loading_rate_mt_day: Number(loadingRate) || readActiveCalculatorSession().loadRate || 1200,
+          discharging_rate_mt_day: Number(dischargingRate) || readActiveCalculatorSession().dischRate || 1000,
+          vessel_speed_knots: Number(vesselSpeedKnots) || readActiveCalculatorSession().speedKnots || 12.0,
+          daily_hire_rate_usd: Number(vesselDailyHireUsd) || readActiveCalculatorSession().tce || 11500,
           exchange_rate: Number(exchangeRateUsdEur) || 0.92,
           dias_carga: currentReportSnapshot?.diasCarga || 0,
           dias_descarga: currentReportSnapshot?.diasDescarga || 0,
+          dias_muelle: ((currentReportSnapshot?.diasCarga || 0) + (currentReportSnapshot?.diasDescarga || 0)),
+          dias_muelle_total: ((currentReportSnapshot?.diasCarga || 0) + (currentReportSnapshot?.diasDescarga || 0)),
           dias_navegacion: currentReportSnapshot?.diasNavegacion || 0,
           dias_rotacion_total: currentReportSnapshot?.diasRotacionTotal || 0,
           actual_loading_days: actualLoadingDays,
           actual_discharging_days: actualDischargingDays,
           demurrage_days: currentReportSnapshot?.demurrageDays || 0,
-          demurrage_daily_rate_usd: Number(demurrageDailyRateUsd) || 11500,
+          demurrage_daily_rate_usd: Number(demurrageDailyRateUsd) || Number(vesselDailyHireUsd) || readActiveCalculatorSession().tce || 11500,
           demurrage_cost_eur: currentReportSnapshot?.demurrageCostNum || 0,
+          demurrage_cost_usd: (currentReportSnapshot?.demurrageDays || 0) * (Number(demurrageDailyRateUsd) || Number(vesselDailyHireUsd) || 11500),
           demurrage_status: currentReportSnapshot?.demurrageStatus || 'DENTRO DE PLANCHA (ON SCHEDULE)',
+          plancha_dias_permitidos: ((currentReportSnapshot?.diasCarga || 0) + (currentReportSnapshot?.diasDescarga || 0)),
+          tce_value: Number(tceValue || vesselDailyHireUsd || readActiveCalculatorSession().tce || currentReportSnapshot?.dailyRateUsd || 11500),
+          tce_daily_rate_usd: Number(tceValue || vesselDailyHireUsd || readActiveCalculatorSession().tce || currentReportSnapshot?.dailyRateUsd || 11500),
+          ocean_freight_tce_usd: Number(currentReportSnapshot?.fleteCostNum || ((currentReportSnapshot?.diasRotacionTotal || 0) * Number(tceValue || vesselDailyHireUsd || 11500))),
+          ocean_freight_tce_eur: Math.round(Number(currentReportSnapshot?.fleteCostNum || 0) * (Number(exchangeRateUsdEur) || 0.92) * 100) / 100,
+          tce_active: Boolean(tceActive || !isUnder40t),
+          vessel_type: vesselType || 'Geared Breakbulk (Lo-Lo)',
+          total_weight_tons: Number(currentReportSnapshot?.totalWeightTons || (totals?.weight || 0) / 1000),
+          total_volume_m3: Number(currentReportSnapshot?.totalVolumeM3 || totals?.m3 || 0),
+          report_rt: Number(currentReportSnapshot?.reportRT || 0),
+          is_real_estimate: true,
+          estimated_at: new Date().toISOString()
         },
         totals: { ...totals },
         financial_summary: {
@@ -2846,6 +3127,149 @@ export function ForwarderWorkspace() {
                             {lt.freightCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                           <span className="text-[11px] font-mono text-slate-500 font-bold ml-1">USD</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* SECCIÓN DE RUTA MARÍTIMA, RITMOS OPERATIVOS Y GESTIÓN DE DEMORAS (DATOS REALES GUARDADOS) */}
+              {(() => {
+                const mr = getMaritimeRouteData(activeProject);
+                if (!mr.hasData) return null;
+                return (
+                  <div
+                    id="project-maritime-route-card"
+                    className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-slate-800 space-y-4"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🚢</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                              Ruta Marítima, Ritmos Operativos y Gestión de Demoras
+                            </h3>
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-mono font-bold border border-emerald-200">
+                              ✓ DATOS REALES GUARDADOS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Parámetros operativos reales y exactos calculados para este expediente (sin estimaciones genéricas de IA)
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* VALOR EXACTO DEL TCE OBTENIDO */}
+                      <div className="bg-gradient-to-br from-indigo-50 to-sky-50 border border-indigo-200/80 rounded-xl p-3 px-4 flex items-center justify-between sm:justify-end gap-4 shadow-sm shrink-0">
+                        <div>
+                          <span className="text-[10px] font-mono text-indigo-700 uppercase tracking-wider font-bold block">
+                            TCE Obtenido (Diario)
+                          </span>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span className="text-indigo-600 font-bold text-sm select-none">$</span>
+                            <span id="project-tce-value-display" className="text-xl font-mono font-black text-indigo-950">
+                              {mr.tceValue.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                            <span className="text-[10px] font-mono text-indigo-600 font-bold ml-0.5">USD/día</span>
+                          </div>
+                        </div>
+
+                        <div className="h-8 w-px bg-indigo-200 hidden sm:block"></div>
+
+                        <div>
+                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold block">
+                            Flete Marítimo TCE
+                          </span>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span className="text-emerald-600 font-bold text-sm select-none">$</span>
+                            <span id="project-ocean-freight-tce-display" className="text-xl font-mono font-black text-slate-900">
+                              {mr.oceanFreightTceUsd.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500 font-bold ml-0.5">USD</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CUADRICULA DE DETALLES TÉCNICOS Y OPERATIVOS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      {/* 1. Ruta y Distancia */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ruta & Navegación</div>
+                        <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5 truncate">
+                          <span id="project-pol-display" className="text-blue-700">{mr.pol}</span>
+                          <span className="text-slate-400">➔</span>
+                          <span id="project-pod-display" className="text-emerald-700">{mr.pod}</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                          <span>Distancia náutica:</span>
+                          <span id="project-distance-display" className="font-mono font-bold text-slate-800">{mr.distanceNm.toLocaleString('es-ES')} NM</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between text-[11px]">
+                          <span>Velocidad buque:</span>
+                          <span id="project-speed-display" className="font-mono font-semibold text-slate-700">{mr.vesselSpeedKnots} kn</span>
+                        </div>
+                      </div>
+
+                      {/* 2. Ritmos Operativos */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ritmos de Operación</div>
+                        <div className="text-slate-600 flex justify-between pt-0.5 text-[11px]">
+                          <span>Ritmo de Carga:</span>
+                          <span id="project-loading-rate-display" className="font-mono font-bold text-slate-800">{mr.loadingRate.toLocaleString('es-ES')} MT/día</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between text-[11px]">
+                          <span>Ritmo de Descarga:</span>
+                          <span id="project-discharging-rate-display" className="font-mono font-bold text-slate-800">{mr.dischargingRate.toLocaleString('es-ES')} MT/día</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                          <span>Buque sugerido:</span>
+                          <span className="font-semibold text-slate-700 truncate max-w-[120px]" title={mr.vesselType}>{mr.vesselType}</span>
+                        </div>
+                      </div>
+
+                      {/* 3. Días de Muelle y Navegación */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Días Calculados</div>
+                        <div className="text-slate-600 flex justify-between pt-0.5 text-[11px]">
+                          <span>Días de Muelle:</span>
+                          <span id="project-berth-days-display" className="font-mono font-bold text-slate-800">
+                            {mr.diasMuelle.toFixed(2)} d
+                            <span className="text-[10px] text-slate-500 font-normal ml-1">({mr.diasCarga.toFixed(1)}c / {mr.diasDescarga.toFixed(1)}d)</span>
+                          </span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between text-[11px]">
+                          <span>Días de Navegación:</span>
+                          <span id="project-sea-days-display" className="font-mono font-bold text-slate-800">{mr.diasNavegacion.toFixed(2)} d</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                          <span className="font-semibold text-indigo-950">Rotación Total (D_total):</span>
+                          <span id="project-rotation-days-display" className="font-mono font-black text-indigo-700">{mr.diasRotacionTotal.toFixed(2)} d</span>
+                        </div>
+                      </div>
+
+                      {/* 4. Gestión de Demoras y Plancha */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Demoras y Plancha</div>
+                        <div className="text-slate-600 flex justify-between pt-0.5 text-[11px]">
+                          <span>Plancha permitida:</span>
+                          <span id="project-laytime-display" className="font-mono font-bold text-slate-800">{mr.planchaDiasPermitidos.toFixed(2)} d</span>
+                        </div>
+                        <div className="text-slate-600 flex justify-between text-[11px]">
+                          <span>Tarifa de Demoras:</span>
+                          <span id="project-demurrage-rate-display" className="font-mono font-bold text-slate-800">${mr.demurrageDailyRateUsd.toLocaleString('es-ES')}/día</span>
+                        </div>
+                        <div className="pt-1 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded font-bold uppercase ${mr.demurrageDays > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                            {mr.demurrageDays > 0 ? `+${mr.demurrageDays.toFixed(1)}d DEMORA` : 'EN PLANCHA'}
+                          </span>
+                          {mr.demurrageDays > 0 && (
+                            <span className="font-mono font-bold text-rose-600">
+                              +${mr.demurrageCostUsd.toLocaleString('es-ES')} USD
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3745,18 +4169,18 @@ export function ForwarderWorkspace() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center mt-3 pt-3 border-t border-slate-200">
                   <div className="bg-white p-2.5 rounded border border-slate-200">
                     <span className="block text-[10px] uppercase font-bold text-slate-500">Ruta Marítima</span>
-                    <span className="text-xs font-black text-slate-900 mt-1 block">{activeReport.pol || 'Valencia'} ➔ {activeReport.pod || 'Houston'}</span>
-                    <span className="block text-[9px] text-slate-500 font-mono">{(activeReport.distanceNm || 4850).toLocaleString('es-ES')} NM</span>
+                    <span className="text-xs font-black text-slate-900 mt-1 block">{activeReport.pol || pol || 'POL'} ➔ {activeReport.pod || pod || 'POD'}</span>
+                    <span className="block text-[9px] text-slate-500 font-mono">{(activeReport.distanceNm || distanceNm || 0).toLocaleString('es-ES')} NM</span>
                   </div>
                   <div className="bg-white p-2.5 rounded border border-slate-200">
                     <span className="block text-[10px] uppercase font-bold text-slate-500">Ritmos Carga / Descarga</span>
-                    <span className="text-xs font-black text-slate-900 mt-1 block">{(activeReport.loadingRate || 1200).toLocaleString('es-ES')} / {(activeReport.dischargingRate || 1000).toLocaleString('es-ES')} MT/d</span>
-                    <span className="block text-[9px] text-slate-500">Velocidad: {activeReport.vesselSpeedKnots || 12} nudos</span>
+                    <span className="text-xs font-black text-slate-900 mt-1 block">{(activeReport.loadingRate || loadingRate || 0).toLocaleString('es-ES')} / {(activeReport.dischargingRate || dischargingRate || 0).toLocaleString('es-ES')} MT/d</span>
+                    <span className="block text-[9px] text-slate-500">Velocidad: {activeReport.vesselSpeedKnots || vesselSpeedKnots || 12} nudos</span>
                   </div>
                   <div className="bg-white p-2.5 rounded border border-slate-200">
                     <span className="block text-[10px] uppercase font-bold text-slate-500">Rotación Buque (D_total)</span>
-                    <span className="text-xs font-black text-blue-700 mt-1 block font-mono">{(activeReport.diasRotacionTotal || 10).toFixed(2)} días</span>
-                    <span className="block text-[9px] text-slate-500">({(activeReport.diasCarga || 1.5).toFixed(1)}d C + {(activeReport.diasDescarga || 1.8).toFixed(1)}d D + {(activeReport.diasNavegacion || 6.7).toFixed(1)}d Nav)</span>
+                    <span className="text-xs font-black text-blue-700 mt-1 block font-mono">{(activeReport.diasRotacionTotal || 0).toFixed(2)} días</span>
+                    <span className="block text-[9px] text-slate-500">({(activeReport.diasCarga || 0).toFixed(1)}d C + {(activeReport.diasDescarga || 0).toFixed(1)}d D + {(activeReport.diasNavegacion || 0).toFixed(1)}d Nav)</span>
                   </div>
                   <div className={`p-2.5 rounded border ${activeReport.demurrageDays > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
                     <span className="block text-[10px] uppercase font-bold text-slate-600">Gestión de Demoras</span>

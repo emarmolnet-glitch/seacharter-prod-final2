@@ -351,6 +351,7 @@ export async function ensureApplicationSchema() {
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_destination VARCHAR(255);
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_distance NUMERIC;
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_cost NUMERIC;
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;
