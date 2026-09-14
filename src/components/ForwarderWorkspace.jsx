@@ -939,12 +939,53 @@ export function ForwarderWorkspace() {
       0
     );
 
+    const cargoProductEl = document.getElementById('cargo-product');
+    const packingEl = document.getElementById('gc-add-packing') || document.getElementById('cargo-packaging');
+    const cargoTypeManualEl = document.getElementById('cargo-type-manual');
+    const methodLoadEl = document.getElementById('metodo_carga');
+    const methodDischEl = document.getElementById('metodo_descarga_pod');
+    const charterPartyEl = document.getElementById('charter-party-standard');
+    const ballastEl = document.getElementById('port-ballast');
+
+    const cleanCargoProduct = String(cargoProductEl?.value || sessionSource.cargoProduct || sessionSource.productoEspecifico || sessionSource.commodity || '').trim();
+    const cleanCargoPacking = String(packingEl?.value || sessionSource.cargoPacking || '').trim();
+    const cleanCargoTypeManual = String(cargoTypeManualEl?.value || sessionSource.cargoTypeManual || '').trim();
+    const cleanBallast = String(ballastEl?.value || sessionSource.portBallast || '').trim();
+    const cleanMetodoCarga = String(methodLoadEl?.value || sessionSource.metodoCarga || '').trim();
+    const cleanMetodoDescarga = String(methodDischEl?.value || sessionSource.metodoDescarga || '').trim();
+    const cleanCharterParty = String(charterPartyEl?.value || sessionSource.charterPartyStandard || 'GENCON').trim();
+
+    const isBigBags = /big[- ]?bag|ensacad|saco/i.test(cleanCargoProduct) ||
+                      /big[- ]?bag|ensacad|saco/i.test(cleanCargoType) ||
+                      cleanCargoPacking === 'bigbag' ||
+                      cleanCargoProduct.toLowerCase().includes('big bag');
+
+    const isPallets = /palet|pallet|unitariz/i.test(cleanCargoProduct) ||
+                      /palet|pallet|unitariz/i.test(cleanCargoType) ||
+                      cleanCargoPacking === 'pallet' ||
+                      cleanCargoProduct.toLowerCase().includes('palet');
+
+    const isBulk = !isBigBags && !isPallets && (
+      /granel|bulk|clinker|yeso|mineral|carbon/i.test(cleanCargoProduct) ||
+      /granel|dry bulk|liquid bulk/i.test(cleanCargoType) ||
+      cleanCargoPacking === 'standard'
+    );
+
     return {
       hasActiveSession: Boolean(cleanPol || cleanPod || cleanCargoQty > 0 || cleanLoadRate > 0 || cleanDischRate > 0 || cleanDistance > 0 || cleanTce > 0),
       pol: cleanPol,
       pod: cleanPod,
+      portBallast: cleanBallast,
       cargoQty: cleanCargoQty,
       cargoType: cleanCargoType,
+      cargoCategory: cleanCargoType,
+      cargoProduct: cleanCargoProduct,
+      commodity: cleanCargoProduct || cleanCargoType,
+      cargoPacking: cleanCargoPacking,
+      cargoTypeManual: cleanCargoTypeManual,
+      isBigBags,
+      isPallets,
+      isBulk,
       loadRate: cleanLoadRate,
       dischRate: cleanDischRate,
       distanceNm: cleanDistance,
@@ -952,6 +993,9 @@ export function ForwarderWorkspace() {
       tce: cleanTce,
       freightSell,
       freightCost,
+      metodoCarga: cleanMetodoCarga,
+      metodoDescarga: cleanMetodoDescarga,
+      charterPartyStandard: cleanCharterParty,
     };
   };
 
@@ -969,6 +1013,11 @@ export function ForwarderWorkspace() {
   const [actualDischargingDays, setActualDischargingDays] = useState('');
   const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(initialSession.tce > 0 ? initialSession.tce : 11500);
   const [charteringAssessment, setCharteringAssessment] = useState(null);
+
+  // Estados reactivos para la sincronización con la calculadora y base de datos Neon
+  const [isSyncingCalculator, setIsSyncingCalculator] = useState(false);
+  const [syncSuccessNotice, setSyncSuccessNotice] = useState(null);
+  const [syncFeedback, setSyncFeedback] = useState(null);
 
   const [subtotalFreight, setSubtotalFreight] = useState('0.00');
   const [subtotalFobOperations, setSubtotalFobOperations] = useState('0.00');
@@ -1113,6 +1162,8 @@ export function ForwarderWorkspace() {
     }
   };
 
+  const handleSyncCalculatorDataRef = useRef(null);
+
   const handleSelectProject = async (proj) => {
     setActiveProject(proj);
     if (proj?.project_ref || proj?.id) {
@@ -1127,6 +1178,7 @@ export function ForwarderWorkspace() {
     if (typeof window !== 'undefined') {
       window.getProjectDetails = getProjectDetails;
       window.getMaritimeRouteData = getMaritimeRouteData;
+      window.handleSyncCalculatorData = (...args) => handleSyncCalculatorDataRef.current?.(...args);
     }
   }, []);
 
@@ -1344,6 +1396,398 @@ export function ForwarderWorkspace() {
       console.error('Error al guardar en base de datos:', err);
     }
   };
+
+  // Sincronización completa en tiempo real de la calculadora con el expediente activo y Neon (PUT)
+  const handleSyncCalculatorData = async () => {
+    if (!activeProject) return;
+    setIsSyncingCalculator(true);
+    setSyncSuccessNotice(null);
+
+    try {
+      // 1. Captura en tiempo real de absolutamente todos los cambios realizados en la calculadora
+      const sessionSource = readActiveCalculatorSession();
+
+      const polEl = document.getElementById('port-pol') || document.getElementById('map-port-pol');
+      const podEl = document.getElementById('port-pod') || document.getElementById('map-port-pod');
+      const ballastEl = document.getElementById('port-ballast');
+      const cargoQtyEl = document.getElementById('cargo-qty') || document.getElementById('cargo-quantity');
+      const cargoTypeEl = document.getElementById('cargo-type') || document.getElementById('cargo-category');
+      const cargoProductEl = document.getElementById('cargo-product');
+      const cargoTypeManualEl = document.getElementById('cargo-type-manual');
+      const packingEl = document.getElementById('gc-add-packing') || document.getElementById('cargo-packaging');
+      const loadRateEl = document.getElementById('rate-load') || document.getElementById('load-rate') || document.getElementById('input-loadRate');
+      const dischRateEl = document.getElementById('rate-disch') || document.getElementById('disch-rate') || document.getElementById('rate-discharge') || document.getElementById('input-dischRate');
+      const distEl = document.getElementById('dist-laden') || document.getElementById('dist-total');
+      const speedEl = document.getElementById('spd-laden') || document.getElementById('vessel-speed');
+      const freightCostEl = document.getElementById('freight-rate');
+      const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight');
+      const marginEl = document.getElementById('margin-charterer') || document.getElementById('margin-owner');
+      const methodLoadEl = document.getElementById('metodo_carga');
+      const methodDischEl = document.getElementById('metodo_descarga_pod');
+      const charterPartyEl = document.getElementById('charter-party-standard');
+
+      const capturedPol = String(polEl?.value || sessionSource.pol || pol || '').trim();
+      const capturedPod = String(podEl?.value || sessionSource.pod || pod || '').trim();
+      const capturedBallast = String(ballastEl?.value || sessionSource.portBallast || '').trim();
+
+      const capturedCargoQty = Math.max(
+        0,
+        parseFloat(cargoQtyEl?.value) ||
+        Number(sessionSource.cargoQty || sessionSource.cargo || sessionSource.quantityMT) ||
+        0
+      );
+
+      const capturedCargoCategory = String(
+        cargoTypeEl?.value ||
+        sessionSource.cargoCategory ||
+        sessionSource.cargoType ||
+        ''
+      ).trim();
+
+      const capturedCargoProduct = String(
+        cargoProductEl?.value ||
+        sessionSource.cargoProduct ||
+        sessionSource.productoEspecifico ||
+        sessionSource.commodity ||
+        ''
+      ).trim();
+
+      const capturedTypeManual = String(cargoTypeManualEl?.value || sessionSource.cargoTypeManual || '').trim();
+      const capturedPacking = String(packingEl?.value || sessionSource.cargoPacking || '').trim();
+
+      // Clasificación en tiempo real del tipo de mercancía (Granel vs Big Bags vs Palets)
+      const isBigBags = /big[- ]?bag|ensacad|saco/i.test(capturedCargoProduct) ||
+                        /big[- ]?bag|ensacad|saco/i.test(capturedCargoCategory) ||
+                        capturedPacking === 'bigbag' ||
+                        capturedCargoProduct.toLowerCase().includes('big bag');
+
+      const isPallets = /palet|pallet|unitariz/i.test(capturedCargoProduct) ||
+                        /palet|pallet|unitariz/i.test(capturedCargoCategory) ||
+                        capturedPacking === 'pallet' ||
+                        capturedCargoProduct.toLowerCase().includes('palet');
+
+      const isBulk = !isBigBags && !isPallets && (
+        /granel|bulk|clinker|yeso|mineral|carbon/i.test(capturedCargoProduct) ||
+        /granel|dry bulk|liquid bulk/i.test(capturedCargoCategory) ||
+        capturedPacking === 'standard'
+      );
+
+      const capturedLoadRate = Math.max(
+        1,
+        parseFloat(loadRateEl?.value) ||
+        Number(sessionSource.loadRate || loadingRate) ||
+        (isBigBags ? 1200 : (isPallets ? 1000 : 1200))
+      );
+
+      const capturedDischRate = Math.max(
+        1,
+        parseFloat(dischRateEl?.value) ||
+        Number(sessionSource.dischRate || dischargingRate) ||
+        (isBigBags ? 1000 : (isPallets ? 800 : 1000))
+      );
+
+      const capturedDistance = Math.max(
+        10,
+        parseFloat(distEl?.value) ||
+        Number(sessionSource.distanceNm || distanceNm) ||
+        1500
+      );
+
+      const capturedSpeed = Math.max(
+        1,
+        parseFloat(speedEl?.value) ||
+        Number(sessionSource.speedKnots || vesselSpeedKnots) ||
+        12.0
+      );
+
+      const capturedFreightCost = Math.max(
+        0,
+        parseFloat(freightCostEl?.value) ||
+        Number(sessionSource.freightCost) ||
+        0
+      );
+
+      const capturedFreightSell = Math.max(
+        0,
+        parseFloat(freightSellEl?.value) ||
+        Number(sessionSource.freightSell) ||
+        0
+      );
+
+      const capturedMargin = (capturedFreightCost > 0 && capturedFreightSell > 0)
+        ? Math.round(((capturedFreightSell - capturedFreightCost) / capturedFreightCost) * 100 * 100) / 100
+        : (parseFloat(marginEl?.value) || Number(activeProject.global_margin_percentage) || 15);
+
+      // Captura exhaustiva del valor exacto de TCE activo en la calculadora
+      const tceFromLabel = parseFloat(String(document.getElementById('res-tce-label')?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+      const tceFromPrint = parseFloat(String(document.getElementById('print-tce-owner')?.innerText || document.getElementById('print-tce-owner')?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+      const capturedTce = Math.max(
+        0,
+        Number(sessionSource.tce || vesselDailyHireUsd) ||
+        tceFromLabel ||
+        tceFromPrint ||
+        11500
+      );
+
+      // Cálculos náuticos y de rotación
+      const diasCarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedLoadRate) * 100) / 100 : 0;
+      const diasDescarga = capturedCargoQty > 0 ? Math.round((capturedCargoQty / capturedDischRate) * 100) / 100 : 0;
+      const diasNavegacion = Math.round((capturedDistance / (capturedSpeed * 24)) * 100) / 100;
+      const diasMuelle = Math.round((diasCarga + diasDescarga) * 100) / 100;
+      const diasRotacionTotal = Math.round((diasMuelle + diasNavegacion) * 100) / 100;
+      const oceanFreightTceUsd = Math.round(diasRotacionTotal * capturedTce * 100) / 100;
+      const oceanFreightTceEur = Math.round(oceanFreightTceUsd * exchangeRateUsdEur * 100) / 100;
+
+      // Adaptación reactiva de la Lista de Empaque / Piezas según el tipo de mercancía
+      let updatedCargoItems = [];
+      if (isBigBags) {
+        const bagWeightKg = 1500;
+        const totalPieces = capturedCargoQty > 0 ? Math.max(1, Math.round((capturedCargoQty * 1000) / bagWeightKg)) : 1000;
+        updatedCargoItems = [{
+          id: `item-bigbags-${Date.now()}`,
+          category: 'Big Bags',
+          quantity: totalPieces,
+          type: capturedCargoProduct || 'Big Bags (Minerales/Cemento)',
+          length: 1.15,
+          width: 1.10,
+          height: 1.20,
+          weight: bagWeightKg,
+          shipping_mode_supported: 'Geared Breakbulk (Lo-Lo)'
+        }];
+      } else if (isPallets) {
+        const palletWeightKg = 1500;
+        const totalPieces = capturedCargoQty > 0 ? Math.max(1, Math.round((capturedCargoQty * 1000) / palletWeightKg)) : 1000;
+        updatedCargoItems = [{
+          id: `item-pallets-${Date.now()}`,
+          category: 'Carga Paletizada',
+          quantity: totalPieces,
+          type: capturedCargoProduct || 'Carga Paletizada',
+          length: 1.20,
+          width: 1.00,
+          height: 1.50,
+          weight: palletWeightKg,
+          shipping_mode_supported: 'Geared Breakbulk (Lo-Lo)'
+        }];
+      } else {
+        updatedCargoItems = [{
+          id: `item-bulk-${Date.now()}`,
+          category: capturedCargoCategory || 'Granel Sólido (Dry Bulk)',
+          quantity: 1,
+          type: capturedCargoProduct || 'Granel Sólido',
+          length: 0,
+          width: 0,
+          height: 0,
+          weight: capturedCargoQty > 0 ? capturedCargoQty * 1000 : 15000000,
+          shipping_mode_supported: 'Bulk Carrier'
+        }];
+      }
+
+      // Captura y generación de la Vista Ejecutiva
+      let masterExecReport = null;
+      try {
+        if (typeof window.buildMasterExecutiveReportData === 'function') {
+          masterExecReport = window.buildMasterExecutiveReportData();
+        }
+      } catch (_) {}
+
+      const currentReportSnapshot = buildExecutiveReportData({
+        cargo_items: updatedCargoItems,
+        route_and_chartering: {
+          pol: capturedPol,
+          pod: capturedPod,
+          loading_rate_mt_day: capturedLoadRate,
+          discharging_rate_mt_day: capturedDischRate,
+          distance_nm: capturedDistance,
+          vessel_speed_knots: capturedSpeed,
+          daily_hire_rate_usd: capturedTce,
+          exchange_rate: exchangeRateUsdEur,
+        }
+      });
+
+      // Construcción del objeto route_and_chartering enriquecido
+      const updatedRouteAndChartering = {
+        pol: capturedPol,
+        pod: capturedPod,
+        port_ballast: capturedBallast,
+        distance_nm: capturedDistance,
+        loading_rate_mt_day: capturedLoadRate,
+        discharging_rate_mt_day: capturedDischRate,
+        vessel_speed_knots: capturedSpeed,
+        daily_hire_rate_usd: capturedTce,
+        tce_value: capturedTce,
+        tce_daily_rate_usd: capturedTce,
+        ocean_freight_tce_usd: oceanFreightTceUsd,
+        ocean_freight_tce_eur: oceanFreightTceEur,
+        commodity: capturedCargoProduct || capturedCargoCategory || 'Carga General',
+        cargo_product: capturedCargoProduct,
+        cargo_type: capturedCargoCategory,
+        cargo_category: capturedCargoCategory,
+        cargo_packing: capturedPacking,
+        cargo_type_manual: capturedTypeManual,
+        is_big_bags: isBigBags,
+        is_palletized: isPallets,
+        is_bulk: isBulk,
+        total_weight_tons: capturedCargoQty,
+        flete_compra_usd_mt: capturedFreightCost,
+        flete_venta_usd_mt: capturedFreightSell,
+        freight_rate_cost_usd: capturedFreightCost,
+        freight_rate_sell_usd: capturedFreightSell,
+        exchange_rate: exchangeRateUsdEur,
+        metodo_carga: methodLoadEl?.value || sessionSource.metodoCarga || '',
+        metodo_descarga: methodDischEl?.value || sessionSource.metodoDescarga || '',
+        charter_party_standard: charterPartyEl?.value || sessionSource.charterPartyStandard || 'GENCON',
+        dias_carga: diasCarga,
+        dias_descarga: diasDescarga,
+        dias_muelle: diasMuelle,
+        dias_muelle_total: diasMuelle,
+        dias_navegacion: diasNavegacion,
+        dias_rotacion_total: diasRotacionTotal,
+        actual_loading_days: actualLoadingDays,
+        actual_discharging_days: actualDischargingDays,
+        demurrage_daily_rate_usd: capturedTce,
+        demurrage_days: 0,
+        demurrage_cost_eur: 0,
+        demurrage_cost_usd: 0,
+        demurrage_status: 'DENTRO DE PLANCHA (ON SCHEDULE)',
+        plancha_dias_permitidos: diasMuelle,
+        vessel_type: isBulk ? 'Bulk Carrier (Granelero)' : (isBigBags ? 'Geared Breakbulk (Lo-Lo)' : 'Multi-Purpose MPP'),
+        executive_report_snapshot: currentReportSnapshot,
+        executive_report: masterExecReport || currentReportSnapshot,
+        is_real_estimate: true,
+        last_sync_at: new Date().toISOString()
+      };
+
+      // Flete y servicios asociados para los line_items
+      const totalCostUsd = capturedFreightCost > 0 && capturedCargoQty > 0
+        ? capturedFreightCost * capturedCargoQty
+        : oceanFreightTceUsd;
+      const totalSaleUsd = capturedFreightSell > 0 && capturedCargoQty > 0
+        ? capturedFreightSell * capturedCargoQty
+        : totalCostUsd * (1 + (capturedMargin / 100));
+
+      const totalCostEur = Math.round(totalCostUsd * exchangeRateUsdEur * 100) / 100;
+      const totalSaleEur = Math.round(totalSaleUsd * exchangeRateUsdEur * 100) / 100;
+
+      const serviceLineItem = {
+        id: activeProject.line_items?.[0]?.id || activeProject.items?.[0]?.id || `service-calc-sync-${Date.now()}`,
+        description: `Flete y Operaciones Marítimas (${capturedCargoProduct || capturedCargoCategory || 'Carga'}, ${capturedCargoQty.toLocaleString('es-ES')} MT: ${capturedPol} ➔ ${capturedPod})`,
+        cost_eur: totalCostEur,
+        sale_price_eur: totalSaleEur,
+        margin_eur: totalSaleEur - totalCostEur,
+        payload_data: {
+          route_and_chartering: updatedRouteAndChartering,
+          cargo_items: updatedCargoItems,
+          financialBreakdown: {
+            subtotalOceanFreight: totalCostUsd,
+            subtotalFobPortOperations: 0,
+            finalTotalCost: totalCostUsd,
+            finalTotalSale: totalSaleUsd,
+          },
+          financial_summary: {
+            subtotal_ocean_freight_usd: totalCostUsd,
+            subtotal_fob_operations_usd: 0,
+            estimated_total_cost_usd: totalCostUsd,
+            customer_sale_price_usd: totalSaleUsd,
+            subtotal_ocean_freight_eur: totalCostEur,
+            subtotal_fob_operations_eur: 0,
+            estimated_total_cost_eur: totalCostEur,
+            customer_sale_price_eur: totalSaleEur,
+          },
+          executive_report_snapshot: currentReportSnapshot,
+          totals: {
+            quantity: updatedCargoItems.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0),
+            weight: capturedCargoQty * 1000,
+            m2: currentReportSnapshot?.totals?.m2 || 0,
+            m3: currentReportSnapshot?.totals?.m3 || 0,
+          }
+        }
+      };
+
+      const existingItems = Array.isArray(activeProject.line_items) ? activeProject.line_items : (Array.isArray(activeProject.items) ? activeProject.items : []);
+      const otherItems = existingItems.filter(it => it.id !== serviceLineItem.id);
+      const updatedLineItems = [serviceLineItem, ...otherItems];
+
+      // 2. Ejecutar actualización inmediata (PUT) a la base de datos de Neon
+      const payloadToSync = {
+        id: activeProject.id,
+        project_ref: activeProject.project_ref,
+        client_name: activeProject.client_name,
+        status: activeProject.status || 'Borrador',
+        global_margin_percentage: capturedMargin,
+        documents: activeProject.documents || [],
+        items: updatedLineItems,
+        route_and_chartering: updatedRouteAndChartering,
+        land_origin: activeProject.land_origin,
+        land_destination: activeProject.land_destination,
+        land_distance: activeProject.land_distance,
+        land_freight_cost: activeProject.land_freight_cost,
+      };
+
+      const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payloadToSync),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error ${res.status} al sincronizar con Neon.`);
+      }
+
+      const resData = await res.json();
+      const savedProject = resData.project || payloadToSync;
+
+      const normalizedProject = {
+        ...activeProject,
+        ...savedProject,
+        route_and_chartering: updatedRouteAndChartering,
+        line_items: updatedLineItems,
+        items: updatedLineItems,
+      };
+
+      // 3. Sincronizar el proyecto activo y el estado local de la interfaz
+      setActiveProject(normalizedProject);
+      setProjects((prev) => prev.map((p) => (p.id === activeProject.id || p.project_ref === activeProject.project_ref) ? normalizedProject : p));
+
+      setPol(capturedPol);
+      setPod(capturedPod);
+      setLoadingRate(capturedLoadRate);
+      setDischargingRate(capturedDischRate);
+      setDistanceNm(capturedDistance);
+      setVesselSpeedKnots(capturedSpeed);
+      setVesselDailyHireUsd(capturedTce);
+      setDemurrageDailyRateUsd(capturedTce);
+      setTceValue(capturedTce);
+      setTceActive(true);
+      setIsBigBagsCargo(isBigBags);
+      setCargoItems(updatedCargoItems);
+      setActiveReport(currentReportSnapshot);
+      setReportData(currentReportSnapshot);
+
+      // 4. Mostrar aviso visual de confirmación de sincronización exitosa
+      setSyncSuccessNotice('¡Datos actualizados con éxito!');
+      setSyncFeedback('¡Datos actualizados con éxito!');
+
+      setTimeout(() => {
+        setSyncFeedback(null);
+      }, 3500);
+
+      setTimeout(() => {
+        setSyncSuccessNotice(null);
+      }, 5000);
+
+      await fetchProjects({ silent: true });
+    } catch (err) {
+      console.error('Error al sincronizar datos de la calculadora con Neon:', err);
+      setSyncSuccessNotice(`⚠️ Error de sincronización: ${err.message || 'Fallo de conexión con Neon'}`);
+    } finally {
+      setIsSyncingCalculator(false);
+    }
+  };
+
+  handleSyncCalculatorDataRef.current = handleSyncCalculatorData;
 
   const handleCreateProject = async () => {
     const input = window.prompt('Introduce el nombre del cliente para el nuevo proyecto:');
@@ -3060,14 +3504,38 @@ export function ForwarderWorkspace() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {projects.map((proj) => {
-              const isSelected = activeProject && (
-                (proj.id && activeProject.id === proj.id) ||
-                (proj.project_ref && activeProject.project_ref === proj.project_ref)
-              );
+            {isLoading && (
+              <div className="p-4 text-center text-xs text-slate-400">
+                <div className="inline-block animate-spin w-4 h-4 border-2 border-sky-400 border-t-transparent rounded-full mb-2"></div>
+                <p>Cargando proyectos...</p>
+              </div>
+            )}
+            {!isLoading && error && (
+              <div className="p-3 text-center text-xs text-rose-300 bg-rose-950/40 border border-rose-800/60 rounded-lg">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  onClick={() => fetchProjects()}
+                  className="mt-2 text-[10px] text-sky-400 underline hover:text-sky-300"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+            {!isLoading && !error && projects.length === 0 && (
+              <div className="p-4 text-center text-xs text-slate-400 italic">
+                No hay proyectos disponibles. Pulsa "+ Nuevo" para crear uno.
+              </div>
+            )}
+            {(projects || []).length > 0 && projects.map((proj) => {
+              if (!proj) return null;
+              const isSelected = Boolean(activeProject && (
+                (proj.id && activeProject?.id === proj.id) ||
+                (proj.project_ref && activeProject?.project_ref === proj.project_ref)
+              ));
               return (
                 <div
-                  key={proj.id || proj.project_ref}
+                  key={proj.id || proj.project_ref || Math.random()}
                   onClick={() => handleSelectProject(proj)}
                   className={`group p-3.5 rounded-xl border transition-all cursor-pointer relative ${
                     isSelected ? 'bg-slate-800 border-blue-500 shadow-sm' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
@@ -3075,8 +3543,8 @@ export function ForwarderWorkspace() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <span className="font-mono text-[11px] text-sky-400">{proj.project_ref}</span>
-                      <h3 className="font-bold text-slate-200 text-sm truncate">{proj.client_name}</h3>
+                      <span className="font-mono text-[11px] text-sky-400">{proj.project_ref || 'EXP-SIN-REF'}</span>
+                      <h3 className="font-bold text-slate-200 text-sm truncate">{proj.client_name || 'Sin Cliente'}</h3>
                     </div>
                     <button
                       type="button"
@@ -3121,19 +3589,78 @@ export function ForwarderWorkspace() {
                   type="button"
                   onClick={() => setActiveProject(null)}
                   className="bg-white text-slate-800 border border-slate-300 hover:bg-slate-100 hover:border-slate-400 px-4 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0"
+                  title="— Volver a Proyectos"
+                  aria-label="— Volver a Proyectos"
                 >
                   ← Volver a Proyectos
                 </button>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs font-bold text-sky-700 bg-sky-100 px-2.5 py-1 rounded border border-sky-300">
-                    # REF: {activeProject.project_ref || 'RDM/2026-001'}
+                    # REF: {activeProject?.project_ref || 'RDM/2026-001'}
                   </span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 border border-slate-300 uppercase">
-                    {activeProject.status || 'Borrador'}
+                    {activeProject?.status || 'Borrador'}
                   </span>
                 </div>
-                <h1 className="text-3xl font-bold text-slate-900">{activeProject.client_name}</h1>
+                <h1 className="text-3xl font-bold text-slate-900">{activeProject?.client_name || 'Expediente Sin Nombre'}</h1>
               </header>
+
+              {/* AVISO VISUAL DE CONFIRMACIÓN DE SINCRONIZACIÓN EXITOSA CON LA CALCULADORA Y NEON */}
+              {syncSuccessNotice && (
+                <>
+                  <div
+                    id="sync-success-notice"
+                    role="status"
+                    aria-live="polite"
+                    className="bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl p-3.5 px-4 flex items-center justify-between shadow-xs transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-sm font-black shrink-0">
+                        ✓
+                      </span>
+                      <div>
+                        <p className="text-xs font-bold text-emerald-900 font-semibold">
+                          {syncSuccessNotice}
+                        </p>
+                        <p className="text-[11px] text-emerald-700 mt-0.5">
+                          Los datos de la calculadora se han sincronizado con éxito. Tipo de mercancía, categoría, toneladas, rutas, ritmos operativos, fletes, TCE y vista ejecutiva actualizados en la base de datos de Neon.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSyncSuccessNotice(null)}
+                      className="text-emerald-700 hover:text-emerald-950 text-sm font-bold p-1 rounded cursor-pointer"
+                      title="Cerrar aviso"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* NOTIFICACIÓN FLOTANTE VISUAL DE ÉXITO (TOAST) */}
+                  <div
+                    id="sync-floating-toast"
+                    role="alert"
+                    aria-live="assertive"
+                    className="fixed bottom-6 right-6 z-[9999] bg-emerald-700 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-emerald-500 animate-bounce transition-all duration-300"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-800 text-white text-xs font-black shrink-0">
+                      ✓
+                    </span>
+                    <span className="text-xs font-bold tracking-wide">
+                      ¡Datos actualizados con éxito!
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSyncSuccessNotice(null)}
+                      className="text-emerald-200 hover:text-white ml-2 text-xs font-bold cursor-pointer"
+                      title="Cerrar notificación"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </>
+              )}
 
               {/* SECCIÓN DE RENDERIZADO CONDICIONAL MULTIMODAL: PRE-CARRIAGE / ON-CARRIAGE */}
               {(() => {
@@ -3281,17 +3808,17 @@ export function ForwarderWorkspace() {
                         <div className="text-slate-600 flex justify-between pt-0.5 text-[11px]">
                           <span>Días de Muelle:</span>
                           <span id="project-berth-days-display" className="font-mono font-bold text-slate-800">
-                            {mr.diasMuelle.toFixed(2)} d
-                            <span className="text-[10px] text-slate-500 font-normal ml-1">({mr.diasCarga.toFixed(1)}c / {mr.diasDescarga.toFixed(1)}d)</span>
+                            {Number(mr.diasMuelle || 0).toFixed(2)} d
+                            <span className="text-[10px] text-slate-500 font-normal ml-1">({Number(mr.diasCarga || 0).toFixed(1)}c / {Number(mr.diasDescarga || 0).toFixed(1)}d)</span>
                           </span>
                         </div>
                         <div className="text-slate-600 flex justify-between text-[11px]">
                           <span>Días de Navegación:</span>
-                          <span id="project-sea-days-display" className="font-mono font-bold text-slate-800">{mr.diasNavegacion.toFixed(2)} d</span>
+                          <span id="project-sea-days-display" className="font-mono font-bold text-slate-800">{Number(mr.diasNavegacion || 0).toFixed(2)} d</span>
                         </div>
                         <div className="text-slate-600 flex justify-between pt-1 border-t border-slate-200/60 text-[11px]">
                           <span className="font-semibold text-indigo-950">Rotación Total (D_total):</span>
-                          <span id="project-rotation-days-display" className="font-mono font-black text-indigo-700">{mr.diasRotacionTotal.toFixed(2)} d</span>
+                          <span id="project-rotation-days-display" className="font-mono font-black text-indigo-700">{Number(mr.diasRotacionTotal || 0).toFixed(2)} d</span>
                         </div>
                       </div>
 
@@ -3300,19 +3827,19 @@ export function ForwarderWorkspace() {
                         <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Demoras y Plancha</div>
                         <div className="text-slate-600 flex justify-between pt-0.5 text-[11px]">
                           <span>Plancha permitida:</span>
-                          <span id="project-laytime-display" className="font-mono font-bold text-slate-800">{mr.planchaDiasPermitidos.toFixed(2)} d</span>
+                          <span id="project-laytime-display" className="font-mono font-bold text-slate-800">{Number(mr.planchaDiasPermitidos || 0).toFixed(2)} d</span>
                         </div>
                         <div className="text-slate-600 flex justify-between text-[11px]">
                           <span>Tarifa de Demoras:</span>
-                          <span id="project-demurrage-rate-display" className="font-mono font-bold text-slate-800">${mr.demurrageDailyRateUsd.toLocaleString('es-ES')}/día</span>
+                          <span id="project-demurrage-rate-display" className="font-mono font-bold text-slate-800">${Number(mr.demurrageDailyRateUsd || 0).toLocaleString('es-ES')}/día</span>
                         </div>
                         <div className="pt-1 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
-                          <span className={`px-1.5 py-0.5 rounded font-bold uppercase ${mr.demurrageDays > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
-                            {mr.demurrageDays > 0 ? `+${mr.demurrageDays.toFixed(1)}d DEMORA` : 'EN PLANCHA'}
+                          <span className={`px-1.5 py-0.5 rounded font-bold uppercase ${(mr.demurrageDays || 0) > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                            {(mr.demurrageDays || 0) > 0 ? `+${Number(mr.demurrageDays).toFixed(1)}d DEMORA` : 'EN PLANCHA'}
                           </span>
-                          {mr.demurrageDays > 0 && (
+                          {(mr.demurrageDays || 0) > 0 && (
                             <span className="font-mono font-bold text-rose-600">
-                              +${mr.demurrageCostUsd.toLocaleString('es-ES')} USD
+                              +${Number(mr.demurrageCostUsd || 0).toLocaleString('es-ES')} USD
                             </span>
                           )}
                         </div>
@@ -3399,47 +3926,59 @@ export function ForwarderWorkspace() {
                 )}
               </div>
 
-              {activeProject.line_items?.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-base font-bold text-slate-900">Servicios</h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenExecutiveReport(activeProject.line_items[0])}
-                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5 transition"
-                      >
-                        📄 Reporte Ejecutivo
-                      </button>
-                      <button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button>
+              {(() => {
+                const projectItemsList = Array.isArray(activeProject.line_items)
+                  ? activeProject.line_items
+                  : (Array.isArray(activeProject.items)
+                      ? activeProject.items
+                      : (Array.isArray(activeProject.services) ? activeProject.services : []));
+
+                return projectItemsList.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-base font-bold text-slate-900">Servicios</h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenExecutiveReport(projectItemsList[0])}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5 transition"
+                        >
+                          📄 Reporte Ejecutivo
+                        </button>
+                        <button onClick={handleOpenCreateService} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer">➕ Añadir Servicio</button>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700"><tr><th className="px-4 py-3 text-left">Servicio</th><th className="px-4 py-3 text-right">Coste (€)</th><th className="px-4 py-3 text-right">Venta (€)</th><th className="px-4 py-3 text-center">Acciones</th></tr></thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-800">
+                          {projectItemsList.map((item, idx) => {
+                            const costEur = Number(item.cost_eur ?? item.costEur ?? 0) || 0;
+                            const saleEur = Number(item.sale_price_eur ?? item.salePriceEur ?? 0) || 0;
+                            return (
+                              <tr key={item.id || `item-row-${idx}`} className="border-b border-slate-100">
+                                <td className="px-4 py-3 font-semibold">{item.description || 'Servicio de Transporte'}</td>
+                                <td className="px-4 py-3 text-right text-rose-600 font-bold">{costEur.toLocaleString('es-ES')} €</td>
+                                <td className="px-4 py-3 text-right text-emerald-600 font-bold">{saleEur.toLocaleString('es-ES')} €</td>
+                                <td className="px-4 py-3 text-center">
+                                  <button type="button" onClick={() => handleOpenExecutiveReport(item)} className="mx-1 cursor-pointer hover:scale-110 transition-transform" title="Generar Reporte Ejecutivo">📄</button>
+                                  <button onClick={() => handleEditService(item)} className="mx-1 cursor-pointer">✏️</button>
+                                  <button onClick={() => handleDeleteService(item.id)} className="mx-1 cursor-pointer">🗑️</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700"><tr><th className="px-4 py-3 text-left">Servicio</th><th className="px-4 py-3 text-right">Coste (€)</th><th className="px-4 py-3 text-right">Venta (€)</th><th className="px-4 py-3 text-center">Acciones</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-800">
-                        {activeProject.line_items.map((item) => (
-                          <tr key={item.id} className="border-b border-slate-100">
-                            <td className="px-4 py-3 font-semibold">{item.description}</td>
-                            <td className="px-4 py-3 text-right text-rose-600 font-bold">{Number(item.cost_eur).toLocaleString('es-ES')} €</td>
-                            <td className="px-4 py-3 text-right text-emerald-600 font-bold">{Number(item.sale_price_eur).toLocaleString('es-ES')} €</td>
-                            <td className="px-4 py-3 text-center">
-                              <button type="button" onClick={() => handleOpenExecutiveReport(item)} className="mx-1 cursor-pointer hover:scale-110 transition-transform" title="Generar Reporte Ejecutivo">📄</button>
-                              <button onClick={() => handleEditService(item)} className="mx-1 cursor-pointer">✏️</button>
-                              <button onClick={() => handleDeleteService(item.id)} className="mx-1 cursor-pointer">🗑️</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                ) : (
+                  <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center bg-white text-center">
+                    <p className="text-slate-600 font-bold mb-3">No hay servicios logísticos añadidos a este proyecto</p>
+                    <button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-blue-700 transition cursor-pointer">➕ Añadir Servicio</button>
                   </div>
-                </div>
-              ) : (
-                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center bg-white text-center">
-                  <p className="text-slate-600 font-bold mb-3">No hay servicios logísticos añadidos a este proyecto</p>
-                  <button onClick={handleOpenCreateService} className="px-5 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-blue-700 transition cursor-pointer">➕ Añadir Servicio</button>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </main>
@@ -3465,8 +4004,44 @@ export function ForwarderWorkspace() {
                           setActiveProject(null);
                         }}
                         className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors mr-2 cursor-pointer"
+                        title="— Volver a Proyectos"
+                        aria-label="— Volver a Proyectos"
                       >
                         ← Volver a Proyectos
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-update-calculator-data"
+                        onClick={handleSyncCalculatorData}
+                        disabled={isSyncingCalculator}
+                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Capturar absolutamente todos los cambios de la calculadora en tiempo real y sincronizar con Neon"
+                        aria-label="Actualizar datos"
+                      >
+                        {isSyncingCalculator ? (
+                          <>
+                            <svg className="animate-spin -ml-0.5 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            <span>Sincronizando datos...</span>
+                          </>
+                        ) : syncFeedback ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>{syncFeedback}</span>
+                          </>
+                        ) : (
+                          <>
+                            {/* Icono vectorial de sincronización / disquete */}
+                            <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span>Actualizar datos</span>
+                          </>
+                        )}
                       </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
@@ -4517,28 +5092,28 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {activeReport.stowagePlan.holds?.map((hold) => (
-                        <div key={hold.holdNumber} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
+                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
+                        <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] font-black uppercase text-slate-800">{hold.name}</span>
+                            <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
                             <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                              {Number(hold.weightPercentage || 0).toFixed(1)}% peso
+                              {Number(hold?.weightPercentage || 0).toFixed(1)}% peso
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-600 mb-1.5">
-                            <span className="font-bold text-slate-900">{Number(hold.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold.totalVolumeCbm || 0).toFixed(1)} m³
+                            <span className="font-bold text-slate-900">{Number(hold?.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold?.totalVolumeCbm || 0).toFixed(1)} m³
                           </div>
                           <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${Math.min(100, Math.max(4, hold.volumeUtilizationPct || 0))}%` }}
+                              style={{ width: `${Math.min(100, Math.max(4, hold?.volumeUtilizationPct || 0))}%` }}
                             />
                           </div>
-                          <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold.stowageTier}>
-                            Nivel: <span className="font-bold text-slate-900">{hold.stowageTier}</span>
+                          <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold?.stowageTier || 'Bodega General'}>
+                            Nivel: <span className="font-bold text-slate-900">{hold?.stowageTier || 'Bodega General'}</span>
                           </div>
-                          <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold.securingLegend}>
-                            {hold.securingLegend}
+                          <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold?.securingLegend || ''}>
+                            {hold?.securingLegend || 'Trincaje estándar OMI'}
                           </div>
                         </div>
                       ))}
@@ -4956,4 +5531,63 @@ export function ForwarderWorkspace() {
   );
 }
 
-export default ForwarderWorkspace;
+class ForwarderWorkspaceErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error en componente ForwarderWorkspace:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center p-8 bg-slate-900 text-white">
+          <div className="max-w-md bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center shadow-xl">
+            <span className="text-4xl mb-3 block">⚠️</span>
+            <h3 className="text-lg font-bold text-slate-100">Error en la vista del expediente</h3>
+            <p className="text-xs text-slate-400 mt-2 mb-4">
+              Se ha detectado una incidencia temporal al renderizar los datos del proyecto.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold cursor-pointer transition shadow-sm"
+              >
+                Reintentar vista
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition"
+              >
+                Recargar página
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function SafeForwarderWorkspace(props) {
+  return (
+    <ForwarderWorkspaceErrorBoundary>
+      <ForwarderWorkspace {...props} />
+    </ForwarderWorkspaceErrorBoundary>
+  );
+}
+
+export default SafeForwarderWorkspace;
