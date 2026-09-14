@@ -2814,35 +2814,38 @@ export function ForwarderWorkspace() {
                 const lt = getLandTransportData(activeProject);
                 if (!lt.hasData) return null;
                 return (
-                  <div id="project-multimodal-card" className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 border border-emerald-500/40 rounded-xl p-5 shadow-sm text-white">
+                  <div
+                    id="project-multimodal-card"
+                    className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-slate-800"
+                  >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-xl">🚛</span>
-                          <h3 className="text-xs font-black text-emerald-400 uppercase tracking-wider">
+                          <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
                             Pre-carriage / On-carriage
                           </h3>
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold border border-emerald-500/30">
+                          <span className="text-[10px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded font-mono font-bold border border-slate-200 tracking-wide">
                             Conexión Multimodal Puerta a Puerto
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 font-semibold uppercase">Ruta Terrestre:</span>
-                          <span className="text-lg font-mono font-black text-white">{lt.routeText}</span>
+                          <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Ruta Terrestre:</span>
+                          <span className="text-lg font-mono font-black text-slate-900 tracking-tight">{lt.routeText}</span>
                         </div>
-                        <p className="text-xs text-slate-300">
-                          Distancia terrestre: <strong className="text-emerald-300 font-mono">{lt.distance > 0 ? `${lt.distance.toLocaleString('es-ES')} km` : 'No especificada'}</strong> · Inyectado por Land Charter Core PRO
+                        <p className="text-xs text-slate-600">
+                          Distancia terrestre: <strong className="text-slate-900 font-mono font-bold">{lt.distance > 0 ? `${lt.distance.toLocaleString('es-ES')} km` : 'No especificada'}</strong> · Inyectado por Land Charter Core PRO
                         </p>
                       </div>
 
-                      <div className="bg-slate-950/70 border border-emerald-500/30 rounded-lg p-3.5 px-5 flex flex-col items-start sm:items-end shrink-0">
-                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Coste Flete Terrestre</span>
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 px-5 flex flex-col items-start sm:items-end shrink-0 shadow-sm">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Coste Flete Terrestre</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <span className="text-emerald-400 font-bold text-lg select-none">$</span>
-                          <span className="text-2xl font-mono font-black text-emerald-300">
+                          <span className="text-emerald-600 font-bold text-lg select-none">$</span>
+                          <span className="text-2xl font-mono font-black text-slate-900">
                             {lt.freightCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
-                          <span className="text-[11px] font-mono text-slate-400 font-bold ml-1">USD</span>
+                          <span className="text-[11px] font-mono text-slate-500 font-bold ml-1">USD</span>
                         </div>
                       </div>
                     </div>
