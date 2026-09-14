@@ -1,8 +1,16 @@
 const DEFAULT_DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
+const DEFAULT_NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
+export const NOMINATIM_USER_AGENT = "SeaCharterCorePRO/1.0";
 
 type UnknownRecord = Record<string, unknown>;
 
-export interface DatalasticPortRecord {
+export type GeoSource = "DATALASTIC" | "NOMINATIM";
+
+export interface GeoResolutionRecord {
+  lat: number;
+  lon: number;
+  displayName: string;
+  source: GeoSource;
   uuid: string;
   portName: string;
   officialLabel: string;
@@ -14,8 +22,9 @@ export interface DatalasticPortRecord {
   longitude: number;
   maxOperationalDraftMeters: number | null;
   draftSourceField: string | null;
-  source: "DATALASTIC";
 }
+
+export type DatalasticPortRecord = GeoResolutionRecord;
 
 export class DatalasticPortError extends Error {
   status: number;
@@ -98,7 +107,7 @@ export function extractMaxOperationalDraft(value: unknown) {
   return match ? { meters: Number(match.meters.toFixed(3)), field: match.field } : { meters: null, field: null };
 }
 
-export function normalizeDatalasticPort(value: unknown): DatalasticPortRecord | null {
+export function normalizeDatalasticPort(value: unknown): GeoResolutionRecord | null {
   const record = asRecord(value);
   const portName = cleanText(record.port_name ?? record.name);
   const countryCode = cleanText(record.country_iso ?? record.country_code).toUpperCase();
@@ -106,19 +115,62 @@ export function normalizeDatalasticPort(value: unknown): DatalasticPortRecord | 
   const longitude = Number(record.lon ?? record.lng ?? record.longitude);
   if (!portName || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const draft = extractMaxOperationalDraft(record);
+  const officialLabel = cleanText(record.official_label ?? record.officialLabel) || `${portName} (${countryCode || "INT"})`;
+  const displayName = cleanText(record.display_name ?? record.displayName) || officialLabel;
+
   return {
     uuid: cleanText(record.uuid),
     portName,
-    officialLabel: `${portName} (${countryCode || "INT"})`,
+    officialLabel,
     countryCode,
     countryName: cleanText(record.country_name),
     unlocode: cleanText(record.unlocode).toUpperCase(),
-    portType: cleanText(record.port_type),
+    portType: cleanText(record.port_type) || "port",
     latitude,
     longitude,
     maxOperationalDraftMeters: draft.meters,
     draftSourceField: draft.field,
+    lat: latitude,
+    lon: longitude,
+    displayName,
     source: "DATALASTIC",
+  };
+}
+
+export function normalizeNominatimLocation(value: unknown): GeoResolutionRecord | null {
+  const record = asRecord(value);
+  const lat = Number(record.lat ?? record.latitude);
+  const lon = Number(record.lon ?? record.lng ?? record.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const displayName = cleanText(record.display_name ?? record.displayName ?? record.name);
+  if (!displayName) return null;
+
+  const address = asRecord(record.address);
+  const countryCode = cleanText(address.country_code ?? record.country_code ?? record.countryCode).toUpperCase();
+  const countryName = cleanText(address.country ?? record.country ?? record.countryName);
+
+  const rawName = cleanText(record.name ?? address.city ?? address.town ?? address.port ?? address.harbour ?? displayName.split(",")[0]);
+  const portName = rawName || displayName.split(",")[0].trim() || displayName;
+  const officialLabel = portName && countryCode ? `${portName} (${countryCode})` : displayName;
+  const portType = cleanText(record.type ?? record.class ?? "location") || "location";
+
+  return {
+    uuid: cleanText(record.place_id ? `osm-${record.place_id}` : record.uuid),
+    portName,
+    officialLabel,
+    countryCode,
+    countryName,
+    unlocode: cleanText(record.unlocode).toUpperCase(),
+    portType,
+    latitude: lat,
+    longitude: lon,
+    maxOperationalDraftMeters: null,
+    draftSourceField: null,
+    lat,
+    lon,
+    displayName,
+    source: "NOMINATIM",
   };
 }
 
@@ -136,35 +188,119 @@ async function requestDatalastic(path: string, parameters: Record<string, string
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
     });
-  } catch {
-    throw new DatalasticPortError("No fue posible conectar con Datalastic.", 502);
+  } catch (error) {
+    throw new DatalasticPortError(
+      `No fue posible conectar con Datalastic: ${error instanceof Error ? error.message : String(error)}`,
+      502,
+    );
   }
 
   const payload = await response.json().catch(() => null);
   const meta = asRecord(asRecord(payload).meta);
   if (!response.ok || meta.success === false) {
-    throw new DatalasticPortError("Datalastic rechazó la consulta de puertos.", response.status >= 500 ? 503 : 502);
+    const errorMsg = cleanText(meta.message || meta.error) || "Datalastic rechazó la consulta de puertos.";
+    const status = response.status === 402 || meta.status === 402
+      ? 402
+      : response.status >= 500
+        ? 503
+        : 502;
+    throw new DatalasticPortError(errorMsg, status);
   }
   return asRecord(payload).data;
 }
 
-export async function findDatalasticPorts(query: string, limit = 12) {
+export async function findDatalasticPorts(query: string, limit = 12): Promise<GeoResolutionRecord[]> {
   const data = await requestDatalastic("port_find", { name: query, fuzzy: "1" });
   return (Array.isArray(data) ? data : [])
     .map(normalizeDatalasticPort)
-    .filter((port): port is DatalasticPortRecord => Boolean(port))
+    .filter((port): port is GeoResolutionRecord => Boolean(port))
     .slice(0, Math.max(1, Math.min(20, limit)));
 }
 
-export async function getDatalasticPort(options: { uuid?: string; unlocode?: string; name?: string }) {
+export async function findNominatimLocations(query: string, limit = 12): Promise<GeoResolutionRecord[]> {
+  const baseUrl = cleanText(environmentValue("NOMINATIM_API_BASE_URL") || DEFAULT_NOMINATIM_BASE_URL).replace(/\/+$/, "");
+  const url = new URL(`${baseUrl}/search`);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("limit", String(Math.max(1, Math.min(20, limit))));
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "User-Agent": NOMINATIM_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch (error) {
+    throw new Error(`No fue posible conectar con Nominatim: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Nominatim respondió con error HTTP ${response.status}`);
+  }
+
+  const payload = await response.json().catch(() => []);
+  return (Array.isArray(payload) ? payload : [])
+    .map(normalizeNominatimLocation)
+    .filter((loc): loc is GeoResolutionRecord => Boolean(loc))
+    .slice(0, Math.max(1, Math.min(20, limit)));
+}
+
+export async function resolvePortsWithFailover(query: string, limit = 12): Promise<GeoResolutionRecord[]> {
+  const trimmed = cleanText(query);
+  if (trimmed.length < 2) return [];
+
+  // Proveedor Primario: Datalastic
+  try {
+    const datalasticResults = await findDatalasticPorts(trimmed, limit);
+    if (datalasticResults.length > 0) {
+      return datalasticResults;
+    }
+    console.warn(`[geo-resolver] Datalastic devolvió 0 resultados para "${trimmed}". Conmutando automáticamente a Nominatim.`);
+  } catch (error) {
+    console.warn(
+      `[geo-resolver] Datalastic falló para "${trimmed}" (${error instanceof Error ? error.message : String(error)}). Conmutando automáticamente a Nominatim (OpenStreetMap).`,
+    );
+  }
+
+  // Proveedor Secundario Gratuito: Nominatim (OpenStreetMap)
+  try {
+    return await findNominatimLocations(trimmed, limit);
+  } catch (osmError) {
+    console.error(
+      `[geo-resolver] Falló la conmutación a Nominatim para "${trimmed}":`,
+      osmError instanceof Error ? osmError.message : String(osmError),
+    );
+    return [];
+  }
+}
+
+export const resolveGeographicPoints = resolvePortsWithFailover;
+export const resolveGeographicLocation = resolvePortsWithFailover;
+
+export async function getDatalasticPort(options: { uuid?: string; unlocode?: string; name?: string }): Promise<GeoResolutionRecord | null> {
   let uuid = cleanText(options.uuid);
   let unlocode = cleanText(options.unlocode).toUpperCase();
   if (!uuid && !unlocode && options.name) {
-    const matches = await findDatalasticPorts(options.name, 1);
+    const matches = await resolvePortsWithFailover(options.name, 1);
     uuid = matches[0]?.uuid || "";
     unlocode = matches[0]?.unlocode || "";
+    if (matches[0] && (!uuid || uuid.startsWith("osm-"))) {
+      return matches[0];
+    }
   }
   if (!uuid && !unlocode) return null;
-  const data = await requestDatalastic("port", uuid ? { uuid } : { unlocode });
-  return normalizeDatalasticPort(data);
+  try {
+    const data = await requestDatalastic("port", uuid ? { uuid } : { unlocode });
+    return normalizeDatalasticPort(data);
+  } catch (error) {
+    if (options.name) {
+      const matches = await findNominatimLocations(options.name, 1);
+      return matches[0] || null;
+    }
+    throw error;
+  }
 }
