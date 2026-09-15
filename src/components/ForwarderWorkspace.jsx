@@ -1938,13 +1938,39 @@ export function ForwarderWorkspace() {
 
   handleSyncCalculatorDataRef.current = handleSyncCalculatorData;
 
-  const handleCreateProject = async () => {
-    const input = window.prompt('Introduce el nombre del cliente para el nuevo proyecto:');
-    if (!input || !input.trim()) return;
+  const handleCreateProject = async (e) => {
+    // 🛡️ BLINDAJE ULTRA-ESTRICTO:
+    // Bloquear si es ejecución programática/sintética, durante inyección de IA o en carga inicial
+    const isSynthetic = e && (e.isTrusted === false || e.isProgrammatic === true);
+    const isAiInjecting = typeof window !== 'undefined' && Boolean(
+      window.__AI_INJECTION_IN_PROGRESS__ ||
+      window.updateFieldsActionInProgress ||
+      window.__IS_PROGRAMMATIC_UPDATE__
+    );
+    const isPageLoading = typeof document !== 'undefined' && document.readyState !== 'complete';
+
+    if (isSynthetic || isAiInjecting || isPageLoading) {
+      console.warn("🛡️ [ForwarderWorkspace] Creación de proyecto bloqueada: ejecución automática, IA o carga inicial.");
+      return;
+    }
+
+    let input = null;
+    try {
+      input = window.prompt('Introduce el nombre del cliente para el nuevo proyecto:');
+    } catch (_) {
+      return;
+    }
+
+    // Si el usuario cancela (null) o devuelve vacío, aborta la operación silenciosamente y NO llames al endpoint /api/forwarder-projects
+    if (input === null || !input || !input.trim()) {
+      return;
+    }
+
     setIsCreating(true);
     try {
       const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ client_name: input.trim(), documents: [] }),
       });
       if (!res.ok) throw new Error();
@@ -5317,7 +5343,7 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {activeReport.stowagePlan.holds?.map((hold, holdIdx) => (
+                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
                         <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>

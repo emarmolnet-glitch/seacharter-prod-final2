@@ -31920,10 +31920,15 @@ function setIsGeoInputOpen(isNextOpen) {
 
         // --- LÓGICA DE NEGOCIO Y CASCADA DE GASTOS ---
         function autoScaleVesselAndCosts() {
+            const cargoQtyEl = document.getElementById('cargo-qty');
+            const vesselNameEl = document.getElementById('vessel-name');
+            const vesselDwtEl = document.getElementById('vessel-dwt');
+            if (!cargoQtyEl || !vesselNameEl || !vesselDwtEl) return;
+
             const options = arguments[0] || {};
             const deferDependentCalculations = options.deferDependentCalculations === true;
-            const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
-            const vesselName = (document.getElementById('vessel-name').value || '').trim();
+            const cargo = parseFloat(cargoQtyEl.value) || 0;
+            const vesselName = (vesselNameEl.value || '').trim();
             const isRealVessel = vesselName && vesselName.toUpperCase() !== 'TBN';
 
             // Unchangeable golden rule: Under no circumstances should you modify, approximate, or invent the actual DWT of the vessel to try to match or adapt it to the weight of the cargo.
@@ -31935,7 +31940,7 @@ function setIsGeoInputOpen(isNextOpen) {
                 console.log("Strict Golden Rule: Keeping official vessel DWT, no auto-scaling to match cargo weight.");
             } else {
                 const suggestedDWT = Math.round(cargo * 1.15);
-                document.getElementById('vessel-dwt').value = suggestedDWT;
+                vesselDwtEl.value = suggestedDWT;
             }
 
             handleDWTChange(false, !deferDependentCalculations);
@@ -32093,7 +32098,9 @@ function setIsGeoInputOpen(isNextOpen) {
         }
 
         function autoAdjustSFLegacy() {
-            const type = document.getElementById('cargo-type').value;
+            const typeEl = document.getElementById('cargo-type');
+            if (!typeEl) return;
+            const type = typeEl.value;
             let sf = 1.20;
             const surchargeEl = document.getElementById('cargo-surcharge');
             const marginOwnerEl = document.getElementById('margin-owner');
@@ -32143,7 +32150,8 @@ function setIsGeoInputOpen(isNextOpen) {
                 if (marginChartererEl) marginChartererEl.value = selectedProfile ? Number(selectedProfile.chartererMarginPercent || 0).toFixed(2) : DEFAULT_CHARTERER_MARGIN_PERCENT;
             }
             
-            document.getElementById('cargo-sf').value = sf.toFixed(2);
+            const cargoSfEl = document.getElementById('cargo-sf');
+            if (cargoSfEl) cargoSfEl.value = sf.toFixed(2);
             
             // Auto-adjust standard policy dropdown as a smart default when cargo type changes
             const cpStandardEl = document.getElementById('charter-party-standard');
@@ -32353,16 +32361,18 @@ function setIsGeoInputOpen(isNextOpen) {
         }
 
         function handleFlagOrPscChange() {
-            const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            const dwtEl = document.getElementById('vessel-dwt');
+            const dwt = parseFloat(dwtEl?.value) || 0;
             if (dwt > 0) {
                 const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
-                const name = (document.getElementById('vessel-name').value || '').trim();
+                const name = (document.getElementById('vessel-name')?.value || '').trim();
                 const totalOpexDaily = calculateFixedOpex(dwt, specialty, name);
-                document.getElementById('opex-daily').value = totalOpexDaily;
+                const opexDailyEl = document.getElementById('opex-daily');
+                if (opexDailyEl) opexDailyEl.value = totalOpexDaily;
                 
                 autoCalculateDemurrage(false);
             }
-            runEngine();
+            if (typeof runEngine === 'function') runEngine();
         }
 
         function updateOpexCategoryDisplay() {
@@ -32999,7 +33009,9 @@ function setIsGeoInputOpen(isNextOpen) {
             if (isManual) {
                 State.vesselDwtFixed = true;
             }
-            const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            const vesselDwtEl = document.getElementById('vessel-dwt');
+            if (!vesselDwtEl) return;
+            const dwt = parseFloat(vesselDwtEl.value) || 0;
             updateCalculatorDwtBadge(dwt);
             if (typeof updateVesselPricingRouter === 'function') {
                 updateVesselPricingRouter();
@@ -33009,19 +33021,23 @@ function setIsGeoInputOpen(isNextOpen) {
             const cSea = Math.max(3.0, dwt * 0.0006);
             const cPort = Math.max(0.5, dwt * 0.0001);
 
-            document.getElementById('cons-sea').value = cSea.toFixed(1);
-            document.getElementById('cons-port').value = cPort.toFixed(1);
+            const consSeaEl = document.getElementById('cons-sea');
+            if (consSeaEl) {
+                consSeaEl.value = cSea.toFixed(1);
+                consSeaEl.dataset.navigationBase = cSea.toFixed(1);
+            }
+            const consPortEl = document.getElementById('cons-port');
+            if (consPortEl) consPortEl.value = cPort.toFixed(1);
 
             const detectedSegment = detectVesselSegment(dwt);
             let vClass = detectedSegment.segment;
 
-            document.getElementById('vessel-badge').innerText = vClass;
+            const vesselBadgeEl = document.getElementById('vessel-badge');
+            if (vesselBadgeEl) vesselBadgeEl.innerText = vClass;
             State.class = vClass;
             if (typeof updateCargoVesselClassDisplay === 'function') {
                 updateCargoVesselClassDisplay();
             }
-            const seaInput = document.getElementById('cons-sea');
-            if (seaInput) seaInput.dataset.navigationBase = cSea.toFixed(1);
             if (typeof syncNavigationStrategyEffect === 'function') {
                 syncNavigationStrategyEffect();
             }
@@ -33030,10 +33046,12 @@ function setIsGeoInputOpen(isNextOpen) {
             autoClassifySpecialtyFromInputs();
 
             const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
-            const name = (document.getElementById('vessel-name').value || '').trim();
+            const vesselNameEl = document.getElementById('vessel-name');
+            const name = (vesselNameEl ? vesselNameEl.value : '').trim();
             const totalOpexDaily = calculateFixedOpex(dwt, specialty, name);
 
-            document.getElementById('opex-daily').value = totalOpexDaily;
+            const opexDailyEl = document.getElementById('opex-daily');
+            if (opexDailyEl) opexDailyEl.value = totalOpexDaily;
 
             if (triggerEngine) {
                 if (typeof debouncedAutoFillPDA === 'function') {
@@ -33081,7 +33099,8 @@ function setIsGeoInputOpen(isNextOpen) {
         function autoClassifySpecialtyFromInputs() {
             if (State.userHasEditedSpecialty) return;
 
-            let vesselName = (document.getElementById('vessel-name').value || '').trim();
+            const vesselNameEl = document.getElementById('vessel-name');
+            let vesselName = (vesselNameEl ? vesselNameEl.value : '').trim();
             // If the name already has specs in parentheses, extract the base name!
             const parenIndex = vesselName.indexOf('(');
             if (parenIndex !== -1) {
@@ -33089,7 +33108,8 @@ function setIsGeoInputOpen(isNextOpen) {
             }
 
             const nameLower = vesselName.toLowerCase();
-            const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            const vesselDwtEl = document.getElementById('vessel-dwt');
+            const dwt = parseFloat(vesselDwtEl ? vesselDwtEl.value : '') || 0;
             const cargoType = document.getElementById('cargo-type')?.value || '';
             const specialtyInput = document.getElementById('gc-add-specialty');
             if (!specialtyInput) return;
@@ -33215,7 +33235,7 @@ function setIsGeoInputOpen(isNextOpen) {
 
         function autoCalculateSeasonalMargin() {
             // Buscar la fecha de laycan en el contrato, o usar la fecha actual si está vacía
-            const laycanDateStr = document.getElementById('gc-laycan-date').value;
+            const laycanDateStr = document.getElementById('gc-laycan-date')?.value || '';
             const date = laycanDateStr ? new Date(laycanDateStr) : new Date();
             const month = date.getMonth(); // 0 = Ene, 11 = Dic
 
@@ -33238,7 +33258,8 @@ function setIsGeoInputOpen(isNextOpen) {
                 icon = "fa-leaf text-emerald-400";
             }
 
-            document.getElementById('margin-owner').value = margin;
+            const marginOwnerEl = document.getElementById('margin-owner');
+            if (marginOwnerEl) marginOwnerEl.value = margin;
             showToast(`📅 Temporada ${season}: Margen del Armador ajustado al ${margin}% <i class="fa-solid ${icon} ml-1"></i>`);
             runEngine();
         }
@@ -34320,29 +34341,36 @@ function setIsGeoInputOpen(isNextOpen) {
                     }
                     
                     if (normalized.dwt) {
-                        document.getElementById('vessel-dwt').value = Math.round(normalized.dwt);
+                        const vesselDwtEl = document.getElementById('vessel-dwt');
+                        if (vesselDwtEl) vesselDwtEl.value = Math.round(normalized.dwt);
                         State.vesselDwtFixed = true;
                     }
                     if (normalized.spd_ballast) {
-                        document.getElementById('spd-ballast').value = parseFloat(normalized.spd_ballast).toFixed(1);
+                        const spdBallastEl = document.getElementById('spd-ballast');
+                        if (spdBallastEl) spdBallastEl.value = parseFloat(normalized.spd_ballast).toFixed(1);
                         markKnownVesselSpeed('spd-ballast');
                     }
                     if (normalized.spd_laden) {
-                        document.getElementById('spd-laden').value = parseFloat(normalized.spd_laden).toFixed(1);
+                        const spdLadenEl = document.getElementById('spd-laden');
+                        if (spdLadenEl) spdLadenEl.value = parseFloat(normalized.spd_laden).toFixed(1);
                         markKnownVesselSpeed('spd-laden');
                     }
                     if (normalized.cons_sea) {
-                        document.getElementById('cons-sea').value = parseFloat(normalized.cons_sea).toFixed(1);
+                        const consSeaEl = document.getElementById('cons-sea');
+                        if (consSeaEl) consSeaEl.value = parseFloat(normalized.cons_sea).toFixed(1);
                     }
                     if (normalized.cons_port) {
-                        document.getElementById('cons-port').value = parseFloat(normalized.cons_port).toFixed(1);
+                        const consPortEl = document.getElementById('cons-port');
+                        if (consPortEl) consPortEl.value = parseFloat(normalized.cons_port).toFixed(1);
                     }
                     if (normalized.vessel_class) {
-                        document.getElementById('vessel-badge').innerText = normalized.vessel_class;
+                        const vesselBadgeEl = document.getElementById('vessel-badge');
+                        if (vesselBadgeEl) vesselBadgeEl.innerText = normalized.vessel_class;
                         State.class = normalized.vessel_class;
                     }
                     if (normalized.specialty_type) {
-                        document.getElementById('gc-add-specialty').value = normalized.specialty_type;
+                        const specialtyEl = document.getElementById('gc-add-specialty');
+                        if (specialtyEl) specialtyEl.value = normalized.specialty_type;
                         State.userHasEditedSpecialty = false;
                     }
 
@@ -34360,8 +34388,11 @@ function setIsGeoInputOpen(isNextOpen) {
                     const loa = normalized.loa ? (typeof normalized.loa === 'string' && normalized.loa.endsWith('m') ? normalized.loa : `${normalized.loa}m`) : 'Unknown';
                     const draft = normalized.draft ? (typeof normalized.draft === 'string' && normalized.draft.endsWith('m') ? normalized.draft : `${normalized.draft}m`) : 'Unknown';
 
-                    document.getElementById('vessel-name').value = `${name} (${flag}, ${builtYear}, ${capacity} DWT, IMO: ${imo}, LOA: ${loa}, Draft: ${draft})`;
-                    State.vessel = document.getElementById('vessel-name').value;
+                    const vesselNameEl = document.getElementById('vessel-name');
+                    if (vesselNameEl) {
+                        vesselNameEl.value = `${name} (${flag}, ${builtYear}, ${capacity} DWT, IMO: ${imo}, LOA: ${loa}, Draft: ${draft})`;
+                        State.vessel = vesselNameEl.value;
+                    }
 
                     // Guardar en el servidor (historial persistente de buques auditados)
                     fetch('/api/vessels', {
@@ -34374,19 +34405,20 @@ function setIsGeoInputOpen(isNextOpen) {
                         body: JSON.stringify(normalized)
                     }).catch(err => console.error("Error autosaving audited vessel to database:", err));
                     
-                    const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+                    const dwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
                     if (dwt > 0) {
                         const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
-                        const name = (document.getElementById('vessel-name').value || '').trim();
+                        const name = (document.getElementById('vessel-name')?.value || '').trim();
                         const totalOpexDaily = calculateFixedOpex(dwt, specialty, name);
-                        document.getElementById('opex-daily').value = totalOpexDaily;
+                        const opexDailyEl = document.getElementById('opex-daily');
+                        if (opexDailyEl) opexDailyEl.value = totalOpexDaily;
                         
                         autoCalculateDemurrage(false);
                     }
 
                     showToast(`✅ Especificaciones del buque "${vesselName}" cargadas.`);
                     runEngine();
-                    const cargoQty = parseFloat(document.getElementById('cargo-qty').value) || 0;
+                    const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
                     if (dwt > 0 && cargoQty > 0 && dwt < cargoQty) {
                         showToast("<strong class='text-red-400'>NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.</strong>");
                     }
@@ -36066,7 +36098,7 @@ function setIsGeoInputOpen(isNextOpen) {
             }
         }
 
-        window.hydrateBunkerIndexData = function() {
+        function hydrateBunkerIndexData() {
             const cache = readBunkerIndexCache({ allowStale: true });
             if (cache) {
                 applyBunkerIndexData(cache);
@@ -36076,6 +36108,7 @@ function setIsGeoInputOpen(isNextOpen) {
             updateBunkerMarketSyncStatus(null);
             return false;
         }
+        window.hydrateBunkerIndexData = hydrateBunkerIndexData;
 
         function normalizeBunkerMarketPayload(payload, options = {}) {
             const routeRegion = options.routeRegion || getCurrentBunkerRegionContext();
@@ -36489,15 +36522,17 @@ function setIsGeoInputOpen(isNextOpen) {
             if (role === 'owner') {
                 const finalVal = State.sugOwner || 0;
                 const roundedValue = Math.round(finalVal * 4) / 4;
-                document.getElementById('freight-rate').value = roundedValue.toFixed(2);
+                const freightRateEl = document.getElementById('freight-rate');
+                if (freightRateEl) freightRateEl.value = roundedValue.toFixed(2);
                 State.freightRate = roundedValue;
             } else {
                 const finalVal = State.sugCharterer || 0;
                 const roundedValue = Math.round(finalVal * 4) / 4;
-                document.getElementById('freight-sell').value = roundedValue.toFixed(2);
+                const freightSellEl = document.getElementById('freight-sell');
+                if (freightSellEl) freightSellEl.value = roundedValue.toFixed(2);
                 State.freightSell = roundedValue;
             }
-            if (!options.deferEngine) runEngine();
+            if (!options.deferEngine && typeof runEngine === 'function') runEngine();
         }
 
         function buildMatchingRequest(calculation = {}) {
@@ -36653,7 +36688,7 @@ function setIsGeoInputOpen(isNextOpen) {
         // --- ALGORITMO LOCAL DE FLETE SPOT REAL (SIN IA) ---
         function predictSpotMarketLocal() {
             // 1. Forzar recálculo previo para tener la base matemática limpia
-            runEngine(); 
+            if (typeof runEngine === 'function') runEngine(); 
 
             const finalOwner = State.sugOwner || 0;
             const finalChart = State.sugCharterer || 0;
@@ -36665,20 +36700,26 @@ function setIsGeoInputOpen(isNextOpen) {
             const finalChartRounded = roundCommercial(finalChart);
 
             // 4. Aplicar a la interfaz
-            document.getElementById('freight-rate').value = finalOwnerRounded;
-            document.getElementById('freight-sell').value = finalChartRounded;
+            const freightRateEl = document.getElementById('freight-rate');
+            if (freightRateEl) freightRateEl.value = finalOwnerRounded;
+            const freightSellEl = document.getElementById('freight-sell');
+            if (freightSellEl) freightSellEl.value = finalChartRounded;
             
             showToast(`📈 Flete PMT Spot Actualizado: Calculado sobre un Break-Even base de $${(State.breakEven || 0).toFixed(2)}/TM.`);
             
-            runEngine();
+            if (typeof runEngine === 'function') runEngine();
         }
 
         // --- CÁLCULOS DE UNIDADES (BULTOS) PARA ADDENDUM ---
         function updateCargoUnit(forceDefault = false) {
-            const type = document.getElementById('gc-add-packing').value;
-            const totalCargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
+            const packingEl = document.getElementById('gc-add-packing');
+            const cargoQtyEl = document.getElementById('cargo-qty');
+            if (!packingEl || !cargoQtyEl) return;
+            const type = packingEl.value;
+            const totalCargo = parseFloat(cargoQtyEl.value) || 0;
             const unitsInput = document.getElementById('gc-add-units');
             const weightInput = document.getElementById('gc-add-weight');
+            if (!unitsInput || !weightInput) return;
             
             let weightPerUnit = 1;
             let defaultDim = { w: '', l: '', h: '' };
@@ -36707,13 +36748,11 @@ function setIsGeoInputOpen(isNextOpen) {
                     break;
             }
 
-            if (weightInput) {
-                if (forceDefault || !weightInput.value || parseFloat(weightInput.value) === 0) {
-                    weightInput.value = type === 'standard' ? '1.00' : weightPerUnit.toFixed(2);
-                }
+            if (forceDefault || !weightInput.value || parseFloat(weightInput.value) === 0) {
+                weightInput.value = type === 'standard' ? '1.00' : weightPerUnit.toFixed(2);
             }
 
-            const currentWeight = weightInput ? (parseFloat(weightInput.value) || weightPerUnit) : weightPerUnit;
+            const currentWeight = parseFloat(weightInput.value) || weightPerUnit;
 
             if (totalCargo > 0 && currentWeight > 0) {
                 unitsInput.value = Math.ceil(totalCargo / currentWeight);
@@ -36722,20 +36761,27 @@ function setIsGeoInputOpen(isNextOpen) {
             }
 
             // Solo actualizar si no hay dimensiones ya escritas o si cambió la unidad base
-            if (forceDefault || (!document.getElementById('dim-w').value && !document.getElementById('dim-l').value && !document.getElementById('dim-h').value)) {
-                document.getElementById('dim-w').value = defaultDim.w;
-                document.getElementById('dim-l').value = defaultDim.l;
-                document.getElementById('dim-h').value = defaultDim.h;
+            const dimW = document.getElementById('dim-w');
+            const dimL = document.getElementById('dim-l');
+            const dimH = document.getElementById('dim-h');
+            if (forceDefault || (!dimW?.value && !dimL?.value && !dimH?.value)) {
+                if (dimW) dimW.value = defaultDim.w;
+                if (dimL) dimL.value = defaultDim.l;
+                if (dimH) dimH.value = defaultDim.h;
             }
             
-            syncGencon();
+            if (typeof syncGencon === 'function') syncGencon();
         }
 
         function updateCargoUnitManual() {
-            const type = document.getElementById('gc-add-packing').value;
-            const totalCargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
+            const packingEl = document.getElementById('gc-add-packing');
+            const cargoQtyEl = document.getElementById('cargo-qty');
+            if (!packingEl || !cargoQtyEl) return;
+            const type = packingEl.value;
+            const totalCargo = parseFloat(cargoQtyEl.value) || 0;
             const unitsInput = document.getElementById('gc-add-units');
             const weightInput = document.getElementById('gc-add-weight');
+            if (!unitsInput || !weightInput) return;
             
             const weightPerUnit = parseFloat(weightInput.value) || 0;
 
@@ -36745,7 +36791,7 @@ function setIsGeoInputOpen(isNextOpen) {
                 unitsInput.value = '';
             }
             
-            syncGencon();
+            if (typeof syncGencon === 'function') syncGencon();
         }
 
         let reactiveEngineTimer = null;
@@ -38219,9 +38265,9 @@ function scheduleReactiveEngine() {
             const distBal = typeof readEffectiveBallastDistance === 'function'
                 ? readEffectiveBallastDistance()
                 : (parseFloat(document.getElementById('dist-ballast')?.value) || 0);
-            const distLaden = parseFloat(document.getElementById('dist-laden').value) || 0;
-            const spdBal = parseFloat(document.getElementById('spd-ballast').value) || 11;
-            const spdLaden = parseFloat(document.getElementById('spd-laden').value) || 11;
+            const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
+            const spdBal = parseFloat(document.getElementById('spd-ballast')?.value) || 11;
+            const spdLaden = parseFloat(document.getElementById('spd-laden')?.value) || 11;
             
             const cargo = cargoSnapshot;
             const stowageFactor = stowageFactorSnapshot;
@@ -38254,8 +38300,8 @@ function scheduleReactiveEngine() {
             const metodoDescarga = getMetodoDescargaActual();
             const ritmoRealPol = calcularRitmoEfectivo('pol');
             const ritmoRealPod = calcularRitmoEfectivo('pod');
-            const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
-            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
+            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || ritmoRealPol;
+            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
             const marginDays = getTotalPortRiskDays('factor-clima', 'factor-clima-pod');
             const marginInput = document.getElementById('days-margin');
             if (marginInput) marginInput.value = marginDays.toFixed(2);
@@ -38263,7 +38309,7 @@ function scheduleReactiveEngine() {
             const turnTimeHours = Math.max(0, parseFloat(document.getElementById('turn-time-hours')?.value) || 0);
             const turnTimeDays = isZeroCalculation ? 0 : (turnTimeHours / 24);
 
-            const cSea = parseFloat(document.getElementById('cons-sea').value) || 0;
+            const cSea = parseFloat(document.getElementById('cons-sea')?.value) || 0;
             const netConsVal = (cSea * 1.05).toFixed(2);
             const netConsIndicator = document.getElementById('net-cons-indicator');
             if (netConsIndicator) {
@@ -38276,23 +38322,23 @@ function scheduleReactiveEngine() {
                     netConsIndicator.innerText = `Consumo Neto (incluye 5% de margen por mal tiempo): ${netConsVal} T/D`;
                 }
             }
-            const vlsfoPrice = parseFloat(document.getElementById('price-sea').value) || 0;
+            const vlsfoPrice = parseFloat(document.getElementById('price-sea')?.value) || 0;
             const ifoPrice = parseFloat(document.getElementById('price-ifo')?.value) || 0;
             const hasScrubber = vesselHasScrubber();
             const pSea = hasScrubber ? ifoPrice : vlsfoPrice;
-            const cPort = parseFloat(document.getElementById('cons-port').value) || 0;
+            const cPort = parseFloat(document.getElementById('cons-port')?.value) || 0;
             const cAnchorage = parseFloat(document.getElementById('cons-anchorage')?.value) || cPort;
             const cAnchorageAux = parseFloat(document.getElementById('cons-anchorage-aux')?.value) || 2.0;
-            const pPort = parseFloat(document.getElementById('price-port').value) || 0;
+            const pPort = parseFloat(document.getElementById('price-port')?.value) || 0;
             
-            const opex = parseFloat(document.getElementById('opex-daily').value) || 0;
+            const opex = parseFloat(document.getElementById('opex-daily')?.value) || 0;
             const tipoCargaOperativa = normalizarTipoCarga();
             const projectCargoAssessment = calculateActiveProjectCargo();
             const costeTrincaje = projectCargoAssessment.isProjectCargo ? 0 : costeTrincajeCondicional();
             const costeManiobraEspecial = projectCargoAssessment.isProjectCargo ? 0 : (tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0);
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
-            const canalCost = parseFloat(document.getElementById('pda-misc').value) || 0;
-            const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
+            const canalCost = parseFloat(document.getElementById('pda-misc')?.value) || 0;
+            const voyageExtras = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
             const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
             const stevedoringAllocation = resolveStevedoringAllocation(freightConditions, cargo);
 	            const basePdaPol = readOperationalPdaBase('pol');
@@ -38310,13 +38356,13 @@ function scheduleReactiveEngine() {
                 ? (pdaDiluidoPorViaje + costeTrincaje + costeManiobraEspecial)
                 : basePortExpenses;
 
-            const marginOwner = parseFloat(document.getElementById('margin-owner').value) || 0;
-            const marginChart = parseFloat(document.getElementById('margin-charterer').value) || 0;
+            const marginOwner = parseFloat(document.getElementById('margin-owner')?.value) || 0;
+            const marginChart = parseFloat(document.getElementById('margin-charterer')?.value) || 0;
             const margenObjetivo = Math.min(95, Math.max(0, parseFloat(document.getElementById('target-margin')?.value) || 15));
-            const freightBuy = parseFloat(document.getElementById('freight-rate').value) || 0;
-            let freightSell = parseFloat(document.getElementById('freight-sell').value) || 0;
-            const commPct = parseFloat(document.getElementById('comm-pct').value) || 0;
-            const dwtVal = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            const freightBuy = parseFloat(document.getElementById('freight-rate')?.value) || 0;
+            let freightSell = parseFloat(document.getElementById('freight-sell')?.value) || 0;
+            const commPct = parseFloat(document.getElementById('comm-pct')?.value) || 0;
+            const dwtVal = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
             const getSmartInputState = (id) => {
                 const el = document.getElementById(id);
                 const raw = el ? String(el.value).trim() : '';
@@ -43770,23 +43816,23 @@ function scheduleReactiveEngine() {
         }
 
         function syncSurchargeToCalculator() {
-            const val = parseFloat(document.getElementById('gc-surcharge-val').value) || 0;
+            const val = parseFloat(document.getElementById('gc-surcharge-val')?.value) || 0;
             const surchargeEl = document.getElementById('cargo-surcharge');
             if (surchargeEl) {
                 surchargeEl.value = val;
             }
-            runEngine();
-            syncGencon();
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof syncGencon === 'function') syncGencon();
         }
 
         function syncAsbSurchargeToCalculator() {
-            const val = parseFloat(document.getElementById('asb-surcharge-val').value) || 0;
+            const val = parseFloat(document.getElementById('asb-surcharge-val')?.value) || 0;
             const surchargeEl = document.getElementById('cargo-surcharge');
             if (surchargeEl) {
                 surchargeEl.value = val;
             }
-            runEngine();
-            syncAsbatankvoy();
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
         }
 
         function syncAsbatankvoy() {
@@ -68077,7 +68123,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
-            hydrateBunkerIndexData();
+            if (typeof hydrateBunkerIndexData === 'function') {
+                hydrateBunkerIndexData();
+            } else if (typeof window.hydrateBunkerIndexData === 'function') {
+                window.hydrateBunkerIndexData();
+            }
             const applyHydratedBunkers = snapshot => {
                 const bunkers = snapshot?.bunkers;
                 if (!bunkers || ![bunkers.vlsfo, bunkers.hsfo, bunkers.mgo].every(price => Number(price) > 0)) return;
