@@ -8,7 +8,7 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const trackingSource = await readFile(new URL('../tracking-live.js', import.meta.url), 'utf8');
 const viteSource = await readFile(new URL('../vite.config.js', import.meta.url), 'utf8');
 
-function loadUtility({ href = 'https://example.test/', sessionReference = '', localStore = new Map() } = {}) {
+function loadUtility({ href = 'https://example.test/', sessionReference = '', localStore = new Map(), parent = undefined } = {}) {
   const session = new Map(sessionReference ? [['active_contract_ref', sessionReference]] : []);
   const local = localStore;
   const broadcastMessages = [];
@@ -69,6 +69,7 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
       removeItem: (key) => local.delete(key),
     },
   };
+  window.parent = parent !== undefined ? parent : window;
   vm.runInNewContext(utilitySource, {
     window,
     URL,
@@ -252,4 +253,69 @@ test('breaks infinite loop: calling setActiveContractRef with identical referenc
   assert.equal(getReplaceStateCalls(), initialCalls + 1);
   assert.equal(dispatchedEvents.length, initialEventCount + 1);
 });
+
+test('emits SYNC_REFERENCE postMessage to window.parent when embedded in an iframe (MasterHub)', () => {
+  const postedMessages = [];
+  const mockParent = {
+    postMessage(message, targetOrigin) {
+      postedMessages.push({ message, targetOrigin });
+    },
+  };
+
+  const { api } = loadUtility({ parent: mockParent });
+
+  // 1. Fallback reference generated on initial getActiveContractRef
+  const initialRef = api.getActiveContractRef();
+  assert.ok(postedMessages.length >= 1);
+  assert.equal(postedMessages[0].targetOrigin, '*');
+  assert.equal(postedMessages[0].message.type, 'SYNC_REFERENCE');
+  assert.equal(postedMessages[0].message.reference, initialRef);
+
+  // 2. Setting a new active contract reference notifies parent
+  postedMessages.length = 0;
+  const updatedRef = api.setActiveContractRef('RDM/2026-7890');
+  assert.equal(updatedRef, 'RDM/2026-7890');
+  assert.equal(postedMessages.length, 1);
+  assert.equal(postedMessages[0].targetOrigin, '*');
+  assert.equal(postedMessages[0].message.type, 'SYNC_REFERENCE');
+  assert.equal(postedMessages[0].message.reference, 'RDM/2026-7890');
+
+  // 3. Creating a new voyage reference notifies parent
+  postedMessages.length = 0;
+  const createdRef = api.createNewReference(true);
+  assert.ok(createdRef.startsWith('RDM/2026-'));
+  assert.equal(postedMessages.length, 1);
+  assert.equal(postedMessages[0].targetOrigin, '*');
+  assert.equal(postedMessages[0].message.type, 'SYNC_REFERENCE');
+  assert.equal(postedMessages[0].message.reference, createdRef);
+});
+
+test('does not emit SYNC_REFERENCE postMessage when running standalone (window.parent === window)', () => {
+  const postedMessages = [];
+  const { api, window } = loadUtility();
+  window.postMessage = (message, targetOrigin) => {
+    postedMessages.push({ message, targetOrigin });
+  };
+
+  assert.equal(window.parent, window);
+  api.setActiveContractRef('RDM/2026-1122');
+  api.createNewReference(true);
+  assert.equal(postedMessages.length, 0);
+});
+
+test('catches and warns gracefully if window.parent.postMessage throws without crashing', () => {
+  const throwingParent = {
+    postMessage() {
+      throw new Error('Simulated cross-origin / detached iframe error');
+    },
+  };
+
+  const { api } = loadUtility({ parent: throwingParent });
+
+  assert.doesNotThrow(() => {
+    api.setActiveContractRef('RDM/2026-3344');
+    api.createNewReference(true);
+  });
+});
+
 
