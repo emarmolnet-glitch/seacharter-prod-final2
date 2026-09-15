@@ -669,6 +669,17 @@
                 writeSessionReference(newRef);
                 writeUrlReference(newRef);
                 writeSharedActiveSession(newRef);
+                // Emitir al Parent si estamos dentro de un Iframe (MasterHub)
+                if (window.parent !== window) {
+                  try {
+                    window.parent.postMessage({ 
+                      type: 'SYNC_REFERENCE', 
+                      reference: newRef // Reemplaza por tu variable local de referencia
+                    }, '*');
+                  } catch (e) {
+                    console.warn("No se pudo emitir la referencia al parent", e);
+                  }
+                }
                 return newRef;
             };
             const setActiveContractRef = function(reference) {
@@ -683,6 +694,17 @@
                 writeSessionReference(normalized);
                 writeUrlReference(normalized);
                 writeSharedActiveSession(normalized);
+                // Emitir al Parent si estamos dentro de un Iframe (MasterHub)
+                if (window.parent !== window) {
+                  try {
+                    window.parent.postMessage({ 
+                      type: 'SYNC_REFERENCE', 
+                      reference: normalized // Reemplaza por tu variable local de referencia
+                    }, '*');
+                  } catch (e) {
+                    console.warn("No se pudo emitir la referencia al parent", e);
+                  }
+                }
                 return normalized;
             };
             const clearActiveSession = function() {
