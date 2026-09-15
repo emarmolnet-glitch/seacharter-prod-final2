@@ -72,6 +72,7 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
   window.parent = parent !== undefined ? parent : window;
   vm.runInNewContext(utilitySource, {
     window,
+    console,
     URL,
     URLSearchParams,
     Uint32Array,
@@ -317,5 +318,133 @@ test('catches and warns gracefully if window.parent.postMessage throws without c
     api.createNewReference(true);
   });
 });
+
+test('subordinate: listens for MASTER_FORCE_REFERENCE and obeys incoming directive from MasterHub', () => {
+  const postedMessages = [];
+  const mockParent = {
+    postMessage(message, targetOrigin) {
+      postedMessages.push({ message, targetOrigin });
+    },
+  };
+
+  const { api, listeners, session, local } = loadUtility({
+    parent: mockParent,
+    sessionReference: 'RDM/2026-1111',
+  });
+
+  assert.equal(api.getActiveContractRef(), 'RDM/2026-1111');
+
+  const messageHandler = listeners.get('message');
+  assert.equal(typeof messageHandler, 'function', 'A message event listener must be registered on window');
+
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => {
+    logs.push(args.join(' '));
+    originalLog(...args);
+  };
+
+  try {
+    postedMessages.length = 0;
+    messageHandler({
+      data: {
+        type: 'MASTER_FORCE_REFERENCE',
+        reference: 'RDM/2026-8888',
+      },
+    });
+
+    // 1. Logs obedient subordinate message
+    const subordinateLog = logs.find((l) => l.includes('[Subordinado] Acatando referencia maestra de MasterHub: RDM/2026-8888'));
+    assert.ok(subordinateLog, 'Must log subordinate acceptance message with the forced reference');
+
+    // 2. Active contract reference is updated
+    assert.equal(api.getActiveContractRef(), 'RDM/2026-8888');
+
+    // 3. Storage is updated
+    assert.equal(session.get('active_contract_ref'), 'RDM/2026-8888');
+    const sharedSession = JSON.parse(local.get('active_core_pro_session') || '{}');
+    assert.equal(sharedSession.reference, 'RDM/2026-8888');
+
+    // 4. Emits SYNC_REFERENCE back to parent orchestrator
+    const syncMsg = postedMessages.find((p) => p.message?.type === 'SYNC_REFERENCE' && p.message?.reference === 'RDM/2026-8888');
+    assert.ok(syncMsg, 'Must emit SYNC_REFERENCE to window.parent upon updating reference');
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test('subordinate: ignores MASTER_FORCE_REFERENCE if the reference is already identical', () => {
+  const postedMessages = [];
+  const mockParent = {
+    postMessage(message, targetOrigin) {
+      postedMessages.push({ message, targetOrigin });
+    },
+  };
+
+  const { api, listeners, getReplaceStateCalls } = loadUtility({
+    parent: mockParent,
+    sessionReference: 'RDM/2026-5555',
+  });
+
+  assert.equal(api.getActiveContractRef(), 'RDM/2026-5555');
+  const initialReplaceCalls = getReplaceStateCalls();
+  postedMessages.length = 0;
+
+  const messageHandler = listeners.get('message');
+  assert.equal(typeof messageHandler, 'function');
+
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => {
+    logs.push(args.join(' '));
+    originalLog(...args);
+  };
+
+  try {
+    // Send directive with identical reference
+    messageHandler({
+      data: {
+        type: 'MASTER_FORCE_REFERENCE',
+        reference: 'RDM/2026-5555',
+      },
+    });
+
+    // Must not log subordinate action
+    const subordinateLog = logs.find((l) => l.includes('[Subordinado] Acatando referencia maestra'));
+    assert.equal(subordinateLog, undefined, 'Must not act or log if reference is already identical');
+
+    // State remains unchanged and no extra postMessages sent
+    assert.equal(api.getActiveContractRef(), 'RDM/2026-5555');
+    assert.equal(getReplaceStateCalls(), initialReplaceCalls);
+    assert.equal(postedMessages.length, 0);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test('subordinate: safely ignores other message types and malformed payloads', () => {
+  const { api, listeners } = loadUtility({ sessionReference: 'RDM/2026-7777' });
+  const messageHandler = listeners.get('message');
+  assert.equal(typeof messageHandler, 'function');
+
+  assert.doesNotThrow(() => {
+    messageHandler();
+    messageHandler(null);
+    messageHandler({});
+    messageHandler({ data: null });
+    messageHandler({ data: 'hello' });
+    messageHandler({ data: { type: 'SOME_OTHER_TYPE', reference: 'RDM/2026-9999' } });
+    messageHandler({ data: { type: 'MASTER_FORCE_REFERENCE' } }); // missing reference
+    messageHandler({ data: { type: 'MASTER_FORCE_REFERENCE', reference: '' } });
+  });
+
+  assert.equal(api.getActiveContractRef(), 'RDM/2026-7777');
+});
+
+test('index.html inline script contains MASTER_FORCE_REFERENCE listener', () => {
+  assert.match(indexSource, /event\.data\.type === ['"]MASTER_FORCE_REFERENCE['"]/);
+  assert.match(indexSource, /\[Subordinado\] Acatando referencia maestra de MasterHub:/);
+});
+
 
 

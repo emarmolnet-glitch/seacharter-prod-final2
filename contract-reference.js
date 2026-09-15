@@ -625,6 +625,26 @@
         getOrCreateSyncChannel();
         getActiveContractRef();
         updateEcosystemMenuLinks();
+
+        // Listener para acatar órdenes del orquestador padre (MasterHub)
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('message', (event) => {
+                if (event && event.data && event.data.type === 'MASTER_FORCE_REFERENCE' && event.data.reference) {
+                    const incomingRef = event.data.reference;
+
+                    // Validar si tenemos la función local para leer la referencia actual
+                    const currentRef = typeof getActiveContractRef === 'function' ? getActiveContractRef() : null;
+
+                    // Si el Jefe dicta una referencia distinta, obedecemos y actualizamos silenciosamente
+                    if (incomingRef !== currentRef) {
+                        console.log("[Subordinado] Acatando referencia maestra de MasterHub:", incomingRef);
+                        if (typeof setActiveContractRef === 'function') {
+                            setActiveContractRef(incomingRef);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     try {
