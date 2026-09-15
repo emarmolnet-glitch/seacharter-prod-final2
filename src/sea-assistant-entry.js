@@ -618,6 +618,16 @@ function clickActionableAiFinalValidationButton() {
 async function executeActionableAiUpdateFields(actionObj) {
     console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple universal y precisa");
     console.log("Objeto de acción recibido:", actionObj);
+    const originalPrompt = typeof window !== 'undefined' ? window.prompt : null;
+    if (typeof window !== 'undefined') {
+        window.__AI_INJECTION_IN_PROGRESS__ = true;
+        window.updateFieldsActionInProgress = true;
+        window.__IS_PROGRAMMATIC_UPDATE__ = true;
+        window.prompt = function(...args) {
+            console.warn("🛡️ [Cerebro.ia/update_fields] window.prompt silenciado durante la inyección de IA:", args[0]);
+            return null;
+        };
+    }
     try {
         if (!actionObj) return false;
 
@@ -832,7 +842,9 @@ async function executeActionableAiUpdateFields(actionObj) {
                 } else {
                     sel.value = targetOption.value;
                 }
-                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                const changeEv = new Event('change', { bubbles: true });
+                changeEv.isProgrammatic = true;
+                sel.dispatchEvent(changeEv);
                 console.log(`✅ [Core PRO] Desplegable ajustado dinámicamente a: ${targetOption.text}`);
             }
         });
@@ -928,6 +940,14 @@ async function executeActionableAiUpdateFields(actionObj) {
         console.error("❌ [Cerebro.ia/update_fields] Error no controlado durante la inyección", { actionObj, error });
         throw error;
     } finally {
+        if (typeof window !== 'undefined') {
+            window.__AI_INJECTION_IN_PROGRESS__ = false;
+            window.updateFieldsActionInProgress = false;
+            window.__IS_PROGRAMMATIC_UPDATE__ = false;
+            if (originalPrompt) {
+                window.prompt = originalPrompt;
+            }
+        }
         console.groupEnd();
     }
 }
