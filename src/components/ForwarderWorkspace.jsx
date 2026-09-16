@@ -836,6 +836,74 @@ export function ForwarderWorkspace() {
   const [insuranceCost, setInsuranceCost] = useState(0);
   const userEditedSurveyor = useRef(false);
 
+  // Helper centralizado para capturar el project_ref corporativo activo del estado global (barra superior / RDM)
+  const getActiveGlobalReference = () => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const mgrRef = window.ContractRefManager?.getActiveContractRef?.() ||
+                     window.ContractReference?.getActiveContractRef?.() ||
+                     (typeof window.getActiveContractRef === 'function' ? window.getActiveContractRef() : null);
+      if (mgrRef && typeof mgrRef === 'string' && mgrRef.trim()) {
+        const clean = mgrRef.trim();
+        if (clean !== '—' && clean !== '-') return clean;
+      }
+    } catch (_) {}
+
+    try {
+      const sRef = window.sessionStorage?.getItem('active_contract_ref');
+      if (sRef && sRef.trim() && sRef.trim() !== '—') return sRef.trim();
+    } catch (_) {}
+
+    try {
+      const lRef = window.localStorage?.getItem('active_contract_ref');
+      if (lRef && lRef.trim() && lRef.trim() !== '—') return lRef.trim();
+    } catch (_) {}
+
+    try {
+      const shared = window.localStorage?.getItem('active_core_pro_session');
+      if (shared) {
+        const parsed = JSON.parse(shared);
+        const ref = parsed?.reference || parsed?.target_session_id;
+        if (ref && typeof ref === 'string' && ref.trim()) return ref.trim();
+      }
+    } catch (_) {}
+
+    try {
+      const scRef = window.SeaCharterStore?.getState?.()?.contractReference ||
+                    window.SeaCharterStore?.getState?.()?.reference ||
+                    window.State?.contractReference ||
+                    window.State?.reference ||
+                    window.activeVoyage?.reference;
+      if (scRef && typeof scRef === 'string' && scRef.trim()) return scRef.trim();
+    } catch (_) {}
+
+    try {
+      const domCandidates = [
+        document.getElementById('contract-reference'),
+        document.getElementById('audit-contract-reference'),
+        document.getElementById('current-voyage-reference'),
+        document.getElementById('voyage-reference'),
+        document.getElementById('new-estimation-current-reference'),
+        document.getElementById('quick-ref'),
+        document.getElementById('gc-ref'),
+        document.getElementById('asb-ref'),
+        document.getElementById('tracking-live-contract-ref'),
+        document.querySelector?.('[data-contract-reference]'),
+      ];
+      for (const el of domCandidates) {
+        if (!el) continue;
+        const val = (el.value || el.dataset?.reference || el.textContent || '').trim();
+        if (!val || val === '—' || val === '-') continue;
+        const match = val.match(/RDM\/[A-Z0-9_-]+/i);
+        if (match) return match[0];
+        const clean = val.replace(/^REF:\s*/i, '').trim();
+        if (clean && clean !== '—' && /^RDM\b/i.test(clean)) return clean;
+      }
+    } catch (_) {}
+
+    return '';
+  };
+
   // Helper centralizado para capturar el estado activo de la calculadora y de la sesión (sin valores mock)
   const readActiveCalculatorSession = () => {
     if (typeof window === 'undefined') return {};
@@ -1333,6 +1401,7 @@ export function ForwarderWorkspace() {
       window.getProjectDetails = getProjectDetails;
       window.getMaritimeRouteData = getMaritimeRouteData;
       window.getExecutiveOperationalTimes = getExecutiveOperationalTimes;
+      window.getActiveGlobalReference = getActiveGlobalReference;
       window.handleSyncCalculatorData = (...args) => handleSyncCalculatorDataRef.current?.(...args);
     }
   }, []);
@@ -1350,11 +1419,20 @@ export function ForwarderWorkspace() {
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.projects || []);
       setProjects(list);
+      const globalActiveRef = getActiveGlobalReference();
+      const hasActiveRdm = Boolean(globalActiveRef && /^RDM\//i.test(globalActiveRef.trim()));
+
       if (activeProject) {
         const updated = list.find((p) => p.id === activeProject.id || p.project_ref === activeProject.project_ref);
         if (updated) {
           setActiveProject(updated);
           setprojectDocuments(updated.documents || updated.files || []);
+        }
+      } else if (hasActiveRdm) {
+        const matchingRdm = list.find((p) => p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase());
+        if (matchingRdm) {
+          setActiveProject(matchingRdm);
+          setprojectDocuments(matchingRdm.documents || matchingRdm.files || []);
         }
       }
       return list;
@@ -1368,6 +1446,25 @@ export function ForwarderWorkspace() {
       }
     }
   };
+
+  useEffect(() => {
+    const handleRefChanged = (e) => {
+      const newRef = e?.detail?.reference || getActiveGlobalReference();
+      if (newRef && /^RDM\//i.test(newRef.trim())) {
+        const match = projects.find((p) => p.project_ref && p.project_ref.toUpperCase() === newRef.trim().toUpperCase());
+        if (match) {
+          setActiveProject(match);
+          setprojectDocuments(match.documents || match.files || []);
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('contract-reference:changed', handleRefChanged);
+      return () => {
+        window.removeEventListener('contract-reference:changed', handleRefChanged);
+      };
+    }
+  }, [projects]);
 
   useEffect(() => { fetchProjects(); }, []);
 
@@ -3703,9 +3800,16 @@ export function ForwarderWorkspace() {
       setActiveReport(currentReportSnapshot);
       setReportData(currentReportSnapshot);
 
+      // Captura del project_ref activo del estado global (barra superior / RDM)
+      const globalActiveRef = getActiveGlobalReference();
+      const hasActiveRdm = Boolean(globalActiveRef && /^RDM\//i.test(globalActiveRef.trim()));
+      const activeProjectRef = hasActiveRdm
+        ? globalActiveRef.trim()
+        : (activeProject?.project_ref || globalActiveRef || '');
+
       const safeCargoItems = Array.isArray(cargoItems) ? cargoItems : [];
       const payload = {
-        project_ref: activeProject?.project_ref,
+        project_ref: activeProjectRef || activeProject?.project_ref,
         cargo_items: safeCargoItems.map((item) => ({
           id: item.id || `item-${Date.now()}-${Math.random()}`,
           category: item.category || 'Equipos de Proceso',
@@ -3823,20 +3927,46 @@ export function ForwarderWorkspace() {
         payload_data: payload,
       };
 
-      if (activeProject) {
-        const existingItems = Array.isArray(activeProject.line_items) ? activeProject.line_items : [];
+      // Si hay un RDM activo, la operación debe ser un UPDATE / UPSERT sobre ese expediente específico
+      const existingRdmProject = hasActiveRdm
+        ? projects.find((p) => p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase())
+        : null;
+
+      const targetProject = existingRdmProject || (hasActiveRdm && activeProject ? { ...activeProject, project_ref: globalActiveRef.trim() } : activeProject) || {
+        project_ref: activeProjectRef || `EXP-${Date.now().toString().slice(-6)}`,
+        client_name: hasActiveRdm ? `Expediente Corporativo ${globalActiveRef.trim()}` : 'Nuevo Cliente',
+        status: 'Borrador',
+        line_items: [],
+        items: [],
+        documents: [],
+      };
+
+      if (targetProject) {
+        const existingItems = Array.isArray(targetProject.line_items)
+          ? targetProject.line_items
+          : (Array.isArray(targetProject.items) ? targetProject.items : []);
         const updatedLineItems = editingLineItemId
           ? existingItems.map((li) => (li.id === editingLineItemId ? savedLineItem : li))
           : [...existingItems, savedLineItem];
         const updatedProject = {
-          ...activeProject,
+          ...targetProject,
+          project_ref: targetProject.project_ref || activeProjectRef,
           route_and_chartering: payload.route_and_chartering,
           charteringAssessment: charteringAssessment,
           line_items: updatedLineItems,
-          services: updatedLineItems
+          services: updatedLineItems,
+          items: updatedLineItems,
         };
         setActiveProject(updatedProject);
-        setProjects((prev) => prev.map((p) => p.id === activeProject.id ? updatedProject : p));
+        setProjects((prev) => {
+          const matchIdx = prev.findIndex((p) => (updatedProject.project_ref && p.project_ref === updatedProject.project_ref) || (updatedProject.id && p.id === updatedProject.id));
+          if (matchIdx >= 0) {
+            const next = [...prev];
+            next[matchIdx] = updatedProject;
+            return next;
+          }
+          return [updatedProject, ...prev];
+        });
         await persistProjectToDatabase(updatedProject);
       }
       await fetchProjects({ silent: true });
@@ -4345,14 +4475,31 @@ export function ForwarderWorkspace() {
                       ? activeProject.items
                       : (Array.isArray(activeProject.services) ? activeProject.services : []));
 
-                return projectItemsList.length > 0 ? (
+                const transportCost = Number(activeProject?.land_freight_cost ?? 0) || 0;
+                const hasExplicitTransportItem = projectItemsList.some(
+                  (it) => !it.description || /transporte/i.test(it.description)
+                );
+                const effectiveItemsList = (!hasExplicitTransportItem && (transportCost > 0 || activeProject?.land_origin || activeProject?.land_destination))
+                  ? [
+                      ...projectItemsList,
+                      {
+                        id: 'land-transport-auto',
+                        description: 'Servicio de Transporte',
+                        cost_eur: transportCost,
+                        sale_price_eur: Math.round(transportCost * 1.15 * 100) / 100,
+                        is_transport: true,
+                      },
+                    ]
+                  : projectItemsList;
+
+                return effectiveItemsList.length > 0 ? (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <h3 className="text-base font-bold text-slate-900">Servicios</h3>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleOpenExecutiveReport(projectItemsList[0])}
+                          onClick={() => handleOpenExecutiveReport(effectiveItemsList[0])}
                           className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5 transition"
                         >
                           📄 Reporte Ejecutivo
@@ -4364,9 +4511,15 @@ export function ForwarderWorkspace() {
                       <table className="w-full text-xs">
                         <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700"><tr><th className="px-4 py-3 text-left">Servicio</th><th className="px-4 py-3 text-right">Coste (€)</th><th className="px-4 py-3 text-right">Venta (€)</th><th className="px-4 py-3 text-center">Acciones</th></tr></thead>
                         <tbody className="divide-y divide-slate-100 text-slate-800">
-                          {projectItemsList.map((item, idx) => {
-                            const costEur = Number(item.cost_eur ?? item.costEur ?? 0) || 0;
-                            const saleEur = Number(item.sale_price_eur ?? item.salePriceEur ?? 0) || 0;
+                          {effectiveItemsList.map((item, idx) => {
+                            const isTransportService = !item.description || /transporte/i.test(item.description) || item.is_transport;
+                            const transportCost = Number(activeProject?.land_freight_cost ?? 0) || 0;
+                            const costEur = isTransportService && transportCost > 0
+                              ? transportCost
+                              : (Number(item.cost_eur ?? item.costEur ?? 0) || (isTransportService ? transportCost : 0));
+                            const saleEur = isTransportService && costEur > 0
+                              ? Math.round(costEur * 1.15 * 100) / 100
+                              : (Number(item.sale_price_eur ?? item.salePriceEur ?? 0) || (isTransportService ? Math.round(costEur * 1.15 * 100) / 100 : 0));
                             return (
                               <tr key={item.id || `item-row-${idx}`} className="border-b border-slate-100">
                                 <td className="px-4 py-3 font-semibold">{item.description || 'Servicio de Transporte'}</td>
@@ -4906,41 +5059,41 @@ export function ForwarderWorkspace() {
 
                     {/* FLETES SUGERIDOS CALCULADORA (COMPRA / VENTA) */}
                     <div id="modal-suggested-freights-bar" className="mt-4 pt-4 border-t border-slate-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="bg-slate-800/90 border border-blue-500/40 rounded-lg p-3 flex items-center justify-between">
+                      <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-3 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
-                            <span className="text-xs font-black uppercase text-blue-300 tracking-wider">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-blue-900 tracking-wider">
                               Flete Sugerido Armador (Compra)
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400">Target armador simulación Calculadora</span>
+                          <span className="text-[10px] text-blue-700/80">Target armador simulación Calculadora</span>
                         </div>
                         <div className="flex items-baseline">
-                          <span className="text-sm font-mono font-bold text-blue-400 mr-1 select-none">$</span>
-                          <span id="modal-flete-sugerido-armador" className="text-xl font-mono font-black text-blue-200">
+                          <span className="text-sm font-mono font-bold text-blue-700 mr-1 select-none">$</span>
+                          <span id="modal-flete-sugerido-armador" className="text-xl font-mono font-black text-blue-900">
                             {Number(fleteCompra || activeProject?.route_and_chartering?.flete_compra_usd_mt || 0).toFixed(2)}
                           </span>
-                          <span className="text-[10px] font-mono font-semibold text-slate-400 ml-1">USD/MT</span>
+                          <span className="text-[10px] font-mono font-semibold text-blue-700 ml-1">USD/MT</span>
                         </div>
                       </div>
 
-                      <div className="bg-slate-800/90 border border-emerald-500/40 rounded-lg p-3 flex items-center justify-between">
+                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg p-3 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                            <span className="text-xs font-black uppercase text-emerald-300 tracking-wider">
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-emerald-900 tracking-wider">
                               Flete Sugerido Fletador (Venta)
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400">Target fletador simulación Calculadora</span>
+                          <span className="text-[10px] text-emerald-700/80">Target fletador simulación Calculadora</span>
                         </div>
                         <div className="flex items-baseline">
-                          <span className="text-sm font-mono font-bold text-emerald-400 mr-1 select-none">$</span>
-                          <span id="modal-flete-sugerido-fletador" className="text-xl font-mono font-black text-emerald-200">
+                          <span className="text-sm font-mono font-bold text-emerald-700 mr-1 select-none">$</span>
+                          <span id="modal-flete-sugerido-fletador" className="text-xl font-mono font-black text-emerald-900">
                             {Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta_usd_mt || 0).toFixed(2)}
                           </span>
-                          <span className="text-[10px] font-mono font-semibold text-slate-400 ml-1">USD/MT</span>
+                          <span className="text-[10px] font-mono font-semibold text-emerald-700 ml-1">USD/MT</span>
                         </div>
                       </div>
                     </div>
