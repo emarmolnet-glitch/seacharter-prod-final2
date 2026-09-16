@@ -870,8 +870,8 @@ export function ForwarderWorkspace() {
     const distEl = document.getElementById('dist-laden') || document.getElementById('dist-total');
     const speedEl = document.getElementById('spd-laden') || document.getElementById('vessel-speed');
     const cargoQtyEl = document.getElementById('cargo-qty') || document.getElementById('cargo-quantity');
-    const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight');
-    const freightRateEl = document.getElementById('freight-rate');
+    const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight') || document.getElementById('flete-venta') || document.getElementById('target-freight-sell');
+    const freightRateEl = document.getElementById('freight-rate') || document.getElementById('freight-rate-calc') || document.getElementById('input-freightRate') || document.getElementById('buying-freight') || document.getElementById('flete-compra');
     const cargoTypeEl = document.getElementById('cargo-type') || document.getElementById('cargo-type-manual');
 
     const cleanPol = String(polEl?.value || sessionSource.pol || sessionSource.portPol || sessionSource.port_pol || sessionSource.origin || '').trim();
@@ -928,14 +928,16 @@ export function ForwarderWorkspace() {
     const freightSell = Math.max(
       0,
       parseFloat(freightSellEl?.value) ||
-      Number(sessionSource.freightSell || sessionSource.fleteVenta || sessionSource.sellingFreight) ||
+      Number(sessionSource.freightSell || sessionSource.fleteVenta || sessionSource.flete_venta || sessionSource.sellingFreight || sessionSource.chartererFreight) ||
+      parseFloat(String(document.getElementById('coa-detail-charterer-target')?.textContent || '').replace(/[^0-9.-]/g, '')) ||
       0
     );
 
     const freightCost = Math.max(
       0,
       parseFloat(freightRateEl?.value) ||
-      Number(sessionSource.freightRate || sessionSource.fleteCoste || sessionSource.ownerFreight) ||
+      Number(sessionSource.freightRate || sessionSource.freightCost || sessionSource.fleteCoste || sessionSource.fleteCompra || sessionSource.flete_compra || sessionSource.ownerFreight) ||
+      parseFloat(String(document.getElementById('coa-detail-owner-purchase')?.textContent || '').replace(/[^0-9.-]/g, '')) ||
       0
     );
 
@@ -1031,6 +1033,12 @@ export function ForwarderWorkspace() {
       tce: cleanTce,
       freightSell,
       freightCost,
+      fleteCompra: freightCost,
+      fleteVenta: freightSell,
+      fleteSugeridoArmador: freightCost,
+      fleteSugeridoFletador: freightSell,
+      fleteSugeridoArmadorCompra: freightCost,
+      fleteSugeridoFletadorVenta: freightSell,
       metodoCarga: cleanMetodoCarga,
       metodoDescarga: cleanMetodoDescarga,
       charterPartyStandard: cleanCharterParty,
@@ -1098,6 +1106,10 @@ export function ForwarderWorkspace() {
   const [actualDischargingDays, setActualDischargingDays] = useState('');
   const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(initialSession.tce > 0 ? initialSession.tce : 11500);
   const [charteringAssessment, setCharteringAssessment] = useState(null);
+
+  // Estados para fletes financieros sincronizados de la Calculadora (Flete Compra Armador y Flete Venta Fletador)
+  const [fleteCompra, setFleteCompra] = useState(initialSession.freightCost || initialSession.fleteCompra || 0);
+  const [fleteVenta, setFleteVenta] = useState(initialSession.freightSell || initialSession.fleteVenta || 0);
 
   // Estados reactivos para la sincronización con la calculadora y base de datos Neon
   const [isSyncingCalculator, setIsSyncingCalculator] = useState(false);
@@ -1218,7 +1230,30 @@ export function ForwarderWorkspace() {
     const totalVolumeM3 = Number(rc.total_volume_m3 ?? 0) || 0;
     const reportRt = Number(rc.report_rt ?? 0) || 0;
 
-    const hasData = Boolean(pol || pod || distanceNm > 0 || tceValue > 0 || loadingRate > 0 || dischargingRate > 0 || diasRotacionTotal > 0);
+    // Fletes financieros sincronizados de la Calculadora (Flete Compra Armador y Flete Venta Fletador)
+    const fleteCompra = Number(
+      rc.flete_compra_usd_mt ??
+      rc.freight_rate_cost_usd ??
+      rc.flete_sugerido_armador_compra ??
+      rc.flete_compra ??
+      rc.fleteCompra ??
+      sessionData.fleteCompra ??
+      sessionData.freightCost ??
+      0
+    ) || 0;
+
+    const fleteVenta = Number(
+      rc.flete_venta_usd_mt ??
+      rc.freight_rate_sell_usd ??
+      rc.flete_sugerido_fletador_venta ??
+      rc.flete_venta ??
+      rc.fleteVenta ??
+      sessionData.fleteVenta ??
+      sessionData.freightSell ??
+      0
+    ) || 0;
+
+    const hasData = Boolean(pol || pod || distanceNm > 0 || tceValue > 0 || loadingRate > 0 || dischargingRate > 0 || diasRotacionTotal > 0 || fleteCompra > 0 || fleteVenta > 0);
 
     return {
       hasData,
@@ -1249,6 +1284,10 @@ export function ForwarderWorkspace() {
       tceValue,
       oceanFreightTceUsd,
       oceanFreightTceEur,
+      fleteCompra,
+      fleteVenta,
+      fleteSugeridoArmadorCompra: fleteCompra,
+      fleteSugeridoFletadorVenta: fleteVenta,
       vesselType,
       totalWeightTons,
       totalVolumeM3,
@@ -1360,6 +1399,14 @@ export function ForwarderWorkspace() {
           setTceValue(tceVal);
           setTceActive(true);
         }
+        if (projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra) {
+          const fcVal = Number(projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra);
+          setFleteCompra(fcVal);
+        }
+        if (projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta) {
+          const fvVal = Number(projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta);
+          setFleteVenta(fvVal);
+        }
         if (projectRoute.vessel_type) {
           setVesselType(projectRoute.vessel_type);
         }
@@ -1387,6 +1434,8 @@ export function ForwarderWorkspace() {
           setDemurrageDailyRateUsd(sessionData.tce);
           setTceActive(true);
         }
+        if (sessionData.freightCost > 0) setFleteCompra(sessionData.freightCost);
+        if (sessionData.freightSell > 0) setFleteVenta(sessionData.freightSell);
       }
     }
   }, [activeProject]);
@@ -1534,8 +1583,8 @@ export function ForwarderWorkspace() {
       const dischRateEl = document.getElementById('rate-disch') || document.getElementById('disch-rate') || document.getElementById('rate-discharge') || document.getElementById('input-dischRate');
       const distEl = document.getElementById('dist-laden') || document.getElementById('dist-total');
       const speedEl = document.getElementById('spd-laden') || document.getElementById('vessel-speed');
-      const freightCostEl = document.getElementById('freight-rate');
-      const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight');
+      const freightCostEl = document.getElementById('freight-rate') || document.getElementById('freight-rate-calc') || document.getElementById('input-freightRate') || document.getElementById('buying-freight') || document.getElementById('flete-compra');
+      const freightSellEl = document.getElementById('freight-sell') || document.getElementById('selling-freight') || document.getElementById('flete-venta') || document.getElementById('target-freight-sell');
       const marginEl = document.getElementById('margin-charterer') || document.getElementById('margin-owner');
       const methodLoadEl = document.getElementById('metodo_carga');
       const methodDischEl = document.getElementById('metodo_descarga_pod');
@@ -1618,14 +1667,16 @@ export function ForwarderWorkspace() {
       const capturedFreightCost = Math.max(
         0,
         parseFloat(freightCostEl?.value) ||
-        Number(sessionSource.freightCost) ||
+        Number(sessionSource.freightCost || sessionSource.fleteCompra || sessionSource.flete_compra || sessionSource.freightRate) ||
+        parseFloat(String(document.getElementById('coa-detail-owner-purchase')?.textContent || '').replace(/[^0-9.-]/g, '')) ||
         0
       );
 
       const capturedFreightSell = Math.max(
         0,
         parseFloat(freightSellEl?.value) ||
-        Number(sessionSource.freightSell) ||
+        Number(sessionSource.freightSell || sessionSource.fleteVenta || sessionSource.flete_venta || sessionSource.sellingFreight || sessionSource.targetFreightSell) ||
+        parseFloat(String(document.getElementById('coa-detail-charterer-target')?.textContent || '').replace(/[^0-9.-]/g, '')) ||
         0
       );
 
@@ -1778,6 +1829,10 @@ export function ForwarderWorkspace() {
         flete_venta_usd_mt: capturedFreightSell,
         freight_rate_cost_usd: capturedFreightCost,
         freight_rate_sell_usd: capturedFreightSell,
+        flete_sugerido_armador_compra: capturedFreightCost,
+        flete_sugerido_fletador_venta: capturedFreightSell,
+        flete_compra: capturedFreightCost,
+        flete_venta: capturedFreightSell,
         exchange_rate: exchangeRateUsdEur,
         metodo_carga: methodLoadEl?.value || sessionSource.metodoCarga || '',
         metodo_descarga: methodDischEl?.value || sessionSource.metodoDescarga || '',
@@ -1910,6 +1965,8 @@ export function ForwarderWorkspace() {
       setDemurrageDailyRateUsd(capturedTce);
       setTceValue(capturedTce);
       setTceActive(true);
+      setFleteCompra(capturedFreightCost);
+      setFleteVenta(capturedFreightSell);
       setIsBigBagsCargo(isBigBags);
       setCargoItems(updatedCargoItems);
       setActiveReport(currentReportSnapshot);
@@ -2314,6 +2371,7 @@ export function ForwarderWorkspace() {
     const isUnderThreshold = totalWeightTons < 40;
     setIsUnder40t(isUnderThreshold);
 
+    const landCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
     let calculatedOceanFreight = 0;
     let calculatedFobOperations = 0;
     let totalEstimatedCost = 0;
@@ -2341,10 +2399,9 @@ export function ForwarderWorkspace() {
       const totalLclFreightCost = oceanFreightCost + cfsOriginCost + cfsDestCost + portT3Cost + blFee;
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
 
-      calculatedOceanFreight = oceanFreightCost;
-      calculatedFobOperations = cfsOriginCost + cfsDestCost + portT3Cost + blFee + terminalStorageCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0);
+      calculatedOceanFreight = Number(oceanFreightCost) || 0;
+      calculatedFobOperations = (Number(cfsOriginCost) || 0) + (Number(cfsDestCost) || 0) + (Number(portT3Cost) || 0) + (Number(blFee) || 0) + (Number(terminalStorageCost) || 0) + (Number(currentSurveyorCost) || 0) + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0);
 
-      const landCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + landCost;
     } else {
       // Regla >= 40t: Aplicar fletamento completo y cálculo de TCE del buque sugerido
@@ -2452,17 +2509,35 @@ export function ForwarderWorkspace() {
         terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
       }
 
-      calculatedOceanFreight = freightCost;
-      calculatedFobOperations = lashingCost + stevedoringCost + portCraneCost + terminalStorageCost + initialHandlingCost + currentSurveyorCost + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0) + demurrageCostUsd;
+      calculatedOceanFreight = Number(freightCost) || 0;
+      calculatedFobOperations = (Number(lashingCost) || 0) + (Number(stevedoringCost) || 0) + (Number(portCraneCost) || 0) + (Number(terminalStorageCost) || 0) + (Number(initialHandlingCost) || 0) + (Number(currentSurveyorCost) || 0) + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0) + (Number(demurrageCostUsd) || 0);
 
-      const landCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + landCost;
     }
 
-    setSubtotalFreight(calculatedOceanFreight.toFixed(2));
-    setSubtotalFobOperations(calculatedFobOperations.toFixed(2));
-    setEstimatedCost(totalEstimatedCost.toFixed(2));
-    setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
+    const effectiveFleteVenta = Number(
+      fleteVenta ||
+      activeProject?.route_and_chartering?.flete_venta_usd_mt ||
+      activeProject?.route_and_chartering?.freight_rate_sell_usd ||
+      activeProject?.route_and_chartering?.flete_sugerido_fletador_venta ||
+      0
+    );
+
+    const effectiveWeightOrRt = totalWeightTons > 0 ? totalWeightTons : (isUnderThreshold ? revenueTons : RT);
+
+    // Respetar la Simulación: La vista de Proyectos debe respetar el flete de venta manual sincronizado desde la Calculadora como el objetivo principal, en lugar de sugerir únicamente el precio automatizado bottom-up.
+    let targetSalePrice = 0;
+    if (effectiveFleteVenta > 0 && effectiveWeightOrRt > 0) {
+      const targetOceanFreightSale = Math.round(effectiveFleteVenta * effectiveWeightOrRt * 100) / 100;
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+    } else {
+      targetSalePrice = (Number(totalEstimatedCost) || 0) * 1.15;
+    }
+
+    setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
+    setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
+    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
+    setSalePrice((Number(targetSalePrice) || 0).toFixed(2));
   };
 
   useEffect(() => {
@@ -2485,13 +2560,12 @@ export function ForwarderWorkspace() {
     actualLoadingDays,
     actualDischargingDays,
     demurrageDailyRateUsd,
+    fleteCompra,
+    fleteVenta,
     activeProject?.land_freight_cost,
     activeProject?.land_origin,
     activeProject?.land_destination,
     activeProject?.land_distance,
-    actualLoadingDays,
-    actualDischargingDays,
-    demurrageDailyRateUsd,
   ]);
 
   useEffect(() => {
@@ -2954,8 +3028,35 @@ export function ForwarderWorkspace() {
     } else {
       fleteCostNum = Math.round(diasRotacionTotal * reportDailyHire * 100) / 100;
     }
-    const fleteSaleNum = fleteCostNum * 1.15;
-    const fleteMarginNum = fleteSaleNum - fleteCostNum;
+
+    // Fletes financieros sincronizados de la Calculadora (Flete Compra Armador y Flete Venta Fletador)
+    const manualFleteVentaUnit = Number(
+      sourcePayload?.route_and_chartering?.flete_venta_usd_mt ??
+      sourcePayload?.route_and_chartering?.freight_rate_sell_usd ??
+      sourcePayload?.route_and_chartering?.flete_sugerido_fletador_venta ??
+      sourcePayload?.flete_venta_usd_mt ??
+      activeProject?.route_and_chartering?.flete_venta_usd_mt ??
+      fleteVenta ??
+      0
+    );
+    const manualFleteCompraUnit = Number(
+      sourcePayload?.route_and_chartering?.flete_compra_usd_mt ??
+      sourcePayload?.route_and_chartering?.freight_rate_cost_usd ??
+      sourcePayload?.route_and_chartering?.flete_sugerido_armador_compra ??
+      sourcePayload?.flete_compra_usd_mt ??
+      activeProject?.route_and_chartering?.flete_compra_usd_mt ??
+      fleteCompra ??
+      0
+    );
+
+    // Respetar la Simulación: Si se especificó Flete Venta manual en la Calculadora, se utiliza como objetivo principal del tramo marítimo
+    let fleteSaleNum = 0;
+    if (manualFleteVentaUnit > 0 && reportRT > 0) {
+      fleteSaleNum = Math.round(manualFleteVentaUnit * reportRT * 100) / 100;
+    } else {
+      fleteSaleNum = Math.round(fleteCostNum * 1.15 * 100) / 100;
+    }
+    const fleteMarginNum = Math.round((fleteSaleNum - fleteCostNum) * 100) / 100;
 
     // Subtotal 2: Cuadrillas y Estiba
     const gangsCount = sourcePayload?.port_labor_and_equipment?.stevedore_gangs_shifts ?? stevedoreGangs;
@@ -3011,11 +3112,18 @@ export function ForwarderWorkspace() {
     const periMarginNum = periSaleNum - periCostNum;
 
     const landTransportData = getLandTransportData(activeProject, sourcePayload);
-    const landCost = landTransportData.freightCost;
+    const landCost = Number(landTransportData?.freightCost ?? 0) || 0;
 
-    const fobSubtotal = estibaCostNum + matCostNum + periCostNum + insCost + demurrageCostNum;
+    const fobSubtotal = (Number(estibaCostNum) || 0) + (Number(matCostNum) || 0) + (Number(periCostNum) || 0) + (Number(insCost) || 0) + (Number(demurrageCostNum) || 0);
     const finalTotalCost = Math.round((fleteCostNum + fobSubtotal + landCost) * 100) / 100;
-    const finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
+
+    // Respetar la Simulación: La vista de Proyectos debe respetar el flete de venta manual sincronizado desde la Calculadora como el objetivo principal, en lugar de sugerir únicamente el precio automatizado bottom-up.
+    let finalTotalSale = 0;
+    if (manualFleteVentaUnit > 0 && reportRT > 0) {
+      finalTotalSale = Math.round(((Number(fleteSaleNum) || 0) + ((Number(fobSubtotal) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15)) * 100) / 100;
+    } else {
+      finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
+    }
     const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
     const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
 
@@ -3216,6 +3324,10 @@ export function ForwarderWorkspace() {
       landDistance: landTransportData.distance,
       fobPortOperationsItems,
       stowagePlan,
+      fleteCompraUnit: manualFleteCompraUnit,
+      fleteVentaUnit: manualFleteVentaUnit,
+      fleteSugeridoArmadorCompra: manualFleteCompraUnit,
+      fleteSugeridoFletadorVenta: manualFleteVentaUnit,
     };
   };
 
@@ -3439,6 +3551,8 @@ export function ForwarderWorkspace() {
         setDemurrageDailyRateUsd(sessionData.tce);
         setTceActive(true);
       }
+      if (sessionData.freightCost > 0) setFleteCompra(sessionData.freightCost);
+      if (sessionData.freightSell > 0) setFleteVenta(sessionData.freightSell);
       if (sessionData.cargoQty > 0) {
         const itemType = sessionData.cargoType || 'Carga General';
         setCargoItems([{
@@ -3510,6 +3624,10 @@ export function ForwarderWorkspace() {
         if (rc.demurrage_daily_rate_usd) {
           setDemurrageDailyRateUsd(Number(rc.demurrage_daily_rate_usd));
         }
+        const editFleteCompra = Number(rc.flete_compra_usd_mt ?? rc.freight_rate_cost_usd ?? rc.flete_sugerido_armador_compra ?? 0);
+        const editFleteVenta = Number(rc.flete_venta_usd_mt ?? rc.freight_rate_sell_usd ?? rc.flete_sugerido_fletador_venta ?? 0);
+        if (editFleteCompra > 0) setFleteCompra(editFleteCompra);
+        if (editFleteVenta > 0) setFleteVenta(editFleteVenta);
       }
       if (payload.charteringAssessment || payload.chartering_assessment) {
         setCharteringAssessment(payload.charteringAssessment || payload.chartering_assessment);
@@ -3615,6 +3733,14 @@ export function ForwarderWorkspace() {
           total_weight_tons: Number(currentReportSnapshot?.totalWeightTons || (totals?.weight || 0) / 1000),
           total_volume_m3: Number(currentReportSnapshot?.totalVolumeM3 || totals?.m3 || 0),
           report_rt: Number(currentReportSnapshot?.reportRT || 0),
+          flete_compra_usd_mt: Number(fleteCompra || activeProject?.route_and_chartering?.flete_compra_usd_mt || readActiveCalculatorSession().freightCost || 0),
+          flete_venta_usd_mt: Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta_usd_mt || readActiveCalculatorSession().freightSell || 0),
+          freight_rate_cost_usd: Number(fleteCompra || activeProject?.route_and_chartering?.freight_rate_cost_usd || readActiveCalculatorSession().freightCost || 0),
+          freight_rate_sell_usd: Number(fleteVenta || activeProject?.route_and_chartering?.freight_rate_sell_usd || readActiveCalculatorSession().freightSell || 0),
+          flete_sugerido_armador_compra: Number(fleteCompra || activeProject?.route_and_chartering?.flete_sugerido_armador_compra || readActiveCalculatorSession().freightCost || 0),
+          flete_sugerido_fletador_venta: Number(fleteVenta || activeProject?.route_and_chartering?.flete_sugerido_fletador_venta || readActiveCalculatorSession().freightSell || 0),
+          flete_compra: Number(fleteCompra || activeProject?.route_and_chartering?.flete_compra || readActiveCalculatorSession().freightCost || 0),
+          flete_venta: Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta || readActiveCalculatorSession().freightSell || 0),
           is_real_estimate: true,
           estimated_at: new Date().toISOString()
         },
@@ -3831,6 +3957,21 @@ export function ForwarderWorkspace() {
                   </span>
                 </div>
                 <h1 className="text-3xl font-bold text-slate-900">{activeProject?.client_name || 'Expediente Sin Nombre'}</h1>
+
+                <button
+                  type="button"
+                  id="btn-sync-databridge-project-header"
+                  onClick={handleSyncCalculatorData}
+                  disabled={isSyncingCalculator}
+                  className="sm:ml-auto bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Sincronizar (DataBridge): Capturar parámetros operativos y fletes (compra y venta) desde la Calculadora"
+                  aria-label="Sincronizar (DataBridge)"
+                >
+                  <svg className={`w-3.5 h-3.5 text-white shrink-0 ${isSyncingCalculator ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>{isSyncingCalculator ? 'Sincronizando DataBridge...' : 'Sincronizar (DataBridge)'}</span>
+                </button>
               </header>
 
               {/* AVISO VISUAL DE CONFIRMACIÓN DE SINCRONIZACIÓN EXITOSA CON LA CALCULADORA Y NEON */}
@@ -3851,7 +3992,7 @@ export function ForwarderWorkspace() {
                           {syncSuccessNotice}
                         </p>
                         <p className="text-[11px] text-emerald-700 mt-0.5">
-                          Los datos de la calculadora se han sincronizado con éxito. Tipo de mercancía, categoría, toneladas, rutas, ritmos operativos, fletes, TCE y vista ejecutiva actualizados en la base de datos de Neon.
+                          Los datos de la calculadora se han sincronizado con éxito. Tipo de mercancía, categoría, toneladas, rutas, ritmos operativos, fletes (compra y venta), TCE y vista ejecutiva actualizados en la base de datos de Neon.
                         </p>
                       </div>
                     </div>
@@ -3988,6 +4129,53 @@ export function ForwarderWorkspace() {
                               {mr.oceanFreightTceUsd.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                             <span className="text-[10px] font-mono text-slate-500 font-bold ml-0.5">USD</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FLETES FINANCIEROS SINCRONIZADOS DE LA CALCULADORA (DATABRIDGE) */}
+                    <div id="project-financial-freights-bar" className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-gradient-to-r from-blue-50/80 via-slate-50 to-emerald-50/80 border border-slate-200 rounded-xl">
+                      {/* Flete Sugerido Armador (Compra) */}
+                      <div className="flex items-center justify-between p-3 bg-white border border-blue-200 rounded-lg shadow-xs">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-blue-900 tracking-wider">
+                              Flete Sugerido Armador (Compra)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Flete base de compra sincronizado desde la Calculadora</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-baseline justify-end gap-1">
+                            <span className="text-blue-700 font-bold text-sm">$</span>
+                            <span id="project-flete-compra-display" className="text-xl font-mono font-black text-blue-950">
+                              {(mr.fleteCompra || fleteCompra || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-blue-700 ml-0.5">USD/MT</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Flete Sugerido Fletador (Venta) */}
+                      <div className="flex items-center justify-between p-3 bg-white border border-emerald-200 rounded-lg shadow-xs">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-emerald-900 tracking-wider">
+                              Flete Sugerido Fletador (Venta)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Flete objetivo de venta sincronizado (Target Simulación)</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-baseline justify-end gap-1">
+                            <span className="text-emerald-700 font-bold text-sm">$</span>
+                            <span id="project-flete-venta-display" className="text-xl font-mono font-black text-emerald-950">
+                              {(mr.fleteVenta || fleteVenta || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-emerald-700 ml-0.5">USD/MT</span>
                           </div>
                         </div>
                       </div>
@@ -4267,7 +4455,7 @@ export function ForwarderWorkspace() {
                             <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            <span>Actualizar datos</span>
+                            <span>Actualizar datos (Sincronizar DataBridge)</span>
                           </>
                         )}
                       </button>
@@ -4720,6 +4908,47 @@ export function ForwarderWorkspace() {
                       </div>
                     </div>
 
+                    {/* FLETES SUGERIDOS CALCULADORA (COMPRA / VENTA) */}
+                    <div id="modal-suggested-freights-bar" className="mt-4 pt-4 border-t border-slate-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-slate-800/90 border border-blue-500/40 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-blue-300 tracking-wider">
+                              Flete Sugerido Armador (Compra)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400">Target armador simulación Calculadora</span>
+                        </div>
+                        <div className="flex items-baseline">
+                          <span className="text-sm font-mono font-bold text-blue-400 mr-1 select-none">$</span>
+                          <span id="modal-flete-sugerido-armador" className="text-xl font-mono font-black text-blue-200">
+                            {Number(fleteCompra || activeProject?.route_and_chartering?.flete_compra_usd_mt || 0).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] font-mono font-semibold text-slate-400 ml-1">USD/MT</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/90 border border-emerald-500/40 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                            <span className="text-xs font-black uppercase text-emerald-300 tracking-wider">
+                              Flete Sugerido Fletador (Venta)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400">Target fletador simulación Calculadora</span>
+                        </div>
+                        <div className="flex items-baseline">
+                          <span className="text-sm font-mono font-bold text-emerald-400 mr-1 select-none">$</span>
+                          <span id="modal-flete-sugerido-fletador" className="text-xl font-mono font-black text-emerald-200">
+                            {Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta_usd_mt || 0).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] font-mono font-semibold text-slate-400 ml-1">USD/MT</span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Sección Condicional: Pre-carriage / On-carriage */}
                     {(() => {
                       const lt = getLandTransportData(activeProject, reportData || financialBreakdown);
@@ -5080,9 +5309,29 @@ export function ForwarderWorkspace() {
                   <tbody className="divide-y divide-slate-200">
                     {/* Fila 1: Flete Marítimo (Base RT) */}
                     <tr className="hover:bg-slate-50 bg-sky-50/40">
-                      <td className="py-2.5 px-3 font-bold text-sky-900">Flete Marítimo (Base RT)</td>
+                      <td className="py-2.5 px-3 font-bold text-sky-900">
+                        <div>Flete Marítimo (Base RT)</div>
+                        {(Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
+                          <div className="text-[10px] font-mono font-semibold mt-0.5 space-y-0.5">
+                            {Number(activeReport.fleteCompraUnit || 0) > 0 && (
+                              <div className="text-blue-800">Flete Sugerido Armador (Compra): ${Number(activeReport.fleteCompraUnit).toFixed(2)} USD/MT</div>
+                            )}
+                            {Number(activeReport.fleteVentaUnit || 0) > 0 && (
+                              <div className="text-emerald-800">Flete Sugerido Fletador (Venta): ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT</div>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-slate-600">
-                        Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                        {Number(activeReport.fleteVentaUnit || 0) > 0 ? (
+                          <span>
+                            Ocean Freight simulación respetada (Flete Venta Fletador: ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · TCE {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                          </span>
+                        ) : (
+                          <span>
+                            Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">{formatCurrency(fleteSaleNum)}</td>
@@ -5187,6 +5436,45 @@ export function ForwarderWorkspace() {
                     Base: {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT · Valores exclusivos en USD/MT
                   </span>
                 </h3>
+
+                {(Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
+                  <div id="executive-suggested-freights-bar" className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-xl shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-black uppercase tracking-wide text-blue-900">
+                          Flete Sugerido Armador (Compra)
+                        </span>
+                        <span className="text-[10px] font-extrabold bg-blue-200 text-blue-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                          USD/MT
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black font-mono text-blue-950 mt-2">
+                        {Number(activeReport.fleteCompraUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-blue-800">USD/MT</span>
+                      </div>
+                      <p className="text-[10px] text-blue-700 mt-1.5 font-semibold">
+                        Flete base armador sincronizado de la Calculadora
+                      </p>
+                    </div>
+
+                    <div className="bg-emerald-50 border-2 border-emerald-300 p-4 rounded-xl shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-black uppercase tracking-wide text-emerald-900">
+                          Flete Sugerido Fletador (Venta)
+                        </span>
+                        <span className="text-[10px] font-extrabold bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                          USD/MT
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black font-mono text-emerald-950 mt-2">
+                        {Number(activeReport.fleteVentaUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-800">USD/MT</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-700 mt-1.5 font-semibold">
+                        Objetivo comercial de venta sincronizado (Target Simulación)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Valor del Flete */}
                   <div className="bg-sky-50 border-2 border-sky-300 p-4 rounded-xl shadow-sm">
