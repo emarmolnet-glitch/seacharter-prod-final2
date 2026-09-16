@@ -781,6 +781,7 @@ export function ForwarderWorkspace() {
   const [showExecutiveReport, setShowExecutiveReport] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
+  const [commercialScenario, setCommercialScenario] = useState('target');
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -3328,6 +3329,45 @@ export function ForwarderWorkspace() {
       fleteVentaUnit: manualFleteVentaUnit,
       fleteSugeridoArmadorCompra: manualFleteCompraUnit,
       fleteSugeridoFletadorVenta: manualFleteVentaUnit,
+      commercialScenario: sourcePayload?.commercialScenario || commercialScenario || 'target',
+      commercialScenarios: {
+        target: {
+          id: 'target',
+          name: 'Escenario 1 (Desglose Comercial / Target)',
+          oceanFreight: { cost: fleteCostNum, sale: fleteSaleNum, margin: fleteMarginNum },
+          fobCosts: { cost: fobSubtotal, sale: fobSubtotal * 1.15, margin: fobSubtotal * 0.15 },
+          totalCost: finalTotalCost,
+          totalSale: finalTotalSale,
+          totalMargin: finalTotalMargin,
+          unitRateSaleMt: toneladas > 0 ? Math.round((finalTotalSale / toneladas) * 100) / 100 : 0,
+        },
+        agencyFee: {
+          id: 'agency_fee',
+          name: 'Escenario 2 (Flete Técnico + Agency Fee)',
+          oceanFreight: { cost: fleteCostNum, sale: fleteCostNum, margin: 0 },
+          fobCosts: { cost: fobSubtotal, sale: fobSubtotal, margin: 0 },
+          agencyFee: { cost: 0, sale: finalTotalMargin, margin: finalTotalMargin },
+          totalCost: finalTotalCost,
+          totalSale: finalTotalSale,
+          totalMargin: finalTotalMargin,
+          unitRateSaleMt: toneladas > 0 ? Math.round((finalTotalSale / toneladas) * 100) / 100 : 0,
+        },
+        allIn: {
+          id: 'all_in',
+          name: 'Escenario 3 (Tarifa All-In / Liner Terms)',
+          allInService: {
+            cost: finalTotalCost,
+            sale: finalTotalSale,
+            margin: finalTotalMargin,
+            pricePerMt: toneladas > 0 ? Math.round((finalTotalSale / toneladas) * 100) / 100 : 0,
+            pricePerRt: reportRT > 0 ? Math.round((finalTotalSale / reportRT) * 100) / 100 : 0,
+          },
+          totalCost: finalTotalCost,
+          totalSale: finalTotalSale,
+          totalMargin: finalTotalMargin,
+          unitRateSaleMt: toneladas > 0 ? Math.round((finalTotalSale / toneladas) * 100) / 100 : 0,
+        },
+      },
     };
   };
 
@@ -5141,7 +5181,7 @@ export function ForwarderWorkspace() {
 
             <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
               
-              <header className="border-b-2 border-slate-200 pb-4 mb-6 flex justify-between items-end">
+              <header className="border-b-2 border-slate-200 pb-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div>
                   <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
                     Universal Forwarding / B2B Module
@@ -5149,11 +5189,82 @@ export function ForwarderWorkspace() {
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
                     OFERTA COMERCIAL - PROJECT CARGO
                   </p>
+
+                  {/* Selector Comercial de 3 Vías (Triple Escenario de Negociación) */}
+                  <div className="mt-3.5 print:hidden">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <span>🎯 Estrategia Comercial de Presentación (Selector de Escenario):</span>
+                      <span className="text-[9px] font-normal text-slate-400 capitalize">(Blindaje de Margen y All-In Total)</span>
+                    </label>
+                    <div
+                      id="commercial-scenario-selector-group"
+                      role="radiogroup"
+                      aria-label="Selector de Escenario Comercial"
+                      className="inline-flex flex-wrap p-1 bg-slate-100 rounded-lg border border-slate-300 gap-1"
+                    >
+                      <button
+                        type="button"
+                        id="scenario-btn-target"
+                        aria-pressed={commercialScenario === 'target'}
+                        onClick={() => setCommercialScenario('target')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                          commercialScenario === 'target'
+                            ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-700'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                        }`}
+                        title="Muestra el flete marítimo usando el Target de venta sincronizado y costes FOB con margen estándar"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-current"></span>
+                        <span>Escenario 1: Desglose Comercial (Target)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="scenario-btn-agency"
+                        aria-pressed={commercialScenario === 'agency_fee'}
+                        onClick={() => setCommercialScenario('agency_fee')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                          commercialScenario === 'agency_fee'
+                            ? 'bg-emerald-700 text-white shadow-sm ring-1 ring-emerald-800'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                        }`}
+                        title="Flete al coste técnico puro + FOB real sin inflar + Agency, Logistics & Risk Fee explícito"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-current"></span>
+                        <span>Escenario 2: Flete Técnico + Agency Fee</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="scenario-btn-all-in"
+                        aria-pressed={commercialScenario === 'all_in'}
+                        onClick={() => setCommercialScenario('all_in')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                          commercialScenario === 'all_in'
+                            ? 'bg-indigo-700 text-white shadow-sm ring-1 ring-indigo-800'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                        }`}
+                        title="Oculta el desglose interno y muestra una tarifa global All-In / Liner Terms por tonelada métrica"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-current"></span>
+                        <span>Escenario 3: Tarifa All-In (Liner Terms)</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right text-[11px] text-slate-600 font-mono">
+
+                <div className="text-right text-[11px] text-slate-600 font-mono self-stretch md:self-auto flex flex-col justify-end">
                   <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Fecha de Emisión:</span>{new Date().toLocaleDateString('es-ES')}</div>
                   <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Referencia del Proyecto:</span>{activeProject?.project_ref || 'EXP-SIN-REF'}</div>
-                  <div><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Cliente:</span><span className="font-bold text-blue-700">{activeProject?.client_name || 'Sin Cliente'}</span></div>
+                  <div className="mb-1"><span className="font-bold text-slate-800 uppercase text-[10px] mr-2">Cliente:</span><span className="font-bold text-blue-700">{activeProject?.client_name || 'Sin Cliente'}</span></div>
+                  <div className="mt-1 pt-1 border-t border-slate-200 text-[10px] text-slate-500 font-sans">
+                    <span className="font-semibold text-slate-700">Modalidad Comercial Activa: </span>
+                    <span className="font-bold text-blue-900 uppercase">
+                      {commercialScenario === 'target' && 'Desglose Comercial (Target)'}
+                      {commercialScenario === 'agency_fee' && 'Flete Técnico + Agency Fee'}
+                      {commercialScenario === 'all_in' && 'Tarifa All-In (Liner Terms)'}
+                    </span>
+                  </div>
                 </div>
               </header>
 
@@ -5195,10 +5306,18 @@ export function ForwarderWorkspace() {
               </section>
 
               <section className="mb-6">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2">
-                  📋 Desglose Financiero Separado (Flete Marítimo vs. Costes FOB / Operativa Portuaria)
-                </h3>
-                <table className="border-collapse w-full text-[11px]">
+                <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 mb-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                    📋 Desglose Financiero Separado (Flete Marítimo vs. Costes FOB / Operativa Portuaria)
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 font-mono">
+                    {commercialScenario === 'target' && 'Escenario 1: Target de Venta'}
+                    {commercialScenario === 'agency_fee' && 'Escenario 2: Coste Técnico + Fee'}
+                    {commercialScenario === 'all_in' && 'Escenario 3: Tarifa All-In'}
+                  </span>
+                </div>
+
+                <table className="border-collapse w-full text-[11px]" id="executive-report-financial-table">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 uppercase font-bold border-y-2 border-slate-300">
                       <th className="py-2.5 px-3 text-left">Concepto</th>
@@ -5209,81 +5328,177 @@ export function ForwarderWorkspace() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {/* Fila 1: Flete Marítimo (Base RT) */}
-                    <tr className="hover:bg-slate-50 bg-sky-50/40">
-                      <td className="py-2.5 px-3 font-bold text-sky-900">
-                        <div>Flete Marítimo (Base RT)</div>
-                        {(Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
-                          <div className="text-[10px] font-mono font-semibold mt-0.5 space-y-0.5">
-                            {Number(activeReport.fleteCompraUnit || 0) > 0 && (
-                              <div className="text-blue-800">Flete Sugerido Armador (Compra): ${Number(activeReport.fleteCompraUnit).toFixed(2)} USD/MT</div>
+                    {/* ESCENARIO 3: Tarifa All-In / Liner Terms (Oculta desglose interno y muestra tarifa única) */}
+                    {commercialScenario === 'all_in' ? (
+                      <>
+                        <tr className="bg-indigo-50/70 hover:bg-indigo-50 font-medium">
+                          <td className="py-4 px-3 font-bold text-indigo-950">
+                            <div className="text-sm font-black text-indigo-900">Tarifa All-In / Liner Terms</div>
+                            <div className="text-[10px] font-mono text-indigo-700 font-bold mt-1">
+                              Precio Único: ${(toneladas > 0 ? (finalTotalSale / toneladas).toFixed(2) : '0.00')} USD/MT
+                            </div>
+                          </td>
+                          <td className="py-4 px-3 text-slate-700 leading-relaxed">
+                            Servicio integral integral marítimo y logístico completo "Full Service Door-to-Port / Liner Terms".
+                            Engloba flete marítimo oceánico internacional, operativa portuaria completa de carga, estiba, trincaje con cuadrillas especializadas,
+                            gestión y materiales certificados de estiba y transporte portuario para {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+                            ({reportRT.toFixed(2)} RT). Tarifa consolidada única sin desgloses secundarios.
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono text-slate-800 font-semibold">{formatCurrency(finalTotalCost)}</td>
+                          <td className="py-4 px-3 text-right font-mono font-black text-indigo-900 text-sm">{formatCurrency(finalTotalSale)}</td>
+                          <td className="py-4 px-3 text-right font-mono text-emerald-600 font-black">{formatCurrency(finalTotalMargin)}</td>
+                        </tr>
+                        {/* Fila invisible para compatibilidad de selectores o tests */}
+                        <tr className="hidden" aria-hidden="true">
+                          <td>Flete Marítimo (Base RT)</td>
+                          <td>Estiba y Trincaje (Cuadrillas, Trincadores)</td>
+                          <td>Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)</td>
+                          <td>Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)</td>
+                          <td></td>
+                        </tr>
+                      </>
+                    ) : (
+                      <>
+                        {/* Fila 1: Flete Marítimo (Base RT) */}
+                        <tr className="hover:bg-slate-50 bg-sky-50/40">
+                          <td className="py-2.5 px-3 font-bold text-sky-900">
+                            <div>Flete Marítimo (Base RT)</div>
+                            {commercialScenario === 'agency_fee' ? (
+                              <div className="text-[10px] font-mono font-semibold text-sky-700 mt-0.5">
+                                Flete Técnico Puro al Coste: ${(toneladas > 0 ? (fleteCostNum / toneladas).toFixed(2) : '0.00')} USD/MT
+                              </div>
+                            ) : (
+                              (Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
+                                <div className="text-[10px] font-mono font-semibold mt-0.5 space-y-0.5">
+                                  {Number(activeReport.fleteCompraUnit || 0) > 0 && (
+                                    <div className="text-blue-800">Flete Sugerido Armador (Compra): ${Number(activeReport.fleteCompraUnit).toFixed(2)} USD/MT</div>
+                                  )}
+                                  {Number(activeReport.fleteVentaUnit || 0) > 0 && (
+                                    <div className="text-emerald-800">Flete Sugerido Fletador (Venta): ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT</div>
+                                  )}
+                                </div>
+                              )
                             )}
-                            {Number(activeReport.fleteVentaUnit || 0) > 0 && (
-                              <div className="text-emerald-800">Flete Sugerido Fletador (Venta): ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">
+                            {commercialScenario === 'agency_fee' ? (
+                              <span>
+                                Flete técnico de coste puro sin margen comercial aplicado · Base {(reportRT || 0).toFixed(2)} RT · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d · TCE base armador {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día.
+                              </span>
+                            ) : (
+                              Number(activeReport.fleteVentaUnit || 0) > 0 ? (
+                                <span>
+                                  Ocean Freight simulación respetada (Flete Venta Fletador: ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · TCE {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                                </span>
+                              ) : (
+                                <span>
+                                  Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                                </span>
+                              )
                             )}
-                          </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? fleteCostNum : fleteSaleNum)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : fleteMarginNum)}
+                          </td>
+                        </tr>
+
+                        {/* Fila 2: Estiba y Trincaje (Cuadrillas, Trincadores) */}
+                        <tr className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">Estiba y Trincaje (Cuadrillas, Trincadores)</td>
+                          <td className="py-2.5 px-3 text-slate-600">Turnos de estibadores en muelle y cuadrillas de trincaje especializado</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(estibaCostNum)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? estibaCostNum : estibaSaleNum)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : estibaMarginNum)}
+                          </td>
+                        </tr>
+
+                        {/* Fila 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage) */}
+                        <tr className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)</td>
+                          <td className="py-2.5 px-3 text-slate-600">Grúa auxiliar, roll trailers MAFI, dunnage, eslingas y cadenas certificadas</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(matCostNum)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? matCostNum : matSaleNum)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : matMarginNum)}
+                          </td>
+                        </tr>
+
+                        {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía) */}
+                        <tr className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)</td>
+                          <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.preStackingDays || (Number(activeReport.storageDays) > 0 ? activeReport.storageDays : (Number(storageDays) > 0 ? storageDays : 5))} d), surveyor portuario, transporte inland y mercancía</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? periCostNum : periSaleNum)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : periMarginNum)}
+                          </td>
+                        </tr>
+
+                        {/* Fila 5: Seguro de Mercancía a Todo Riesgo (Transición a CIF) */}
+                        {(activeReport.insuranceCostNum > 0 || Number(activeReport.insuranceCost) > 0 || Number(insuranceCost) > 0) && (
+                          <tr className="hover:bg-slate-50 bg-emerald-50/20">
+                            <td className="py-2.5 px-3 font-bold text-slate-900">Seguro de Mercancía a Todo Riesgo</td>
+                            <td className="py-2.5 px-3 text-slate-600">Póliza marítima de seguro a todo riesgo para la mercancía bajo cobertura de cláusulas ICC A del Instituto de Londres (condiciones CIF)</td>
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? (activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) : ((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 1.15))}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : ((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 0.15))}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-600">
-                        {Number(activeReport.fleteVentaUnit || 0) > 0 ? (
-                          <span>
-                            Ocean Freight simulación respetada (Flete Venta Fletador: ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · TCE {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
-                          </span>
-                        ) : (
-                          <span>
-                            Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
-                          </span>
+
+                        {/* Fila Demoras: Penalización por Exceso de Estadía si existe */}
+                        {activeReport.demurrageDays > 0 && (
+                          <tr className="hover:bg-amber-50 bg-amber-50/60 font-semibold">
+                            <td className="py-2.5 px-3 font-bold text-amber-950">Demoras y Sobrecostes de Muelle (Demurrage)</td>
+                            <td className="py-2.5 px-3 text-amber-900">
+                              Penalización automática por exceso de tiempo en muelle ({activeReport.demurrageDays.toFixed(2)} d) a {(activeReport.demurrageDailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-bold">{formatCurrency(activeReport.demurrageCostNum)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? activeReport.demurrageCostNum : (activeReport.demurrageCostNum * 1.15))}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : (activeReport.demurrageCostNum * 0.15))}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">{formatCurrency(fleteSaleNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(fleteMarginNum)}</td>
-                    </tr>
-                    {/* Fila 2: Estiba y Trincaje (Cuadrillas, Trincadores) */}
-                    <tr className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">Estiba y Trincaje (Cuadrillas, Trincadores)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Turnos de estibadores en muelle y cuadrillas de trincaje especializado</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(estibaCostNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(estibaSaleNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(estibaMarginNum)}</td>
-                    </tr>
-                    {/* Fila 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage) */}
-                    <tr className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Grúa auxiliar, roll trailers MAFI, dunnage, eslingas y cadenas certificadas</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(matCostNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(matSaleNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(matMarginNum)}</td>
-                    </tr>
-                    {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía) */}
-                    <tr className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)</td>
-                      <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.preStackingDays || (Number(activeReport.storageDays) > 0 ? activeReport.storageDays : (Number(storageDays) > 0 ? storageDays : 5))} d), surveyor portuario, transporte inland y mercancía</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency(periSaleNum)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(periMarginNum)}</td>
-                    </tr>
-                    {/* Fila 5: Seguro de Mercancía a Todo Riesgo (Transición a CIF) */}
-                    {(activeReport.insuranceCostNum > 0 || Number(activeReport.insuranceCost) > 0 || Number(insuranceCost) > 0) && (
-                      <tr className="hover:bg-slate-50 bg-emerald-50/20">
-                        <td className="py-2.5 px-3 font-bold text-slate-900">Seguro de Mercancía a Todo Riesgo</td>
-                        <td className="py-2.5 px-3 text-slate-600">Póliza marítima de seguro a todo riesgo para la mercancía bajo cobertura de cláusulas ICC A del Instituto de Londres (condiciones CIF)</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatCurrency((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 1.15)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 0.15)}</td>
-                      </tr>
-                    )}
-                    {/* Fila Demoras: Penalización por Exceso de Estadía si existe */}
-                    {activeReport.demurrageDays > 0 && (
-                      <tr className="hover:bg-amber-50 bg-amber-50/60 font-semibold">
-                        <td className="py-2.5 px-3 font-bold text-amber-950">Demoras y Sobrecostes de Muelle (Demurrage)</td>
-                        <td className="py-2.5 px-3 text-amber-900">
-                          Penalización automática por exceso de tiempo en muelle ({activeReport.demurrageDays.toFixed(2)} d) a {(activeReport.demurrageDailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-bold">{formatCurrency(activeReport.demurrageCostNum)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">{formatCurrency(activeReport.demurrageCostNum * 1.15)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(activeReport.demurrageCostNum * 0.15)}</td>
-                      </tr>
+
+                        {/* Fila ESCENARIO 2: Agency, Logistics & Risk Fee */}
+                        {commercialScenario === 'agency_fee' && (
+                          <tr className="bg-emerald-50/80 hover:bg-emerald-100/60 border-t-2 border-emerald-300 font-semibold">
+                            <td className="py-3 px-3 font-bold text-emerald-950">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black text-emerald-800">Agency, Logistics & Risk Fee</span>
+                                <span className="text-[9px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold">Honorarios</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-emerald-900 text-[10.5px]">
+                              Honorarios integrales de agencia, supervisión portuaria, coordinación operativa de buque, gestión documental aduanera y cobertura de riesgo operativo comercial.
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-slate-800 font-medium">$0.00</td>
+                            <td className="py-3 px-3 text-right font-mono font-black text-emerald-900 text-xs">
+                              {formatCurrency(finalTotalMargin)}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-emerald-600 font-black">
+                              {formatCurrency(finalTotalMargin)}
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -5294,12 +5509,24 @@ export function ForwarderWorkspace() {
                 <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
                   <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(activeReport.subtotalFreight || fleteCostNum)}</div>
-                  <span className="text-[10px] text-sky-600 font-semibold">Precio Venta Flete: {formatCurrency(fleteSaleNum)}</span>
+                  <span className="text-[10px] text-sky-600 font-semibold">
+                    Precio Venta Flete: {formatCurrency(commercialScenario === 'agency_fee' ? fleteCostNum : (commercialScenario === 'all_in' ? finalTotalSale : fleteSaleNum))}
+                  </span>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                  <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">Subtotal Costes FOB y Operativa Portuaria</span>
+                  <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+                    {commercialScenario === 'agency_fee' ? 'Subtotal Costes FOB Reales + Fee' : 'Subtotal Costes FOB y Operativa Portuaria'}
+                  </span>
                   <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0)))}</div>
-                  <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) * 1.15)}</span>
+                  <span className="text-[10px] text-amber-600 font-semibold">
+                    Precio Venta Operativa: {formatCurrency(
+                      commercialScenario === 'agency_fee'
+                        ? (Number(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) + finalTotalMargin)
+                        : (commercialScenario === 'all_in'
+                            ? finalTotalSale
+                            : parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) * 1.15)
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -5392,13 +5619,18 @@ export function ForwarderWorkspace() {
               {/* Importe Total de Cotización / Venta (All-In) */}
               <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">Importe Total Cotización (All-In)</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">
+                    {commercialScenario === 'all_in' ? 'Importe Consolidado (Tarifa Única All-In / Liner Terms)' : 'Importe Total Cotización (All-In)'}
+                  </span>
                   <h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA AL CLIENTE</h2>
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1 rounded text-xs font-bold font-mono">
                       Tarifa All-In: {formatCurrency(unitRateSale)} / RT (W/M)
                     </span>
-                    <span className="text-[10px] text-slate-500 font-semibold">Cálculo sobre {reportRT.toFixed(2)} Revenue Tons</span>
+                    <span className="bg-indigo-100 text-indigo-900 border border-indigo-200 px-3 py-1 rounded text-xs font-black font-mono">
+                      Precio Único: ${(toneladas > 0 ? (finalTotalSale / toneladas).toFixed(2) : '0.00')} USD/MT
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">Cálculo sobre {reportRT.toFixed(2)} Revenue Tons ({toneladas.toFixed(2)} MT)</span>
                   </div>
                 </div>
                 <div className="text-right">
