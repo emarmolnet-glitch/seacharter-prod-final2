@@ -108,10 +108,67 @@ exports.handler = async (event) => {
           routeAndChartering
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
+        if (updateResult.rows.length > 0) {
+          return {
+            statusCode: 200,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: updateResult.rows[0] })
+          };
+        }
+
+        // UPSERT: Si no existía fila previa con ese project_ref (ej. RDM), crearla preservando la referencia
+        const upsertRef = data.project_ref || `EXP-${Date.now().toString().slice(-6)}`;
+        const upsertStatus = statusValue || 'BORRADOR';
+        const upsertMargin = marginValue || '0';
+
+        const upsertInsertQuery = `
+          INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
+          VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+          RETURNING *;
+        `;
+        const upsertInsertValues = [
+          upsertRef, 
+          data.client_name || 'Nuevo Cliente', 
+          upsertStatus,
+          upsertMargin,
+          JSON.stringify(data.documents || []),
+          JSON.stringify(data.items || data.line_items || data.services || [])
+        ];
+        const upsertResult = await pool.query(upsertInsertQuery, upsertInsertValues);
+        const upsertRow = upsertResult.rows[0];
+
+        if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering) {
+          try {
+            const landUpdate = await pool.query(
+              `UPDATE forwarder_projects
+               SET land_origin = COALESCE($1, land_origin),
+                   land_destination = COALESCE($2, land_destination),
+                   land_distance = COALESCE($3, land_distance),
+                   land_freight_cost = COALESCE($4, land_freight_cost),
+                   route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
+               WHERE id = $5
+               RETURNING *;`,
+              [
+                landOrigin,
+                landDestination,
+                landDistance,
+                landFreightCost,
+                upsertRow.id,
+                routeAndChartering
+              ]
+            );
+            return {
+              statusCode: 200,
+              headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: landUpdate.rows[0] || upsertRow })
+            };
+          } catch (_) {}
+        }
+
         return {
           statusCode: 200,
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: updateResult.rows[0] })
+          body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: upsertRow })
         };
       }
 
@@ -232,6 +289,56 @@ exports.handler = async (event) => {
       const result = await pool.query(query, values);
 
       if (result.rows.length === 0) {
+        if (data.project_ref) {
+          // UPSERT para PUT: si no existe con project_ref, crearlo directamente
+          const upsertRef = data.project_ref;
+          const upsertStatus = statusValue || 'BORRADOR';
+          const upsertMargin = marginValue || '0';
+
+          const insertQuery = `
+            INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+            RETURNING *;
+          `;
+          const insertValues = [
+            upsertRef, 
+            data.client_name || 'Nuevo Cliente', 
+            upsertStatus,
+            upsertMargin,
+            JSON.stringify(data.documents || []),
+            JSON.stringify(data.items || data.line_items || data.services || [])
+          ];
+          const insertResult = await pool.query(insertQuery, insertValues);
+          const createdProject = insertResult.rows[0];
+
+          if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering) {
+            try {
+              const landUpdate = await pool.query(
+                `UPDATE forwarder_projects
+                 SET land_origin = COALESCE($1, land_origin),
+                     land_destination = COALESCE($2, land_destination),
+                     land_distance = COALESCE($3, land_distance),
+                     land_freight_cost = COALESCE($4, land_freight_cost),
+                     route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
+                 WHERE id = $5
+                 RETURNING *;`,
+                [landOrigin, landDestination, landDistance, landFreightCost, createdProject.id, routeAndChartering]
+              );
+              return {
+                statusCode: 200,
+                headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: landUpdate.rows[0] || createdProject })
+              };
+            } catch (_) {}
+          }
+
+          return {
+            statusCode: 200,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: createdProject })
+          };
+        }
+
         return {
           statusCode: 404,
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
