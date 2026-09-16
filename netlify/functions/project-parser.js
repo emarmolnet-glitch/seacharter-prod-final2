@@ -2073,10 +2073,17 @@ function isBulkOrBigBagsCargo(items = []) {
     const shipping = String(it.shipping_mode_supported || '');
     const combined = normalizeStr(`${cat} ${it.type || ''} ${shipping}`);
 
+    const isExplicitPallet = combined.includes('palet') || combined.includes('pallet');
+    const isExplicitBigBag = combined.includes('big bag') || combined.includes('bigbag') || combined.includes('fibc');
+
+    if (isExplicitPallet && !isExplicitBigBag) {
+      continue;
+    }
+
     if (
       cat === 'Mercancía Ensacada / Dry Bulk' ||
       shipping === 'Big Bags / Granel' ||
-      combined.includes('big bag') || combined.includes('bigbag') || combined.includes('fibc') ||
+      isExplicitBigBag ||
       combined.includes('saco') || combined.includes('ensacad') || combined.includes('granel') ||
       combined.includes('dry bulk') || hasWord(combined, 'bulk') || combined.includes('cereal') ||
       combined.includes('trigo') || combined.includes('cemento') || combined.includes('fertilizante') ||
@@ -2617,19 +2624,53 @@ function calculateFinancialBreakdown(items = [], orderTotals, charteringAssessme
         description: 'Especialistas homologados para ejecución y certificación del trincaje a bordo según Código CSS de la OMI.',
       });
 
-      // Materiales de sujeción específicos: maderas de dunnage, cables de acero, cadenas de trincaje G80
-      const dunnageCount = Math.ceil(totalWeightTons / 5);
-      const chainsCount = Math.max(2, (roRoCount * 4) || Math.ceil(totalPieces * 1.5));
-      const slingsCount = Math.ceil(totalPieces / 2);
-      const shacklesCount = (slingsCount * 2) + (chainsCount * 2);
-      const lashingCost = (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40) + (shacklesCount * 15);
-
-      fobPortOperationsItems.push({
-        concept: 'Materiales de Sujeción y Trincaje Pesado (Maderas Dunnage, Cadenas G80, Cables de Acero, Grilletes)',
-        units: totalPieces,
-        amount: lashingCost,
-        category: 'Trincaje y Estiba',
+      // Detección condicional: Mercancía Paletizada / Sacos / Sling Bags / Carga General
+      const isPalletizedOnly = items.length > 0 && items.every(it => {
+        const cat = String(it.category || '').toLowerCase();
+        const typ = String(it.type || '').toLowerCase();
+        const wt = Number(it.weight || 0);
+        const isHeavy = cat.includes('maquinaria') || cat.includes('proyecto') || cat.includes('heavy') || typ.includes('transformador') || wt > 8000;
+        if (isHeavy) return false;
+        return cat.includes('palet') || cat.includes('pallet') || cat.includes('saco') || cat.includes('sling') || cat.includes('general') || cat.includes('suministro') ||
+               typ.includes('palet') || typ.includes('pallet') || typ.includes('saco') || typ.includes('caja') || typ.includes('bulto');
       });
+
+      let dunnageCount = 0;
+      let chainsCount = 0;
+      let slingsCount = 0;
+      let shacklesCount = 0;
+      let lashingCost = 0;
+
+      if (isPalletizedOnly) {
+        // Regla estricta Paletizada / Sacos / Sling Bags / Carga General:
+        // Cadenas y grilletes forzados a 0 para evitar daños por sobrepresión
+        dunnageCount = Math.max(1, Math.ceil(totalWeightTons / 25));
+        chainsCount = 0;
+        slingsCount = Math.ceil(totalPieces / 2);
+        shacklesCount = 0;
+        lashingCost = (dunnageCount * 20) + (slingsCount * 40);
+
+        fobPortOperationsItems.push({
+          concept: 'Materiales de Sujeción y Calce Ligero (Madera de Estiba / Airbags (Dunnage), Cinchas)',
+          units: dunnageCount,
+          amount: lashingCost,
+          category: 'Trincaje y Estiba',
+          description: 'Calce y bloqueo de huecos con maderas de estiba / airbags ligeros y cinchas de poliéster. Cadenas pesadas y grilletes excluidos (valor 0) para preservar la integridad de la carga.',
+        });
+      } else {
+        dunnageCount = Math.ceil(totalWeightTons / 5);
+        chainsCount = Math.max(2, (roRoCount * 4) || Math.ceil(totalPieces * 1.5));
+        slingsCount = Math.ceil(totalPieces / 2);
+        shacklesCount = (slingsCount * 2) + (chainsCount * 2);
+        lashingCost = (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40) + (shacklesCount * 15);
+
+        fobPortOperationsItems.push({
+          concept: 'Materiales de Sujeción y Trincaje Pesado (Maderas Dunnage, Cadenas G80, Cables de Acero, Grilletes)',
+          units: totalPieces,
+          amount: lashingCost,
+          category: 'Trincaje y Estiba',
+        });
+      }
     }
   }
 
