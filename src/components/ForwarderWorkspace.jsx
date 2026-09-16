@@ -4031,50 +4031,6 @@ export function ForwarderWorkspace() {
                 </>
               )}
 
-              {/* SECCIÓN DE RENDERIZADO CONDICIONAL MULTIMODAL: PRE-CARRIAGE / ON-CARRIAGE */}
-              {(() => {
-                const lt = getLandTransportData(activeProject);
-                if (!lt.hasData) return null;
-                return (
-                  <div
-                    id="project-multimodal-card"
-                    className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-slate-800"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">🚛</span>
-                          <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                            Pre-carriage / On-carriage
-                          </h3>
-                          <span className="text-[10px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded font-mono font-bold border border-slate-200 tracking-wide">
-                            Conexión Multimodal Puerta a Puerto
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Ruta Terrestre:</span>
-                          <span className="text-lg font-mono font-black text-slate-900 tracking-tight">{lt.routeText}</span>
-                        </div>
-                        <p className="text-xs text-slate-600">
-                          Distancia terrestre: <strong className="text-slate-900 font-mono font-bold">{lt.distance > 0 ? `${lt.distance.toLocaleString('es-ES')} km` : 'No especificada'}</strong> · Inyectado por Land Charter Core PRO
-                        </p>
-                      </div>
-
-                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 px-5 flex flex-col items-start sm:items-end shrink-0 shadow-sm">
-                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Coste Flete Terrestre</span>
-                        <div className="flex items-baseline gap-1 mt-0.5">
-                          <span className="text-emerald-600 font-bold text-lg select-none">$</span>
-                          <span className="text-2xl font-mono font-black text-slate-900">
-                            {lt.freightCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                          <span className="text-[11px] font-mono text-slate-500 font-bold ml-1">USD</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* SECCIÓN DE RUTA MARÍTIMA, RITMOS OPERATIVOS Y GESTIÓN DE DEMORAS (DATOS REALES GUARDADOS) */}
               {(() => {
                 const mr = getMaritimeRouteData(activeProject);
@@ -4949,60 +4905,6 @@ export function ForwarderWorkspace() {
                       </div>
                     </div>
 
-                    {/* Sección Condicional: Pre-carriage / On-carriage */}
-                    {(() => {
-                      const lt = getLandTransportData(activeProject, reportData || financialBreakdown);
-                      if (!lt.hasData) return null;
-                      return (
-                        <div id="pre-carriage-on-carriage-section" className="mt-4 pt-4 border-t border-slate-700/80">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">🚛</span>
-                              <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
-                                Pre-carriage / On-carriage
-                              </h4>
-                            </div>
-                            <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-600/50 px-2 py-0.5 rounded">
-                              Conexión Multimodal Puerta a Puerto
-                            </span>
-                          </div>
-
-                          <div className="bg-slate-800 border border-emerald-500/40 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-inner">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-sm font-black text-white">
-                                <span className="text-slate-400 font-normal text-xs uppercase tracking-wider">Ruta:</span>
-                                <span id="land-route-display" className="text-emerald-300 font-mono text-base">{lt.routeText}</span>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-slate-300">
-                                <div>
-                                  <span className="text-slate-400">Distancia: </span>
-                                  <span id="land-distance-display" className="font-mono font-bold text-white">
-                                    {lt.distance > 0 ? `${lt.distance.toLocaleString('es-ES')} km` : 'No especificada'}
-                                  </span>
-                                </div>
-                                <span className="text-slate-600">|</span>
-                                <div>
-                                  <span className="text-slate-400">Modalidad: </span>
-                                  <span className="font-semibold text-slate-200">Transporte Terrestre por Camión</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/80 flex items-baseline justify-between sm:justify-end gap-3">
-                              <span className="text-[11px] font-mono text-slate-400">Coste Flete Terrestre:</span>
-                              <div className="flex items-baseline">
-                                <span className="text-lg font-mono font-bold text-emerald-400 mr-1 select-none">$</span>
-                                <span id="land-freight-cost-display" className="text-2xl font-mono font-black text-emerald-300">
-                                  {lt.freightCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <span className="text-xs font-mono font-semibold text-slate-400 ml-1.5">USD</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                     {((activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0) > 0 || (activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0) > 0) && (
                       <div id="financial-unit-ratios-summary" className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between transition-all hover:border-sky-300">
@@ -5383,28 +5285,12 @@ export function ForwarderWorkspace() {
                         <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(activeReport.demurrageCostNum * 0.15)}</td>
                       </tr>
                     )}
-                    {/* Fila Multimodal: Pre-carriage / On-carriage (Tramo Terrestre) */}
-                    {(() => {
-                      const lt = activeReport.landTransport || getLandTransportData(activeProject, activeReport);
-                      if (!lt?.hasData) return null;
-                      return (
-                        <tr className="hover:bg-slate-50 bg-emerald-50/40 font-semibold">
-                          <td className="py-2.5 px-3 font-bold text-emerald-950">Pre-carriage / On-carriage</td>
-                          <td className="py-2.5 px-3 text-emerald-900">
-                            Transporte terrestre por camión ({lt.routeText} · {lt.distance > 0 ? `${lt.distance} km` : 'Inland'}) · Conexión multimodal de puerta a puerto
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-950 font-bold">{formatCurrency(lt.freightCost)}</td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">{formatCurrency(lt.freightCost * 1.15)}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">{formatCurrency(lt.freightCost * 0.15)}</td>
-                        </tr>
-                      );
-                    })()}
                   </tbody>
                 </table>
               </section>
 
               {/* Subtotales destacados: Flete vs FOB / Operativa */}
-              <div className={`grid gap-4 mb-6 ${((activeReport?.landTransport || getLandTransportData(activeProject, activeReport))?.hasData) ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
                   <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(activeReport.subtotalFreight || fleteCostNum)}</div>
@@ -5415,17 +5301,6 @@ export function ForwarderWorkspace() {
                   <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0)))}</div>
                   <span className="text-[10px] text-amber-600 font-semibold">Precio Venta Operativa: {formatCurrency(parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) * 1.15)}</span>
                 </div>
-                {(() => {
-                  const lt = activeReport?.landTransport || getLandTransportData(activeProject, activeReport);
-                  if (!lt?.hasData) return null;
-                  return (
-                    <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-lg">
-                      <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Subtotal Pre-carriage / On-carriage</span>
-                      <div className="text-xl font-black font-mono text-emerald-900 mt-1">{formatCurrency(lt.freightCost)}</div>
-                      <span className="text-[10px] text-emerald-600 font-semibold">Precio Venta Terrestre: {formatCurrency(lt.freightCost * 1.15)}</span>
-                    </div>
-                  );
-                })()}
               </div>
 
               {/* Sección: Desglose Unitario Operativo (USD/MT) */}

@@ -2,122 +2,93 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const forwarderFunctionsSource = readFileSync(new URL('../netlify/functions/forwarder-projects.js', import.meta.url), 'utf8');
-const schemaSource = readFileSync(new URL('../db/schema.ts', import.meta.url), 'utf8');
 const workspaceSource = readFileSync(new URL('../src/components/ForwarderWorkspace.jsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 
-test('1. forwarder-projects.js SQL query extracts land transport fields (land_origin, land_destination, land_distance, land_freight_cost)', () => {
-  assert.match(forwarderFunctionsSource, /land_origin/);
-  assert.match(forwarderFunctionsSource, /land_destination/);
-  assert.match(forwarderFunctionsSource, /land_distance/);
-  assert.match(forwarderFunctionsSource, /land_freight_cost/);
-
-  // Verificamos que la consulta SELECT del GET incluya todos los campos de transporte terrestre
-  assert.match(
-    forwarderFunctionsSource,
-    /SELECT[\s\S]*?land_origin[\s\S]*?land_destination[\s\S]*?land_distance[\s\S]*?land_freight_cost[\s\S]*?FROM\s+forwarder_projects/i
+test('1. Core PRO UI is 100% maritime: project-multimodal-card (truck UI) is purged from active project view', () => {
+  assert.doesNotMatch(
+    workspaceSource,
+    /id="project-multimodal-card"/,
+    'project-multimodal-card must be purged from Core PRO'
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /Inyectado por Land Charter Core PRO/,
+    'Land Charter injection notice must be purged from Core PRO'
   );
 });
 
-test('2. forwarder-projects.js GET supports querying single project details by project_ref or id', () => {
-  assert.match(forwarderFunctionsSource, /qParams\.project_ref/);
-  assert.match(forwarderFunctionsSource, /qParams\.id/);
-  assert.match(forwarderFunctionsSource, /WHERE\s+\(id\s*=\s*\$1\s+OR\s+UPPER\(project_ref\)\s*=\s*UPPER\(\$2\)\)/i);
+test('2. Core PRO UI is 100% maritime: pre-carriage-on-carriage-section is purged from financial breakdown', () => {
+  assert.doesNotMatch(
+    workspaceSource,
+    /id="pre-carriage-on-carriage-section"/,
+    'pre-carriage-on-carriage-section must be purged from Core PRO'
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /Modalidad:\s*Transporte Terrestre por Camión/,
+    'Truck transport modality section must be purged from Core PRO'
+  );
 });
 
-test('3. forwarder-projects.js UPDATE queries preserve and persist land transport fields', () => {
-  assert.match(forwarderFunctionsSource, /land_origin\s*=\s*COALESCE\(\$8,\s*land_origin\)/);
-  assert.match(forwarderFunctionsSource, /land_destination\s*=\s*COALESCE\(\$9,\s*land_destination\)/);
-  assert.match(forwarderFunctionsSource, /land_distance\s*=\s*COALESCE\(\$10,\s*land_distance\)/);
-  assert.match(forwarderFunctionsSource, /land_freight_cost\s*=\s*COALESCE\(\$11,\s*land_freight_cost\)/);
-});
-
-test('4. db/schema.ts defines forwarderProjects table with land transport columns', () => {
-  assert.match(schemaSource, /export const forwarderProjects = pgTable\("forwarder_projects"/);
-  assert.match(schemaSource, /landOrigin:\s*varchar\("land_origin"/);
-  assert.match(schemaSource, /landDestination:\s*varchar\("land_destination"/);
-  assert.match(schemaSource, /landDistance:\s*numeric\("land_distance"\)/);
-  assert.match(schemaSource, /landFreightCost:\s*numeric\("land_freight_cost"\)/);
-});
-
-test('5. ForwarderWorkspace defines getProjectDetails and getLandTransportData helper', () => {
-  assert.match(workspaceSource, /const\s+getProjectDetails\s*=\s*async/);
-  assert.match(workspaceSource, /\/\.netlify\/functions\/forwarder-projects\?project_ref=/);
-  assert.match(workspaceSource, /const\s+getLandTransportData\s*=/);
-  assert.match(workspaceSource, /handleSelectProject/);
-});
-
-test('6. ForwarderWorkspace renders conditional "Pre-carriage / On-carriage" section inside financial-breakdown-card', () => {
-  assert.match(workspaceSource, /id="financial-breakdown-card"/);
-  assert.match(workspaceSource, /id="pre-carriage-on-carriage-section"/);
-  assert.match(workspaceSource, /Pre-carriage \/ On-carriage/);
-  assert.match(workspaceSource, /id="land-route-display"/);
-  assert.match(workspaceSource, /id="land-distance-display"/);
-  assert.match(workspaceSource, /id="land-freight-cost-display"/);
-});
-
-test('7. ForwarderWorkspace renders conditional multimodal card in active project view and Executive Report', () => {
-  assert.match(workspaceSource, /id="project-multimodal-card"/);
-  assert.match(workspaceSource, /Conexión Multimodal Puerta a Puerto/);
-  // Executive Report subtotal and row
-  assert.match(workspaceSource, /Subtotal Pre-carriage \/ On-carriage/);
-});
-
-test('8. Total calculation sums land freight cost into disbursements/costs of maritime voyage', () => {
-  // En autoCalculateEstimates
+test('3. Core PRO UI is 100% maritime: Executive Report omits multimodal truck row and subtotal', () => {
+  assert.doesNotMatch(
+    workspaceSource,
+    /Subtotal Pre-carriage \/ On-carriage/,
+    'Subtotal Pre-carriage / On-carriage must be purged from Executive Report'
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /Transporte terrestre por camión/,
+    'Transporte terrestre por camión row must be purged from Executive Report table'
+  );
   assert.match(
     workspaceSource,
-    /totalEstimatedCost\s*=\s*calculatedOceanFreight\s*\+\s*calculatedFobOperations\s*\+\s*landCost;/
-  );
-
-  // En buildExecutiveReportData
-  assert.match(
-    workspaceSource,
-    /finalTotalCost\s*=\s*Math\.round\(\(fleteCostNum\s*\+\s*fobSubtotal\s*\+\s*landCost\)\s*\*\s*100\)\s*\/\s*100;/
+    /<div className="grid grid-cols-2 gap-4 mb-6">/,
+    'Executive Report subtotals grid must be 2 columns (Flete Marítimo and FOB/Operativa Portuaria)'
   );
 });
 
-test('9. Behavioral simulation: multimodal door-to-port financial calculation with Sétif -> Bejaia', () => {
-  // Simulación con los datos del objetivo:
-  // Tramo terrestre inyectado por Land Charter: Sétif -> Bejaia, 115 km, 850 USD coste camión
-  const projectMock = {
-    project_ref: 'RDM/2026-ALG-01',
-    client_name: 'Sonatrach Energy Logistics',
-    land_origin: 'Sétif',
-    land_destination: 'Bejaia',
-    land_distance: 115,
-    land_freight_cost: 850,
-  };
+test('4. Core PRO UI is 100% maritime: renders project-maritime-route-card with nautical parameters', () => {
+  assert.match(
+    workspaceSource,
+    /id="project-maritime-route-card"/,
+    'Maritime route card must remain the core view for route parameters'
+  );
+  assert.match(
+    workspaceSource,
+    /Ruta Marítima, Ritmos Operativos y Gestión de Demoras/,
+    'Maritime title must be present'
+  );
+});
 
-  function simulateGetLandTransportData(project) {
-    const origin = (project.land_origin || '').trim();
-    const destination = (project.land_destination || '').trim();
-    const distance = Number(project.land_distance || 0);
-    const freightCost = Number(project.land_freight_cost || 0);
-    const hasData = Boolean((origin && destination) || freightCost > 0 || distance > 0);
-    const routeText = origin && destination ? `${origin} -> ${destination}` : 'Ruta Terrestre';
-    return { hasData, origin, destination, distance, freightCost, routeText };
-  }
+test('5. Financial stability fix: landCost is safely scoped in autoCalculateEstimates preventing ReferenceError', () => {
+  const functionBodyMatch = workspaceSource.match(
+    /const autoCalculateEstimates = \([\s\S]*?setIsUnder40t\(isUnderThreshold\);([\s\S]*?)if \(isUnderThreshold\)/
+  );
+  assert.ok(functionBodyMatch, 'autoCalculateEstimates must declare landCost before isUnderThreshold check');
+  assert.match(
+    functionBodyMatch[1],
+    /const\s+landCost\s*=\s*Number\(activeProject\?\.land_freight_cost\s*\?\?\s*activeProject\?\.landFreightCost\s*\?\?\s*0\)\s*\|\|\s*0;/,
+    'landCost must have safe number fallback'
+  );
+  assert.match(
+    workspaceSource,
+    /totalEstimatedCost\s*=\s*calculatedOceanFreight\s*\+\s*calculatedFobOperations\s*\+\s*landCost;/,
+    'totalEstimatedCost must calculate without ReferenceError'
+  );
+});
 
-  const lt = simulateGetLandTransportData(projectMock);
-  assert.equal(lt.hasData, true);
-  assert.equal(lt.routeText, 'Sétif -> Bejaia');
-  assert.equal(lt.distance, 115);
-  assert.equal(lt.freightCost, 850);
+test('6. DataBridge maritime freights sync: Flete Compra Armador and Flete Venta Fletador remain preserved', () => {
+  assert.match(workspaceSource, /Flete Sugerido Armador \(Compra\)/);
+  assert.match(workspaceSource, /Flete Sugerido Fletador \(Venta\)/);
+  assert.match(workspaceSource, /id="btn-sync-databridge-project-header"/);
+  assert.match(workspaceSource, /manualFleteVentaUnit/);
+  assert.match(workspaceSource, /manualFleteCompraUnit/);
+});
 
-  // Simulación de cálculo financiero combinado:
-  const maritimeFreightCost = 18500; // Flete marítimo buque
-  const fobOperationsCost = 4200;    // Operativa portuaria y manipulación
-  const landCost = lt.freightCost;   // 850 USD
-
-  // Multimodal Disbursements / Total Costs
-  const totalMultimodalDisbursements = maritimeFreightCost + fobOperationsCost + landCost;
-  assert.equal(totalMultimodalDisbursements, 23550);
-
-  // Venta con margen comercial del 15%
-  const salePrice = Math.round(totalMultimodalDisbursements * 1.15 * 100) / 100;
-  assert.equal(salePrice, 27082.50);
-
-  const margin = Math.round((salePrice - totalMultimodalDisbursements) * 100) / 100;
-  assert.equal(margin, 3532.50);
+test('7. App.jsx routing remains 100% maritime without truck or land calculators', () => {
+  assert.doesNotMatch(appSource, /LDM|camion|road-routing|land-charter/i);
+  assert.match(appSource, /FORWARDERS|PROYECTOS/);
+  assert.match(appSource, /MAP|CALCULATOR/);
 });
