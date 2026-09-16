@@ -827,6 +827,8 @@ export function ForwarderWorkspace() {
   const [tceValue, setTceValue] = useState(null);
   const [charterMode, setCharterMode] = useState('Fletamento Completo');
   const [isBigBagsCargo, setIsBigBagsCargo] = useState(false);
+  const [cargoCategory, setCargoCategory] = useState('Carga de Proyecto / Heavy Lift');
+  const [isPalletizedOrBagsCargo, setIsPalletizedOrBagsCargo] = useState(false);
   const [operationalProfileNotice, setOperationalProfileNotice] = useState('');
 
   const [storageDays, setStorageDays] = useState(0);
@@ -2351,15 +2353,33 @@ export function ForwarderWorkspace() {
     return acc;
   }, { quantity: 0, m2: 0, m3: 0, weight: 0 });
 
-  const autoCalculateEstimates = (items) => {
+  const handleCargoCategoryChange = (newCategory) => {
+    setCargoCategory(newCategory);
+    setCargoItems((prev) => {
+      const currentList = Array.isArray(prev) ? prev : [];
+      if (currentList.length === 0) {
+        autoCalculateEstimates([], newCategory);
+        return currentList;
+      }
+      const updated = currentList.map((item) => ({
+        ...item,
+        category: newCategory,
+      }));
+      autoCalculateEstimates(updated, newCategory);
+      return updated;
+    });
+  };
+
+  const autoCalculateEstimates = (items, explicitCategory = null) => {
     if (!items || items.length === 0) {
       setDunnage(0); setChains(0); setSlings(0); setShackles(0);
       setGangs(0); setHeavyLift(0); setMafiPlatforms(0); setLashingTeams(0);
       setShippingMode('Lo-Lo'); setVesselType('Geared Breakbulk (Lo-Lo)');
       setSubtotalFreight('0.00'); setSubtotalFobOperations('0.00');
-      setEstimatedCost(''); setSalePrice('');
+      setEstimatedCost('0.00'); setSalePrice('0.00');
       setIsUnder40t(false); setTceActive(false); setTceValue(null);
       setOperationalProfileNotice('');
+      setIsPalletizedOrBagsCargo(false);
       return;
     }
     let totalPieces = 0; let totalWeightKg = 0; let totalVolumeM3 = 0; let total_m2 = 0;
@@ -2385,7 +2405,7 @@ export function ForwarderWorkspace() {
 
     const totalWeightTons = totalWeightKg / 1000;
     const Dunnage = Math.ceil(totalWeightTons / 5);
-    const Cadenas = roRoItems * 4;
+    const Cadenas = roRoItems > 0 ? (roRoItems * 4) : Math.max(4, Math.ceil(totalPieces * 2));
     const Eslingas = Math.ceil(totalPieces / 2);
     const Grilletes = (Eslingas * 2) + (Cadenas * 2);
 
@@ -2404,10 +2424,6 @@ export function ForwarderWorkspace() {
       Gangs = Math.ceil(totalPieces / 15);
     }
 
-    setDunnage(Dunnage); setChains(Cadenas); setSlings(Eslingas); setShackles(Grilletes);
-    setGangs(Gangs); setHeavyLift(HeavyLift); setMafiPlatforms(MAFIs);
-    setLashingTeams(cargoItems.length > 0 ? Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)) : 0);
-
     // 1. Evaluación del perfil operativo adecuado en Trincaje y Operativa
     const isBigBagsOrBulk = items.some(it => {
       const cat = String(it.category || '').toLowerCase();
@@ -2420,17 +2436,46 @@ export function ForwarderWorkspace() {
 
     setIsBigBagsCargo(isBigBagsOrBulk);
 
+    const activeCat = String(explicitCategory || cargoCategory || '').trim();
+    const normalizeCat = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const activeNorm = normalizeCat(activeCat);
+
+    const isExplicitProject = activeNorm.includes('proyecto') || activeNorm.includes('project') || activeNorm.includes('heavy lift');
+
+    const isPalletizedOrBags = !isExplicitProject && (
+      activeNorm.includes('palet') ||
+      activeNorm.includes('pallet') ||
+      activeNorm.includes('sling bag') ||
+      activeNorm.includes('saco') ||
+      activeNorm.includes('general') ||
+      items.some(it => {
+        const cat = normalizeCat(it.category);
+        const typ = normalizeCat(it.type);
+        const mod = normalizeCat(it.shipping_mode_supported);
+        return cat.includes('palet') || cat.includes('pallet') || cat.includes('sling bag') || cat.includes('saco') || cat.includes('general') ||
+               typ.includes('palet') || typ.includes('pallet') || typ.includes('sling bag') || typ.includes('saco') || typ.includes('general') ||
+               mod.includes('palet') || mod.includes('pallet') || mod.includes('sling bag');
+      })
+    );
+
+    if (isPalletizedOrBags) {
+      setIsBigBagsCargo(false);
+    }
+    setIsPalletizedOrBagsCargo(isPalletizedOrBags);
+
     let effectiveDunnage = Dunnage;
     let effectiveCadenas = Cadenas;
     let effectiveSlings = Eslingas;
+    let effectiveGrilletes = Grilletes;
     let effectiveHeavyLift = HeavyLift;
 
-    if (isBigBagsOrBulk) {
+    if (isBigBagsOrBulk && !isPalletizedOrBags) {
       // Regla estricta Big Bags: Queda prohibido calcular eslingas sueltas individuales o materiales de trincaje pesado (cadenas, maderas de cuna estructurales)
       effectiveDunnage = 0;
       effectiveCadenas = 0;
       effectiveHeavyLift = 0;
       effectiveSlings = 0;
+      effectiveGrilletes = 0;
 
       // Spreader multipunto (14-16 sacos por ciclo) y ciclos de izado
       const bagsPerLift = 15;
@@ -2456,7 +2501,43 @@ export function ForwarderWorkspace() {
       setSpreaderMultipunto(calculatedSpreaders);
 
       setOperationalProfileNotice('Perfil: Mercancía Ensacada / Big Bags (Estiba en Bloque) · Spreader multipunto (14-16 sacos/ciclo) · Maderas de cuna pesadas y cables de acero de proyecto quedan excluidos');
+    } else if (isPalletizedOrBags) {
+      // Regla estricta Carga Paletizada / Sling Bags / Sacos / General:
+      // Operativamente, las cadenas y grilletes pesados destruyen la carga -> forzar a 0 unidades y coste
+      effectiveCadenas = 0;
+      effectiveGrilletes = 0;
+      setChainsBinders(0);
+      setShackles(0);
+
+      // Ratio ligero de dunnage: calce y bloqueo de huecos con maderas de estiba / airbags
+      const lightDunnageUnits = Math.max(1, Math.ceil(totalWeightTons / 25));
+      effectiveDunnage = lightDunnageUnits;
+      setDunnageWood(lightDunnageUnits);
+
+      effectiveSlings = Eslingas;
+      setHighCapacitySlings(Eslingas);
+
+      setGangs(Gangs);
+      setHeavyLift(0);
+      setHeavyLiftCrane(0);
+      setMafiPlatforms(MAFIs);
+      setLashingTeams(Math.max(1, Math.ceil(totalPieces / 30)));
+      setLashingTeam(Math.max(1, Math.ceil(totalPieces / 30)));
+      setSpreaderMultipunto(0);
+      setCraneLiftCycles(0);
+
+      setOperationalProfileNotice('Perfil: Mercancía Paletizada / Sacos (Calce Ligero) · Madera de Estiba y Airbags · Cadenas y grilletes pesados excluidos');
     } else {
+      // Carga de Proyecto / Heavy Lift: reactivamente inyecta cadenas, grilletes y dunnage estructural
+      setDunnage(Dunnage);
+      setChains(Cadenas);
+      setSlings(Eslingas);
+      setShackles(Grilletes);
+      setGangs(Gangs);
+      setHeavyLift(HeavyLift);
+      setMafiPlatforms(MAFIs);
+      setLashingTeams(cargoItems.length > 0 ? Math.max(1, Math.ceil(totalPieces / 20) + (roRoItems > 0 ? 1 : 0)) : 0);
+
       setSpreaderMultipunto(0);
       setCraneLiftCycles(0);
       setOperationalProfileNotice('Perfil: Carga Industrial de Proyecto / Breakbulk · Cunas estructurales y cables/cadenas requeridos');
@@ -2579,9 +2660,12 @@ export function ForwarderWorkspace() {
       const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
       const airBagsCost = isBigBagsOrBulk ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
 
+      const dunnageRate = isPalletizedOrBags ? 20 : 30;
       const lashingCost = isBigBagsOrBulk
         ? (spreaderCost + airBagsCost)
-        : ((effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15));
+        : (isPalletizedOrBags
+            ? ((effectiveDunnage * dunnageRate) + (effectiveSlings * 40))
+            : ((effectiveDunnage * 30) + (effectiveCadenas * 80) + (effectiveSlings * 40) + ((effectiveSlings * 2 + effectiveCadenas * 2) * 15)));
       const stevedoringCost = (MAFIs * 300) + (HeavyLift * 2500) + (Gangs * 1200);
 
       // Alquiler obligatorio de grúa móvil portuaria para spreader y su operador por jornada
@@ -2634,14 +2718,15 @@ export function ForwarderWorkspace() {
 
     setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
     setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
-    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
-    setSalePrice((Number(targetSalePrice) || 0).toFixed(2));
+    setEstimatedCost(totalEstimatedCost.toFixed(2));
+    setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
   useEffect(() => {
-    autoCalculateEstimates(cargoItems);
+    autoCalculateEstimates(cargoItems, cargoCategory);
   }, [
     cargoItems,
+    cargoCategory,
     storageDays,
     surveyorCost,
     inlandCost,
@@ -3173,10 +3258,12 @@ export function ForwarderWorkspace() {
     const spreaderCost = spreaderCount * 600;
     const airBagsCost = isBigBags ? (Math.max(2, Math.ceil(totalWeightTons / 50)) * 35) : 0;
     const dunnageCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.dunnage_wood ?? dunnageWood);
-    const chainsCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.chains_and_binders ?? chainsBinders);
+    const chainsCount = (isBigBags || isPalletizedOrBagsCargo) ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.chains_and_binders ?? chainsBinders);
     const slingsCount = isBigBags ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.high_capacity_slings ?? highCapacitySlings);
+    const shacklesCount = (isBigBags || isPalletizedOrBagsCargo) ? 0 : (sourcePayload?.lashing_and_dunnage_materials?.shackles ?? shackles);
 
-    const matCostNum = (mafiCount * 300) + (heavyLiftCount * 2500) + portCraneCost + spreaderCost + airBagsCost + (dunnageCount * 30) + (chainsCount * 80) + (slingsCount * 40);
+    const dunnageRate = isPalletizedOrBagsCargo ? 20 : 30;
+    const matCostNum = (mafiCount * 300) + (heavyLiftCount * 2500) + portCraneCost + spreaderCost + airBagsCost + (dunnageCount * dunnageRate) + (chainsCount * 80) + (slingsCount * 40) + (shacklesCount * 15);
     const matSaleNum = matCostNum * 1.15;
     const matMarginNum = matSaleNum - matCostNum;
 
@@ -3824,8 +3911,8 @@ export function ForwarderWorkspace() {
         lashing_and_dunnage_materials: {
           dunnage_wood: Number(dunnageWood) || 0,
           high_capacity_slings: Number(highCapacitySlings) || 0,
-          chains_and_binders: Number(chainsBinders) || 0,
-          shackles: Number(shackles) || 0,
+          chains_and_binders: isPalletizedOrBagsCargo ? 0 : (Number(chainsBinders) || 0),
+          shackles: isPalletizedOrBagsCargo ? 0 : (Number(shackles) || 0),
           spreader_multipunto: Number(spreaderMultipunto) || 0,
         },
         port_labor_and_equipment: {
@@ -4610,6 +4697,23 @@ export function ForwarderWorkspace() {
                       </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                        <label htmlFor="cargo-category-select-section1" className="text-[11px] font-bold text-slate-600">Categoría Carga:</label>
+                        <select
+                          id="cargo-category-select-section1"
+                          value={cargoCategory}
+                          onChange={(e) => handleCargoCategoryChange(e.target.value)}
+                          className="text-xs font-bold bg-white border border-slate-300 rounded px-2 py-0.5 text-slate-800 shadow-xs focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          <option value="Carga Paletizada">Carga Paletizada</option>
+                          <option value="Carga de Proyecto / Heavy Lift">Carga de Proyecto / Heavy Lift</option>
+                          <option value="Sling Bags">Sling Bags</option>
+                          <option value="Sacos">Sacos</option>
+                          <option value="Carga General">Carga General</option>
+                          <option value="Mercancía Ensacada / Dry Bulk">Mercancía Ensacada / Dry Bulk</option>
+                          <option value="Maquinaria / Equipos Industriales">Maquinaria / Equipos Industriales</option>
+                        </select>
+                      </div>
                       <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">+ Añadir Pieza</button>
                       <button
                         type="button"
@@ -4917,8 +5021,27 @@ export function ForwarderWorkspace() {
                 </section>
 
                 <section className="pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Materiales</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">2. Trincaje y Materiales</h3>
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                        <label htmlFor="cargo-category-dropdown" className="text-[11px] font-bold text-slate-600">Tipo de Carga:</label>
+                        <select
+                          id="cargo-category-dropdown"
+                          value={cargoCategory}
+                          onChange={(e) => handleCargoCategoryChange(e.target.value)}
+                          className="text-xs font-bold bg-white border border-slate-300 rounded px-2 py-0.5 text-slate-800 shadow-xs focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          <option value="Carga Paletizada">Carga Paletizada</option>
+                          <option value="Carga de Proyecto / Heavy Lift">Carga de Proyecto / Heavy Lift</option>
+                          <option value="Sling Bags">Sling Bags</option>
+                          <option value="Sacos">Sacos</option>
+                          <option value="Carga General">Carga General</option>
+                          <option value="Mercancía Ensacada / Dry Bulk">Mercancía Ensacada / Dry Bulk</option>
+                          <option value="Maquinaria / Equipos Industriales">Maquinaria / Equipos Industriales</option>
+                        </select>
+                      </div>
+                    </div>
                     {isUnder40t ? (
                       <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 rounded-full flex items-center gap-1.5 shadow-sm">
                         📦 Modalidad Grupaje LCL (&lt; 40 t) · TCE Desactivado
@@ -4949,6 +5072,20 @@ export function ForwarderWorkspace() {
                       )}
                     </div>
                   </div>
+                  {isPalletizedOrBagsCargo && !isBigBagsCargo && (
+                    <div className="bg-sky-50 border border-sky-200 rounded-xl p-3.5 text-xs text-sky-900 flex items-start gap-2.5 shadow-sm">
+                      <span className="text-base">📦</span>
+                      <div className="space-y-1">
+                        <strong>Perfil de Carga Paletizada / Sacos / Carga General:</strong>
+                        <p className="text-sky-800">
+                          Se aplica estiba de reparto ligero. <strong>Cadenas, tensores y grilletes pesados quedan forzados a 0</strong> para evitar sobrepresión y aplastamiento de la mercancía.
+                        </p>
+                        <p className="text-sky-950 font-semibold">
+                          🪵 <strong>Madera de Estiba / Airbags (Dunnage):</strong> Dimensionado con ratio ligero para calce y bloqueo de huecos entre pallets.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {isBigBagsCargo && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5 shadow-sm">
                       <span className="text-base">🛡️</span>
@@ -4964,10 +5101,10 @@ export function ForwarderWorkspace() {
                     </div>
                   )}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <NumericCounter label="Maderas de Estiba (Dunnage)" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Dunnage"} value={dunnageWood} onChange={setDunnageWood} />
+                    <NumericCounter label={isPalletizedOrBagsCargo ? "Madera de Estiba / Airbags (Dunnage)" : "Maderas de Estiba (Dunnage)"} subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : (isPalletizedOrBagsCargo ? "Ratio Ligero (Calce/Huecos)" : "Dunnage")} value={dunnageWood} onChange={setDunnageWood} />
                     <NumericCounter label="Eslingas de alta capacidad" subtitle={isBigBagsCargo ? "Prohibidas (Usar Spreader)" : "Alta Capacidad"} value={highCapacitySlings} onChange={setHighCapacitySlings} />
-                    <NumericCounter label="Cadenas y Tensores" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : "Trincaje Pesado"} value={chainsBinders} onChange={setChainsBinders} />
-                    <NumericCounter label="Grilletes" subtitle={isBigBagsCargo ? "Excluidos (Big Bags)" : "Unión de Trincas"} value={shackles} onChange={setShackles} />
+                    <NumericCounter label="Cadenas y Tensores" subtitle={isBigBagsCargo ? "Excluidas (Big Bags)" : (isPalletizedOrBagsCargo ? "Excluidas (Carga Paletizada/Sacos)" : "Trincaje Pesado")} value={chainsBinders} onChange={setChainsBinders} />
+                    <NumericCounter label="Grilletes" subtitle={isBigBagsCargo ? "Excluidos (Big Bags)" : (isPalletizedOrBagsCargo ? "Excluidos (Carga Paletizada/Sacos)" : "Unión de Trincas")} value={shackles} onChange={setShackles} />
                   </div>
                   {isBigBagsCargo && (
                     <div className="mt-3 bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
@@ -5891,7 +6028,7 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
+                      {activeReport.stowagePlan.holds?.map((hold, holdIdx) => (
                         <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
