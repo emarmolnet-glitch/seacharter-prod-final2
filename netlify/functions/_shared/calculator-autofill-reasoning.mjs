@@ -51,9 +51,11 @@ function classifyVessel(requiredDwt) {
   return "Capesize";
 }
 
+export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
+
 function deduceCargoMethod(cargoType, rate) {
   const cargo = String(cargoType || "").toLocaleLowerCase("es");
-  const isBigBags = /big\s*bags?|sacos?|ensacad/.test(cargo);
+  const isBigBags = /big\s*bags?|sacos?|sling|ensacad/.test(cargo);
   const isPalletized = /pallet|palet|unitiz|unitariz|envasad/.test(cargo);
   const isSteel = /hierro|acero|sider/.test(cargo);
   const exceptionallyHigh = isBigBags

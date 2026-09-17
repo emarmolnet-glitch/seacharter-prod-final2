@@ -91,7 +91,7 @@ function normalizeMethod(value: unknown) {
 }
 
 function inferBigBagsMethod(cargoType: string) {
-  return /big\s*bags?/i.test(cargoType) ? "big_bags_barco" : "";
+  return /(big\s*bag|saco|sling|palet|envasad)/i.test(cargoType) ? "big_bags_barco" : "";
 }
 
 function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScenario, sourceText = ""): VoyageScenario {

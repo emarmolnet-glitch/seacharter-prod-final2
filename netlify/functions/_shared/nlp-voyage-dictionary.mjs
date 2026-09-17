@@ -224,17 +224,20 @@ function extractCargo(text) {
   ]);
   if (!cargo_type) {
     cargo_type = captureFirst(text, [
-      /\b(cemento(?:\s+(?:a\s+granel|en\s+polvo))?|granos?|cl[ií]nker|trigo|ma[ií]z|soja|fertilizantes?|carb[oó]n|mineral\s+de\s+hierro)\b/i,
+      /\b((?:cemento(?:\s+(?:a\s+granel|en\s+polvo))?|granos?|cl[ií]nker|trigo|ma[ií]z|soja|fertilizantes?|carb[oó]n|mineral\s+de\s+hierro)(?:\s+(?:en\s+)?(?:big\s*bags?|sacos?|slings?|palets?|envasad[oa]s?))?)\b/i,
     ]);
   }
   return { cargo_qty, cargo_type };
 }
+
+export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
 
 export function extractNaturalVoyageEntities(text, referenceDate = new Date()) {
   const source = String(text ?? "");
   const route = extractRoute(source);
   const laycan = extractLaycan(source, referenceDate);
   const cargo = extractCargo(source);
+  const hasPackaging = PACKAGING_REGEX.test(source) || PACKAGING_REGEX.test(cargo.cargo_type || "");
   return {
     pol: normalizePortReference(route.pol),
     pod: normalizePortReference(route.pod),
@@ -242,6 +245,7 @@ export function extractNaturalVoyageEntities(text, referenceDate = new Date()) {
     cancelling: laycan.cancelling,
     cargo_qty: cargo.cargo_qty,
     cargo_type: cargo.cargo_type,
+    ...(hasPackaging ? { packaging: "Big Bags", packingType: "Big Bags" } : {}),
     loading_rate: parsePositiveNumber(captureFirst(source, [
       /(?:loading(?:\s+rate)?|load\s+rate|ritmo\s+(?:de\s+)?carga|loading_rate)\s*[:\-]?\s*([\d.,\s]+)/i,
     ])),

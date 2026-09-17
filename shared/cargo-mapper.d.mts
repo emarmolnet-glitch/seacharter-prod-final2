@@ -13,6 +13,7 @@ export const CARGO_SPECIFICATION_IDS: readonly string[];
 export const CARGO_SPECIFICATIONS: Readonly<Record<string, string>>;
 export const CARGO_METHODS: readonly string[];
 export const LAYTIME_TERMS: readonly string[];
+export const PACKAGING_REGEX: RegExp;
 
 export function mapCargoDescription(value: unknown): NormalizedCargoMapping;
 export function normalizeCargoMethod(value: unknown): string;
