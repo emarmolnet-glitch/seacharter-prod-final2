@@ -768,11 +768,43 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
         // 🚀 2. MOTOR LÉXICO AVANZADO
+        const packagingRegex = /(big\s*bag|saco|sling|palet|envasad)/i;
         const cargoTypeLower = (p.cargo_type || p.underlyingCommodity || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
+        const rawPackagingText = String(p.packingType || p.packaging || p.packageType || "").toLowerCase();
+        const rawProductText = String(p.product || p.cargoProduct || p.productoEspecifico || p.productSpecific || "").toLowerCase();
+        const rawCategoryText = String(p.category || p.cargoCategory || p.categoriaCarga || "").toLowerCase();
+        const hasEnvase = packagingRegex.test(cargoTypeLower) || packagingRegex.test(rawPackagingText) || packagingRegex.test(rawProductText) || packagingRegex.test(rawCategoryText);
+
+        if (hasEnvase) {
+            p.category = "Minerales y Construcción";
+            p.cargoCategory = "Minerales y Construcción";
+            p.categoriaCarga = "Minerales y Construcción";
+            p.product = "Big Bags (Minerales/Cemento)";
+            p.cargoProduct = "Big Bags (Minerales/Cemento)";
+            p.productoEspecifico = "Big Bags (Minerales/Cemento)";
+            p.productSpecific = "Big Bags (Minerales/Cemento)";
+            p.cargoSpecification = "10";
+            p.cargo_specification = "10";
+            p.especificacionCargaId = "10";
+            p.packingType = "Big Bags";
+            p.packaging = "Big Bags";
+            p.cargoType = "Minerales y Construcción";
+            p.cargo_type = "Big Bags (Minerales/Cemento)";
+            if (!p.loadingMethod || /cuchara|grab|bulk|granel/i.test(p.loadingMethod)) {
+                p.loadingMethod = "Big Bags - Grúa Barco";
+            }
+            if (!p.dischargeMethod || /cuchara|grab|bulk|granel/i.test(p.dischargeMethod)) {
+                p.dischargeMethod = "Big Bags - Grúa Barco";
+            }
+            p.methodPOL = "big_bags_barco";
+            p.methodPOD = "big_bags_barco";
+        }
+
         const methodLoadLower = (p.loadingMethod || p.metodo_carga || "").toLowerCase();
         const methodDischLower = (p.dischargeMethod || p.metodo_descarga_pod || methodLoadLower).toLowerCase();
 
-        const isGranel = cargoTypeLower.includes('granel') || cargoTypeLower.includes('bulk') || (p.category || "").toLowerCase().includes('granel');
+        // Si la expresión regular detecta un envase, interceptar y bloquear cualquier asignación por defecto a "granel" (Bulk)
+        const isGranel = !hasEnvase && (cargoTypeLower.includes('granel') || cargoTypeLower.includes('bulk') || (p.category || "").toLowerCase().includes('granel'));
 
         const pillButtons = Array.from(document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]'));
         
@@ -800,7 +832,8 @@ async function executeActionableAiUpdateFields(actionObj) {
         };
 
         let family = 'general';
-        if (isGranel || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
+        if (hasEnvase) family = 'bigbags';
+        else if (isGranel || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
         else if (cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
         else if (cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags';
         else if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) family = 'proyecto';
@@ -816,11 +849,18 @@ async function executeActionableAiUpdateFields(actionObj) {
                 const optText = opt.text.toLowerCase();
                 const optValue = String(opt.value).toLowerCase();
                 
+                if (hasEnvase) {
+                    if (sel.id === 'cargo-type' && (optValue === 'minerales y construcción' || optText.includes('minerales y construcción'))) return true;
+                    if (sel.id === 'cargo-product' && (optValue === 'big bags (minerales/cemento)' || optText.includes('big bags (minerales/cemento)'))) return true;
+                    if (sel.id === 'cargo-type-manual' && (optValue === '10' || optText.startsWith('10'))) return true;
+                }
+
                 if (p.cargoSpecification && (optValue === String(p.cargoSpecification) || optText.startsWith(String(p.cargoSpecification)))) return true;
                 if (p.product && optText.includes(p.product.toLowerCase())) return true;
                 if (p.category && optText === p.category.toLowerCase()) return true;
                 if (cargoTypeLower.includes('fertilizante') || cargoTypeLower.includes('abono')) return optText.includes('fertilizante') || optText.includes('abono');
                 if (cargoTypeLower.includes('cemento') || cargoTypeLower.includes('clinker')) {
+                    if (hasEnvase && optText.includes('big bag')) return true;
                     if (isGranel && optText.includes('cemento') && optText.includes('granel')) return true;
                     if (!isGranel && optText.includes('cemento') && optText.includes('big bag')) return true;
                     return optText.includes('cemento');
@@ -849,10 +889,30 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         });
 
+        if (hasEnvase) {
+            if (typeof window.replaceCargoHierarchySelection === 'function') {
+                window.replaceCargoHierarchySelection("Minerales y Construcción", "Big Bags (Minerales/Cemento)");
+            }
+        }
+
         // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
         const routeState = {
             ...(p.pol ? { pol: p.pol } : {}),
             ...(p.pod ? { pod: p.pod } : {}),
+            ...(hasEnvase ? {
+                cargoCategory: "Minerales y Construcción",
+                cargoProduct: "Big Bags (Minerales/Cemento)",
+                cargoType: "Minerales y Construcción",
+                productoEspecifico: "Big Bags (Minerales/Cemento)",
+                productSpecific: "Big Bags (Minerales/Cemento)",
+                cargoSpecification: "10",
+                cargo_specification: "10",
+                especificacionCargaId: "10",
+                packaging: "Big Bags",
+                packingType: "Big Bags",
+                isBulk: false,
+                isBigBags: true,
+            } : {}),
         };
         const tonnage = Number(p.tonnage);
         const loadingRate = Number(p.loadingRate);

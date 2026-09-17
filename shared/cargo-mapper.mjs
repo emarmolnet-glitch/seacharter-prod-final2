@@ -19,7 +19,7 @@ export const CARGO_PRODUCTS = Object.freeze([...new Set(Object.values(CARGO_PROD
 export const CARGO_SPECIFICATION_IDS = Object.freeze(["10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
 
 export const CARGO_SPECIFICATIONS = Object.freeze({
-  "10": "10 - Cemento, yeso, cal y clínker (25)",
+  "10": "10 - Cemento, yeso, cal y clínker (25) (Envasado / Granel)",
   "20": "20 - Hierro, acero y sus manufacturas (72/73)",
   "30": "30 - Fertilizantes y abonos (31)",
   "40": "40 - Aluminio y sus manufacturas (76)",
@@ -194,16 +194,36 @@ function readCargoSpecificationId(value) {
   return leadingId?.[1] || "";
 }
 
+export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
+
 export function mapCargoDescription(value) {
   const rawCargo = String(value ?? "").trim();
   const normalizedCargo = normalizeLookupText(rawCargo);
+  const promptLower = rawCargo.toLowerCase();
+
+  // Detección del material
   const family = CARGO_FAMILIES.find((candidate) => candidate.aliases.some((alias) => includesAlias(normalizedCargo, alias)));
-  const hasBigBags = /\bbig\s*bags?\b/.test(normalizedCargo);
+
+  // Inyectar Regex de Prioridad de Envase: Inmediatamente después de detectar el material, evalúa el prompt original (texto en minúsculas)
+  const hasPackaging = PACKAGING_REGEX.test(promptLower) || PACKAGING_REGEX.test(normalizedCargo);
+  const hasBigBags = hasPackaging || /\bbig\s*bags?\b/.test(normalizedCargo);
+
+  // Sobrescribir la Clasificación "A Granel": Si la expresión regular detecta un envase, el código debe interceptar y bloquear cualquier asignación por defecto a "granel" (Bulk).
+  // Debe forzar que la categoría de la carga cambie a "Minerales y Construcción" (o la genérica aplicable) y el producto específico a "Big Bags (Minerales/Cemento)" o el equivalente en tu base de datos de estados.
   const specificationId = family?.especificacionCargaId || (hasBigBags ? "10" : "100");
+
   const categoriaCarga = family?.categoriaCarga || (hasBigBags ? "Carga Unitizada / Envasada" : "");
+
+  let productoEspecifico = selectCargoProduct(normalizedCargo, specificationId, hasBigBags);
+  if (hasPackaging) {
+    if (!productoEspecifico || /granel|bulk/i.test(productoEspecifico) || specificationId === "10") {
+      productoEspecifico = "Big Bags (Minerales/Cemento)";
+    }
+  }
+
   return {
     categoriaCarga,
-    productoEspecifico: selectCargoProduct(normalizedCargo, specificationId, hasBigBags),
+    productoEspecifico,
     especificacionCarga: CARGO_SPECIFICATIONS[specificationId],
     especificacionCargaId: specificationId,
     hasBigBags,
@@ -234,7 +254,10 @@ export function normalizeCargoMethod(value) {
 export function inferCargoMethod(cargoDescription, category = "", product = "", specificationId = "") {
   const normalizedCargo = normalizeLookupText([cargoDescription, category, product].filter(Boolean).join(" "));
   const normalizedSpecification = readCargoSpecificationId(specificationId);
-  if (/\bbig\s*bags?\b/.test(normalizedCargo)) return "big_bags_barco";
+  if (PACKAGING_REGEX.test(normalizedCargo) || /\bbig\s*bags?\b/.test(normalizedCargo)) {
+    if (normalizedCargo.includes("palet") || normalizedCargo.includes("pallet")) return "paletizado_barco";
+    return "big_bags_barco";
+  }
   if (normalizedCargo.includes("palet") || normalizedCargo.includes("pallet")) return "paletizado_barco";
   if (normalizedCargo.includes("cemento a granel") || normalizedCargo.includes("bulk cement")) return "bombas_neumaticas";
   if (["20", "40", "90"].includes(normalizedSpecification)
@@ -276,8 +299,19 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
     sourceText,
   ].filter(Boolean).join(" ");
   const mappedCargo = mapCargoDescription(cargoSource);
-  const explicitCategory = readCargoSelectionValue(source.cargo_category ?? source.cargoCategory ?? source.categoriaCarga);
-  const explicitProduct = readCargoSelectionValue(source.cargo_product ?? source.cargoProduct ?? source.productoEspecifico);
+  const rawPackaging = String(source.packaging ?? source.packingType ?? source.packageType ?? source.tipoEmpaque ?? "").toLowerCase();
+  const rawProduct = String(source.cargo_product ?? source.cargoProduct ?? source.productoEspecifico ?? source.productSpecific ?? source.product ?? "").toLowerCase();
+  const rawCategory = String(source.cargo_category ?? source.cargoCategory ?? source.categoriaCarga ?? "").toLowerCase();
+  const hasDetectedPackaging = mappedCargo.hasPackaging
+    || mappedCargo.hasBigBags
+    || PACKAGING_REGEX.test(cargoSource.toLowerCase())
+    || PACKAGING_REGEX.test(sourceText.toLowerCase())
+    || PACKAGING_REGEX.test(rawPackaging)
+    || PACKAGING_REGEX.test(rawProduct)
+    || PACKAGING_REGEX.test(rawCategory);
+
+  const explicitCategory = hasDetectedPackaging ? "" : readCargoSelectionValue(source.cargo_category ?? source.cargoCategory ?? source.categoriaCarga);
+  const explicitProduct = hasDetectedPackaging ? "" : readCargoSelectionValue(source.cargo_product ?? source.cargoProduct ?? source.productoEspecifico);
   const explicitSpecification = readCargoSpecificationId(
     source.cargo_specification
       ?? source.cargoSpecification
@@ -302,24 +336,36 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
   const hasProjectCargo = Boolean(source.projectCargo || source.project_cargo || source.payload?.projectCargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
 
   const hasMappedFamily = mappedCargo.especificacionCargaId !== "100";
-  const specificationId = hasMappedFamily
-    ? mappedCargo.especificacionCargaId
-    : CARGO_SPECIFICATION_IDS.includes(explicitSpecification)
-      ? explicitSpecification
-      : hasProjectCargo
-        ? "90"
-        : mappedCargo.especificacionCargaId;
-  const cargoCategory = (hasMappedFamily && mappedCargo.categoriaCarga) || explicitCategory || (hasProjectCargo && specificationId === "90" ? "Carga de Proyecto (Breakbulk)" : mappedCargo.categoriaCarga);
-  const cargoProduct = mappedCargo.hasBigBags || (hasMappedFamily && mappedCargo.productoEspecifico)
-    ? mappedCargo.productoEspecifico
-    : explicitProduct || (hasProjectCargo && specificationId === "90" ? (cargoDescription || "Piezas Especiales / Maquinaria") : mappedCargo.productoEspecifico);
+  const specificationId = hasDetectedPackaging
+    ? (mappedCargo.especificacionCargaId && mappedCargo.especificacionCargaId !== "100" ? mappedCargo.especificacionCargaId : "10")
+    : (hasMappedFamily
+      ? mappedCargo.especificacionCargaId
+      : CARGO_SPECIFICATION_IDS.includes(explicitSpecification)
+        ? explicitSpecification
+        : hasProjectCargo
+          ? "90"
+          : mappedCargo.especificacionCargaId);
+  const cargoCategory = hasDetectedPackaging
+    ? (mappedCargo.categoriaCarga || "Minerales y Construcción")
+    : ((hasMappedFamily && mappedCargo.categoriaCarga) || explicitCategory || (hasProjectCargo && specificationId === "90" ? "Carga de Proyecto (Breakbulk)" : mappedCargo.categoriaCarga));
+  let cargoProduct = hasDetectedPackaging
+    ? "Big Bags (Minerales/Cemento)"
+    : (mappedCargo.hasBigBags || (hasMappedFamily && mappedCargo.productoEspecifico)
+      ? mappedCargo.productoEspecifico
+      : explicitProduct || (hasProjectCargo && specificationId === "90" ? (cargoDescription || "Piezas Especiales / Maquinaria") : mappedCargo.productoEspecifico));
+  if (hasDetectedPackaging && (!cargoProduct || /granel|bulk/i.test(cargoProduct))) {
+    cargoProduct = "Big Bags (Minerales/Cemento)";
+  }
   const validatedCargo = validateCargoHierarchy(cargoCategory, cargoProduct, cargoSource);
+  const defaultPackagingMethod = hasDetectedPackaging
+    ? (/(palet|pallet)/i.test(cargoSource) ? "paletizado_barco" : "big_bags_barco")
+    : "";
   const methodPOL = explicitMethodPOL || inferCargoMethod(
     cargoDescription,
     validatedCargo.categoriaCarga,
     validatedCargo.productoEspecifico,
     specificationId,
-  );
+  ) || defaultPackagingMethod;
   const methodPOD = normalizeCargoMethod(source.methodPOD ?? source.discharge_method ?? source.dischargeMethod ?? source.unloadingMethod) || methodPOL;
 
   const normalizedProjectCargo = hasProjectCargo ? {
@@ -341,7 +387,7 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
 
   return {
     ...source,
-    ...(cargoDescription ? { cargo_type: cargoDescription } : {}),
+    ...(cargoDescription ? { cargo_type: hasDetectedPackaging && (!cargoDescription || /granel|bulk/i.test(cargoDescription)) ? "Big Bags (Minerales/Cemento)" : cargoDescription } : {}),
     ...(normalizedProjectCargo ? {
       projectCargo: normalizedProjectCargo,
       pesoUnitario: unitWeightMT,
@@ -360,6 +406,12 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
     cargo_specification: specificationId,
     categoriaCarga: validatedCargo.categoriaCarga,
     productoEspecifico: validatedCargo.productoEspecifico,
+    productSpecific: validatedCargo.productoEspecifico,
+    cargoCategory: validatedCargo.categoriaCarga,
+    cargoProduct: validatedCargo.productoEspecifico,
+    packaging: hasDetectedPackaging ? "Big Bags" : (source.packaging || ""),
+    packingType: hasDetectedPackaging ? "Big Bags" : (source.packingType || ""),
+    hasPackaging: hasDetectedPackaging,
     especificacionCarga: CARGO_SPECIFICATIONS[specificationId] || CARGO_SPECIFICATIONS["100"],
     especificacionCargaId: specificationId,
     methodPOL,
