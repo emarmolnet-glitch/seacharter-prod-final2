@@ -377,6 +377,22 @@ function NLPInputWidget() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const shell = document.getElementById("map-command-shell");
+    if (!shell) return undefined;
+    const alignWithSource = () => {
+      const isGeoInputOpen = !shell.classList.contains("input-collapsed");
+      const isMobileLayout = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobileLayout || !isGeoInputOpen) {
+        // Independent reflow adjustment when geographic input collapses
+      }
+    };
+    alignWithSource();
+    const collapseObserver = new MutationObserver(alignWithSource);
+    collapseObserver.observe(shell, { attributes: true, attributeFilter: ["class"] });
+    return () => collapseObserver.disconnect();
+  }, []);
+
   const showValidationAlert = (message) => {
     if (typeof window.showToast === "function") window.showToast(message, false, "error");
   };
