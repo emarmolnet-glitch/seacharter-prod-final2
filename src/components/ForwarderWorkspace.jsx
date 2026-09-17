@@ -13,6 +13,20 @@ import {
   PRICE_2026,
 } from '../../cbam-module.js';
 
+export const COMMODITY_TARIFFS = {
+  "CEM I 52,5N BIGBAG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  "CEM I 52,5N SAC 50KG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  "CEM I 42,5N/R BIGBAG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  "CEM I 42,5N/R SAC 50KG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  "CEM II 52.5N/R 50KG": { inlandUsdMt: 4.26, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 2.60 },
+  "CEM II 52.5N BIGBAG": { inlandUsdMt: 4.26, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  "CEM II 42,5N/R FARDILISE": { inlandUsdMt: 4.26, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 2.56 },
+  "CEM II 42,5N/R FARDILLISE TAVCIM": { inlandUsdMt: 4.26, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 2.65 },
+  "CEM II 42,5 VRAC": { inlandUsdMt: 4.30, portDuesUsdMt: 2.00, customsUsdMt: 0.30, packagingUsdMt: 3.50 },
+  "CEM II 42,5 R BIGBAG": { inlandUsdMt: 4.30, portDuesUsdMt: 2.00, customsUsdMt: 0.30, packagingUsdMt: 3.50 },
+  "CEM I 52,5 R BIGBAG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.30, packagingUsdMt: 3.50 }
+};
+
 function NumericCounter({ label, subtitle, value, onChange, min = 0 }) {
   const numValue = Number(value) || 0;
   return (
@@ -829,6 +843,7 @@ export function ForwarderWorkspace() {
   const [isBigBagsCargo, setIsBigBagsCargo] = useState(false);
   const [cargoCategory, setCargoCategory] = useState('Carga de Proyecto / Heavy Lift');
   const [isPalletizedOrBagsCargo, setIsPalletizedOrBagsCargo] = useState(false);
+  const [isCommodityTariffActive, setIsCommodityTariffActive] = useState(false);
   const [operationalProfileNotice, setOperationalProfileNotice] = useState('');
 
   const [storageDays, setStorageDays] = useState(0);
@@ -2380,6 +2395,7 @@ export function ForwarderWorkspace() {
       setIsUnder40t(false); setTceActive(false); setTceValue(null);
       setOperationalProfileNotice('');
       setIsPalletizedOrBagsCargo(false);
+      setIsCommodityTariffActive(false);
       return;
     }
     let totalPieces = 0; let totalWeightKg = 0; let totalVolumeM3 = 0; let total_m2 = 0;
@@ -2695,6 +2711,18 @@ export function ForwarderWorkspace() {
       calculatedFobOperations = (Number(lashingCost) || 0) + (Number(stevedoringCost) || 0) + (Number(portCraneCost) || 0) + (Number(terminalStorageCost) || 0) + (Number(initialHandlingCost) || 0) + (Number(currentSurveyorCost) || 0) + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0) + (Number(demurrageCostUsd) || 0);
 
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + landCost;
+    }
+
+    const rawType = String(cargoItems[0]?.type || '').toUpperCase().trim();
+    const appliedTariff = COMMODITY_TARIFFS[rawType] || null;
+
+    if (appliedTariff) {
+      setIsCommodityTariffActive(true);
+      const inlandCost = totalWeightTons * appliedTariff.inlandUsdMt;
+      calculatedFobOperations = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt);
+      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + inlandCost;
+    } else {
+      setIsCommodityTariffActive(false);
     }
 
     const effectiveFleteVenta = Number(
@@ -4666,7 +4694,7 @@ export function ForwarderWorkspace() {
                         id="btn-update-calculator-data"
                         onClick={handleSyncCalculatorData}
                         disabled={isSyncingCalculator}
-                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         title="Capturar absolutamente todos los cambios de la calculadora en tiempo real y sincronizar con Neon"
                         aria-label="Actualizar datos"
                       >
@@ -4691,14 +4719,14 @@ export function ForwarderWorkspace() {
                             <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            <span>Actualizar datos (Sincronizar DataBridge)</span>
+                            <span>⚡ Sync DataBridge</span>
                           </>
                         )}
                       </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
-                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-                        <label htmlFor="cargo-category-select-section1" className="text-[11px] font-bold text-slate-600">Categoría Carga:</label>
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 whitespace-nowrap">
+                        <label htmlFor="cargo-category-select-section1" className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Tarifa:</label>
                         <select
                           id="cargo-category-select-section1"
                           value={cargoCategory}
@@ -4785,7 +4813,7 @@ export function ForwarderWorkspace() {
                           return (
                             <tr key={item.id} className="hover:bg-slate-50/80">
                               <td className="p-1"><input type="text" value={item.category || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'category', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-800 text-[11px]" placeholder="Ej: Equipos..." /></td>
-                              <td className="p-1"><input type="text" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold text-[11px]" placeholder="Descripción de pieza..." /></td>
+                              <td className="p-1"><input type="text" list="commodity-list" value={item.type || ''} onChange={(e) => handleUpdateCargoItem(item.id, 'type', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1.5 text-slate-900 font-semibold text-[11px]" placeholder="Descripción de pieza..." /></td>
                               <td className="p-1"><input type="number" min={1} value={item.quantity} onChange={(e) => handleUpdateCargoItem(item.id, 'quantity', e.target.value)} className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-1 py-1.5 text-center text-slate-900 text-[11px]" /></td>
                               <td className="p-1"><input type="number" value={item.length} onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center text-[11px]" placeholder="L" /></td>
                               <td className="p-1"><input type="number" value={item.width} onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)} className="w-full bg-white border border-slate-300 px-1 py-1.5 rounded text-center text-[11px]" placeholder="W" /></td>
@@ -4811,6 +4839,11 @@ export function ForwarderWorkspace() {
                         </tr>
                       </tfoot>
                     </table>
+                    <datalist id="commodity-list">
+                      {Object.keys(COMMODITY_TARIFFS).map((commodityKey) => (
+                        <option key={commodityKey} value={commodityKey} />
+                      ))}
+                    </datalist>
                   </div>
                 </section>
 
@@ -5148,6 +5181,10 @@ export function ForwarderWorkspace() {
                     <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">5. Desglose Financiero Separado (Flete vs. FOB / Operativa)</h3>
                     <span className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-wider">SeaCharter Core PRO</span>
                   </div>
+
+                  {isCommodityTariffActive && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-lg mb-4 text-xs font-bold">💡 Tarifa de Convenio Comercial / FSPE Aplicada. Los cálculos dinámicos de km y estiba han sido sustituidos por tarifas netas de commodity.</div>
+                  )}
 
                   <div id="financial-breakdown-card" className="bg-slate-900 border border-slate-700 rounded-xl p-5 text-white shadow-xl">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
