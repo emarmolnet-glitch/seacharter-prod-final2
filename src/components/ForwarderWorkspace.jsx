@@ -1533,6 +1533,58 @@ export function ForwarderWorkspace() {
       if (projectAssessment) {
         setCharteringAssessment(projectAssessment);
       }
+
+      // Absorción inversa de Costes Terrestres (DataBridge / Land Charter ➔ Core PRO):
+      // Extrae coste terrestre y mercancía, convirtiendo EUR a USD según el tipo de cambio del proyecto
+      const activeExRate = Number(
+        projectRoute?.exchange_rate ??
+        projectRoute?.exchangeRate ??
+        activeProject.exchange_rate ??
+        exchangeRateUsdEur ??
+        0.92
+      ) || 0.92;
+
+      const rawLandCostEur = Number(
+        activeProject.land_freight_cost_eur ??
+        activeProject.land_freight_cost ??
+        activeProject.landFreightCost ??
+        activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
+        activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
+        activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost ??
+        activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost ??
+        activeProject.land_charter?.cost ??
+        activeProject.land_charter?.freight_cost ??
+        0
+      ) || 0;
+
+      if (rawLandCostEur > 0) {
+        const landCostUsd = Math.round((rawLandCostEur / activeExRate) * 100) / 100;
+        setInlandCost(landCostUsd);
+      }
+
+      // 2. Absorción Exacta del Coste de Mercancía (Ya viene en USD desde Data Bridge)
+      const rawGoodsCostUsd = Number(
+        activeProject.valor_total_mercancia_usd ??
+        activeProject.valorTotalMercanciaUsd ??
+        activeProject.payload_data?.valorTotalMercanciaUsd ??
+        activeProject.payload_data?.valor_total_mercancia_usd ??
+        activeProject.line_items?.[0]?.payload_data?.valorTotalMercanciaUsd ??
+        activeProject.line_items?.[0]?.payload_data?.valor_total_mercancia_usd ??
+        activeProject.services?.[0]?.payload_data?.valorTotalMercanciaUsd ??
+        activeProject.services?.[0]?.payload_data?.valor_total_mercancia_usd ??
+        0
+      ) || 0;
+
+      if (rawGoodsCostUsd > 0) {
+        // Como el dato YA está en USD, NO dividimos por activeExRate
+        const syncedGoodsCost = Math.round(rawGoodsCostUsd * 100) / 100;
+
+        if (typeof setGoodsCost === 'function') {
+          setGoodsCost(syncedGoodsCost);
+        } else if (typeof setCustomsCost === 'function') {
+          setCustomsCost(syncedGoodsCost);
+        }
+      }
     } else {
       setprojectDocuments([]);
       const sessionData = readActiveCalculatorSession();
@@ -2086,6 +2138,54 @@ export function ForwarderWorkspace() {
       setCargoItems(updatedCargoItems);
       setActiveReport(currentReportSnapshot);
       setReportData(currentReportSnapshot);
+
+      // Sincronización Inversa de Costes Terrestres (DataBridge ➔ Core PRO):
+      const activeExRate = Number(
+        updatedRouteAndChartering.exchange_rate ??
+        activeProject.exchange_rate ??
+        exchangeRateUsdEur ??
+        0.92
+      ) || 0.92;
+
+      const rawLandCostEur = Number(
+        activeProject.land_freight_cost_eur ??
+        activeProject.land_freight_cost ??
+        activeProject.landFreightCost ??
+        sessionSource.landFreightCost ??
+        sessionSource.landCost ??
+        0
+      ) || 0;
+
+      let syncedInlandCost = Number(inlandCost) || 0;
+      if (rawLandCostEur > 0) {
+        syncedInlandCost = Math.round((rawLandCostEur / activeExRate) * 100) / 100;
+        setInlandCost(syncedInlandCost);
+      }
+
+      // 2. Absorción Exacta del Coste de Mercancía (Ya viene en USD desde Data Bridge)
+      const rawGoodsCostUsd = Number(
+        activeProject.valor_total_mercancia_usd ??
+        activeProject.valorTotalMercanciaUsd ??
+        activeProject.payload_data?.valorTotalMercanciaUsd ??
+        activeProject.payload_data?.valor_total_mercancia_usd ??
+        sessionSource.valorTotalMercanciaUsd ??
+        sessionSource.valor_total_mercancia_usd ??
+        0
+      ) || 0;
+
+      if (rawGoodsCostUsd > 0) {
+        // Como el dato YA está en USD, NO dividimos por activeExRate
+        const syncedGoodsCost = Math.round(rawGoodsCostUsd * 100) / 100;
+
+        if (typeof setGoodsCost === 'function') {
+          setGoodsCost(syncedGoodsCost);
+        } else if (typeof setCustomsCost === 'function') {
+          setCustomsCost(syncedGoodsCost);
+        }
+      }
+
+      // Disparar recálculo financiero inmediato
+      autoCalculateEstimates(updatedCargoItems, capturedCargoCategory);
 
       // 4. Mostrar aviso visual de confirmación de sincronización exitosa
       setSyncSuccessNotice('¡Datos actualizados con éxito!');
