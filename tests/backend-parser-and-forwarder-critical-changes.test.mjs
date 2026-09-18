@@ -106,7 +106,10 @@ test('5. forwarder-projects.js INSERT query explicitly saves status and global_m
   assert.match(forwarderProjectsSource, /const\s*\{\s*client_name[^}]*status[^}]*global_margin_percentage[^}]*\}\s*=\s*data/);
 
   // La consulta INSERT incluye status y global_margin_percentage con parámetros posicionales
-  assert.match(forwarderProjectsSource, /INSERT INTO forwarder_projects\s*\(\s*project_ref,\s*client_name,\s*status,\s*global_margin_percentage,\s*documents,\s*items\s*\)\s*VALUES\s*\(\s*\$1,\s*\$2,\s*\$3,\s*\$4,\s*\$5::jsonb,\s*\$6::jsonb\s*\)/i);
+  assert.match(
+    forwarderProjectsSource,
+    /INSERT INTO forwarder_projects\s*\(\s*project_ref,\s*client_name,\s*status,\s*global_margin_percentage,\s*documents,\s*items(?:,\s*valor_total_mercancia_usd,\s*land_freight_sale)?\s*\)\s*VALUES\s*\(\s*\$1,\s*\$2,\s*\$3,\s*\$4,\s*\$5::jsonb,\s*\$6::jsonb(?:,\s*\$7,\s*\$8)?\s*\)/i
+  );
 });
 
 test('6. forwarder-projects.js UPDATE queries explicitly save status and global_margin_percentage from payload', () => {
