@@ -2819,7 +2819,7 @@ export function ForwarderWorkspace() {
     if (appliedTariff) {
       setIsCommodityTariffActive(true);
       const inlandCost = totalWeightTons * appliedTariff.inlandUsdMt;
-      calculatedFobOperations = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt);
+      calculatedFobOperations = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt) + (Number(customsCost) || 0);
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + inlandCost;
     } else {
       setIsCommodityTariffActive(false);
@@ -2846,8 +2846,8 @@ export function ForwarderWorkspace() {
 
     setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
     setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
-    setEstimatedCost(totalEstimatedCost.toFixed(2));
-    setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
+    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
+    setSalePrice((Number(targetSalePrice) || 0).toFixed(2));
   };
 
   useEffect(() => {
@@ -3427,8 +3427,18 @@ export function ForwarderWorkspace() {
     const landTransportData = getLandTransportData(activeProject, sourcePayload);
     const landCost = Number(landTransportData?.freightCost ?? 0) || 0;
 
-    const fobSubtotal = (Number(estibaCostNum) || 0) + (Number(matCostNum) || 0) + (Number(periCostNum) || 0) + (Number(insCost) || 0) + (Number(demurrageCostNum) || 0);
-    const finalTotalCost = Math.round((fleteCostNum + fobSubtotal + landCost) * 100) / 100;
+    const rawReportType = String((sourcePayload?.cargo_items || cargoItems)[0]?.type || '').toUpperCase().trim();
+    const appliedReportTariff = COMMODITY_TARIFFS[rawReportType] || null;
+
+    let fobSubtotal = (Number(estibaCostNum) || 0) + (Number(matCostNum) || 0) + (Number(periCostNum) || 0) + (Number(insCost) || 0) + (Number(demurrageCostNum) || 0);
+    let effectiveInlandCost = landCost;
+    if (appliedReportTariff) {
+      const baseTariffFob = totalWeightTons * (appliedReportTariff.portDuesUsdMt + appliedReportTariff.customsUsdMt + appliedReportTariff.packagingUsdMt);
+      fobSubtotal = baseTariffFob + custCost;
+      effectiveInlandCost = totalWeightTons * appliedReportTariff.inlandUsdMt;
+    }
+
+    const finalTotalCost = Math.round((fleteCostNum + fobSubtotal + effectiveInlandCost) * 100) / 100;
 
     // Respetar la Simulación: La vista de Proyectos debe respetar el flete de venta manual sincronizado desde la Calculadora como el objetivo principal, en lugar de sugerir únicamente el precio automatizado bottom-up.
     let finalTotalSale = 0;
@@ -3453,7 +3463,9 @@ export function ForwarderWorkspace() {
     }
 
     // Costes FOB operativos (excluyendo mercancía) y Valor total de la mercancía en USD
-    const fobOpsCostUsd = estibaCostNum + matCostNum + (storageCostNum + initialHandlingCost + survCost + inlCost + insCost) + demurrageCostNum;
+    const fobOpsCostUsd = appliedReportTariff
+      ? (totalWeightTons * (appliedReportTariff.portDuesUsdMt + appliedReportTariff.customsUsdMt + appliedReportTariff.packagingUsdMt))
+      : (estibaCostNum + matCostNum + (storageCostNum + initialHandlingCost + survCost + inlCost + insCost) + demurrageCostNum);
     const valorMercanciaUsd = custCost;
 
     let costesFobTotalesUsd = 0;
@@ -5372,7 +5384,7 @@ export function ForwarderWorkspace() {
                       </div>
                     </div>
 
-                    {((activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0) > 0 || (activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0) > 0) && (
+                    {((activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0) > 0 || (activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0) > 0 || (Number(subtotalFobOperations) > 0 && ((totals.weight || 0) > 0 || (totals.weightKg || 0) > 0))) && (
                       <div id="financial-unit-ratios-summary" className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between transition-all hover:border-sky-300">
                           <div className="flex items-center gap-2">
@@ -5381,7 +5393,13 @@ export function ForwarderWorkspace() {
                           </div>
                           <div className="flex items-baseline gap-1 font-mono">
                             <span className="text-lg font-black text-slate-900">
-                              {Number(activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0).toFixed(2)}
+                              {(() => {
+                                const totalTons = Number(totals.totalWeightTons || totals.weightTons || (totals.weightKg ? totals.weightKg / 1000 : (totals.weight ? totals.weight / 1000 : 0))) || 0;
+                                if (totalTons > 0 && Number(subtotalFreight) > 0) {
+                                  return (Number(subtotalFreight) / totalTons).toFixed(2);
+                                }
+                                return Number(activeReport?.flete_unitario_usd_mt ?? financialBreakdown?.flete_unitario_usd_mt ?? 0).toFixed(2);
+                              })()}
                             </span>
                             <span className="text-[11px] font-bold text-sky-700">USD/MT</span>
                           </div>
@@ -5393,7 +5411,13 @@ export function ForwarderWorkspace() {
                           </div>
                           <div className="flex items-baseline gap-1 font-mono">
                             <span className="text-lg font-black text-slate-900">
-                              {Number(activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0).toFixed(2)}
+                              {(() => {
+                                const totalTons = Number(totals.totalWeightTons || totals.weightTons || (totals.weightKg ? totals.weightKg / 1000 : (totals.weight ? totals.weight / 1000 : 0))) || 0;
+                                if (totalTons > 0 && Number(subtotalFobOperations) > 0) {
+                                  return (Number(subtotalFobOperations) / totalTons).toFixed(2);
+                                }
+                                return Number(activeReport?.fob_mas_mercancia_unitario_usd_mt ?? financialBreakdown?.fob_mas_mercancia_unitario_usd_mt ?? 0).toFixed(2);
+                              })()}
                             </span>
                             <span className="text-[11px] font-bold text-amber-800">USD/MT</span>
                           </div>
@@ -6165,7 +6189,7 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {activeReport.stowagePlan.holds?.map((hold, holdIdx) => (
+                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
                         <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
