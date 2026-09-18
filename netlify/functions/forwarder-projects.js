@@ -38,6 +38,8 @@ async function ensureForwarderSchema() {
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_distance NUMERIC;
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_cost NUMERIC;
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
+      ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS valor_total_mercancia_usd NUMERIC;
+      ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_sale NUMERIC;
     `);
     schemaEnsured = true;
   } catch (_err) {
@@ -59,6 +61,12 @@ exports.handler = async (event) => {
     // 1. CREAR O ACTUALIZAR UN EXPEDIENTE (POST)
     if (httpMethod === 'POST') {
       const data = JSON.parse(body || '{}');
+      const valorTotalMercanciaUsd = (data.valor_total_mercancia_usd !== undefined && data.valor_total_mercancia_usd !== null)
+        ? Number(data.valor_total_mercancia_usd)
+        : ((data.valorTotalMercanciaUsd !== undefined && data.valorTotalMercanciaUsd !== null) ? Number(data.valorTotalMercanciaUsd) : null);
+      const landFreightSale = (data.land_freight_sale !== undefined && data.land_freight_sale !== null)
+        ? Number(data.land_freight_sale)
+        : ((data.landFreightSale !== undefined && data.landFreightSale !== null) ? Number(data.landFreightSale) : null);
       
       // MODO ACTUALIZACIÓN (Si ya existe ID o REF)
       if (data.id || data.project_ref) {
@@ -87,7 +95,9 @@ exports.handler = async (event) => {
               land_destination = COALESCE($9, land_destination),
               land_distance = COALESCE($10, land_distance),
               land_freight_cost = COALESCE($11, land_freight_cost),
-              route_and_chartering = COALESCE($12::jsonb, route_and_chartering)
+              route_and_chartering = COALESCE($12::jsonb, route_and_chartering),
+              valor_total_mercancia_usd = COALESCE($13, valor_total_mercancia_usd),
+              land_freight_sale = COALESCE($14, land_freight_sale)
           WHERE id = $4 OR project_ref = $5
           RETURNING *;
         `;
@@ -105,7 +115,9 @@ exports.handler = async (event) => {
           landDestination,
           landDistance,
           landFreightCost,
-          routeAndChartering
+          routeAndChartering,
+          valorTotalMercanciaUsd,
+          landFreightSale
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
         if (updateResult.rows.length > 0) {
@@ -122,8 +134,8 @@ exports.handler = async (event) => {
         const upsertMargin = marginValue || '0';
 
         const upsertInsertQuery = `
-          INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
-          VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+          INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items, valor_total_mercancia_usd, land_freight_sale)
+          VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
           RETURNING *;
         `;
         const upsertInsertValues = [
@@ -132,12 +144,14 @@ exports.handler = async (event) => {
           upsertStatus,
           upsertMargin,
           JSON.stringify(data.documents || []),
-          JSON.stringify(data.items || data.line_items || data.services || [])
+          JSON.stringify(data.items || data.line_items || data.services || []),
+          valorTotalMercanciaUsd,
+          landFreightSale
         ];
         const upsertResult = await pool.query(upsertInsertQuery, upsertInsertValues);
         const upsertRow = upsertResult.rows[0];
 
-        if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering) {
+        if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering || valorTotalMercanciaUsd != null || landFreightSale != null) {
           try {
             const landUpdate = await pool.query(
               `UPDATE forwarder_projects
@@ -145,7 +159,9 @@ exports.handler = async (event) => {
                    land_destination = COALESCE($2, land_destination),
                    land_distance = COALESCE($3, land_distance),
                    land_freight_cost = COALESCE($4, land_freight_cost),
-                   route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
+                   route_and_chartering = COALESCE($6::jsonb, route_and_chartering),
+                   valor_total_mercancia_usd = COALESCE($7, valor_total_mercancia_usd),
+                   land_freight_sale = COALESCE($8, land_freight_sale)
                WHERE id = $5
                RETURNING *;`,
               [
@@ -154,7 +170,9 @@ exports.handler = async (event) => {
                 landDistance,
                 landFreightCost,
                 upsertRow.id,
-                routeAndChartering
+                routeAndChartering,
+                valorTotalMercanciaUsd,
+                landFreightSale
               ]
             );
             return {
@@ -181,8 +199,8 @@ exports.handler = async (event) => {
         : '0';
 
       const insertQuery = `
-        INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+        INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items, valor_total_mercancia_usd, land_freight_sale)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
         RETURNING *;
       `;
       const insertValues = [
@@ -191,11 +209,13 @@ exports.handler = async (event) => {
         projectStatus,
         marginPercentage,
         JSON.stringify(documents || []),
-        JSON.stringify(items || line_items || services || [])
+        JSON.stringify(items || line_items || services || []),
+        valorTotalMercanciaUsd,
+        landFreightSale
       ];
       const result = await pool.query(insertQuery, insertValues);
 
-      if (data.land_origin || data.land_destination || data.land_distance != null || data.land_freight_cost != null || data.route_and_chartering || data.routeAndChartering) {
+      if (data.land_origin || data.land_destination || data.land_distance != null || data.land_freight_cost != null || data.route_and_chartering || data.routeAndChartering || valorTotalMercanciaUsd != null || landFreightSale != null) {
         try {
           const landUpdate = await pool.query(
             `UPDATE forwarder_projects
@@ -203,7 +223,9 @@ exports.handler = async (event) => {
                  land_destination = COALESCE($2, land_destination),
                  land_distance = COALESCE($3, land_distance),
                  land_freight_cost = COALESCE($4, land_freight_cost),
-                 route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
+                 route_and_chartering = COALESCE($6::jsonb, route_and_chartering),
+                 valor_total_mercancia_usd = COALESCE($7, valor_total_mercancia_usd),
+                 land_freight_sale = COALESCE($8, land_freight_sale)
              WHERE id = $5
              RETURNING *;`,
             [
@@ -212,7 +234,9 @@ exports.handler = async (event) => {
               data.land_distance != null ? Number(data.land_distance) : null,
               data.land_freight_cost != null ? Number(data.land_freight_cost) : null,
               result.rows[0].id,
-              (data.route_and_chartering || data.routeAndChartering) ? JSON.stringify(data.route_and_chartering || data.routeAndChartering) : null
+              (data.route_and_chartering || data.routeAndChartering) ? JSON.stringify(data.route_and_chartering || data.routeAndChartering) : null,
+              valorTotalMercanciaUsd,
+              landFreightSale
             ]
           );
           return {
@@ -239,6 +263,12 @@ exports.handler = async (event) => {
     // 2. ACTUALIZAR EXPEDIENTE ESTRICTO (PUT)
     if (httpMethod === 'PUT') {
       const data = JSON.parse(body || '{}');
+      const valorTotalMercanciaUsd = (data.valor_total_mercancia_usd !== undefined && data.valor_total_mercancia_usd !== null)
+        ? Number(data.valor_total_mercancia_usd)
+        : ((data.valorTotalMercanciaUsd !== undefined && data.valorTotalMercanciaUsd !== null) ? Number(data.valorTotalMercanciaUsd) : null);
+      const landFreightSale = (data.land_freight_sale !== undefined && data.land_freight_sale !== null)
+        ? Number(data.land_freight_sale)
+        : ((data.landFreightSale !== undefined && data.landFreightSale !== null) ? Number(data.landFreightSale) : null);
       
       const statusValue = (data.status !== undefined && data.status !== null && String(data.status).trim())
         ? String(data.status).trim()
@@ -265,7 +295,9 @@ exports.handler = async (event) => {
             land_destination = COALESCE($9, land_destination),
             land_distance = COALESCE($10, land_distance),
             land_freight_cost = COALESCE($11, land_freight_cost),
-            route_and_chartering = COALESCE($12::jsonb, route_and_chartering)
+            route_and_chartering = COALESCE($12::jsonb, route_and_chartering),
+            valor_total_mercancia_usd = COALESCE($13, valor_total_mercancia_usd),
+            land_freight_sale = COALESCE($14, land_freight_sale)
         WHERE id = $4 OR project_ref = $5
         RETURNING *;
       `;
@@ -283,7 +315,9 @@ exports.handler = async (event) => {
         landDestination,
         landDistance,
         landFreightCost,
-        routeAndChartering
+        routeAndChartering,
+        valorTotalMercanciaUsd,
+        landFreightSale
       ];
       
       const result = await pool.query(query, values);
@@ -296,8 +330,8 @@ exports.handler = async (event) => {
           const upsertMargin = marginValue || '0';
 
           const insertQuery = `
-            INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items)
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+            INSERT INTO forwarder_projects (project_ref, client_name, status, global_margin_percentage, documents, items, valor_total_mercancia_usd, land_freight_sale)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
             RETURNING *;
           `;
           const insertValues = [
@@ -306,12 +340,14 @@ exports.handler = async (event) => {
             upsertStatus,
             upsertMargin,
             JSON.stringify(data.documents || []),
-            JSON.stringify(data.items || data.line_items || data.services || [])
+            JSON.stringify(data.items || data.line_items || data.services || []),
+            valorTotalMercanciaUsd,
+            landFreightSale
           ];
           const insertResult = await pool.query(insertQuery, insertValues);
           const createdProject = insertResult.rows[0];
 
-          if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering) {
+          if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering || valorTotalMercanciaUsd != null || landFreightSale != null) {
             try {
               const landUpdate = await pool.query(
                 `UPDATE forwarder_projects
@@ -319,10 +355,21 @@ exports.handler = async (event) => {
                      land_destination = COALESCE($2, land_destination),
                      land_distance = COALESCE($3, land_distance),
                      land_freight_cost = COALESCE($4, land_freight_cost),
-                     route_and_chartering = COALESCE($6::jsonb, route_and_chartering)
+                     route_and_chartering = COALESCE($6::jsonb, route_and_chartering),
+                     valor_total_mercancia_usd = COALESCE($7, valor_total_mercancia_usd),
+                     land_freight_sale = COALESCE($8, land_freight_sale)
                  WHERE id = $5
                  RETURNING *;`,
-                [landOrigin, landDestination, landDistance, landFreightCost, createdProject.id, routeAndChartering]
+                [
+                  landOrigin,
+                  landDestination,
+                  landDistance,
+                  landFreightCost,
+                  createdProject.id,
+                  routeAndChartering,
+                  valorTotalMercanciaUsd,
+                  landFreightSale
+                ]
               );
               return {
                 statusCode: 200,
@@ -367,6 +414,7 @@ exports.handler = async (event) => {
           SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
                  land_origin, land_destination, land_distance, land_freight_cost,
                  route_and_chartering,
+                 valor_total_mercancia_usd, land_freight_sale,
                  TO_CHAR(created_at, 'DD/MM/YYYY') as date 
           FROM forwarder_projects 
           WHERE (id = $1 OR UPPER(project_ref) = UPPER($2))
@@ -391,6 +439,7 @@ exports.handler = async (event) => {
         SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
                land_origin, land_destination, land_distance, land_freight_cost,
                route_and_chartering,
+               valor_total_mercancia_usd, land_freight_sale,
                TO_CHAR(created_at, 'DD/MM/YYYY') as date 
         FROM forwarder_projects 
         ORDER BY created_at DESC;

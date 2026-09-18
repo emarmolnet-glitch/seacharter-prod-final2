@@ -401,6 +401,8 @@ export const forwarderProjects = pgTable("forwarder_projects", {
   landDistance: numeric("land_distance"),
   landFreightCost: numeric("land_freight_cost"),
   routeAndChartering: jsonb("route_and_chartering").default({}),
+  valorTotalMercanciaUsd: numeric("valor_total_mercancia_usd"),
+  landFreightSale: numeric("land_freight_sale"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
