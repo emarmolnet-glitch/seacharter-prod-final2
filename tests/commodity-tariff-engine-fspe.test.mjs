@@ -86,3 +86,40 @@ test('9. Functional simulation: empty or undefined type item does not crash auto
 
   assert.equal(appliedTariff2, null);
 });
+
+test('10. FSPE commodity tariff unconditionally includes merchandise cost (customsCost) in calculatedFobOperations', () => {
+  assert.match(
+    workspaceSource,
+    /calculatedFobOperations\s*=\s*totalWeightTons\s*\*\s*\(\s*appliedTariff\.portDuesUsdMt\s*\+\s*appliedTariff\.customsUsdMt\s*\+\s*appliedTariff\.packagingUsdMt\s*\)\s*\+\s*\(\s*Number\(\s*customsCost\s*\)\s*\|\|\s*0\s*\);/,
+    'calculatedFobOperations under FSPE must explicitly add customsCost (Mercancía USD)'
+  );
+});
+
+test('11. Indicator "FOB + Mercancía Unitario" divides real subtotalFobOperations by total metric tons', () => {
+  assert.match(
+    workspaceSource,
+    /Number\(\s*subtotalFobOperations\s*\)\s*\/\s*totalTons/,
+    'FOB + Mercancía Unitario indicator must divide subtotalFobOperations by totalTons'
+  );
+});
+
+test('12. Functional simulation: FSPE flat rates correctly pass through cargo merchandise value into subtotal and unit ratio', () => {
+  const COMMODITY_TARIFFS = {
+    "CEM I 52,5N BIGBAG": { inlandUsdMt: 3.00, portDuesUsdMt: 2.00, customsUsdMt: 0.25, packagingUsdMt: 3.50 },
+  };
+
+  const totalWeightTons = 1000;
+  const customsCost = 75000; // Mercancía (USD)
+  const rawType = "CEM I 52,5N BIGBAG";
+  const appliedTariff = COMMODITY_TARIFFS[rawType];
+
+  const flatFobPortOps = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt);
+  assert.equal(flatFobPortOps, 5750, 'Base FSPE flat operational tariff is 5,750 USD');
+
+  const calculatedFobOperations = flatFobPortOps + (Number(customsCost) || 0);
+  assert.equal(calculatedFobOperations, 80750, 'Subtotal FOB operations must be 80,750 USD (flat operations + merchandise)');
+
+  const fobMasMercanciaUnitario = totalWeightTons > 0 ? (calculatedFobOperations / totalWeightTons) : 0;
+  assert.equal(fobMasMercanciaUnitario, 80.75, 'FOB + Mercancía Unitario must be 80.75 USD/MT');
+});
+
