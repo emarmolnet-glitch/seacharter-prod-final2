@@ -2804,8 +2804,27 @@ export function ForwarderWorkspace() {
     const rawType = String(cargoItems[0]?.type || '').toUpperCase().trim();
     const appliedTariff = COMMODITY_TARIFFS[rawType] || null;
 
+    // 2. Inyectamos los costes en la UI (pantalla) BLINDADOS CONTRA BUCLES
     if (appliedTariff) {
       setIsCommodityTariffActive(true);
+      const computedInland = Math.round(totalWeightTons * appliedTariff.inlandUsdMt * 100) / 100;
+      const commodityValueUsdMt = 55; // Valor por defecto del CEM
+      const computedMercancia = Math.round(totalWeightTons * commodityValueUsdMt * 100) / 100;
+      
+      // Freno de React: Solo actualizamos el estado si el número ES DIFERENTE al que ya hay
+      setInlandCost(prev => (prev === computedInland ? prev : computedInland));
+      setMercanciaCost(prev => (prev === computedMercancia ? prev : computedMercancia));
+      
+      // Freno del objeto: Evitamos mutar activeProject infinitamente
+      if (activeProject) {
+         if (activeProject.valor_total_mercancia_usd !== computedMercancia) {
+             activeProject.valor_total_mercancia_usd = computedMercancia;
+         }
+         if (activeProject.land_freight_cost !== computedInland) {
+             activeProject.land_freight_cost = computedInland;
+         }
+      }
+
       const inlandCost = totalWeightTons * appliedTariff.inlandUsdMt;
       calculatedFobOperations = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt) + (Number(customsCost) || 0);
       totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + inlandCost;
