@@ -4025,6 +4025,7 @@ export function ForwarderWorkspace() {
       const safeCargoItems = Array.isArray(cargoItems) ? cargoItems : [];
       const payload = {
         project_ref: activeProjectRef || activeProject?.project_ref,
+        client_name: `REF: ${activeProject?.project_ref || ''} ${activeProject?.client_name || activeProject?.name || ''}`.trim(),
         cargo_items: safeCargoItems.map((item) => ({
           id: item.id || `item-${Date.now()}-${Math.random()}`,
           category: item.category || 'Equipos de Proceso',
@@ -4149,7 +4150,7 @@ export function ForwarderWorkspace() {
 
       const targetProject = existingRdmProject || (hasActiveRdm && activeProject ? { ...activeProject, project_ref: globalActiveRef.trim() } : activeProject) || {
         project_ref: activeProjectRef || `EXP-${Date.now().toString().slice(-6)}`,
-        client_name: hasActiveRdm ? `Expediente Corporativo ${globalActiveRef.trim()}` : 'Nuevo Cliente',
+        client_name: hasActiveRdm ? `Expediente Corporativo ${globalActiveRef.trim()}` : `REF: ${activeProject?.project_ref || ''} ${activeProject?.client_name || activeProject?.name || ''}`.trim(),
         status: 'Borrador',
         line_items: [],
         items: [],
@@ -4163,15 +4164,18 @@ export function ForwarderWorkspace() {
         const updatedLineItems = editingLineItemId
           ? existingItems.map((li) => (li.id === editingLineItemId ? savedLineItem : li))
           : [...existingItems, savedLineItem];
+        const { id: _originalId, ...projectDataWithoutId } = targetProject;
         const updatedProject = {
-          ...targetProject,
+          ...projectDataWithoutId,
           project_ref: targetProject.project_ref || activeProjectRef,
+          client_name: `REF: ${activeProject?.project_ref || ''} ${activeProject?.client_name || activeProject?.name || ''}`.trim(),
           route_and_chartering: payload.route_and_chartering,
           charteringAssessment: charteringAssessment,
           line_items: updatedLineItems,
           services: updatedLineItems,
           items: updatedLineItems,
         };
+        delete updatedProject.id;
         setActiveProject(updatedProject);
         setProjects((prev) => {
           const matchIdx = prev.findIndex((p) => (updatedProject.project_ref && p.project_ref === updatedProject.project_ref) || (updatedProject.id && p.id === updatedProject.id));
