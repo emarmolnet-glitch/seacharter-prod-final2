@@ -1215,6 +1215,8 @@ export function ForwarderWorkspace() {
   const setHeavyLift = setHeavyLiftCrane;
   const setLashingTeams = setLashingTeam;
   const setSpreader = setSpreaderMultipunto;
+  const setCustCost = setCustomsCost;
+  const setMercanciaCost = setCustomsCost;
 
   const getLandTransportData = (project, payload = null) => {
     const p = project || {};
@@ -1444,12 +1446,18 @@ export function ForwarderWorkspace() {
         if (updated) {
           setActiveProject(updated);
           setprojectDocuments(updated.documents || updated.files || []);
+          if (updated.valor_total_mercancia_usd !== undefined && updated.valor_total_mercancia_usd !== null) {
+            setCustCost(Number(updated.valor_total_mercancia_usd) || 0);
+          }
         }
       } else if (hasActiveRdm) {
         const matchingRdm = list.find((p) => p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase());
         if (matchingRdm) {
           setActiveProject(matchingRdm);
           setprojectDocuments(matchingRdm.documents || matchingRdm.files || []);
+          if (matchingRdm.valor_total_mercancia_usd !== undefined && matchingRdm.valor_total_mercancia_usd !== null) {
+            setCustCost(Number(matchingRdm.valor_total_mercancia_usd) || 0);
+          }
         }
       }
       return list;
@@ -1563,7 +1571,7 @@ export function ForwarderWorkspace() {
       }
 
       // 2. Absorción Exacta del Coste de Mercancía (Ya viene en USD desde Data Bridge)
-      const rawGoodsCostUsd = Number(
+      const incomingMercancia = Number(
         activeProject.valor_total_mercancia_usd ??
         activeProject.valorTotalMercanciaUsd ??
         activeProject.payload_data?.valorTotalMercanciaUsd ??
@@ -1574,17 +1582,7 @@ export function ForwarderWorkspace() {
         activeProject.services?.[0]?.payload_data?.valor_total_mercancia_usd ??
         0
       ) || 0;
-
-      if (rawGoodsCostUsd > 0) {
-        // Como el dato YA está en USD, NO dividimos por activeExRate
-        const syncedGoodsCost = Math.round(rawGoodsCostUsd * 100) / 100;
-
-        if (typeof setGoodsCost === 'function') {
-          setGoodsCost(syncedGoodsCost);
-        } else if (typeof setCustomsCost === 'function') {
-          setCustomsCost(syncedGoodsCost);
-        }
-      }
+      setCustCost(Number(activeProject.valor_total_mercancia_usd) || incomingMercancia);
     } else {
       setprojectDocuments([]);
       const sessionData = readActiveCalculatorSession();
@@ -2163,7 +2161,7 @@ export function ForwarderWorkspace() {
       }
 
       // 2. Absorción Exacta del Coste de Mercancía (Ya viene en USD desde Data Bridge)
-      const rawGoodsCostUsd = Number(
+      const incomingMercancia = Number(
         activeProject.valor_total_mercancia_usd ??
         activeProject.valorTotalMercanciaUsd ??
         activeProject.payload_data?.valorTotalMercanciaUsd ??
@@ -2172,17 +2170,7 @@ export function ForwarderWorkspace() {
         sessionSource.valor_total_mercancia_usd ??
         0
       ) || 0;
-
-      if (rawGoodsCostUsd > 0) {
-        // Como el dato YA está en USD, NO dividimos por activeExRate
-        const syncedGoodsCost = Math.round(rawGoodsCostUsd * 100) / 100;
-
-        if (typeof setGoodsCost === 'function') {
-          setGoodsCost(syncedGoodsCost);
-        } else if (typeof setCustomsCost === 'function') {
-          setCustomsCost(syncedGoodsCost);
-        }
-      }
+      setCustCost(Number(activeProject.valor_total_mercancia_usd) || incomingMercancia);
 
       // Disparar recálculo financiero inmediato
       autoCalculateEstimates(updatedCargoItems, capturedCargoCategory);
