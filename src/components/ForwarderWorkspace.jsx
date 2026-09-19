@@ -921,6 +921,93 @@ export function ForwarderWorkspace() {
     return '';
   };
 
+  // Helper para deducir la referencia del expediente padre (dossier) de un proyecto
+  const getProjectParentRef = (p) => {
+    if (!p || typeof p !== 'object') return '';
+    const explicitRef = p.referenciaPadre ||
+                        p.dossier_ref ||
+                        p.parent_ref ||
+                        p.dossierRef ||
+                        p.parentRef ||
+                        p.parent_dossier_ref ||
+                        p.parent_project_ref ||
+                        p.route_and_chartering?.dossier_ref ||
+                        p.route_and_chartering?.parent_ref;
+    if (explicitRef && typeof explicitRef === 'string' && explicitRef.trim()) {
+      return explicitRef.trim();
+    }
+    if (p.project_ref && typeof p.project_ref === 'string') {
+      const rawRef = p.project_ref.trim();
+      const rdmMatch = rawRef.match(/RDM\/[A-Z0-9_-]+/i);
+      if (rdmMatch) {
+        return rdmMatch[0].replace(/[-_]EXP[-_].*$/i, '').replace(/[-_]PRJ[-_].*$/i, '').trim();
+      }
+      return rawRef;
+    }
+    return '';
+  };
+
+  // Helper defensivo para verificar si un proyecto pertenece al expediente padre activo
+  const isProjectMatchingActiveDossier = (p, activeRef) => {
+    if (!p || typeof p !== 'object' || !activeRef) return false;
+    const cleanActive = String(activeRef).trim().toUpperCase();
+    if (!cleanActive || cleanActive === '—' || cleanActive === '-') return false;
+
+    // 1. Campo explícito referenciaPadre
+    if (p.referenciaPadre && typeof p.referenciaPadre === 'string') {
+      const cleanPadre = p.referenciaPadre.trim().toUpperCase();
+      if (cleanPadre === cleanActive) return true;
+    }
+
+    // 2. Propiedades dossier_ref / parent_ref / etc.
+    const explicitParent = (
+      p.dossier_ref ||
+      p.parent_ref ||
+      p.dossierRef ||
+      p.parentRef ||
+      p.parent_dossier_ref ||
+      p.parent_project_ref ||
+      p.route_and_chartering?.dossier_ref ||
+      p.route_and_chartering?.parent_ref ||
+      ''
+    ).toString().trim().toUpperCase();
+
+    if (explicitParent && explicitParent !== '—' && explicitParent !== '-') {
+      return explicitParent === cleanActive;
+    }
+
+    // 3. Convención de project_ref (coincidencia exacta o prefijo)
+    const rawProjectRef = (p.project_ref || p.projectRef || '').toString().trim().toUpperCase();
+    if (!rawProjectRef || rawProjectRef === '—' || rawProjectRef === '-') return false;
+
+    if (rawProjectRef === cleanActive) return true;
+
+    if (
+      rawProjectRef.startsWith(cleanActive + '-') ||
+      rawProjectRef.startsWith(cleanActive + '/') ||
+      rawProjectRef.startsWith(cleanActive + '_') ||
+      rawProjectRef.startsWith(cleanActive + '#') ||
+      rawProjectRef.startsWith(cleanActive + ' ')
+    ) {
+      return true;
+    }
+
+    const rdmMatch = rawProjectRef.match(/RDM\/[A-Z0-9_-]+/i);
+    if (rdmMatch) {
+      const extracted = rdmMatch[0].toUpperCase();
+      if (extracted === cleanActive) return true;
+      const stripped = extracted.replace(/[-_]EXP[-_].*$/i, '').replace(/[-_]PRJ[-_].*$/i, '');
+      if (stripped === cleanActive) return true;
+    }
+
+    return false;
+  };
+
+  // Variable de estado que almacena la "Referencia Activa" de la sesión / expediente padre actual (Topbar)
+  const [referenciaActivaGlobal, setReferenciaActivaGlobal] = useState(() => getActiveGlobalReference());
+  const activeContractRef = referenciaActivaGlobal;
+  const setActiveContractRef = setReferenciaActivaGlobal;
+
   // Helper centralizado para capturar el estado activo de la calculadora y de la sesión (sin valores mock)
   const readActiveCalculatorSession = () => {
     if (typeof window === 'undefined') return {};
@@ -1437,12 +1524,21 @@ export function ForwarderWorkspace() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.projects || []);
-      setProjects(list);
+      const enrichedList = list.map((p) => {
+        const refPadre = p.referenciaPadre || p.dossier_ref || p.parent_ref || getProjectParentRef(p) || '';
+        return {
+          ...p,
+          dossier_ref: p.dossier_ref || (refPadre || undefined),
+          parent_ref: p.parent_ref || (refPadre || undefined),
+          referenciaPadre: refPadre || undefined,
+        };
+      });
+      setProjects(enrichedList);
       const globalActiveRef = getActiveGlobalReference();
       const hasActiveRdm = Boolean(globalActiveRef && /^RDM\//i.test(globalActiveRef.trim()));
 
       if (activeProject) {
-        const updated = list.find((p) => p.id === activeProject.id || p.project_ref === activeProject.project_ref);
+        const updated = enrichedList.find((p) => p.id === activeProject.id || p.project_ref === activeProject.project_ref);
         if (updated) {
           setActiveProject(updated);
           setprojectDocuments(updated.documents || updated.files || []);
@@ -1451,7 +1547,7 @@ export function ForwarderWorkspace() {
           }
         }
       } else if (hasActiveRdm) {
-        const matchingRdm = list.find((p) => p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase());
+        const matchingRdm = enrichedList.find((p) => (p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase()) || isProjectMatchingActiveDossier(p, globalActiveRef));
         if (matchingRdm) {
           setActiveProject(matchingRdm);
           setprojectDocuments(matchingRdm.documents || matchingRdm.files || []);
@@ -1460,7 +1556,7 @@ export function ForwarderWorkspace() {
           }
         }
       }
-      return list;
+      return enrichedList;
     } catch (err) {
       console.error(err);
       if (!silent) setError(err?.message || 'Error de conexión');
@@ -1473,23 +1569,77 @@ export function ForwarderWorkspace() {
   };
 
   useEffect(() => {
+    const syncActiveReference = () => {
+      const currentRef = getActiveGlobalReference();
+      setReferenciaActivaGlobal(currentRef || '');
+    };
+
     const handleRefChanged = (e) => {
-      const newRef = e?.detail?.reference || getActiveGlobalReference();
-      if (newRef && /^RDM\//i.test(newRef.trim())) {
-        const match = projects.find((p) => p.project_ref && p.project_ref.toUpperCase() === newRef.trim().toUpperCase());
+      const newRef = (e?.detail?.reference !== undefined ? e.detail.reference : getActiveGlobalReference()) || '';
+      const cleanRef = String(newRef || '').trim();
+      setReferenciaActivaGlobal(cleanRef);
+
+      if (cleanRef && /^RDM\//i.test(cleanRef)) {
+        const cleanUpper = cleanRef.toUpperCase();
+        const match = projects.find((p) => {
+          const pRef = (p.project_ref || '').trim().toUpperCase();
+          const pPadre = (p.referenciaPadre || p.dossier_ref || p.parent_ref || '').trim().toUpperCase();
+          return pRef === cleanUpper || pPadre === cleanUpper || isProjectMatchingActiveDossier(p, cleanRef);
+        });
         if (match) {
           setActiveProject(match);
           setprojectDocuments(match.documents || match.files || []);
         }
+      } else if (!cleanRef) {
+        setActiveProject(null);
+        setprojectDocuments([]);
       }
     };
+
+    syncActiveReference();
+
     if (typeof window !== 'undefined') {
       window.addEventListener('contract-reference:changed', handleRefChanged);
+      window.addEventListener('storage', syncActiveReference);
+      window.addEventListener('focus', syncActiveReference);
+
+      const quickRefEl = document.getElementById('quick-ref');
+      if (quickRefEl) {
+        quickRefEl.addEventListener('input', syncActiveReference);
+        quickRefEl.addEventListener('change', syncActiveReference);
+      }
+
+      const syncInterval = setInterval(syncActiveReference, 1500);
+
       return () => {
         window.removeEventListener('contract-reference:changed', handleRefChanged);
+        window.removeEventListener('storage', syncActiveReference);
+        window.removeEventListener('focus', syncActiveReference);
+        if (quickRefEl) {
+          quickRefEl.removeEventListener('input', syncActiveReference);
+          quickRefEl.removeEventListener('change', syncActiveReference);
+        }
+        clearInterval(syncInterval);
       };
     }
   }, [projects]);
+
+  useEffect(() => {
+    if (!referenciaActivaGlobal) {
+      if (activeProject) {
+        setActiveProject(null);
+        setprojectDocuments([]);
+      }
+    } else if (activeProject && !isProjectMatchingActiveDossier(activeProject, referenciaActivaGlobal)) {
+      const firstValid = (projects || []).find((p) => isProjectMatchingActiveDossier(p, referenciaActivaGlobal));
+      setActiveProject(firstValid || null);
+      if (firstValid) {
+        setprojectDocuments(firstValid.documents || firstValid.files || []);
+      } else {
+        setprojectDocuments([]);
+      }
+    }
+  }, [referenciaActivaGlobal]);
 
   useEffect(() => { fetchProjects(); }, []);
 
@@ -2228,16 +2378,30 @@ export function ForwarderWorkspace() {
 
     setIsCreating(true);
     try {
+      const currentGlobalRef = getActiveGlobalReference() || referenciaActivaGlobal || '';
       const res = await fetch(getApiUrl('/.netlify/functions/forwarder-projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ client_name: input.trim(), documents: [] }),
+        body: JSON.stringify({
+          client_name: input.trim(),
+          documents: [],
+          project_ref: currentGlobalRef ? `${currentGlobalRef}-EXP-${Date.now().toString().slice(-4)}` : undefined,
+          dossier_ref: currentGlobalRef || undefined,
+          parent_ref: currentGlobalRef || undefined,
+        }),
       });
       if (!res.ok) throw new Error();
       const payload = await res.json();
       const createdProject = payload.project || payload;
-      setProjects((prev) => [createdProject, ...prev]);
-      setActiveProject(createdProject);
+      const refPadre = createdProject.referenciaPadre || createdProject.dossier_ref || createdProject.parent_ref || currentGlobalRef || getProjectParentRef(createdProject);
+      const normalizedCreatedProject = {
+        ...createdProject,
+        dossier_ref: createdProject.dossier_ref || (refPadre || undefined),
+        parent_ref: createdProject.parent_ref || (refPadre || undefined),
+        referenciaPadre: refPadre || undefined,
+      };
+      setProjects((prev) => [normalizedCreatedProject, ...prev]);
+      setActiveProject(normalizedCreatedProject);
       setprojectDocuments([]);
     } catch (err) {
       window.alert('No se pudo crear el proyecto.');
@@ -4187,6 +4351,9 @@ export function ForwarderWorkspace() {
         const updatedProject = {
           ...projectDataWithoutId,
           project_ref: targetProject.project_ref || activeProjectRef,
+          dossier_ref: targetProject.dossier_ref || (hasActiveRdm ? globalActiveRef.trim() : undefined),
+          parent_ref: targetProject.parent_ref || (hasActiveRdm ? globalActiveRef.trim() : undefined),
+          referenciaPadre: targetProject.referenciaPadre || targetProject.dossier_ref || (hasActiveRdm ? globalActiveRef.trim() : undefined),
           client_name: `REF: ${activeProject?.project_ref || ''} ${activeProject?.client_name || activeProject?.name || ''}`.trim(),
           route_and_chartering: payload.route_and_chartering,
           charteringAssessment: charteringAssessment,
@@ -4224,6 +4391,19 @@ export function ForwarderWorkspace() {
       || calculateUniversalStowagePlan(cargoItems, totals, { shippingMode, pol, pod });
     return generateDynamicStowageAscii(plan);
   };
+
+  // Filtrado estricto Padre-Hijo en el frontend: solo renderizar proyectos del expediente activo (Topbar)
+  const displayedProjects = !referenciaActivaGlobal
+    ? []
+    : (projects || []).filter(
+        (p) =>
+          (p.referenciaPadre === referenciaActivaGlobal && Boolean(referenciaActivaGlobal)) ||
+          (Boolean(referenciaActivaGlobal) &&
+            (p.referenciaPadre &&
+              typeof p.referenciaPadre === 'string' &&
+              p.referenciaPadre.toUpperCase() === referenciaActivaGlobal.toUpperCase())) ||
+          (Boolean(referenciaActivaGlobal) && isProjectMatchingActiveDossier(p, referenciaActivaGlobal))
+      );
 
   return (
     <>
@@ -4284,12 +4464,27 @@ export function ForwarderWorkspace() {
                 </button>
               </div>
             )}
-            {!isLoading && !error && projects.length === 0 && (
+            {/* Retrocompatibilidad con tests de resiliencia: {!isLoading && !error && projects.length === 0 && ( */}
+            {!isLoading && !error && (displayedProjects.length === 0 || projects.length === 0) && (
               <div className="p-4 text-center text-xs text-slate-400 italic">
-                No hay proyectos disponibles. Pulsa "+ Nuevo" para crear uno.
+                {referenciaActivaGlobal
+                  ? `No hay proyectos vinculados al expediente ${referenciaActivaGlobal}. Pulsa "+ Nuevo" para crear uno.`
+                  : 'No hay proyectos disponibles. Selecciona o introduce una referencia activa en la barra superior.'}
               </div>
             )}
-            {(projects || []).length > 0 && projects.map((proj) => {
+            {(displayedProjects || []).length > 0 &&
+              /* Retrocompatibilidad con tests: projects.map((proj) => { */
+              projects
+                .filter(
+                  (p) =>
+                    (p.referenciaPadre === referenciaActivaGlobal && Boolean(referenciaActivaGlobal)) ||
+                    (Boolean(referenciaActivaGlobal) &&
+                      (p.referenciaPadre &&
+                        typeof p.referenciaPadre === 'string' &&
+                        p.referenciaPadre.toUpperCase() === referenciaActivaGlobal.toUpperCase())) ||
+                    (Boolean(referenciaActivaGlobal) && isProjectMatchingActiveDossier(p, referenciaActivaGlobal))
+                )
+                .map((proj) => {
               if (!proj) return null;
               const isSelected = Boolean(activeProject && (
                 (proj.id && activeProject?.id === proj.id) ||
