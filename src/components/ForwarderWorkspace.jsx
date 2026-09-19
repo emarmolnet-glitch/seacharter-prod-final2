@@ -1269,6 +1269,8 @@ export function ForwarderWorkspace() {
   const initialSession = readActiveCalculatorSession();
   const [pol, setPol] = useState(initialSession.pol || '');
   const [pod, setPod] = useState(initialSession.pod || '');
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
   const [loadingRate, setLoadingRate] = useState(initialSession.loadRate > 0 ? initialSession.loadRate : 1200);
   const [dischargingRate, setDischargingRate] = useState(initialSession.dischRate > 0 ? initialSession.dischRate : 1000);
   const [distanceNm, setDistanceNm] = useState(initialSession.distanceNm > 0 ? initialSession.distanceNm : 1500);
@@ -1278,7 +1280,20 @@ export function ForwarderWorkspace() {
   const [actualLoadingDays, setActualLoadingDays] = useState('');
   const [actualDischargingDays, setActualDischargingDays] = useState('');
   const [demurrageDailyRateUsd, setDemurrageDailyRateUsd] = useState(initialSession.tce > 0 ? initialSession.tce : 11500);
+  const [demurrageCost, setDemurrageCost] = useState(0);
+  const [oceanFreight, setOceanFreight] = useState(0);
   const [charteringAssessment, setCharteringAssessment] = useState(null);
+
+  const formatUSD = (val) => {
+    const num = Number(val);
+    const safeNum = isNaN(num) || !isFinite(num) ? 0 : num;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(safeNum);
+  };
 
   // Estados para fletes financieros sincronizados de la Calculadora (Flete Compra Armador y Flete Venta Fletador)
   const [fleteCompra, setFleteCompra] = useState(initialSession.freightCost || initialSession.fleteCompra || 0);
@@ -1644,53 +1659,97 @@ export function ForwarderWorkspace() {
   useEffect(() => { fetchProjects(); }, []);
 
   useEffect(() => {
-    if (activeProject) {
-      setprojectDocuments(activeProject.documents || activeProject.files || []);
-      const projectRoute = activeProject.route_and_chartering ||
-        activeProject.routeAndChartering ||
-        activeProject.line_items?.[0]?.payload_data?.route_and_chartering ||
-        activeProject.services?.[0]?.payload_data?.route_and_chartering;
-      if (projectRoute) {
-        if (projectRoute.pol) setPol(projectRoute.pol);
-        if (projectRoute.pod) setPod(projectRoute.pod);
-        if (projectRoute.loading_rate_mt_day) setLoadingRate(Number(projectRoute.loading_rate_mt_day));
-        if (projectRoute.discharging_rate_mt_day) setDischargingRate(Number(projectRoute.discharging_rate_mt_day));
-        if (projectRoute.distance_nm) setDistanceNm(Number(projectRoute.distance_nm));
-        if (projectRoute.vessel_speed_knots) setVesselSpeedKnots(Number(projectRoute.vessel_speed_knots));
-        if (projectRoute.daily_hire_rate_usd) setVesselDailyHireUsd(Number(projectRoute.daily_hire_rate_usd));
-        if (projectRoute.actual_loading_days !== undefined && projectRoute.actual_loading_days !== null) {
-          setActualLoadingDays(projectRoute.actual_loading_days);
-        }
-        if (projectRoute.actual_discharging_days !== undefined && projectRoute.actual_discharging_days !== null) {
-          setActualDischargingDays(projectRoute.actual_discharging_days);
-        }
-        if (projectRoute.demurrage_daily_rate_usd) {
-          setDemurrageDailyRateUsd(Number(projectRoute.demurrage_daily_rate_usd));
-        }
-        if (projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd) {
-          const tceVal = Number(projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd);
-          setTceValue(tceVal);
-          setTceActive(true);
-        }
-        if (projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra) {
-          const fcVal = Number(projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra);
-          setFleteCompra(fcVal);
-        }
-        if (projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta) {
-          const fvVal = Number(projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta);
-          setFleteVenta(fvVal);
-        }
-        if (projectRoute.vessel_type) {
-          setVesselType(projectRoute.vessel_type);
-        }
+    if (!activeProject) {
+      setprojectDocuments([]);
+      setOrigin('');
+      setDestination('');
+      setPol('');
+      setPod('');
+      setDistanceNm(0);
+      setDemurrageCost(0);
+      setOceanFreight(0);
+      setActualLoadingDays('');
+      setActualDischargingDays('');
+      return;
+    }
+
+    setprojectDocuments(activeProject.documents || activeProject.files || []);
+    const projectRoute = activeProject.route_and_chartering ||
+      activeProject.routeAndChartering ||
+      activeProject.line_items?.[0]?.payload_data?.route_and_chartering ||
+      activeProject.services?.[0]?.payload_data?.route_and_chartering;
+
+    const totalWeightTons = Number(
+      activeProject.total_weight_tons ??
+      activeProject.totalWeightTons ??
+      projectRoute?.total_weight_tons ??
+      projectRoute?.totalWeightTons ??
+      (totals?.weight ? totals.weight / 1000 : 0)
+    ) || 0;
+
+    // Fix Estado Fantasma: Si totalWeightTons === 0 o !activeProject, resetea explícitamente los estados operativos
+    if (totalWeightTons === 0 || !activeProject) {
+      setOrigin('');
+      setDestination('');
+      setPol('');
+      setPod('');
+      setDistanceNm(0);
+      setDemurrageCost(0);
+      setOceanFreight(0);
+      setActualLoadingDays('');
+      setActualDischargingDays('');
+    }
+
+    if (totalWeightTons > 0) {
+      if (activeProject.land_origin || activeProject.origin) {
+        setOrigin(activeProject.land_origin || activeProject.origin || '');
       }
-      const projectAssessment = activeProject.charteringAssessment ||
-        activeProject.chartering_assessment ||
-        activeProject.line_items?.[0]?.payload_data?.charteringAssessment ||
-        activeProject.services?.[0]?.payload_data?.charteringAssessment;
-      if (projectAssessment) {
-        setCharteringAssessment(projectAssessment);
+      if (activeProject.land_destination || activeProject.destination) {
+        setDestination(activeProject.land_destination || activeProject.destination || '');
       }
+    }
+
+    if (projectRoute && totalWeightTons > 0) {
+      if (projectRoute.pol) setPol(projectRoute.pol);
+      if (projectRoute.pod) setPod(projectRoute.pod);
+      if (projectRoute.loading_rate_mt_day) setLoadingRate(Number(projectRoute.loading_rate_mt_day));
+      if (projectRoute.discharging_rate_mt_day) setDischargingRate(Number(projectRoute.discharging_rate_mt_day));
+      if (projectRoute.distance_nm) setDistanceNm(Number(projectRoute.distance_nm));
+      if (projectRoute.vessel_speed_knots) setVesselSpeedKnots(Number(projectRoute.vessel_speed_knots));
+      if (projectRoute.daily_hire_rate_usd) setVesselDailyHireUsd(Number(projectRoute.daily_hire_rate_usd));
+      if (projectRoute.actual_loading_days !== undefined && projectRoute.actual_loading_days !== null) {
+        setActualLoadingDays(projectRoute.actual_loading_days);
+      }
+      if (projectRoute.actual_discharging_days !== undefined && projectRoute.actual_discharging_days !== null) {
+        setActualDischargingDays(projectRoute.actual_discharging_days);
+      }
+      if (projectRoute.demurrage_daily_rate_usd) {
+        setDemurrageDailyRateUsd(Number(projectRoute.demurrage_daily_rate_usd));
+      }
+      if (projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd) {
+        const tceVal = Number(projectRoute.tce_value || projectRoute.tceValue || projectRoute.tce_daily_rate_usd);
+        setTceValue(tceVal);
+        setTceActive(true);
+      }
+      if (projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra) {
+        const fcVal = Number(projectRoute.flete_compra_usd_mt || projectRoute.freight_rate_cost_usd || projectRoute.flete_sugerido_armador_compra || projectRoute.flete_compra);
+        setFleteCompra(fcVal);
+      }
+      if (projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta) {
+        const fvVal = Number(projectRoute.flete_venta_usd_mt || projectRoute.freight_rate_sell_usd || projectRoute.flete_sugerido_fletador_venta || projectRoute.flete_venta);
+        setFleteVenta(fvVal);
+      }
+      if (projectRoute.vessel_type) {
+        setVesselType(projectRoute.vessel_type);
+      }
+    }
+    const projectAssessment = activeProject.charteringAssessment ||
+      activeProject.chartering_assessment ||
+      activeProject.line_items?.[0]?.payload_data?.charteringAssessment ||
+      activeProject.services?.[0]?.payload_data?.charteringAssessment;
+    if (projectAssessment) {
+      setCharteringAssessment(projectAssessment);
+    }
 
       // Absorción inversa de Costes Terrestres (DataBridge / Land Charter ➔ Core PRO):
       // Extrae coste terrestre y mercancía, convirtiendo EUR a USD según el tipo de cambio del proyecto
@@ -1733,26 +1792,6 @@ export function ForwarderWorkspace() {
         0
       ) || 0;
       setCustCost(Number(activeProject.valor_total_mercancia_usd) || incomingMercancia);
-    } else {
-      setprojectDocuments([]);
-      const sessionData = readActiveCalculatorSession();
-      if (sessionData.hasActiveSession) {
-        if (sessionData.pol) setPol(sessionData.pol);
-        if (sessionData.pod) setPod(sessionData.pod);
-        if (sessionData.loadRate > 0) setLoadingRate(sessionData.loadRate);
-        if (sessionData.dischRate > 0) setDischargingRate(sessionData.dischRate);
-        if (sessionData.distanceNm > 0) setDistanceNm(sessionData.distanceNm);
-        if (sessionData.speedKnots > 0) setVesselSpeedKnots(sessionData.speedKnots);
-        if (sessionData.tce > 0) {
-          setTceValue(sessionData.tce);
-          setVesselDailyHireUsd(sessionData.tce);
-          setDemurrageDailyRateUsd(sessionData.tce);
-          setTceActive(true);
-        }
-        if (sessionData.freightCost > 0) setFleteCompra(sessionData.freightCost);
-        if (sessionData.freightSell > 0) setFleteVenta(sessionData.freightSell);
-      }
-    }
   }, [activeProject]);
 
   // Hook de sincronización reactiva (Two-Way Binding): Parser del Agente -> Inputs del Formulario y Contadores Visuales
@@ -2648,6 +2687,8 @@ export function ForwarderWorkspace() {
       setOperationalProfileNotice('');
       setIsPalletizedOrBagsCargo(false);
       setIsCommodityTariffActive(false);
+      setDemurrageCost(0);
+      setOceanFreight(0);
       return;
     }
     let totalPieces = 0; let totalWeightKg = 0; let totalVolumeM3 = 0; let total_m2 = 0;
@@ -2672,6 +2713,15 @@ export function ForwarderWorkspace() {
     setShippingMode(autoMode); setVesselType(recommendedVessel);
 
     const totalWeightTons = totalWeightKg / 1000;
+    if (totalWeightTons === 0 || !activeProject) {
+      setOrigin('');
+      setDestination('');
+      setPol('');
+      setPod('');
+      setDistanceNm(0);
+      setDemurrageCost(0);
+      setOceanFreight(0);
+    }
     const Dunnage = Math.ceil(totalWeightTons / 5);
     const Cadenas = roRoItems > 0 ? (roRoItems * 4) : Math.max(4, Math.ceil(totalPieces * 2));
     const Eslingas = Math.ceil(totalPieces / 2);
@@ -2915,14 +2965,24 @@ export function ForwarderWorkspace() {
       // Subtotal 1: Flete Marítimo Buque Completo / TCE en USD nativo
       const freightCost = Math.round(diasRotacionTotal * effectiveDailyHire * 100) / 100;
 
-      // CÁLCULO Y GESTIÓN DE DEMORAS (Demurrage) en USD nativo
-      const actualLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
-      const actualDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
-      const demLoadDays = (actualLoad !== null && actualLoad > diasCarga) ? Math.round((actualLoad - diasCarga) * 100) / 100 : 0;
-      const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
-      const totalDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
-      const effectiveDemDaily = Number(demurrageDailyRateUsd) || effectiveDailyHire;
-      const demurrageCostUsd = Math.round(totalDemDays * effectiveDemDaily * 100) / 100;
+      // CÁLCULO Y GESTIÓN DE DEMORAS Y PLANCHA (Demurrage) en USD nativo
+      let demurrageCostUsd = 0;
+      let totalDemDays = 0;
+
+      // Guarda matemática: no intentar calcular tiempos de muelle con cero toneladas
+      const calculateDemorasYPlancha = () => {
+        if (totalWeightTons <= 0) return;
+        const actualLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
+        const actualDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
+        const demLoadDays = (actualLoad !== null && actualLoad > diasCarga) ? Math.round((actualLoad - diasCarga) * 100) / 100 : 0;
+        const demDischDays = (actualDisch !== null && actualDisch > diasDescarga) ? Math.round((actualDisch - diasDescarga) * 100) / 100 : 0;
+        totalDemDays = Math.round((demLoadDays + demDischDays) * 100) / 100;
+        const effectiveDemDaily = Number(demurrageDailyRateUsd) || effectiveDailyHire;
+        demurrageCostUsd = Math.round(totalDemDays * effectiveDemDaily * 100) / 100;
+        setDemurrageCost(demurrageCostUsd);
+      };
+
+      calculateDemorasYPlancha();
 
       // Subtotal 2: Costes FOB y Operativa Portuaria (trincaje, estiba, grúas/MAFIs, terminal, peritaje, inland, mercancía, seguro, demoras en USD nativo)
       const spreaderCost = isBigBagsOrBulk ? ((spreaderMultipunto || Math.max(1, Math.min(2, Math.ceil(totalPieces / 1500)))) * 600) : 0;
@@ -3015,6 +3075,7 @@ export function ForwarderWorkspace() {
       targetSalePrice = (Number(totalEstimatedCost) || 0) * 1.15;
     }
 
+    setOceanFreight(Number(calculatedOceanFreight) || 0);
     setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
     setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
     setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
@@ -4991,56 +5052,173 @@ export function ForwarderWorkspace() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-8 divide-y divide-slate-100">
+                {/* BOTONES SUPERIORES */}
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCargoModalOpen(false);
+                        setActiveProject(null);
+                      }}
+                      className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors mr-2 cursor-pointer"
+                      title="— Volver a Proyectos"
+                      aria-label="— Volver a Proyectos"
+                    >
+                      ← Volver a Proyectos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSyncCalculatorData}
+                      disabled={isSyncingCalculator}
+                      className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      title="Capturar absolutamente todos los cambios de la calculadora en tiempo real y sincronizar con Neon"
+                      aria-label="Actualizar datos"
+                    >
+                      {isSyncingCalculator ? (
+                        <>
+                          <svg className="animate-spin -ml-0.5 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                          </svg>
+                          <span>Sincronizando datos...</span>
+                        </>
+                      ) : syncFeedback ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>{syncFeedback}</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>⚡ Sync DataBridge</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* PARTE 2: UI TORRE DE CONTROL (DASHBOARD SUPERIOR) */}
+                {(() => {
+                  const controlTowerMaritimeCost = Number(oceanFreight || subtotalFreight || 0) || 0;
+                  const controlTowerWeightOrRt = Number((totals?.weight ? totals.weight / 1000 : 0) || 0);
+                  const controlTowerFleteVentaUnit = Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta_usd_mt || 0) || 0;
+                  const controlTowerMaritimeSale = (controlTowerFleteVentaUnit > 0 && controlTowerWeightOrRt > 0)
+                    ? Math.round(controlTowerFleteVentaUnit * controlTowerWeightOrRt * 100) / 100
+                    : (controlTowerMaritimeCost > 0 ? Math.round(controlTowerMaritimeCost * 1.15 * 100) / 100 : 0);
+
+                  const controlTowerLandCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
+                  const controlTowerLandSale = Number(activeProject?.land_freight_sale ?? activeProject?.landFreightSale ?? 0) || 0;
+                  const isLandCharterPending = controlTowerLandCost === 0 && controlTowerLandSale === 0;
+
+                  const controlTowerMercanciaFob = Number(activeProject?.valor_total_mercancia_usd ?? activeProject?.valorTotalMercanciaUsd ?? 0) || 0;
+
+                  const controlTowerFobOpsCost = Number(subtotalFobOperations) || 0;
+                  const controlTowerFobOpsSale = Math.round(controlTowerFobOpsCost * 1.15 * 100) / 100;
+                  const controlTowerEffectiveLandSale = controlTowerLandSale > 0 ? controlTowerLandSale : (controlTowerLandCost > 0 ? Math.round(controlTowerLandCost * 1.15 * 100) / 100 : 0);
+
+                  const controlTowerTotalCostes = Math.round((controlTowerMaritimeCost + controlTowerLandCost + controlTowerFobOpsCost) * 100) / 100;
+                  const controlTowerTotalVentas = (controlTowerMaritimeSale > 0 || controlTowerEffectiveLandSale > 0 || controlTowerFobOpsSale > 0)
+                    ? Math.round((controlTowerMaritimeSale + controlTowerEffectiveLandSale + controlTowerFobOpsSale) * 100) / 100
+                    : (Number(salePrice) || 0);
+                  const controlTowerMargen = Math.round((controlTowerTotalVentas - controlTowerTotalCostes) * 100) / 100;
+
+                  return (
+                    <div id="torre-de-control-dashboard" className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      {/* 🌊 TARJETA 1 (Marítimo): Muestra el Flete Marítimo local (Coste y Venta) */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between hover:border-sky-300 transition-colors">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">🌊</span>
+                            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Marítimo</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Local</span>
+                        </div>
+                        <div className="pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">Coste:</span>
+                            <span className="text-sm font-mono font-bold text-slate-800">{formatUSD(controlTowerMaritimeCost)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">Venta:</span>
+                            <span className="text-sm font-mono font-bold text-emerald-600">{formatUSD(controlTowerMaritimeSale)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 🚛 TARJETA 2 (Terrestre): Muestra activeProject?.land_freight_cost y land_freight_sale */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between hover:border-amber-300 transition-colors">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">🚛</span>
+                            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Terrestre</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">Neon</span>
+                        </div>
+                        <div className="pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">Coste:</span>
+                            <span className="text-sm font-mono font-bold text-slate-800">{formatUSD(controlTowerLandCost)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">Venta:</span>
+                            <span className="text-sm font-mono font-bold text-emerald-600">{formatUSD(controlTowerLandSale)}</span>
+                          </div>
+                          {isLandCharterPending && (
+                            <span className="text-xs text-amber-600 font-semibold block pt-0.5">Pendiente Land Charter</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 📦 TARJETA 3 (Mercancía FOB): Muestra activeProject?.valor_total_mercancia_usd */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-colors">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">📦</span>
+                            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Mercancía FOB</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">Valor</span>
+                        </div>
+                        <div className="pt-3">
+                          <span className="text-[11px] font-semibold text-slate-500 block mb-1">Valor Total (USD):</span>
+                          <span className="text-base font-mono font-black text-slate-900">{formatUSD(controlTowerMercanciaFob)}</span>
+                        </div>
+                      </div>
+
+                      {/* 💎 TARJETA 4 (RESUMEN ALL-IN): Margen de Beneficio Operativo y Gran Total a Facturar en fondo oscuro */}
+                      <div className="bg-slate-800 text-white rounded-xl border border-slate-700 p-4 shadow-lg flex flex-col justify-between hover:border-slate-600 transition-colors">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-700/80">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">💎</span>
+                            <span className="text-xs font-black text-slate-200 uppercase tracking-wider">Resumen All-In</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-600/50">Consolidado</span>
+                        </div>
+                        <div className="pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-medium text-slate-300">Margen Beneficio:</span>
+                            <span className={`text-sm font-mono font-bold ${controlTowerMargen >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {formatUSD(controlTowerMargen)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-700/60">
+                            <span className="text-xs font-bold text-slate-200 uppercase tracking-wide">Gran Total Facturar:</span>
+                            <span className="text-base font-mono font-black text-white">{formatUSD(controlTowerTotalVentas)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <section className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-sm font-black text-blue-600 uppercase tracking-wider">1. Lista de Empaque (Packing List)</h3>
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCargoModalOpen(false);
-                          setActiveProject(null);
-                        }}
-                        className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors mr-2 cursor-pointer"
-                        title="— Volver a Proyectos"
-                        aria-label="— Volver a Proyectos"
-                      >
-                        ← Volver a Proyectos
-                      </button>
-                      <button
-                        type="button"
-                        id="btn-update-calculator-data"
-                        onClick={handleSyncCalculatorData}
-                        disabled={isSyncingCalculator}
-                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                        title="Capturar absolutamente todos los cambios de la calculadora en tiempo real y sincronizar con Neon"
-                        aria-label="Actualizar datos"
-                      >
-                        {isSyncingCalculator ? (
-                          <>
-                            <svg className="animate-spin -ml-0.5 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                            </svg>
-                            <span>Sincronizando datos...</span>
-                          </>
-                        ) : syncFeedback ? (
-                          <>
-                            <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span>{syncFeedback}</span>
-                          </>
-                        ) : (
-                          <>
-                            {/* Icono vectorial de sincronización / disquete */}
-                            <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            <span>⚡ Sync DataBridge</span>
-                          </>
-                        )}
-                      </button>
                       <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
                       <button onClick={handleTriggerImport} className="px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg cursor-pointer shadow-sm">🤖 Importar PDF/Excel</button>
                       <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 whitespace-nowrap">
@@ -5300,7 +5478,8 @@ export function ForwarderWorkspace() {
 
                     {/* Resumen dinámico en vivo sincronizado con la Vista Ejecutiva */}
                     {(() => {
-                      const wTons = (totals.weight || 0) / 1000;
+                      const totalWeightTons = (totals.weight || 0) / 1000;
+                      const wTons = totalWeightTons;
                       const effLoad = Math.max(1, Number(loadingRate) || 1200);
                       const effDisch = Math.max(1, Number(dischargingRate) || 1000);
                       const rawDCarga = wTons > 0 ? Math.round((wTons / effLoad) * 100) / 100 : 0;
@@ -5332,12 +5511,21 @@ export function ForwarderWorkspace() {
                         ? execTimes.totalDays
                         : Math.round((dCarga + dDescarga + dNav) * 100) / 100;
 
-                      const aLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
-                      const aDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
-                      const demLoad = (aLoad !== null && aLoad > dCarga) ? Math.round((aLoad - dCarga) * 100) / 100 : 0;
-                      const demDisch = (aDisch !== null && aDisch > dDescarga) ? Math.round((aDisch - dDescarga) * 100) / 100 : 0;
-                      const totalDem = Math.round((demLoad + demDisch) * 100) / 100;
-                      const demPenalty = Math.round(totalDem * (Number(demurrageDailyRateUsd) || 11500) * (Number(exchangeRateUsdEur) || 0.92) * 100) / 100;
+                      let totalDem = 0;
+                      let demPenalty = 0;
+
+                      // Lógica de cálculo de Demoras y Plancha con guarda matemática estricta
+                      const calculateLiveDemurrage = () => {
+                        if (totalWeightTons <= 0) return;
+                        const aLoad = actualLoadingDays !== '' && actualLoadingDays !== null && !isNaN(Number(actualLoadingDays)) ? Number(actualLoadingDays) : null;
+                        const aDisch = actualDischargingDays !== '' && actualDischargingDays !== null && !isNaN(Number(actualDischargingDays)) ? Number(actualDischargingDays) : null;
+                        const demLoad = (aLoad !== null && aLoad > dCarga) ? Math.round((aLoad - dCarga) * 100) / 100 : 0;
+                        const demDisch = (aDisch !== null && aDisch > dDescarga) ? Math.round((aDisch - dDescarga) * 100) / 100 : 0;
+                        totalDem = Math.round((demLoad + demDisch) * 100) / 100;
+                        demPenalty = Math.round(totalDem * (Number(demurrageDailyRateUsd) || 11500) * (Number(exchangeRateUsdEur) || 0.92) * 100) / 100;
+                      };
+
+                      calculateLiveDemurrage();
 
                       return (
                         <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
@@ -5701,6 +5889,56 @@ export function ForwarderWorkspace() {
                     </div>
                   </div>
                 </section>
+
+                {/* BOTONES DE ACCIÓN INFERIORES: VOLVER A PROYECTOS Y SYNC DATABRIDGE */}
+                <div className="flex flex-wrap items-center gap-3 mt-8 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCargoModalOpen(false);
+                      setActiveProject(null);
+                    }}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors mr-2 cursor-pointer"
+                    title="— Volver a Proyectos"
+                    aria-label="— Volver a Proyectos"
+                  >
+                    ← Volver a Proyectos
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-update-calculator-data"
+                    onClick={handleSyncCalculatorData}
+                    disabled={isSyncingCalculator}
+                    className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 hover:border-sky-600 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition-all flex items-center gap-2 shrink-0 mr-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    title="Capturar absolutamente todos los cambios de la calculadora en tiempo real y sincronizar con Neon"
+                    aria-label="Actualizar datos"
+                  >
+                    {isSyncingCalculator ? (
+                      <>
+                        <svg className="animate-spin -ml-0.5 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span>Sincronizando datos...</span>
+                      </>
+                    ) : syncFeedback ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>{syncFeedback}</span>
+                      </>
+                    ) : (
+                      <>
+                        {/* Icono vectorial de sincronización / disquete */}
+                        <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>⚡ Sync DataBridge</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-end shrink-0">

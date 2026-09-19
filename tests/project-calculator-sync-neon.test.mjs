@@ -7,13 +7,19 @@ const workspaceSource = readFileSync(
   'utf8'
 );
 
-// BLOQUE 1: VERIFICACIÓN ESTRUCTURAL DE LA CABECERA DE LA CALCULADORA Y EL BOTÓN "ACTUALIZAR DATOS"
-test('1. La cabecera del módulo de la Calculadora (arriba de la Lista de Empaque) incluye el botón "Actualizar datos" junto a "— Volver a Proyectos"', () => {
-  // Verifica la existencia y posición contigua en la sección 1 arriba de la Lista de Empaque
+// BLOQUE 1: VERIFICACIÓN ESTRUCTURAL DE LOS BOTONES DE ACCIÓN (SUPERIOR E INFERIOR) Y SINCRONIZACIÓN
+test('1. Los botones de acción "Sync DataBridge" y "Volver a Proyectos" se ubican en la barra superior (arriba del Dashboard) y en la barra inferior (debajo de herramientas)', () => {
+  // Verifica la existencia y posición en la barra superior arriba del dashboard y lista de empaque
   assert.match(
     workspaceSource,
-    /1\.\s*Lista de Empaque[\s\S]*?(?:←|—)\s*Volver a Proyectos[\s\S]*?id="btn-update-calculator-data"[\s\S]*?Actualizar datos[\s\S]*?Importar PDF\/Excel/,
-    'El botón "Actualizar datos" debe ubicarse en la cabecera de la Calculadora arriba de la Lista de Empaque junto a Volver a Proyectos'
+    /BOTONES SUPERIORES[\s\S]*?(?:←|—)\s*Volver a Proyectos[\s\S]*?⚡ Sync DataBridge[\s\S]*?torre-de-control-dashboard[\s\S]*?1\.\s*Lista de Empaque/,
+    'Los botones deben ubicarse en la parte superior antes de la Torre de Control y Lista de Empaque'
+  );
+  // Verifica la existencia y posición en la barra inferior debajo de herramientas comerciales y regulatorias
+  assert.match(
+    workspaceSource,
+    /Herramientas Comerciales y Regulatorias[\s\S]*?flex flex-wrap items-center gap-3 mt-8 mb-4[\s\S]*?(?:←|—)\s*Volver a Proyectos[\s\S]*?id="btn-update-calculator-data"[\s\S]*?⚡ Sync DataBridge/,
+    'El botón "Actualizar datos / Sync DataBridge" debe ubicarse en la barra inferior al final junto a Volver a Proyectos'
   );
   assert.match(
     workspaceSource,
