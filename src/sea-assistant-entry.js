@@ -181,6 +181,70 @@ function pickAiFields(source, fieldNames) {
   }));
 }
 
+function sanitizeAiContextValue(value, maxDepth = 4, visited = new WeakSet()) {
+  if (value === null || value === undefined) return value;
+  const valType = typeof value;
+  if (valType === "number") return Number.isFinite(value) ? value : null;
+  if (valType === "boolean") return value;
+  if (valType === "string") {
+    if (/^data:[^;]+;base64,/i.test(value)) return "[contenido binario omitido]";
+    return value.length > AI_USER_CONTEXT_MAX_CHARS ? `${value.slice(0, AI_USER_CONTEXT_MAX_CHARS)}…` : value;
+  }
+  if (valType === "function" || valType === "symbol") return undefined;
+  if (value instanceof Date) return value.toISOString();
+
+  // Descartar nodos del DOM o instancias complejas de interfaz
+  if (typeof Node !== "undefined" && value instanceof Node) return undefined;
+  if (typeof Element !== "undefined" && value instanceof Element) return undefined;
+  if (value && typeof value === "object" && (value.nodeType || value.ownerDocument)) return undefined;
+
+  if (maxDepth <= 0) return Array.isArray(value) ? [] : {};
+  if (visited.has(value)) return undefined;
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    const arr = [];
+    const limit = Math.min(value.length, 50);
+    for (let i = 0; i < limit; i++) {
+      const sanitized = sanitizeAiContextValue(value[i], maxDepth - 1, visited);
+      if (sanitized !== undefined) arr.push(sanitized);
+    }
+    return arr;
+  }
+
+  const result = {};
+  const entries = Object.entries(value);
+  const limit = Math.min(entries.length, 60);
+  for (let i = 0; i < limit; i++) {
+    const [key, val] = entries[i];
+    if (typeof key === "string" && (key.startsWith("_") || key === "element" || key === "dom" || key === "map")) continue;
+    try {
+      const sanitized = sanitizeAiContextValue(val, maxDepth - 1, visited);
+      if (sanitized !== undefined) {
+        result[key] = sanitized;
+      }
+    } catch {
+      // Ignorar posibles getters dinámicos defectuosos
+    }
+  }
+  return result;
+}
+
+function safeStringifyPayload(payload) {
+  const visited = new WeakSet();
+  return JSON.stringify(payload, (_key, entry) => {
+    if (typeof entry === "function" || typeof entry === "symbol") return undefined;
+    if (entry && typeof entry === "object") {
+      if (typeof Node !== "undefined" && entry instanceof Node) return undefined;
+      if (typeof Element !== "undefined" && entry instanceof Element) return undefined;
+      if (entry.nodeType || entry.ownerDocument) return undefined;
+      if (visited.has(entry)) return undefined;
+      visited.add(entry);
+    }
+    return entry;
+  });
+}
+
 function sanitizePayloadForAI(payload = {}) {
   const calculationData = payload.CalculationData && typeof payload.CalculationData === "object"
     ? payload.CalculationData
@@ -299,7 +363,7 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
       });
     } else {
       const sanitizedPayload = sanitizePayloadForAI(requestPayload);
-      sanitizedPayload.contexto = collectChatContext();
+      sanitizedPayload.contexto = sanitizeAiContextValue(collectChatContext());
       sanitizedPayload.mensaje = userText;
 
       response = await fetch(endpointUrl, {
