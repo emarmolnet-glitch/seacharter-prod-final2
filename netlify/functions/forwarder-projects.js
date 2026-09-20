@@ -1,8 +1,36 @@
 const { Pool } = require('pg');
 
+function getDatabaseConnectionString() {
+  const envKeys = [
+    'DATABASE_URL',
+    'NETLIFY_DATABASE_URL',
+    'NETLIFY_DB_URL',
+    'NEON_DATABASE_URL',
+    'POSTGRES_URL',
+    'PGDATABASE_URL',
+  ];
+
+  for (const key of envKeys) {
+    const val = process.env[key];
+    if (val && typeof val === 'string' && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+  return null;
+}
+
+const connectionString = getDatabaseConnectionString();
+
 const pool = new Pool({
-  connectionString: process.env.NEON_DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  connectionString: connectionString || undefined,
+  ssl: connectionString ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+  max: 10,
+});
+
+pool.on('error', (err) => {
+  console.error('⚠️ [forwarder-projects] Error imprevisto en cliente de pool de base de datos:', err);
 });
 
 // Cabeceras CORS obligatorias para evitar bloqueos del navegador
