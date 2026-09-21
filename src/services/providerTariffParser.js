@@ -75,17 +75,34 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
     rowNorm[normalizeKey(k)] = row[k];
   });
 
-  const findValue = (possibleHeaders, def = undefined) => {
+  const findValue = (possibleHeaders, def = undefined, excludePatterns = []) => {
     // 1. Coincidencia exacta de clave normalizada
     for (const ph of possibleHeaders) {
       if (rowNorm[ph] !== undefined && String(rowNorm[ph]).trim() !== '') {
         return rowNorm[ph];
       }
     }
-    // 2. Coincidencia parcial
-    for (const ph of possibleHeaders) {
+    // 2. Coincidencia exacta ignorando caracteres especiales y espacios (cleanKey)
+    const cleanPhList = possibleHeaders.map(p => p.replace(/[^a-z0-9]/g, ''));
+    for (let i = 0; i < possibleHeaders.length; i++) {
+      const ph = possibleHeaders[i];
+      const cleanPh = cleanPhList[i];
       for (const k of Object.keys(rowNorm)) {
-        if (k.includes(ph) && String(rowNorm[k]).trim() !== '') {
+        if (excludePatterns.some(ex => k.includes(ex))) continue;
+        const cleanK = k.replace(/[^a-z0-9]/g, '');
+        if ((k === ph || cleanK === cleanPh) && String(rowNorm[k]).trim() !== '') {
+          return rowNorm[k];
+        }
+      }
+    }
+    // 3. Coincidencia parcial con exclusión de patrones conflictivos
+    for (let i = 0; i < possibleHeaders.length; i++) {
+      const ph = possibleHeaders[i];
+      const cleanPh = cleanPhList[i];
+      for (const k of Object.keys(rowNorm)) {
+        if (excludePatterns.some(ex => k.includes(ex))) continue;
+        const cleanK = k.replace(/[^a-z0-9]/g, '');
+        if ((k.includes(ph) || (cleanPh.length >= 4 && cleanK.includes(cleanPh))) && String(rowNorm[k]).trim() !== '') {
           return rowNorm[k];
         }
       }
@@ -129,13 +146,25 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
   const rawDzd = findValue([
     'prix gica',
     'prix usine dzd',
+    'prix usine da',
+    'prix usine ht',
+    'prix sortie usine',
+    'prix vente usine',
+    'sortie usine',
     'prix usine',
-    'dzd',
     'base dzd',
+    'prix dzd',
+    'prix da',
     'da/t',
     'da / t',
-    'dinars'
-  ]);
+    'da/mt',
+    'da / mt',
+    'dinars',
+    'dinar',
+    'dzd',
+    'prix base',
+    'prix unitaire'
+  ], undefined, ['usd', '$', 'fob', 'transport', 'logistique', 'frais', 'emballage', 'sac']);
   let basePriceDzd = rawDzd !== undefined ? parseCleanNumber(rawDzd, 0) : 0;
 
   // 3. FACTOR DE DESCUENTO ('Rabais') - Exacto celda por celda
@@ -151,14 +180,34 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
     rabaisMultiplier = 1.0;
   }
 
-  // Base en USD si viene directa o calculada por TC oficial
-  const rawBaseUsd = findValue(['base usd', 'base', 'usine', 'planta', 'coste base', 'prix base', 'ex-work', 'cost']);
+  // Base en USD si viene directa o calculada por TC oficial.
+  // Evitar explícitamente que 'usine' o términos en DZD colisionen como USD.
+  const rawBaseUsd = findValue([
+    'base usd',
+    'prix usd',
+    'prix base usd',
+    'cout usd',
+    'cost usd',
+    'coste base usd',
+    'exw usd',
+    'ex-work usd',
+    'usd/mt',
+    'usd / mt',
+    'usd'
+  ], undefined, ['dzd', 'da', 'dinar', 'usine', 'fspe', 'transport', 'logistique', 'frais', 'sac', 'emballage']);
   let baseMaterialCost = rawBaseUsd !== undefined ? parseCleanNumber(rawBaseUsd, 0) : 0;
 
   if (basePriceDzd > 0) {
     baseMaterialCost = Math.round((basePriceDzd / OFFICIAL_EXCHANGE_RATE_DZD_USD) * 100) / 100;
   } else if (baseMaterialCost > 0) {
     basePriceDzd = Math.round(baseMaterialCost * OFFICIAL_EXCHANGE_RATE_DZD_USD * 100) / 100;
+  } else {
+    // Si no se especificó divisa explícita y no hay precio DZD previo, buscar base genérica
+    const genericBase = findValue(['base', 'coste base', 'ex-work', 'cost'], undefined, ['dzd', 'da', 'dinar', 'usine', 'fspe', 'transport', 'logistique', 'frais', 'sac', 'emballage']);
+    if (genericBase !== undefined) {
+      baseMaterialCost = parseCleanNumber(genericBase, 0);
+      basePriceDzd = Math.round(baseMaterialCost * OFFICIAL_EXCHANGE_RATE_DZD_USD * 100) / 100;
+    }
   }
 
   // 4. COSTE ENVASE / BIG BAG / SAC ('Big Bag / Sac') - Exacto celda por celda
@@ -175,29 +224,73 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
   ]);
   const packagingCost = rawPackaging !== undefined ? parseCleanNumber(rawPackaging, 0) : 0;
 
-  // 5. COSTE LOGÍSTICO SEGÚN FSPE ('Coût Logistique FSPE' o 'Coût Logistique Marché')
+  // 5. COSTE LOGÍSTICO SEGÚN FSPE ('Coût Logistique FSPE' o 'Coût Logística Marché (Sans FSPE)')
+  // A) Con FSPE (Subvencionado de fábrica): Debe excluir explícitamente columnas de mercado o 'sans fspe'
   const rawFspe = findValue([
     'cout logistique fspe',
+    'cout logistica fspe',
     'logistique fspe',
+    'logistica fspe',
     'fspe transport',
+    'fspe logistique',
+    'fspe logistica',
+    'transport fspe',
+    'transporte fspe',
+    'cout fspe',
+    'con fspe',
+    'avec fspe',
     'fspe',
+    'cout logistique usine',
+    'cout logistica fabrica',
     'cout logistique',
+    'cout logistica',
     'transporte',
     'logistica',
     'transport',
     'inland',
     'camion'
-  ]);
+  ], undefined, ['sans fspe', 'sin fspe', 'sansfspe', 'sinfspe', 'marche', 'mercado']);
   const inlandTransport = rawFspe !== undefined ? parseCleanNumber(rawFspe, 0) : 0;
 
+  // B) Sin FSPE (Mercado): Lectura estricta de 'Coût Logística Marché (Sans FSPE)' o Land Charter
+  // Debe excluir columnas que representen FSPE con subvención directa
   const rawMarketLogistics = findValue([
+    'cout logistica marche (sans fspe)',
+    'cout logistique marche (sans fspe)',
+    'cout logistica marche sans fspe',
+    'cout logistique marche sans fspe',
+    'cout logistica marche',
     'cout logistique marche',
+    'logistica marche (sans fspe)',
+    'logistique marche (sans fspe)',
+    'logistica marche sans fspe',
+    'logistique marche sans fspe',
+    'logistica marche',
     'logistique marche',
+    'sans fspe',
+    'sin fspe',
+    'sans-fspe',
+    'sin-fspe',
+    'cout logistica mercado (sin fspe)',
+    'cout logistique mercado (sans fspe)',
+    'cout logistica mercado sin fspe',
+    'cout logistique mercado sans fspe',
+    'cout logistica mercado',
+    'cout logistique mercado',
+    'logistica mercado (sin fspe)',
+    'logistique mercado (sans fspe)',
+    'logistica mercado',
+    'logistique mercado',
     'inland marche',
+    'inland mercado',
     'transport marche',
+    'transporte mercado',
     'land charter marche',
-    'marche'
-  ]);
+    'land charter mercado',
+    'land charter',
+    'marche',
+    'mercado'
+  ], undefined, ['con fspe', 'avec fspe']);
   const marketInlandCostPerMt = rawMarketLogistics !== undefined ? parseCleanNumber(rawMarketLogistics, 0) : 0;
 
   // 6. GASTOS DE TRÁNSITO Y SGS ('Frais Transit & SGS') - Exacto celda por celda
@@ -361,13 +454,42 @@ export async function parseExcelTariff(arrayBuffer, filename = 'Tarifa.xlsx') {
   if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas de cálculo.');
 
   const worksheet = workbook.Sheets[firstSheetName];
-  const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+  // Buscador de la fila de cabecera real para evitar mapeos erróneos como __EMPTY por títulos institucionales (ej. GICA)
+  const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  let headerRowIndex = 0;
+
+  for (let i = 0; i < Math.min(rawRows.length, 25); i++) {
+    const row = rawRows[i];
+    if (!Array.isArray(row) || row.length === 0) continue;
+    const rowText = row.map(c => normalizeKey(String(c))).join(' ');
+    // Detectar si la fila contiene identificadores canónicos de cabecera: "produit", "prix gica", "designation", etc.
+    if (
+      rowText.includes('produit') ||
+      rowText.includes('prix gica') ||
+      rowText.includes('designation') ||
+      rowText.includes('article') ||
+      rowText.includes('material') ||
+      (rowText.includes('product') && (rowText.includes('price') || rowText.includes('prix')))
+    ) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const jsonRows = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, defval: '' });
   if (!jsonRows || jsonRows.length === 0) {
     throw new Error('La hoja de cálculo está vacía o no tiene formato de tabla.');
   }
 
+  // Filtrar posibles filas no operativas o vacías
+  const validRows = jsonRows.filter(r => {
+    const values = Object.values(r).map(v => String(v).trim()).filter(Boolean);
+    return values.length > 1;
+  });
+
   const providerName = deduceProviderName(filename, firstSheetName);
-  const materials = jsonRows.map((r, idx) => mapRowToMaterial(r, idx, providerName));
+  const materials = (validRows.length > 0 ? validRows : jsonRows).map((r, idx) => mapRowToMaterial(r, idx, providerName));
 
   return buildProviderPackage(providerName, filename, materials);
 }
@@ -451,7 +573,11 @@ function extractNumbersFromLine(line, product) {
     product.rabais = numbers[0];
   }
   if (lower.includes('fspe') || lower.includes('transport') || lower.includes('logistica') || lower.includes('inland') || lower.includes('flete')) {
-    product.transporte = numbers[0];
+    if (lower.includes('sans') || lower.includes('sin') || lower.includes('marche') || lower.includes('mercado')) {
+      product.marketLogistics = numbers[0];
+    } else {
+      product.transporte = numbers[0];
+    }
   }
   if (lower.includes('bejaia') || lower.includes('puerto') || lower.includes('port') || lower.includes('tasas') || lower.includes('epb')) {
     product.bejaia = numbers[0];
@@ -467,11 +593,12 @@ function extractNumbersFromLine(line, product) {
 function finalizeTextProduct(raw, index, providerName) {
   const row = {
     produit: raw.name,
-    base: raw.base || 45.0,
-    rabais: raw.rabais || 2.0,
-    transporte: raw.transporte || 6.8,
-    tasas: raw.bejaia || 3.7,
-    sgs: raw.sgs || 0.8,
+    base: raw.base !== undefined ? raw.base : 0,
+    rabais: raw.rabais !== undefined ? raw.rabais : 0,
+    transporte: raw.transporte !== undefined ? raw.transporte : 0,
+    'cout logistica marche (sans fspe)': raw.marketLogistics !== undefined ? raw.marketLogistics : 0,
+    tasas: raw.bejaia !== undefined ? raw.bejaia : 0,
+    sgs: raw.sgs !== undefined ? raw.sgs : 0,
     venta: raw.venta || ''
   };
   return mapRowToMaterial(row, index, providerName);
