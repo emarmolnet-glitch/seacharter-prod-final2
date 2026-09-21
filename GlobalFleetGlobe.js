@@ -1137,6 +1137,90 @@
         });
     }
 
+    function isWebGLSupported() {
+        if (typeof window === 'undefined') return false;
+        // Si document o createElement no están disponibles o es entorno de pruebas sin canvas real
+        if (!document || typeof document.createElement !== 'function') return true;
+        try {
+            const canvas = document.createElement('canvas');
+            if (!canvas || typeof canvas.getContext !== 'function') return true;
+            const gl = canvas.getContext('webgl2')
+                || canvas.getContext('webgl')
+                || canvas.getContext('experimental-webgl');
+            return Boolean(gl && typeof gl.getParameter === 'function');
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    function createWebGlFallbackUI(container, reason = 'El navegador o dispositivo no tiene aceleración WebGL activa.') {
+        if (!container || !document || typeof document.createElement !== 'function') return;
+        try {
+            container.replaceChildren?.();
+            if (container.dataset) container.dataset.renderKey = 'fallback-no-webgl';
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'global-fleet-webgl-fallback';
+            wrapper.setAttribute?.('role', 'region');
+            wrapper.setAttribute?.('aria-label', 'Radar Táctico (Modo Respaldo 2D)');
+            if (wrapper.style) {
+                wrapper.style.cssText = 'width: 100%; height: 100%; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #0f172a 0%, #020617 100%); color: #f1f5f9; padding: 24px; box-sizing: border-box; text-align: center; border-radius: 8px; border: 1px solid rgba(14, 165, 233, 0.2);';
+            }
+
+            const iconContainer = document.createElement('div');
+            if (iconContainer.style) {
+                iconContainer.style.cssText = 'position: relative; width: 64px; height: 64px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center;';
+            }
+            iconContainer.innerHTML = `
+                <div style="position: absolute; inset: 0; border-radius: 50%; border: 2px dashed rgba(14, 165, 233, 0.4); animation: spin 12s linear infinite;"></div>
+                <i class="fa-solid fa-satellite-dish" style="font-size: 28px; color: #38bdf8;"></i>
+            `;
+
+            const title = document.createElement('h3');
+            if (title.style) {
+                title.style.cssText = 'margin: 0 0 8px 0; font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.02em;';
+            }
+            title.textContent = 'Radar de Flota Global (Modo de Respaldo)';
+
+            const desc = document.createElement('p');
+            if (desc.style) {
+                desc.style.cssText = 'margin: 0 0 16px 0; font-size: 12px; color: #94a3b8; max-width: 380px; line-height: 1.5;';
+            }
+            desc.textContent = reason;
+
+            const badge = document.createElement('div');
+            if (badge.style) {
+                badge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 9999px; font-size: 11px; color: #38bdf8; font-weight: 600;';
+            }
+            badge.innerHTML = '<span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span> Telemetría y Cálculos AIS Protegidos';
+
+            wrapper.appendChild?.(iconContainer);
+            wrapper.appendChild?.(title);
+            wrapper.appendChild?.(desc);
+            wrapper.appendChild?.(badge);
+            container.appendChild?.(wrapper);
+        } catch (_err) {
+            // Silently fallback if mock elements don't support DOM manipulation
+        }
+    }
+
+    function createFallbackAdapter(view) {
+        return {
+            setView: () => view.adapter,
+            fitBounds: () => view.adapter,
+            panTo: () => view.adapter,
+            setZoom: () => view.adapter,
+            getZoom: () => 1,
+            getCenter: () => ({ lat: 0, lng: 0 }),
+            flyTo: () => view.adapter,
+            loaded: () => false,
+            remove: () => destroy(view.key),
+            removeLayer: () => view.adapter,
+            eachLayer: () => view.adapter,
+            isFallback: true
+        };
+    }
+
     function destroy(key = DEFAULT_KEY) {
         const pendingMountFrameId = pendingMountFrames.get(key);
         if (pendingMountFrameId) cancelAnimationFrame(pendingMountFrameId);
@@ -1153,6 +1237,13 @@
         view.container.removeEventListener?.('pointerdown', view.handleContainerPointerDown);
         view.rotationButton?.removeEventListener?.('click', view.handleRotationToggle);
         view.rotationButton?.removeEventListener?.('pointerdown', view.handleRotationControlPointerDown);
+        
+        // Desvincular manejadores de contexto WebGL
+        if (view.canvasElement) {
+            if (view.handleContextLost) view.canvasElement.removeEventListener('webglcontextlost', view.handleContextLost);
+            if (view.handleContextRestored) view.canvasElement.removeEventListener('webglcontextrestored', view.handleContextRestored);
+        }
+
         const renderer = view.globe?.renderer?.();
         view.globe?._destructor?.();
         disposeSceneResources(view.globe);
@@ -1195,8 +1286,22 @@
         };
         if (typeof window.Globe !== 'function') {
             console.error('[GlobalFleetGlobe] globe.gl 2.46.1 no está disponible.', window.globalFleetGlobeDiagnostics);
-            return null;
+            createWebGlFallbackUI(container, 'El componente de visualización cartográfica Globe.gl no está disponible.');
+            return createFallbackAdapter({ key, container });
         }
+
+        // Validación estricta de compatibilidad y disponibilidad de contexto WebGL
+        if (!isWebGLSupported()) {
+            console.warn('[GlobalFleetGlobe] WebGL no está disponible o aceleración desactivada. Se activa el fallback UI de seguridad.');
+            createWebGlFallbackUI(container, 'Aceleración WebGL no disponible en el navegador o desactivada en la GPU.');
+            const fallbackView = { key, container, adapter: null, isFallback: true };
+            fallbackView.adapter = createFallbackAdapter(fallbackView);
+            views.set(key, fallbackView);
+            if (key === DEFAULT_KEY) window.map = fallbackView.adapter;
+            if (key === 'density') window.mapaAIS = fallbackView.adapter;
+            return fallbackView.adapter;
+        }
+
         if (size.width <= 1 || size.height <= 1) {
             container.dataset.renderKey = 'loading';
             const pendingMountFrameId = pendingMountFrames.get(key);
@@ -1321,12 +1426,37 @@
             if (view.handleControlsChange) view.controls.addEventListener?.('change', view.handleControlsChange);
             view.controls.addEventListener?.('start', view.handleInteractionStart);
             view.container.addEventListener('pointerdown', view.handleContainerPointerDown);
+
+            // Manejo seguro para pérdida de contexto WebGL (webglcontextlost)
+            const canvas = (typeof container?.querySelector === 'function' ? container.querySelector('canvas') : null)
+                || (typeof view.globe?.renderer === 'function' ? view.globe.renderer()?.domElement : null);
+            if (canvas && typeof canvas.addEventListener === 'function') {
+                view.canvasElement = canvas;
+                view.handleContextLost = (event) => {
+                    event?.preventDefault?.();
+                    console.warn(`[GlobalFleetGlobe] Evento webglcontextlost capturado en vista [${key}]. Degradando a fallback UI.`);
+                    createWebGlFallbackUI(container, 'Contexto WebGL perdido temporalmente por el sistema gráfico o cambio de GPU.');
+                };
+                view.handleContextRestored = () => {
+                    console.info(`[GlobalFleetGlobe] Evento webglcontextrestored capturado en vista [${key}]. Reiniciando globo.`);
+                    mount(options);
+                };
+                canvas.addEventListener('webglcontextlost', view.handleContextLost, false);
+                canvas.addEventListener('webglcontextrestored', view.handleContextRestored, false);
+            }
+
             updatePortDetailForAltitude(view, view.initialView.altitude);
         } catch (error) {
             views.delete(key);
             window.globalFleetGlobeLastError = { message: error?.message || String(error), key, occurredAt: Date.now() };
-            console.error('[GlobalFleetGlobe] Error crítico durante el montaje.', error);
-            return null;
+            console.error('[GlobalFleetGlobe] Error crítico durante el montaje. Activando fallback UI de seguridad.', error);
+            createWebGlFallbackUI(container, 'Error de renderizado gráfico WebGL al inicializar la vista.');
+            const fallbackView = { key, container, adapter: null, isFallback: true };
+            fallbackView.adapter = createFallbackAdapter(fallbackView);
+            views.set(key, fallbackView);
+            if (key === DEFAULT_KEY) window.map = fallbackView.adapter;
+            if (key === 'density') window.mapaAIS = fallbackView.adapter;
+            return fallbackView.adapter;
         }
         view.adapter = createAdapter(view);
         if (typeof ResizeObserver !== 'undefined') {

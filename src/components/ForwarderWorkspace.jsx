@@ -5334,9 +5334,10 @@ export function ForwarderWorkspace() {
                         type="button"
                         id="btn-open-tariff-manager-modal"
                         onClick={() => {
-                          window.dispatchEvent(new CustomEvent('seacharter:toggle-provider-tariff'));
                           if (typeof window.toggleProviderTariffSidebar === 'function') {
                             window.toggleProviderTariffSidebar();
+                          } else {
+                            window.dispatchEvent(new CustomEvent('seacharter:toggle-provider-tariff'));
                           }
                         }}
                         className="px-3.5 py-2 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition-colors"

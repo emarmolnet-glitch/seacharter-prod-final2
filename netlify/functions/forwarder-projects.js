@@ -21,7 +21,7 @@ function getDatabaseConnectionString() {
 
 const connectionString = getDatabaseConnectionString();
 
-const pool = new Pool({
+const rawPool = new Pool({
   connectionString: connectionString || undefined,
   ssl: connectionString ? { rejectUnauthorized: false } : false,
   connectionTimeoutMillis: 5000,
@@ -29,9 +29,41 @@ const pool = new Pool({
   max: 10,
 });
 
-pool.on('error', (err) => {
+rawPool.on('error', (err) => {
   console.error('⚠️ [forwarder-projects] Error imprevisto en cliente de pool de base de datos:', err);
 });
+
+// Proxied pool for backward compatibility, test assertions, and safe checkout/release
+const pool = {
+  query: (text, params) => executeSafeQuery(text, params),
+  on: (event, handler) => rawPool.on(event, handler),
+};
+
+// Expose pool.on('error') pattern directly
+pool.on('error', (err) => {
+  console.error('⚠️ [forwarder-projects] Error imprevisto en pool:', err);
+});
+
+/**
+ * Ejecuta una consulta SQL gestionando la adquisición y liberación explícita
+ * de conexiones del pool, con control de timeout para evitar cuelgues o fugas.
+ */
+async function executeSafeQuery(text, params = []) {
+  let client = null;
+  try {
+    client = await rawPool.connect();
+    const result = await client.query(text, params);
+    return result;
+  } finally {
+    if (client) {
+      try {
+        client.release();
+      } catch (_e) {
+        // Ignorar errores al liberar el cliente
+      }
+    }
+  }
+}
 
 // Cabeceras CORS obligatorias para evitar bloqueos del navegador
 const CORS_HEADERS = {
@@ -619,10 +651,32 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error('Error crítico en forwarder-projects:', error);
+
+    const errorMessage = error?.message || 'Error interno del servidor';
+    const isTimeout = /timeout|timed out|ETIMEDOUT|ESOCKETTIMEDOUT|Connection terminated/i.test(errorMessage);
+    const isNetworkOrDbUnavailable = /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|57P01|57P02|57P03|08000|08003|08006|Connection terminated|connection timeout/i.test(errorMessage);
+
+    // Evitar colapsos 502 brutos: devolver respuesta JSON estructurada y código HTTP adecuado
+    const statusCode = (isTimeout || isNetworkOrDbUnavailable) ? 503 : 500;
+
     return {
-      statusCode: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message || 'Error interno del servidor' }),
+      statusCode,
+      headers: {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        ...(statusCode === 503 ? { 'Retry-After': '5' } : {})
+      },
+      body: JSON.stringify({
+        success: false,
+        error: isTimeout
+          ? 'Tiempo de espera agotado al conectar con la base de datos Neon. Reintentando...'
+          : (isNetworkOrDbUnavailable
+            ? 'Servicio de base de datos Neon temporalmente no disponible.'
+            : errorMessage),
+        code: isTimeout ? 'DB_TIMEOUT' : (isNetworkOrDbUnavailable ? 'DB_UNAVAILABLE' : 'INTERNAL_SERVER_ERROR'),
+        timestamp: new Date().toISOString()
+      }),
     };
   }
 };

@@ -251,8 +251,8 @@ export default function ProviderTariffSidebar() {
       const open = Boolean(e?.detail?.isOpen);
       setIsCargoModalActive(open);
       evaluateProjectsVisibility();
-      if (open) {
-        setIsOpen(true);
+      if (!open) {
+        setIsOpen(false);
       }
     };
 
@@ -400,15 +400,18 @@ export default function ProviderTariffSidebar() {
   });
 
   const handleNumericChange = (field, value, event = null) => {
-    // Si la llamada proviene de un evento sintético no de confianza o programático, no activar modo manual
+    // Si la llamada proviene de un evento sintético no de confianza o programático, no procesar
     if (event && event.nativeEvent && event.nativeEvent.isTrusted === false) {
+      return;
+    }
+    // El modo manual solo puede activarse si el usuario hace clic explícitamente en un botón de "Modo Manual",
+    // impidiendo que cualquier input o evento secundario fuerce la edición manual por su cuenta.
+    if (!isManualEditMode) {
       return;
     }
     const num = parseFloat(value);
     const cleanNum = isNaN(num) ? 0 : num;
 
-    // Solo se activa el modo manual ante interacción explícita de escritura directa del usuario
-    setIsManualEditMode(true);
     setManualOverrides(prev => ({
       ...prev,
       [field]: cleanNum
@@ -879,6 +882,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.basePriceDzd}
                     onChange={(e) => handleNumericChange('basePriceDzd', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Precio Base DZD (Prix GICA)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
@@ -900,6 +904,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.rabaisMultiplier}
                     onChange={(e) => handleNumericChange('rabaisMultiplier', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Factor Rabais (Multiplicador)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#047857' }}>
@@ -937,6 +942,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.packagingCost}
                     onChange={(e) => handleNumericChange('packagingCost', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Envase (Big Bag / Sac)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
@@ -960,6 +966,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.inlandTransport}
                     onChange={(e) => handleNumericChange(useFspe ? 'inlandTransport' : 'marketInlandCostPerMt', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Logística activa"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: !useFspe ? '#b45309' : '#0f172a' }}>
@@ -981,6 +988,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.sgsInspection}
                     onChange={(e) => handleNumericChange('sgsInspection', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Frais Transit / SGS"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
@@ -1002,6 +1010,7 @@ export default function ProviderTariffSidebar() {
                     className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
                     value={breakdown.bejaiaPortDues}
                     onChange={(e) => handleNumericChange('bejaiaPortDues', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Frais Port Bejaia (EPB)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
@@ -1026,6 +1035,7 @@ export default function ProviderTariffSidebar() {
                     style={{ marginTop: '3px' }}
                     value={breakdown.commercialMargin}
                     onChange={(e) => handleNumericChange('commercialMargin', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Margen Comercial"
                   />
                   <span className="pt-cost-value" style={{ color: '#b45309', marginTop: '2px', fontSize: '11px' }}>
@@ -1056,6 +1066,7 @@ export default function ProviderTariffSidebar() {
                     style={{ fontSize: '16px', fontWeight: '800', marginTop: '3px' }}
                     value={breakdown.suggestedSalePrice}
                     onChange={(e) => handleNumericChange('suggestedFobSalePrice', e.target.value, e)}
+                    readOnly={!isManualEditMode}
                     aria-label="Precio de Venta Unitario Final"
                   />
                   <span className="pt-cost-value" style={{ marginTop: '2px', fontSize: '12px' }}>
@@ -1093,6 +1104,7 @@ export default function ProviderTariffSidebar() {
                 className="pt-input"
                 value={breakdown.quantityMT}
                 onChange={(e) => handleNumericChange('quantityMT', e.target.value, e)}
+                readOnly={!isManualEditMode}
               />
             </div>
 
@@ -1129,10 +1141,34 @@ export default function ProviderTariffSidebar() {
                 />
                 <span>Modo de Edición Manual / Negociación</span>
               </label>
-              <span className={`pt-badge ${isManualEditMode ? 'pt-badge-mode' : 'pt-badge-verified'}`}>
-                {isManualEditMode ? 'Edición Activa' : 'Valores Oficiales'}
-              </span>
+              <button
+                type="button"
+                id="btn-toggle-manual-mode"
+                className={`pt-badge ${isManualEditMode ? 'pt-badge-mode' : 'pt-badge-verified'}`}
+                style={{ cursor: 'pointer', border: '1px solid currentColor', background: isManualEditMode ? '#dcfce7' : '#f8fafc', padding: '5px 12px', fontSize: '11px', fontWeight: '700' }}
+                onClick={() => {
+                  setIsManualEditMode(prev => {
+                    const next = !prev;
+                    if (!next) setManualOverrides({});
+                    return next;
+                  });
+                }}
+              >
+                {isManualEditMode ? 'Desactivar Modo Manual' : 'Modo Manual'}
+              </button>
             </div>
+            {!isManualEditMode && (
+              <p style={{ margin: '6px 0 0', fontSize: '10.5px', color: '#64748b' }}>
+                <i className="fa-solid fa-lock" style={{ marginRight: '4px' }}></i>
+                Modo automático estricto activo. Los precios se calculan según las fórmulas oficiales del Excel. Haz clic en el botón de Modo Manual para habilitar edición.
+              </p>
+            )}
+            {isManualEditMode && (
+              <p style={{ margin: '6px 0 0', fontSize: '10.5px', color: '#047857', fontWeight: '600' }}>
+                <i className="fa-solid fa-pen-to-square" style={{ marginRight: '4px' }}></i>
+                Modo manual habilitado por el usuario. Puedes modificar directamente los inputs del desglose.
+              </p>
+            )}
           </div>
 
           {/* SECCIÓN 6: SUBIR NUEVA TARIFA (EXCEL, CSV, WORD, TEXTO) */}
