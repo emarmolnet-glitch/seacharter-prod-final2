@@ -122,8 +122,18 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
   let commercialMargin = Number(overrides.commercialMargin !== undefined ? overrides.commercialMargin : (item.commercialMargin !== undefined ? item.commercialMargin : 0));
   let suggestedSalePrice = Number(overrides.suggestedFobSalePrice !== undefined ? overrides.suggestedFobSalePrice : (item.suggestedFobSalePrice !== undefined ? item.suggestedFobSalePrice : 0));
 
+  // Validación y cálculo del precio de venta real:
+  // Si no hay override manual explícito de precio de venta y el valor detectado es menor o igual al coste unitario o un número pequeño (<= 15, ej. 3 USD),
+  // se descarta como precio de venta y se calcula de forma automática según la fórmula: totalUnitCost + commercialMargin.
+  if (overrides.suggestedFobSalePrice === undefined && suggestedSalePrice > 0 && (suggestedSalePrice <= totalUnitCost || suggestedSalePrice <= 15)) {
+    if (commercialMargin === 0 && suggestedSalePrice <= 25) {
+      commercialMargin = suggestedSalePrice;
+    }
+    suggestedSalePrice = 0;
+  }
+
   if (commercialModality === 'EXW') {
-    if (overrides.suggestedFobSalePrice === undefined && suggestedSalePrice === 0) {
+    if (overrides.suggestedFobSalePrice === undefined || suggestedSalePrice === 0) {
       suggestedSalePrice = Math.round((totalUnitCost + commercialMargin) * 100) / 100;
     }
   } else {

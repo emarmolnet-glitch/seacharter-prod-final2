@@ -322,9 +322,19 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
   ]);
   const bejaiaPortDues = rawBejaia !== undefined ? parseCleanNumber(rawBejaia, 0) : 0;
 
-  // Margen y venta FOB de la fila si están presentes
-  const rawMargin = findValue(['margen', 'margin', 'marge', 'spread']);
-  const rawSale = findValue(['prix vente', 'precio venta', 'venta', 'fob', 'sale price']);
+  // Margen y venta FOB de la fila si están presentes de forma explícita
+  const rawMargin = findValue(['margen', 'margin', 'marge', 'spread', 'marge commerciale', 'margen comercial']);
+  const rawSale = findValue([
+    'prix de vente',
+    'prix vente',
+    'precio de venta',
+    'precio venta',
+    'prix vente fob',
+    'precio venta fob',
+    'prix fob final',
+    'sale price',
+    'selling price'
+  ], undefined, ['port', 'frais', 'transit', 'sgs', 'logistique', 'logistica', 'transport', 'inland', 'sac', 'emballage', 'incoterm', 'cost', 'cout', 'coste', 'base', 'marge', 'margen']);
   
   let suggestedFobSalePrice = rawSale !== undefined ? parseCleanNumber(rawSale, 0) : 0;
   let commercialMargin = rawMargin !== undefined ? parseCleanNumber(rawMargin, 0) : 0;
@@ -332,6 +342,15 @@ function mapRowToMaterial(row, index, providerName = 'Proveedor Importado') {
   // Coste unitario aditivo neto
   const net = Math.max(0, baseMaterialCost * rabaisMultiplier);
   const calculatedFobCost = Math.round((net + packagingCost + inlandTransport + bejaiaPortDues + sgsInspection) * 100) / 100;
+
+  // Validación estricta del precio de venta para evitar valores erróneos o fijos como 3 USD
+  // Si suggestedFobSalePrice es menor o igual al coste unitario o un número pequeño (<= 15), no es un precio de venta real
+  if (suggestedFobSalePrice > 0 && (suggestedFobSalePrice <= calculatedFobCost || suggestedFobSalePrice <= 15)) {
+    if (commercialMargin === 0 && suggestedFobSalePrice <= 25) {
+      commercialMargin = suggestedFobSalePrice;
+    }
+    suggestedFobSalePrice = 0;
+  }
 
   if (suggestedFobSalePrice > 0 && commercialMargin === 0) {
     commercialMargin = Math.max(0, Math.round((suggestedFobSalePrice - calculatedFobCost) * 100) / 100);
