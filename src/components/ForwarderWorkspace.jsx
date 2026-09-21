@@ -775,6 +775,16 @@ export function ForwarderWorkspace() {
   const [isAgentVisible, setIsAgentVisible] = useState(true);
 
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
+  const [showExecutiveReport, setShowExecutiveReport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__IS_CARGO_BUILDER_MODAL_OPEN__ = Boolean(isCargoModalOpen && !showExecutiveReport);
+      window.dispatchEvent(new CustomEvent('seacharter:cargo-builder-modal-visibility', {
+        detail: { isOpen: Boolean(isCargoModalOpen && !showExecutiveReport) }
+      }));
+    }
+  }, [isCargoModalOpen, showExecutiveReport]);
   const [editingLineItemId, setEditingLineItemId] = useState(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
 
@@ -792,7 +802,6 @@ export function ForwarderWorkspace() {
   const [cbamCompetitorOrigin, setCbamCompetitorOrigin] = useState('');
   const [cbamCompetitorFactor, setCbamCompetitorFactor] = useState('');
 
-  const [showExecutiveReport, setShowExecutiveReport] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
   const [commercialScenario, setCommercialScenario] = useState('target');
@@ -1687,6 +1696,16 @@ export function ForwarderWorkspace() {
       (totals?.weight ? totals.weight / 1000 : 0)
     ) || 0;
 
+    if (typeof window !== 'undefined') {
+      window.__ACTIVE_FORWARDER_TOTAL_WEIGHT_TONS__ = totalWeightTons;
+      try {
+        localStorage.setItem('seacharter_active_project_weight_tons', String(totalWeightTons));
+      } catch (_) {}
+      window.dispatchEvent(new CustomEvent('seacharter:project-weight-changed', {
+        detail: { weightTons: totalWeightTons, projectRef: activeProject?.project_ref }
+      }));
+    }
+
     // Fix Estado Fantasma: Si totalWeightTons === 0 o !activeProject, resetea explícitamente los estados operativos
     if (totalWeightTons === 0 || !activeProject) {
       setOrigin('');
@@ -1793,6 +1812,38 @@ export function ForwarderWorkspace() {
       ) || 0;
       setCustCost(Number(activeProject.valor_total_mercancia_usd) || incomingMercancia);
   }, [activeProject]);
+
+  // Hook de sincronización y antiduplicidad desde el Gestor de Tarifas FOB / EXW
+  useEffect(() => {
+    const handleTariffInjected = (e) => {
+      const detail = e?.detail;
+      if (!detail) return;
+
+      const commercialModality = String(detail.commercialModality || detail.modality || 'FOB').toUpperCase();
+      const totalMercancia = Number(detail.valorTotalMercanciaUsd || detail.fobSaleTotalUsd || detail.saleTotalUsd) || 0;
+
+      if (totalMercancia > 0) {
+        setCustCost(totalMercancia);
+      }
+
+      if (commercialModality === 'FOB') {
+        // En FOB (Todo Incluido), el precio de la mercancía ya absorbe la logística terrestre y tasas portuarias.
+        // Se fuerzan a 0 los costes paralelos en el módulo terrestre para evitar duplicar costes.
+        setInlandCost(0);
+      } else if (commercialModality === 'EXW') {
+        // En EXW (Desglosado), la mercancía es precio de planta y se aplican de forma separada
+        const inlandVal = Number(detail.inlandTransportTotalUsd || (detail.inlandTransport && detail.quantityMT ? detail.inlandTransport * detail.quantityMT : 0)) || 0;
+        if (inlandVal > 0) {
+          setInlandCost(inlandVal);
+        }
+      }
+    };
+
+    window.addEventListener('seacharter:provider-tariff-injected', handleTariffInjected);
+    return () => {
+      window.removeEventListener('seacharter:provider-tariff-injected', handleTariffInjected);
+    };
+  }, []);
 
   // Hook de sincronización reactiva (Two-Way Binding): Parser del Agente -> Inputs del Formulario y Contadores Visuales
   // Asegura que cuando el Agente de Proyectos procese una instrucción (charteringAssessment / rotationBreakdown),
@@ -4468,6 +4519,7 @@ export function ForwarderWorkspace() {
 
   return (
     <>
+      <div id="forwarder-active-project-tonnage" data-tonnage={Number(activeProject?.total_weight_tons ?? activeProject?.totalWeightTons ?? (totals?.weight ? totals.weight / 1000 : 0)) || 0} className="hidden" aria-hidden="true"></div>
       <div className={`w-full h-full flex overflow-hidden bg-slate-950 text-slate-100 font-sans relative ${showExecutiveReport ? 'print:hidden' : ''}`}>
         <aside className="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-hidden print:hidden">
           <div className="p-4 border-b border-slate-800 flex items-center gap-2">
@@ -4599,7 +4651,15 @@ export function ForwarderWorkspace() {
             </div>
           )}
           {!activeProject ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600"><h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3><p className="mt-2 text-xs">Selecciona un proyecto de la lista lateral para comenzar.</p></div>
+            <div className="flex-1 flex flex-col h-full">
+              <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-xs">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Módulo Proyectos Transitarios</span>
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600">
+                <h3 className="text-xl font-black text-slate-800">Expediente de Transitario</h3>
+                <p className="mt-2 text-xs">Selecciona un proyecto de la lista lateral para comenzar.</p>
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex flex-col p-6 space-y-6">
               <header className="flex flex-col sm:flex-row sm:items-center gap-4 pb-4 border-b border-slate-200">
@@ -4622,20 +4682,22 @@ export function ForwarderWorkspace() {
                 </div>
                 <h1 className="text-3xl font-bold text-slate-900">{activeProject?.client_name || 'Expediente Sin Nombre'}</h1>
 
-                <button
-                  type="button"
-                  id="btn-sync-databridge-project-header"
-                  onClick={handleSyncCalculatorData}
-                  disabled={isSyncingCalculator}
-                  className="sm:ml-auto bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Sincronizar (DataBridge): Capturar parámetros operativos y fletes (compra y venta) desde la Calculadora"
-                  aria-label="Sincronizar (DataBridge)"
-                >
-                  <svg className={`w-3.5 h-3.5 text-white shrink-0 ${isSyncingCalculator ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>{isSyncingCalculator ? 'Sincronizando DataBridge...' : 'Sincronizar (DataBridge)'}</span>
-                </button>
+                <div className="sm:ml-auto flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    id="btn-sync-databridge-project-header"
+                    onClick={handleSyncCalculatorData}
+                    disabled={isSyncingCalculator}
+                    className="bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white border border-sky-500 px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Sincronizar (DataBridge): Capturar parámetros operativos y fletes (compra y venta) desde la Calculadora"
+                    aria-label="Sincronizar (DataBridge)"
+                  >
+                    <svg className={`w-3.5 h-3.5 text-white shrink-0 ${isSyncingCalculator ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{isSyncingCalculator ? 'Sincronizando DataBridge...' : 'Sincronizar (DataBridge)'}</span>
+                  </button>
+                </div>
               </header>
 
               {/* AVISO VISUAL DE CONFIRMACIÓN DE SINCRONIZACIÓN EXITOSA CON LA CALCULADORA Y NEON */}
@@ -5239,6 +5301,21 @@ export function ForwarderWorkspace() {
                         </select>
                       </div>
                       <button onClick={handleAddCargoPiece} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm">+ Añadir Pieza</button>
+                      <button
+                        type="button"
+                        id="btn-open-tariff-manager-modal"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('seacharter:toggle-provider-tariff'));
+                          if (typeof window.toggleProviderTariffSidebar === 'function') {
+                            window.toggleProviderTariffSidebar();
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition-colors"
+                        title="Abrir Gestor Universal de Tarifas FOB/EXW y Tarifas de Fábrica GICA"
+                      >
+                        <i className="fa-solid fa-boxes-packing text-emerald-600"></i>
+                        <span>Tarifas Proveedores / FOB</span>
+                      </button>
                       <button
                         type="button"
                         id="btn-recalculate-cargo"
