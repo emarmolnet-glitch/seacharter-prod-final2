@@ -75,6 +75,86 @@ async function ensureForwarderSchema() {
   }
 }
 
+/**
+ * Filtro y sanitización estricta de documentos:
+ * NUNCA persistir archivos binarios, buffers, o cadenas Base64 en base de datos.
+ * Preservar exclusivamente los metadatos esenciales requeridos por la interfaz.
+ */
+function sanitizeDocuments(rawDocs) {
+  if (!rawDocs) return [];
+  const docsList = Array.isArray(rawDocs) ? rawDocs : [rawDocs];
+  return docsList.map((doc, idx) => {
+    if (!doc || typeof doc !== 'object') return null;
+    const cleanPayload = doc.payload && typeof doc.payload === 'object'
+      ? {
+          name: doc.payload.name || doc.name,
+          size: doc.payload.size ? (typeof doc.payload.size === 'string' ? doc.payload.size : `${Math.round(doc.payload.size / 1024)} KB`) : (doc.size || '120 KB'),
+          itemsCount: Number(doc.payload.itemsCount || doc.itemsCount || 1),
+          uploadedAt: doc.payload.uploadedAt || doc.date || new Date().toISOString()
+        }
+      : undefined;
+
+    return {
+      id: doc.id || `doc-${Date.now()}-${idx}`,
+      name: String(doc.name || 'Documento_Proyecto.pdf').slice(0, 255),
+      size: doc.size ? (typeof doc.size === 'string' ? doc.size : `${Math.round(doc.size / 1024)} KB`) : '120 KB',
+      date: String(doc.date || new Date().toLocaleDateString('es-ES')),
+      itemsCount: Number(doc.itemsCount || 1),
+      ...(cleanPayload ? { payload: cleanPayload } : {})
+    };
+  }).filter(Boolean);
+}
+
+/**
+ * Sanitización de ítems/servicios de proyecto:
+ * Descarta cadenas base64, buffers o blobs pesados que pudieran incrustarse en payload_data o campos anidados.
+ */
+function sanitizeProjectItems(rawItems) {
+  if (!rawItems) return [];
+  const list = Array.isArray(rawItems) ? rawItems : [rawItems];
+  return list.map((item, idx) => {
+    if (!item || typeof item !== 'object') return null;
+    const cleanItem = { ...item };
+
+    // Eliminar cualquier campo directo con base64 o archivo masivo
+    delete cleanItem.fileBase64;
+    delete cleanItem.dataBase64;
+    delete cleanItem.fileBuffer;
+    delete cleanItem.rawContent;
+
+    // Si tiene payload_data anidado, sanitizarlo recursivamente
+    if (cleanItem.payload_data && typeof cleanItem.payload_data === 'object') {
+      const pd = { ...cleanItem.payload_data };
+      delete pd.fileBase64;
+      delete pd.dataBase64;
+      delete pd.fileBuffer;
+      delete pd.rawContent;
+      if (pd.documentMeta && typeof pd.documentMeta === 'object') {
+        const dm = { ...pd.documentMeta };
+        delete dm.dataBase64;
+        delete dm.fileBuffer;
+        pd.documentMeta = dm;
+      }
+      cleanItem.payload_data = pd;
+    }
+
+    return cleanItem;
+  }).filter(Boolean);
+}
+
+/**
+ * Sanitiza una fila de proyecto antes de devolverla en GET
+ * para garantizar respuestas ligeras (< 50KB en lugar de > 6MB).
+ */
+function sanitizeProjectResponseRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    documents: sanitizeDocuments(row.documents),
+    items: sanitizeProjectItems(row.items)
+  };
+}
+
 exports.handler = async (event) => {
   const { httpMethod, body } = event;
 
@@ -129,11 +209,13 @@ exports.handler = async (event) => {
           WHERE id = $4 OR project_ref = $5
           RETURNING *;
         `;
+        const sanitizedDocs = data.documents !== undefined ? sanitizeDocuments(data.documents) : null;
+        const rawItemsList = data.items || data.line_items || data.services;
+        const sanitizedItems = rawItemsList !== undefined ? sanitizeProjectItems(rawItemsList) : null;
+
         const updateValues = [
-          data.documents !== undefined ? JSON.stringify(data.documents) : null,
-          (data.items || data.line_items || data.services) !== undefined
-            ? JSON.stringify(data.items || data.line_items || data.services)
-            : null,
+          sanitizedDocs !== null ? JSON.stringify(sanitizedDocs) : null,
+          sanitizedItems !== null ? JSON.stringify(sanitizedItems) : null,
           data.client_name || null,
           data.id ? parseInt(data.id, 10) : null,
           data.project_ref || null,
@@ -152,7 +234,7 @@ exports.handler = async (event) => {
           return {
             statusCode: 200,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: updateResult.rows[0] })
+            body: JSON.stringify({ message: 'Expediente actualizado con éxito', project: sanitizeProjectResponseRow(updateResult.rows[0]) })
           };
         }
 
@@ -171,8 +253,8 @@ exports.handler = async (event) => {
           data.client_name || 'Nuevo Cliente', 
           upsertStatus,
           upsertMargin,
-          JSON.stringify(data.documents || []),
-          JSON.stringify(data.items || data.line_items || data.services || []),
+          JSON.stringify(sanitizeDocuments(data.documents || [])),
+          JSON.stringify(sanitizeProjectItems(data.items || data.line_items || data.services || [])),
           valorTotalMercanciaUsd,
           landFreightSale
         ];
@@ -206,7 +288,7 @@ exports.handler = async (event) => {
             return {
               statusCode: 200,
               headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: landUpdate.rows[0] || upsertRow })
+              body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: sanitizeProjectResponseRow(landUpdate.rows[0] || upsertRow) })
             };
           } catch (_) {}
         }
@@ -214,7 +296,7 @@ exports.handler = async (event) => {
         return {
           statusCode: 200,
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: upsertRow })
+          body: JSON.stringify({ message: 'Expediente creado con éxito (UPSERT)', project: sanitizeProjectResponseRow(upsertRow) })
         };
       }
 
@@ -236,8 +318,8 @@ exports.handler = async (event) => {
         client_name || 'Nuevo Cliente', 
         projectStatus,
         marginPercentage,
-        JSON.stringify(documents || []),
-        JSON.stringify(items || line_items || services || []),
+        JSON.stringify(sanitizeDocuments(documents || [])),
+        JSON.stringify(sanitizeProjectItems(items || line_items || services || [])),
         valorTotalMercanciaUsd,
         landFreightSale
       ];
@@ -272,7 +354,7 @@ exports.handler = async (event) => {
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message: 'Expediente creado con éxito',
-              project: landUpdate.rows[0] || result.rows[0]
+              project: sanitizeProjectResponseRow(landUpdate.rows[0] || result.rows[0])
             }),
           };
         } catch (_) {}
@@ -283,7 +365,7 @@ exports.handler = async (event) => {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: 'Expediente creado con éxito',
-          project: result.rows[0]
+          project: sanitizeProjectResponseRow(result.rows[0])
         }),
       };
     }
@@ -329,11 +411,13 @@ exports.handler = async (event) => {
         WHERE id = $4 OR project_ref = $5
         RETURNING *;
       `;
+      const putSanitizedDocs = data.documents !== undefined ? sanitizeDocuments(data.documents) : null;
+      const putRawItems = data.items || data.line_items || data.services;
+      const putSanitizedItems = putRawItems !== undefined ? sanitizeProjectItems(putRawItems) : null;
+
       const values = [
-        data.documents !== undefined ? JSON.stringify(data.documents) : null,
-        (data.items || data.line_items || data.services) !== undefined
-          ? JSON.stringify(data.items || data.line_items || data.services)
-          : null,
+        putSanitizedDocs !== null ? JSON.stringify(putSanitizedDocs) : null,
+        putSanitizedItems !== null ? JSON.stringify(putSanitizedItems) : null,
         data.client_name || null,
         data.id ? parseInt(data.id, 10) : null,
         data.project_ref || null,
@@ -367,8 +451,8 @@ exports.handler = async (event) => {
             data.client_name || 'Nuevo Cliente', 
             upsertStatus,
             upsertMargin,
-            JSON.stringify(data.documents || []),
-            JSON.stringify(data.items || data.line_items || data.services || []),
+            JSON.stringify(sanitizeDocuments(data.documents || [])),
+            JSON.stringify(sanitizeProjectItems(data.items || data.line_items || data.services || [])),
             valorTotalMercanciaUsd,
             landFreightSale
           ];
@@ -402,7 +486,7 @@ exports.handler = async (event) => {
               return {
                 statusCode: 200,
                 headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: landUpdate.rows[0] || createdProject })
+                body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: sanitizeProjectResponseRow(landUpdate.rows[0] || createdProject) })
               };
             } catch (_) {}
           }
@@ -410,7 +494,7 @@ exports.handler = async (event) => {
           return {
             statusCode: 200,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: createdProject })
+            body: JSON.stringify({ message: 'Expediente actualizado con éxito (UPSERT)', project: sanitizeProjectResponseRow(createdProject) })
           };
         }
 
@@ -426,7 +510,7 @@ exports.handler = async (event) => {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: 'Expediente actualizado con éxito',
-          project: result.rows[0]
+          project: sanitizeProjectResponseRow(result.rows[0])
         }),
       };
     }
@@ -459,7 +543,7 @@ exports.handler = async (event) => {
         return {
           statusCode: 200,
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify(singleResult.rows[0]),
+          body: JSON.stringify(sanitizeProjectResponseRow(singleResult.rows[0])),
         };
       }
 
@@ -474,10 +558,12 @@ exports.handler = async (event) => {
       `;
       const result = await pool.query(query);
 
+      const sanitizedRows = (result.rows || []).map(sanitizeProjectResponseRow);
+
       return {
         statusCode: 200,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify(result.rows),
+        body: JSON.stringify(sanitizedRows),
       };
     }
 

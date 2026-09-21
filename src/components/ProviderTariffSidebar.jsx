@@ -85,8 +85,8 @@ export default function ProviderTariffSidebar() {
   const [projectWeightTons, setProjectWeightTons] = useState(10000);
   const [hasAbsorbedProjectTonnage, setHasAbsorbedProjectTonnage] = useState(false);
 
-  // Tarifa de mercado Land Charter detectada del proyecto
-  const [marketLandCharterRate, setMarketLandCharterRate] = useState(12.50);
+  // Tarifa de mercado Land Charter detectada del proyecto (inicializada en 0, sin valores fijos ni hardcodeados)
+  const [marketLandCharterRate, setMarketLandCharterRate] = useState(0);
 
   // Tipo de cambio configurado (DZD / USD)
   const [exchangeRateDzdUsd, setExchangeRateDzdUsd] = useState(OFFICIAL_EXCHANGE_RATE_DZD_USD);
@@ -181,6 +181,40 @@ export default function ProviderTariffSidebar() {
     }
   };
 
+  // Absorción de tarifa real Land Charter desde el Proyecto o el ecosistema
+  const detectAndAbsorbLandCharterRate = () => {
+    if (typeof window === 'undefined') return;
+
+    let detectedRate = 0;
+    if (window.__ACTIVE_LAND_CHARTER_RATE_USD_MT__ != null && Number(window.__ACTIVE_LAND_CHARTER_RATE_USD_MT__) > 0) {
+      detectedRate = Number(window.__ACTIVE_LAND_CHARTER_RATE_USD_MT__);
+    } else if (window.__ACTIVE_FORWARDER_LAND_RATE__ != null && Number(window.__ACTIVE_FORWARDER_LAND_RATE__) > 0) {
+      detectedRate = Number(window.__ACTIVE_FORWARDER_LAND_RATE__);
+    }
+
+    if (!detectedRate) {
+      try {
+        const savedCost = localStorage.getItem('seacharter_active_project_land_cost');
+        const savedTons = localStorage.getItem('seacharter_active_project_weight_tons');
+        if (savedCost && savedTons && Number(savedTons) > 0 && Number(savedCost) > 0) {
+          detectedRate = Math.round((Number(savedCost) / Number(savedTons)) * 100) / 100;
+        }
+      } catch (_) {}
+    }
+
+    if (!detectedRate && typeof document !== 'undefined') {
+      const landEl = document.getElementById('forwarder-active-land-rate');
+      if (landEl && landEl.dataset.rate) {
+        const parsed = Number(landEl.dataset.rate);
+        if (parsed > 0) detectedRate = parsed;
+      }
+    }
+
+    if (detectedRate > 0 && detectedRate !== marketLandCharterRate) {
+      setMarketLandCharterRate(detectedRate);
+    }
+  };
+
   // =========================================================================
   // CONTROL DE VISIBILIDAD EXCLUSIVA EN EL MÓDULO PROYECTOS & EVENTOS
   // =========================================================================
@@ -207,6 +241,7 @@ export default function ProviderTariffSidebar() {
         setIsOpen(false);
       } else {
         detectAndAbsorbProjectTonnage();
+        detectAndAbsorbLandCharterRate();
       }
     };
 
@@ -236,6 +271,7 @@ export default function ProviderTariffSidebar() {
     const handleToggleToolbar = () => {
       setIsOpen(prev => !prev);
       detectAndAbsorbProjectTonnage();
+      detectAndAbsorbLandCharterRate();
     };
 
     const handleProjectWeightChange = (e) => {
@@ -246,9 +282,17 @@ export default function ProviderTariffSidebar() {
       }
     };
 
+    const handleLandCharterRateChanged = (e) => {
+      const rate = Number(e?.detail?.rateUsdMt || e?.detail?.rate || e?.detail || 0);
+      if (rate > 0) {
+        setMarketLandCharterRate(rate);
+      }
+    };
+
     window.toggleProviderTariffSidebar = () => {
       setIsOpen(prev => !prev);
       detectAndAbsorbProjectTonnage();
+      detectAndAbsorbLandCharterRate();
     };
 
     window.addEventListener('navigation:view-change', handleNavChange);
@@ -256,6 +300,7 @@ export default function ProviderTariffSidebar() {
     window.addEventListener('seacharter:toggle-provider-tariff', handleToggleToolbar);
     window.addEventListener('seacharter:cargo-builder-modal-visibility', handleCargoModalVisibility);
     window.addEventListener('seacharter:project-weight-changed', handleProjectWeightChange);
+    window.addEventListener('seacharter:land-charter-rate-changed', handleLandCharterRateChanged);
 
     let observer = null;
     const viewForwarders = document.getElementById('view-forwarders');
@@ -269,13 +314,17 @@ export default function ProviderTariffSidebar() {
       observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
     }
 
-    const intervalId = setInterval(detectAndAbsorbProjectTonnage, 1500);
+    const intervalId = setInterval(() => {
+      detectAndAbsorbProjectTonnage();
+      detectAndAbsorbLandCharterRate();
+    }, 1500);
 
     return () => {
       window.removeEventListener('navigation:view-change', handleNavChange);
       window.removeEventListener('hashchange', evaluateProjectsVisibility);
       window.removeEventListener('seacharter:toggle-provider-tariff', handleToggleToolbar);
       window.removeEventListener('seacharter:project-weight-changed', handleProjectWeightChange);
+      window.removeEventListener('seacharter:land-charter-rate-changed', handleLandCharterRateChanged);
       clearInterval(intervalId);
       if (observer) observer.disconnect();
     };
@@ -288,6 +337,7 @@ export default function ProviderTariffSidebar() {
       if (!exists) {
         setSelectedMaterialId(activeEntity.materials[0].id);
         setManualOverrides({});
+        setIsManualEditMode(false);
       }
     }
   }, [selectedEntityId, activeEntity]);
@@ -326,23 +376,59 @@ export default function ProviderTariffSidebar() {
   // Obtener material activo (o fallback si no hay entidad cargada todavía)
   const activeMaterial = activeEntity?.materials?.find(m => m.id === selectedMaterialId) || activeEntity?.materials?.[0] || null;
 
+  // Determinar la tarifa de mercado (Sin FSPE):
+  // 1. Estrictamente el valor de la columna 'Coût Logística Marché (Sans FSPE)' del material (ej. 4.63 USD)
+  // 2. Si no viene en el material (o es 0), se integra con Land Charter del proyecto
+  // 3. Prohibición absoluta de 12.50 fijo o números por defecto
+  const itemMarketLogistics = Number(activeMaterial?.marketInlandCostPerMt || 0);
+  const effectiveMarketLogistics = itemMarketLogistics > 0
+    ? itemMarketLogistics
+    : (Number(marketLandCharterRate) > 0 ? Number(marketLandCharterRate) : 0);
+
   // Motor de cálculo financiero exacto (FOB vs EXW & FSPE)
   const breakdown = calculateTariffBreakdown(activeMaterial || {}, {
     exchangeRateDzdUsd,
     commercialModality,
     useFspe,
-    marketInlandCostPerMt: marketLandCharterRate,
+    marketInlandCostPerMt: (isManualEditMode && manualOverrides.marketInlandCostPerMt !== undefined)
+      ? manualOverrides.marketInlandCostPerMt
+      : effectiveMarketLogistics,
+    landCharterRateUsdMt: marketLandCharterRate > 0 ? marketLandCharterRate : 0,
     projectWeightTons,
     quantityMT: isManualEditMode && manualOverrides.quantityMT != null ? manualOverrides.quantityMT : projectWeightTons,
     ...(isManualEditMode ? manualOverrides : {})
   });
 
-  const handleNumericChange = (field, value) => {
+  const handleNumericChange = (field, value, event = null) => {
+    // Si la llamada proviene de un evento sintético no de confianza o programático, no activar modo manual
+    if (event && event.nativeEvent && event.nativeEvent.isTrusted === false) {
+      return;
+    }
     const num = parseFloat(value);
+    const cleanNum = isNaN(num) ? 0 : num;
+
+    // Solo se activa el modo manual ante interacción explícita de escritura directa del usuario
+    setIsManualEditMode(true);
     setManualOverrides(prev => ({
       ...prev,
-      [field]: isNaN(num) ? 0 : num
+      [field]: cleanNum
     }));
+  };
+
+  const handleToggleFspe = (val) => {
+    setUseFspe(val);
+    setManualOverrides(prev => {
+      const next = { ...prev };
+      delete next.inlandTransport;
+      delete next.marketInlandCostPerMt;
+      return next;
+    });
+  };
+
+  const handleMaterialChange = (newMaterialId) => {
+    setSelectedMaterialId(newMaterialId);
+    setManualOverrides({});
+    setIsManualEditMode(false);
   };
 
   const handleResetToOfficial = () => {
@@ -373,6 +459,7 @@ export default function ProviderTariffSidebar() {
         setSelectedMaterialId(importedEntity.materials[0].id);
       }
       setManualOverrides({});
+      setIsManualEditMode(false);
       setImportNotification({
         type: 'success',
         message: `¡Tarifa de ${newEntityType === 'client' ? 'Cliente' : 'Proveedor'} "${importedEntity.name}" cargada con éxito! (${importedEntity.materials.length} productos detectados)`
@@ -603,7 +690,7 @@ export default function ProviderTariffSidebar() {
                 role="radio"
                 aria-checked={useFspe}
                 className={`pt-modality-btn ${useFspe ? 'is-active is-fob' : ''}`}
-                onClick={() => setUseFspe(true)}
+                onClick={() => handleToggleFspe(true)}
                 title="Con FSPE: Coste logístico reducido subvencionado de fábrica"
               >
                 <i className="fa-solid fa-hand-holding-dollar"></i> Con FSPE
@@ -614,8 +701,8 @@ export default function ProviderTariffSidebar() {
                 role="radio"
                 aria-checked={!useFspe}
                 className={`pt-modality-btn ${!useFspe ? 'is-active is-exw' : ''}`}
-                onClick={() => setUseFspe(false)}
-                title="Sin FSPE: Reemplaza por la tarifa real de mercado Land Charter"
+                onClick={() => handleToggleFspe(false)}
+                title="Sin FSPE: Lee estrictamente 'Coût Logística Marché (Sans FSPE)' del Excel o Land Charter"
               >
                 <i className="fa-solid fa-truck-fast"></i> Sin FSPE (Mercado)
               </button>
@@ -746,10 +833,7 @@ export default function ProviderTariffSidebar() {
                   id="pt-material-select"
                   className="pt-select"
                   value={selectedMaterialId}
-                  onChange={(e) => {
-                    setSelectedMaterialId(e.target.value);
-                    setManualOverrides({});
-                  }}
+                  onChange={(e) => handleMaterialChange(e.target.value)}
                 >
                   {activeEntity.materials.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -783,34 +867,44 @@ export default function ProviderTariffSidebar() {
               <div className="pt-cost-grid">
                 {/* 1. Precio Base en DZD (Prix GICA / Usine) */}
                 <div className="pt-cost-item">
-                  <span className="pt-cost-label">Precio Base DZD (Prix GICA)</span>
-                  {isManualEditMode ? (
-                    <input
-                      type="number"
-                      step="50"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.basePriceDzd}
-                      onChange={(e) => handleNumericChange('basePriceDzd', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value">{breakdown.basePriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} DZD</span>
-                  )}
+                  <label className="pt-cost-label" htmlFor="pt-input-gica">
+                    <span>Precio Base DZD (Prix GICA)</span>
+                    <span style={{ fontSize: '9px', color: '#0284c7' }}>DZD/MT</span>
+                  </label>
+                  <input
+                    id="pt-input-gica"
+                    name="basePriceDzd"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.basePriceDzd}
+                    onChange={(e) => handleNumericChange('basePriceDzd', e.target.value, e)}
+                    aria-label="Precio Base DZD (Prix GICA)"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
+                    {breakdown.basePriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} DZD
+                  </span>
                 </div>
 
                 {/* 2. Rabais Multiplicador */}
                 <div className="pt-cost-item">
-                  <span className="pt-cost-label" style={{ color: '#047857' }}>Factor Rabais (Multiplicador)</span>
-                  {isManualEditMode ? (
-                    <input
-                      type="number"
-                      step="0.005"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.rabaisMultiplier}
-                      onChange={(e) => handleNumericChange('rabaisMultiplier', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value" style={{ color: '#047857' }}>× {breakdown.rabaisMultiplier.toFixed(4)} ({((1 - breakdown.rabaisMultiplier) * 100).toFixed(1)}% desc.)</span>
-                  )}
+                  <label className="pt-cost-label" htmlFor="pt-input-rabais" style={{ color: '#047857' }}>
+                    <span>Factor Rabais (Descuento)</span>
+                    <span style={{ fontSize: '9px' }}>{((1 - breakdown.rabaisMultiplier) * 100).toFixed(1)}% desc.</span>
+                  </label>
+                  <input
+                    id="pt-input-rabais"
+                    name="rabaisMultiplier"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.rabaisMultiplier}
+                    onChange={(e) => handleNumericChange('rabaisMultiplier', e.target.value, e)}
+                    aria-label="Factor Rabais (Multiplicador)"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#047857' }}>
+                    × {breakdown.rabaisMultiplier.toFixed(4)}
+                  </span>
                 </div>
 
                 {/* 3. Precio Neto en DZD */}
@@ -829,98 +923,114 @@ export default function ProviderTariffSidebar() {
                   </span>
                 </div>
 
-                {/* Envase / Big Bag */}
+                {/* 5. Envase / Big Bag */}
                 <div className="pt-cost-item">
-                  <span className="pt-cost-label">+ Envase (Big Bag / Sac)</span>
-                  {isManualEditMode ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.packagingCost}
-                      onChange={(e) => handleNumericChange('packagingCost', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value">+${breakdown.packagingCost.toFixed(2)} USD</span>
-                  )}
-                </div>
-
-                {/* Logística Inland (Ajustada según FSPE y Modalidad FOB) */}
-                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.45 : 1 }}>
-                  <span className="pt-cost-label">
-                    + Logística Inland ({useFspe ? 'FSPE Fábrica' : 'Mercado Land Charter'})
+                  <label className="pt-cost-label" htmlFor="pt-input-packaging">
+                    <span>+ Envase (Big Bag / Sac)</span>
+                    <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
+                  </label>
+                  <input
+                    id="pt-input-packaging"
+                    name="packagingCost"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.packagingCost}
+                    onChange={(e) => handleNumericChange('packagingCost', e.target.value, e)}
+                    aria-label="Envase (Big Bag / Sac)"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
+                    +${breakdown.packagingCost.toFixed(2)} USD
                   </span>
-                  {isManualEditMode && commercialModality === 'FOB' ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.inlandTransport}
-                      onChange={(e) => handleNumericChange('inlandTransport', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value" style={{ color: !useFspe ? '#b45309' : '#0f172a' }}>
-                      {commercialModality === 'FOB' ? `+$${breakdown.inlandTransport.toFixed(2)} USD` : '$0.00 (EXW)'}
-                    </span>
-                  )}
                 </div>
 
-                {/* SGS Inspection */}
-                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.45 : 1 }}>
-                  <span className="pt-cost-label">+ Frais Transit / SGS</span>
-                  {isManualEditMode && commercialModality === 'FOB' ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.sgsInspection}
-                      onChange={(e) => handleNumericChange('sgsInspection', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value">
-                      {commercialModality === 'FOB' ? `+$${breakdown.sgsInspection.toFixed(2)} USD` : '$0.00 (EXW)'}
+                {/* 6. Logística Activa (Ajustada según FSPE y Modalidad FOB) */}
+                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
+                  <label className="pt-cost-label" htmlFor="pt-input-inland">
+                    <span>+ Logística activa ({useFspe ? 'FSPE Fábrica' : 'Marché Sans FSPE'})</span>
+                    <span style={{ fontSize: '9px', color: !useFspe ? '#b45309' : '#0284c7' }}>
+                      {commercialModality === 'EXW' ? 'EXW ($0 en FOB ops)' : 'USD/MT'}
                     </span>
-                  )}
+                  </label>
+                  <input
+                    id="pt-input-inland"
+                    name="inlandTransport"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.inlandTransport}
+                    onChange={(e) => handleNumericChange(useFspe ? 'inlandTransport' : 'marketInlandCostPerMt', e.target.value, e)}
+                    aria-label="Logística activa"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: !useFspe ? '#b45309' : '#0f172a' }}>
+                    {commercialModality === 'FOB' ? `+$${breakdown.inlandTransport.toFixed(2)} USD` : `$${breakdown.inlandTransport.toFixed(2)} USD (EXW)`}
+                  </span>
                 </div>
 
-                {/* Tasas Portuarias Bejaia */}
-                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.45 : 1 }}>
-                  <span className="pt-cost-label">+ Frais Port Bejaia (EPB)</span>
-                  {isManualEditMode && commercialModality === 'FOB' ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      value={breakdown.bejaiaPortDues}
-                      onChange={(e) => handleNumericChange('bejaiaPortDues', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value">
-                      {commercialModality === 'FOB' ? `+$${breakdown.bejaiaPortDues.toFixed(2)} USD` : '$0.00 (EXW)'}
-                    </span>
-                  )}
+                {/* 7. SGS Inspection */}
+                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
+                  <label className="pt-cost-label" htmlFor="pt-input-sgs">
+                    <span>+ Frais Transit / SGS</span>
+                    <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
+                  </label>
+                  <input
+                    id="pt-input-sgs"
+                    name="sgsInspection"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.sgsInspection}
+                    onChange={(e) => handleNumericChange('sgsInspection', e.target.value, e)}
+                    aria-label="Frais Transit / SGS"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
+                    {commercialModality === 'FOB' ? `+$${breakdown.sgsInspection.toFixed(2)} USD` : `$${breakdown.sgsInspection.toFixed(2)} USD (EXW)`}
+                  </span>
+                </div>
+
+                {/* 8. Tasas Portuarias Bejaia */}
+                <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
+                  <label className="pt-cost-label" htmlFor="pt-input-port">
+                    <span>+ Frais Port Bejaia (EPB)</span>
+                    <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
+                  </label>
+                  <input
+                    id="pt-input-port"
+                    name="bejaiaPortDues"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    value={breakdown.bejaiaPortDues}
+                    onChange={(e) => handleNumericChange('bejaiaPortDues', e.target.value, e)}
+                    aria-label="Frais Port Bejaia (EPB)"
+                  />
+                  <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
+                    {commercialModality === 'FOB' ? `+$${breakdown.bejaiaPortDues.toFixed(2)} USD` : `$${breakdown.bejaiaPortDues.toFixed(2)} USD (EXW)`}
+                  </span>
                 </div>
 
                 {/* Margen Comercial */}
                 <div className="pt-cost-item pt-cost-item-full" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="pt-cost-label" style={{ color: '#92400e', margin: 0 }}>Margen / Spread Comercial</span>
+                    <label className="pt-cost-label" htmlFor="pt-input-margin" style={{ color: '#92400e', margin: 0 }}>
+                      Margen / Spread Comercial
+                    </label>
                     <span style={{ fontSize: '10px', color: '#b45309', fontWeight: '800' }}>+{breakdown.marginPercentage}%</span>
                   </div>
-                  {isManualEditMode ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      style={{ marginTop: '3px' }}
-                      value={breakdown.commercialMargin}
-                      onChange={(e) => handleNumericChange('commercialMargin', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value" style={{ color: '#b45309', marginTop: '3px' }}>
-                      +${breakdown.commercialMargin.toFixed(2)} USD / MT
-                    </span>
-                  )}
+                  <input
+                    id="pt-input-margin"
+                    name="commercialMargin"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    style={{ marginTop: '3px' }}
+                    value={breakdown.commercialMargin}
+                    onChange={(e) => handleNumericChange('commercialMargin', e.target.value, e)}
+                    aria-label="Margen Comercial"
+                  />
+                  <span className="pt-cost-value" style={{ color: '#b45309', marginTop: '2px', fontSize: '11px' }}>
+                    +${breakdown.commercialMargin.toFixed(2)} USD / MT
+                  </span>
                 </div>
 
                 {/* Coste Unitario Total */}
@@ -932,23 +1042,25 @@ export default function ProviderTariffSidebar() {
                 {/* Precio Venta Unitario Final */}
                 <div className="pt-cost-item pt-cost-item-full highlight-sale">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="pt-cost-label" style={{ margin: 0 }}>Precio de Venta Unitario Final ({commercialModality})</span>
+                    <label className="pt-cost-label" htmlFor="pt-input-sale-price" style={{ margin: 0 }}>
+                      Precio de Venta Unitario Final ({commercialModality})
+                    </label>
                     {isManualEditMode && <span style={{ color: '#059669', fontSize: '9px', fontWeight: '700' }}>Modo Edición</span>}
                   </div>
-                  {isManualEditMode ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="pt-input is-manual-editing"
-                      style={{ fontSize: '16px', fontWeight: '800', marginTop: '3px' }}
-                      value={breakdown.suggestedSalePrice}
-                      onChange={(e) => handleNumericChange('suggestedFobSalePrice', e.target.value)}
-                    />
-                  ) : (
-                    <span className="pt-cost-value" style={{ marginTop: '3px' }}>
-                      ${breakdown.suggestedSalePrice.toFixed(2)} / MT
-                    </span>
-                  )}
+                  <input
+                    id="pt-input-sale-price"
+                    name="suggestedFobSalePrice"
+                    type="number"
+                    step="any"
+                    className={`pt-input ${isManualEditMode ? 'is-manual-editing' : ''}`}
+                    style={{ fontSize: '16px', fontWeight: '800', marginTop: '3px' }}
+                    value={breakdown.suggestedSalePrice}
+                    onChange={(e) => handleNumericChange('suggestedFobSalePrice', e.target.value, e)}
+                    aria-label="Precio de Venta Unitario Final"
+                  />
+                  <span className="pt-cost-value" style={{ marginTop: '2px', fontSize: '12px' }}>
+                    ${breakdown.suggestedSalePrice.toFixed(2)} / MT
+                  </span>
                 </div>
               </div>
             </div>
@@ -980,7 +1092,7 @@ export default function ProviderTariffSidebar() {
                 step="500"
                 className="pt-input"
                 value={breakdown.quantityMT}
-                onChange={(e) => handleNumericChange('quantityMT', e.target.value)}
+                onChange={(e) => handleNumericChange('quantityMT', e.target.value, e)}
               />
             </div>
 

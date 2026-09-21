@@ -566,8 +566,7 @@ Contexto actual del proyecto: ${projectContext}`;
         size: file.size,
         type: file.type || 'application/pdf',
         itemsCount: formattedItems.length,
-        uploadedAt: new Date().toISOString(),
-        dataBase64: rawDataBase64 // DataURL para visualización previa
+        uploadedAt: new Date().toISOString()
       };
 
       if (formattedItems.length > 0) {

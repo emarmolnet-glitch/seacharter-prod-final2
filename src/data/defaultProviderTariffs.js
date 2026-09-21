@@ -29,7 +29,7 @@ export const DEFAULT_PROVIDER_TARIFFS = [];
  * @param {Object} overrides - Opciones y sobrescrituras:
  *   - commercialModality: 'FOB' | 'EXW'
  *   - useFspe: boolean (true = Con FSPE / subvencionado, false = Sin FSPE / mercado)
- *   - marketInlandCostPerMt: number (tarifa de mercado Land Charter, default: 12.50 USD/MT si no se pasa de proyecto)
+ *   - marketInlandCostPerMt: number (tarifa de mercado Land Charter o de fila Excel, default: 0)
  *   - exchangeRateDzdUsd: number (default: 134.50)
  *   - quantityMT / projectWeightTons: number (default: 10000)
  */
@@ -52,7 +52,7 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
       ? Number(overrides.rabaisMultiplier)
       : (item.rabaisMultiplier !== undefined
           ? Number(item.rabaisMultiplier)
-          : (overrides.rabais !== undefined ? Number(overrides.rabais) : 0.95));
+          : (overrides.rabais !== undefined ? Number(overrides.rabais) : 1.0));
     
     if (rawMultiplier > 0 && rawMultiplier <= 1) {
       rabaisMultiplier = rawMultiplier;
@@ -90,14 +90,15 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
   
   // 3. SELECTOR DE OPCIÓN FSPE (Con FSPE / Sin FSPE)
   // Con FSPE: se usa el coste subvencionado de fábrica ('Coût Logistique FSPE')
-  // Sin FSPE: se reemplaza automáticamente por el coste de mercado ('Coût Logistique Marché' o Land Charter)
+  // Sin FSPE: se lee estrictamente la columna de mercado ('Coût Logística Marché (Sans FSPE)') de la fila o se integra con Land Charter
+  // Prohibición absoluta de 12.50 fijo o inventado
   const factoryInlandTransport = Number(overrides.inlandTransport !== undefined ? overrides.inlandTransport : (item.inlandTransport !== undefined ? item.inlandTransport : 0));
   const marketInlandCostPerMt = Number(
-    overrides.marketInlandCostPerMt !== undefined
+    overrides.marketInlandCostPerMt !== undefined && overrides.marketInlandCostPerMt !== null
       ? overrides.marketInlandCostPerMt
-      : (item.marketInlandCostPerMt && item.marketInlandCostPerMt > 0
+      : (item.marketInlandCostPerMt !== undefined && item.marketInlandCostPerMt !== null && Number(item.marketInlandCostPerMt) > 0
           ? item.marketInlandCostPerMt
-          : (overrides.landCharterRateUsdMt || 12.50))
+          : (overrides.landCharterRateUsdMt || 0))
   );
 
   const inlandTransport = useFspe

@@ -1796,6 +1796,27 @@ export function ForwarderWorkspace() {
       if (rawLandCostEur > 0) {
         const landCostUsd = Math.round((rawLandCostEur / activeExRate) * 100) / 100;
         setInlandCost(landCostUsd);
+
+        const projectTons = Number(
+          activeProject.total_weight_tons ??
+          activeProject.totalWeightTons ??
+          activeProject.weight_tons ??
+          (totals?.weight ? totals.weight / 1000 : 0)
+        ) || 0;
+
+        if (projectTons > 0) {
+          const landRatePerMt = Math.round((landCostUsd / projectTons) * 100) / 100;
+          if (typeof window !== 'undefined') {
+            window.__ACTIVE_LAND_CHARTER_RATE_USD_MT__ = landRatePerMt;
+            try {
+              localStorage.setItem('seacharter_active_project_land_cost', String(landCostUsd));
+              localStorage.setItem('seacharter_active_project_land_rate_usd_mt', String(landRatePerMt));
+            } catch (_) {}
+            window.dispatchEvent(new CustomEvent('seacharter:land-charter-rate-changed', {
+              detail: { rateUsdMt: landRatePerMt }
+            }));
+          }
+        }
       }
 
       // 2. Absorción Exacta del Coste de Mercancía (Ya viene en USD desde Data Bridge)
@@ -2588,13 +2609,21 @@ export function ForwarderWorkspace() {
       return;
     }
 
-    const newDoc = {
-      id: docMeta.id || `doc-${Date.now()}-${Math.random()}`,
+    // NUNCA persistir dataBase64 ni datos binarios en la base de datos para evitar exceder 6 MB
+    const cleanDocMeta = {
       name: docMeta.name || 'Documento_Proyecto.pdf',
       size: docMeta.size ? (typeof docMeta.size === 'string' ? docMeta.size : `${Math.round(docMeta.size / 1024)} KB`) : '120 KB',
-      date: docMeta.uploadedAt ? new Date(docMeta.uploadedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       itemsCount: docMeta.itemsCount || 1,
-      payload: docMeta
+      uploadedAt: docMeta.uploadedAt || new Date().toISOString()
+    };
+
+    const newDoc = {
+      id: docMeta.id || `doc-${Date.now()}-${Math.random()}`,
+      name: cleanDocMeta.name,
+      size: cleanDocMeta.size,
+      date: docMeta.uploadedAt ? new Date(docMeta.uploadedAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      itemsCount: cleanDocMeta.itemsCount,
+      payload: cleanDocMeta
     };
 
     const updatedDocs = [...projectDocuments, newDoc];
@@ -2653,12 +2682,12 @@ export function ForwarderWorkspace() {
           allNewItems.push(...formattedItems);
         }
 
+        // Almacenar únicamente los metadatos esenciales requeridos por la interfaz, sin Base64
         await handleSaveDocumentToProject({
           name: file.name,
           size: file.size,
           itemsCount: data.items ? data.items.length : 0,
-          uploadedAt: new Date().toISOString(),
-          dataBase64: dataBase64
+          uploadedAt: new Date().toISOString()
         });
       }
 
