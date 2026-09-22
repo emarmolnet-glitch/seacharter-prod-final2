@@ -1864,10 +1864,13 @@ export function ForwarderWorkspace() {
       if (!detail) return;
 
       const commercialModality = String(detail.commercialModality || detail.modality || 'FOB').toUpperCase();
-      const totalMercancia = Number(detail.valorTotalMercanciaUsd || detail.fobSaleTotalUsd || detail.saleTotalUsd) || 0;
+      const totalMercancia = Number(detail.mercancia_usd ?? detail.valorTotalMercanciaUsd ?? detail.fobSaleTotalUsd ?? detail.saleTotalUsd) || 0;
 
       if (totalMercancia > 0) {
         setCustCost(totalMercancia);
+        if (activeProject) {
+          activeProject.valor_total_mercancia_usd = totalMercancia;
+        }
       }
 
       if (commercialModality === 'FOB') {
@@ -1887,7 +1890,7 @@ export function ForwarderWorkspace() {
     return () => {
       window.removeEventListener('seacharter:provider-tariff-injected', handleTariffInjected);
     };
-  }, []);
+  }, [activeProject]);
 
   // Hook de sincronización reactiva (Two-Way Binding): Parser del Agente -> Inputs del Formulario y Contadores Visuales
   // Asegura que cuando el Agente de Proyectos procese una instrucción (charteringAssessment / rotationBreakdown),
@@ -3181,8 +3184,8 @@ export function ForwarderWorkspace() {
     setOceanFreight(Number(calculatedOceanFreight) || 0);
     setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
     setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
-    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
-    setSalePrice((Number(targetSalePrice) || 0).toFixed(2));
+    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2)); // setEstimatedCost(totalEstimatedCost.toFixed(2));
+    setSalePrice((Number(targetSalePrice) || 0).toFixed(2)); // setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
   useEffect(() => {
@@ -3508,6 +3511,12 @@ export function ForwarderWorkspace() {
     }
     if (payload.inlandTrucksCount !== undefined) { setInlandCost(payload.inlandTrucksCount); hasChanges = true; }
     if (payload.customsCost !== undefined) { setCustomsCost(payload.customsCost); hasChanges = true; }
+    if (payload.mercancia_usd !== undefined) {
+      const mVal = Number(payload.mercancia_usd) || 0;
+      setCustomsCost(mVal);
+      updatedProject.valor_total_mercancia_usd = mVal;
+      hasChanges = true;
+    }
     if (payload.insuranceCost !== undefined || payload.seguroMercancia !== undefined) {
       setInsuranceCost(Number(payload.insuranceCost ?? payload.seguroMercancia));
       hasChanges = true;
@@ -3548,6 +3557,27 @@ export function ForwarderWorkspace() {
       await persistProjectToDatabase(updatedProject);
     }
   };
+
+  useEffect(() => {
+    window.updatePayload = handleApplyProjectPayload;
+    window.setGlobalState = (data) => {
+      if (data && typeof data === 'object') {
+        handleApplyProjectPayload(data);
+      }
+    };
+
+    const handleUpdatePayloadEvent = (e) => {
+      const detail = e?.detail;
+      if (detail && typeof handleApplyProjectPayload === 'function') {
+        handleApplyProjectPayload(detail);
+      }
+    };
+
+    window.addEventListener('seacharter:update-project-payload', handleUpdatePayloadEvent);
+    return () => {
+      window.removeEventListener('seacharter:update-project-payload', handleUpdatePayloadEvent);
+    };
+  }, [handleApplyProjectPayload]);
 
   const buildExecutiveReportData = (sourceItem = null) => {
     let sourcePayload = null;
@@ -6865,6 +6895,7 @@ export function ForwarderWorkspace() {
 
                     {/* Matriz visual de bodegas 1 a 4 */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {/* activeReport.stowagePlan.holds?.map */}
                       {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
                         <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
                           <div className="flex justify-between items-center mb-1.5">

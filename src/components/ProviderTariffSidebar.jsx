@@ -19,6 +19,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   DEFAULT_PROVIDER_TARIFFS,
+  DEFAULT_EXCEL_MATERIALS,
   OFFICIAL_EXCHANGE_RATE_DZD_USD,
   calculateTariffBreakdown
 } from '../data/defaultProviderTariffs.js';
@@ -26,6 +27,17 @@ import { parseProviderTariffFile } from '../services/providerTariffParser.js';
 
 const STORAGE_CATALOG_KEY = 'seacharter_tariffs_catalog_v3';
 const DEFAULT_POSITION = { x: 30, y: 80 };
+
+const defaultExcelEntity = {
+  id: 'ent-excel-definitivo',
+  name: 'GICA Export 2026 (Matriz Excel)',
+  shortName: 'GICA Excel',
+  entityType: 'provider',
+  country: 'Argelia',
+  port: 'Puerto Bejaia',
+  description: 'Tarifario oficial cargado según el Excel definitivo del cliente.',
+  materials: DEFAULT_EXCEL_MATERIALS
+};
 
 export default function ProviderTariffSidebar() {
   // 1. Visibilidad exclusiva en el modal/pantalla "PROJECT CARGO BUILDER" dentro de Proyectos
@@ -42,6 +54,7 @@ export default function ProviderTariffSidebar() {
 
   // Estado de apertura del panel
   const [isOpen, setIsOpen] = useState(false);
+  const setSidebarOpen = setIsOpen;
 
   // 1. ELIMINACIÓN DE DATOS HARDCODEADOS: Inicia vacío o desde lo guardado por el usuario
   const [entities, setEntities] = useState(() => {
@@ -73,9 +86,9 @@ export default function ProviderTariffSidebar() {
   // Filtro de entidad: 'all' | 'provider' | 'client'
   const [entityFilter, setEntityFilter] = useState('all');
 
-  // Entidad activa y material seleccionado
-  const activeEntity = entities.find(e => e.id === selectedEntityId) || entities[0] || null;
-  const [selectedMaterialId, setSelectedMaterialId] = useState(activeEntity?.materials?.[0]?.id || '');
+  // Entidad activa y material seleccionado (con fallback al catálogo oficial de Excel definitivo)
+  const activeEntity = entities.find(e => e.id === selectedEntityId) || entities[0] || defaultExcelEntity;
+  const [selectedMaterialId, setSelectedMaterialId] = useState(activeEntity?.materials?.[0]?.id || DEFAULT_EXCEL_MATERIALS[0].id);
 
   // Modo de edición manual / negociación
   const [isManualEditMode, setIsManualEditMode] = useState(false);
@@ -88,8 +101,55 @@ export default function ProviderTariffSidebar() {
   // Tarifa de mercado Land Charter detectada del proyecto (inicializada en 0, sin valores fijos ni hardcodeados)
   const [marketLandCharterRate, setMarketLandCharterRate] = useState(0);
 
-  // Tipo de cambio configurado (DZD / USD)
-  const [exchangeRateDzdUsd, setExchangeRateDzdUsd] = useState(OFFICIAL_EXCHANGE_RATE_DZD_USD);
+  // 2. SELECTOR DE DIVISA Y TIPO DE CAMBIO DINÁMICO
+  const [currency, setCurrency] = useState('DZD');
+  const [exchangeRateToUsd, setExchangeRateToUsd] = useState(OFFICIAL_EXCHANGE_RATE_DZD_USD);
+
+  // Tipo de cambio configurado (DZD / USD) sincronizado con exchangeRateToUsd
+  const exchangeRateDzdUsd = exchangeRateToUsd;
+  const setExchangeRateDzdUsd = setExchangeRateToUsd;
+
+  // 1. ELIMINAR CAMPOS HARDCODEADOS (ARGELIA/GICA) -> ARRAY DINÁMICO DE TARIFAS
+  // Sincronizado inicialmente con los valores base del producto por defecto del Excel definitivo
+  const [tarifas, setTarifas] = useState([
+    { id: 1, concepto: 'Precio Base Neto', valorLocal: 4930.00 },
+    { id: 2, concepto: 'Envase / Big Bag', valorLocal: 470.75 },
+    { id: 3, concepto: 'Logística / Inland', valorLocal: 914.60 },
+    { id: 4, concepto: 'Gastos de tránsito', valorLocal: 107.60 },
+    { id: 5, concepto: 'Gastos portuarios', valorLocal: 497.65 }
+  ]);
+
+  // Manejo de filas dinámicas de tarifas
+  const handleTarifaConceptoChange = (id, nuevoConcepto) => {
+    setTarifas(prev => prev.map(t => t.id === id ? { ...t, concepto: nuevoConcepto } : t));
+  };
+
+  const handleTarifaValorChange = (id, nuevoValorLocal) => {
+    const val = parseFloat(nuevoValorLocal);
+    const clean = isNaN(val) ? 0 : val;
+    setTarifas(prev => prev.map(t => t.id === id ? { ...t, valorLocal: clean } : t));
+  };
+
+  const handleAddTarifaRow = () => {
+    const nextId = tarifas.length > 0 ? Math.max(...tarifas.map(t => t.id)) + 1 : 1;
+    setTarifas(prev => [...prev, { id: nextId, concepto: `Concepto ${nextId}`, valorLocal: 0 }]);
+  };
+
+  const handleRemoveTarifaRow = (id) => {
+    setTarifas(prev => prev.filter(t => t.id !== id));
+  };
+
+  // Conversión dinámica a USD según exchangeRateToUsd
+  const tarifasConUsd = tarifas.map(t => {
+    const rate = Number(exchangeRateToUsd) > 0 ? Number(exchangeRateToUsd) : 1;
+    const valorUsd = Math.round((Number(t.valorLocal || 0) / rate) * 100) / 100;
+    return {
+      ...t,
+      valorUsd
+    };
+  });
+
+  const totalTarifasUsdPerMt = tarifasConUsd.reduce((acc, t) => acc + (Number(t.valorUsd) || 0), 0);
 
   // Estados del uploader de archivos
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -424,14 +484,52 @@ export default function ProviderTariffSidebar() {
       const next = { ...prev };
       delete next.inlandTransport;
       delete next.marketInlandCostPerMt;
+      delete next.suggestedFobSalePrice;
+      delete next.commercialMargin;
       return next;
     });
+
+    // Actualizar el estado dinámico del coste de "Logística / Inland" en el array de tarifas
+    if (activeMaterial) {
+      const rate = Number(exchangeRateToUsd) > 0 ? Number(exchangeRateToUsd) : 1;
+      const logisticaLocal = Math.round(
+        (val ? (activeMaterial.inlandTransport || 0) : (activeMaterial.marketInlandCostPerMt || activeMaterial.inlandTransport || 0)) * rate * 100
+      ) / 100;
+
+      setTarifas(prev => prev.map(t => {
+        if (t.id === 3 || t.concepto.toLowerCase().includes('logística') || t.concepto.toLowerCase().includes('inland')) {
+          return { ...t, valorLocal: logisticaLocal };
+        }
+        return t;
+      }));
+    }
   };
 
   const handleMaterialChange = (newMaterialId) => {
     setSelectedMaterialId(newMaterialId);
     setManualOverrides({});
     setIsManualEditMode(false);
+
+    // Cargar valores base correspondientes al Excel definitivo (ej. CEM I 42,5N/R) en el array de tarifas
+    const targetMat = activeEntity?.materials?.find(m => m.id === newMaterialId) || DEFAULT_EXCEL_MATERIALS.find(m => m.id === newMaterialId);
+    if (targetMat) {
+      const rate = Number(exchangeRateToUsd) > 0 ? Number(exchangeRateToUsd) : 1;
+      const baseNetoLocal = targetMat.basePriceDzd > 0
+        ? Math.round(targetMat.basePriceDzd * (targetMat.rabaisMultiplier || 1.0) * 100) / 100
+        : Math.round(targetMat.baseMaterialCost * (targetMat.rabaisMultiplier || 1.0) * rate * 100) / 100;
+      const envaseLocal = Math.round((targetMat.packagingCost || 0) * rate * 100) / 100;
+      const logisticaLocal = Math.round((useFspe ? (targetMat.inlandTransport || 0) : (targetMat.marketInlandCostPerMt || targetMat.inlandTransport || 0)) * rate * 100) / 100;
+      const transitoLocal = Math.round((targetMat.sgsInspection || 0) * rate * 100) / 100;
+      const puertoLocal = Math.round((targetMat.bejaiaPortDues || 0) * rate * 100) / 100;
+
+      setTarifas([
+        { id: 1, concepto: 'Precio Base Neto', valorLocal: baseNetoLocal },
+        { id: 2, concepto: 'Envase / Big Bag', valorLocal: envaseLocal },
+        { id: 3, concepto: 'Logística / Inland', valorLocal: logisticaLocal },
+        { id: 4, concepto: 'Gastos de tránsito', valorLocal: transitoLocal },
+        { id: 5, concepto: 'Gastos portuarios', valorLocal: puertoLocal }
+      ]);
+    }
   };
 
   const handleResetToOfficial = () => {
@@ -489,13 +587,15 @@ export default function ProviderTariffSidebar() {
 
   // =========================================================================
   // BOTÓN DE SINCRONIZACIÓN MANUAL ("Enviar al Proyecto") CON ANTIDUPLICIDAD
+  // Single Source of Truth: Precio Venta Final × Tonelaje del Proyecto
   // =========================================================================
   const handleSendToProject = () => {
     if (!activeMaterial) return;
 
     const qty = breakdown.quantityMT;
     const salePrice = breakdown.suggestedSalePrice;
-    const totalMercanciaUsd = breakdown.totalSaleSum;
+    // Sincronización estricta: Total = Precio Venta Final (ya calculado y correcto) * Tonelaje
+    const totalMercanciaUsd = Math.round(salePrice * qty * 100) / 100;
     const commodityName = activeMaterial.name;
     const category = activeMaterial.category || 'Minerales y Construcción';
     const productType = activeMaterial.productType || 'Cemento a granel';
@@ -527,7 +627,7 @@ export default function ProviderTariffSidebar() {
       }
     }
 
-    // 2. Inyección hacia Proyectos / ForwarderWorkspace con Antiduplicidad
+    // 2. Inyección hacia Proyectos / ForwarderWorkspace con Antiduplicidad y Formato Universal
     const forwarderPayload = {
       provider: entityName,
       entityType: activeEntity?.entityType || 'provider',
@@ -540,6 +640,7 @@ export default function ProviderTariffSidebar() {
       fobPriceUsdMt: salePrice,
       fobCostUsdMt: breakdown.totalUnitCost,
       valorTotalMercanciaUsd: totalMercanciaUsd,
+      mercancia_usd: totalMercanciaUsd, // Campo exacto solicitado por el usuario
       inlandTransport: breakdown.inlandTransport,
       inlandTransportTotalUsd: Math.round(breakdown.inlandTransport * qty * 100) / 100,
       bejaiaPortDues: breakdown.bejaiaPortDues,
@@ -553,6 +654,19 @@ export default function ProviderTariffSidebar() {
       localStorage.setItem('seacharter_provider_mercancia_cost', String(totalMercanciaUsd));
     } catch (_) {}
 
+    // 3. Ejecución directa de actualización del estado global (updatePayload o setGlobalState)
+    const updateData = { mercancia_usd: totalMercanciaUsd };
+    if (typeof window.updatePayload === 'function') {
+      window.updatePayload(updateData);
+    } else if (typeof window.setGlobalState === 'function') {
+      window.setGlobalState(updateData);
+    }
+
+    // Disparar evento para ForwarderWorkspace y otros escuchadores
+    window.dispatchEvent(new CustomEvent('seacharter:update-project-payload', {
+      detail: updateData
+    }));
+
     window.dispatchEvent(new CustomEvent('seacharter:provider-tariff-injected', {
       detail: forwarderPayload
     }));
@@ -561,6 +675,10 @@ export default function ProviderTariffSidebar() {
     if (mercanciaInput) {
       mercanciaInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
+
+    // Cierre automático de la barra lateral tras la inyección
+    setSidebarOpen(false);
+    setIsOpen(false);
 
     setSyncToast({
       message: `✅ Tarifa ${commercialModality} (${useFspe ? 'Con FSPE' : 'Sin FSPE'}) de ${activeEntity?.shortName || entityName} (${commodityName}) enviada al Proyecto: ${qty.toLocaleString('es-ES')} MT a $${salePrice.toFixed(2)}/MT (Total: $${totalMercanciaUsd.toLocaleString('es-ES')})`
@@ -863,16 +981,139 @@ export default function ProviderTariffSidebar() {
                   <i className="fa-solid fa-calculator text-blue-700"></i> 3. Desglose Financiero ({commercialModality} • {useFspe ? 'Con FSPE' : 'Sin FSPE'})
                 </h3>
                 <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '700' }}>
-                  TC: {exchangeRateDzdUsd.toFixed(2)} DZD/USD
+                  TC: {exchangeRateToUsd.toFixed(2)} {currency}/USD
                 </span>
               </div>
 
+              {/* 1. DESPLEGABLE DE PRODUCTOS DEL EXCEL IMPORTADO (Visible SI Y SOLO SI > 1 producto) */}
+              {activeEntity && activeEntity.materials && activeEntity.materials.length > 1 && (
+                <div className="pt-product-selector-bar" style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '12px' }}>
+                  <label htmlFor="pt-excel-products-select" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10.5px', fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}>
+                    <span>Seleccionar Producto de la Matriz Importada</span>
+                    <span style={{ fontSize: '9.5px', color: '#0284c7', fontWeight: '600' }}>{activeEntity.materials.length} productos disponibles</span>
+                  </label>
+                  <select
+                    id="pt-excel-products-select"
+                    className="pt-select"
+                    style={{ fontSize: '11.5px', padding: '6px 8px', fontWeight: '600' }}
+                    value={selectedMaterialId}
+                    onChange={(e) => handleMaterialChange(e.target.value)}
+                    aria-label="Seleccionar Producto Importado"
+                  >
+                    {activeEntity.materials.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 2. SELECTOR DE DIVISA Y TIPO DE CAMBIO (GENÉRICO Y UNIVERSAL) */}
+              <div className="pt-currency-selector-bar" style={{ display: 'flex', gap: '8px', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="pt-currency-select" style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#475569', marginBottom: '2px' }}>
+                    Divisa Origen
+                  </label>
+                  <select
+                    id="pt-currency-select"
+                    className="pt-select"
+                    style={{ fontSize: '11px', padding: '4px 6px' }}
+                    value={currency}
+                    onChange={(e) => {
+                      const newCurr = e.target.value;
+                      setCurrency(newCurr);
+                      if (newCurr === 'DZD') setExchangeRateToUsd(OFFICIAL_EXCHANGE_RATE_DZD_USD);
+                      else if (newCurr === 'EUR') setExchangeRateToUsd(0.92);
+                      else if (newCurr === 'TRY') setExchangeRateToUsd(34.20);
+                      else if (newCurr === 'USD') setExchangeRateToUsd(1.0);
+                    }}
+                  >
+                    <option value="DZD">DZD (Dinar Argelino)</option>
+                    <option value="TRY">TRY (Lira Turca)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="USD">USD (Dólar USA)</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="pt-exchange-rate-input" style={{ display: 'block', fontSize: '10px', fontWeight: 'bold', color: '#475569', marginBottom: '2px' }}>
+                    Tipo de Cambio (1 USD = X {currency})
+                  </label>
+                  <input
+                    id="pt-exchange-rate-input"
+                    type="number"
+                    step="any"
+                    className="pt-input"
+                    style={{ fontSize: '11px', padding: '4px 6px' }}
+                    value={exchangeRateToUsd}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setExchangeRateToUsd(isNaN(val) ? 1 : val);
+                    }}
+                    placeholder={`T.C. ${currency} a USD`}
+                  />
+                </div>
+              </div>
+
+              {/* 1. LISTA DINÁMICA DE TARIFAS (INPUTS POR CADA CONCEPTO Y VALOR LOCAL) */}
+              <div className="pt-dynamic-tariffs-container" style={{ background: '#f1f5f9', padding: '10px', borderRadius: '8px', marginBottom: '14px', border: '1px solid #cbd5e1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#0f172a' }}>
+                    Tarifas Dinámicas ({currency} ➔ USD)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddTarifaRow}
+                    className="pt-badge pt-badge-verified"
+                    style={{ cursor: 'pointer', padding: '2px 8px', fontSize: '10px', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '4px' }}
+                  >
+                    + Añadir Concepto
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {tarifasConUsd.map((t) => (
+                    <div key={t.id} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="pt-input"
+                        style={{ flex: 2, fontSize: '11px', padding: '4px 6px' }}
+                        value={t.concepto}
+                        onChange={(e) => handleTarifaConceptoChange(t.id, e.target.value)}
+                        placeholder="Nombre del concepto (ej. Inland Freight Turkey)"
+                        aria-label={`Concepto ${t.id}`}
+                      />
+                      <input
+                        type="number"
+                        step="any"
+                        className="pt-input"
+                        style={{ flex: 1.2, fontSize: '11px', padding: '4px 6px' }}
+                        value={t.valorLocal}
+                        onChange={(e) => handleTarifaValorChange(t.id, e.target.value)}
+                        placeholder="Valor local"
+                        aria-label={`Valor ${t.id}`}
+                      />
+                      <span style={{ fontSize: '10.5px', color: '#0369a1', minWidth: '65px', textAlign: 'right', fontWeight: 'bold' }}>
+                        ${t.valorUsd.toFixed(2)} USD
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTarifaRow(t.id)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px 4px' }}
+                        title="Eliminar concepto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="pt-cost-grid">
-                {/* 1. Precio Base en DZD (Prix GICA / Usine) */}
+                {/* 1. Precio Base (Sin Dto.) */}
                 <div className="pt-cost-item">
                   <label className="pt-cost-label" htmlFor="pt-input-gica">
-                    <span>Precio Base DZD (Prix GICA)</span>
-                    <span style={{ fontSize: '9px', color: '#0284c7' }}>DZD/MT</span>
+                    <span>Precio Base (Sin Dto.)</span>
+                    <span style={{ fontSize: '9px', color: '#0284c7' }}>{currency}/MT</span>
                   </label>
                   <input
                     id="pt-input-gica"
@@ -883,17 +1124,17 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.basePriceDzd}
                     onChange={(e) => handleNumericChange('basePriceDzd', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Precio Base DZD (Prix GICA)"
+                    aria-label="Precio Base (Sin Dto.)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
-                    {breakdown.basePriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} DZD
+                    {breakdown.basePriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currency}
                   </span>
                 </div>
 
-                {/* 2. Rabais Multiplicador */}
+                {/* 2. Factor Rabais (Descuento de fábrica) */}
                 <div className="pt-cost-item">
                   <label className="pt-cost-label" htmlFor="pt-input-rabais" style={{ color: '#047857' }}>
-                    <span>Factor Rabais (Descuento)</span>
+                    <span>Descuento (Rabais)</span>
                     <span style={{ fontSize: '9px' }}>{((1 - breakdown.rabaisMultiplier) * 100).toFixed(1)}% desc.</span>
                   </label>
                   <input
@@ -905,33 +1146,33 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.rabaisMultiplier}
                     onChange={(e) => handleNumericChange('rabaisMultiplier', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Factor Rabais (Multiplicador)"
+                    aria-label="Descuento (Rabais)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#047857' }}>
                     × {breakdown.rabaisMultiplier.toFixed(4)}
                   </span>
                 </div>
 
-                {/* 3. Precio Neto en DZD */}
+                {/* 3. Precio Base Neto (Base * Descuento) */}
                 <div className="pt-cost-item">
-                  <span className="pt-cost-label">Precio Neto en DZD</span>
+                  <span className="pt-cost-label">Precio Base Neto ({currency})</span>
                   <span className="pt-cost-value" style={{ color: '#0f766e' }}>
-                    {breakdown.netPriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} DZD/MT
+                    {breakdown.netPriceDzd.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currency}/MT
                   </span>
                 </div>
 
                 {/* 4. Precio Base Neto en USD */}
                 <div className="pt-cost-item" style={{ background: '#f0f9ff', borderColor: '#bae6fd' }}>
-                  <span className="pt-cost-label" style={{ color: '#0369a1' }}>Base Neta en USD (÷ {exchangeRateDzdUsd})</span>
+                  <span className="pt-cost-label" style={{ color: '#0369a1' }}>Base Neta en USD (÷ {exchangeRateToUsd.toFixed(2)})</span>
                   <span className="pt-cost-value" style={{ color: '#0284c7' }}>
                     ${breakdown.netMaterialCost.toFixed(2)} USD/MT
                   </span>
                 </div>
 
-                {/* 5. Envase / Big Bag */}
+                {/* 5. Envase (Big Bag / Saco) */}
                 <div className="pt-cost-item">
                   <label className="pt-cost-label" htmlFor="pt-input-packaging">
-                    <span>+ Envase (Big Bag / Sac)</span>
+                    <span>+ Envase (Big Bag / Saco)</span>
                     <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
                   </label>
                   <input
@@ -943,7 +1184,7 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.packagingCost}
                     onChange={(e) => handleNumericChange('packagingCost', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Envase (Big Bag / Sac)"
+                    aria-label="Envase (Big Bag / Saco)"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
                     +${breakdown.packagingCost.toFixed(2)} USD
@@ -953,7 +1194,7 @@ export default function ProviderTariffSidebar() {
                 {/* 6. Logística Activa (Ajustada según FSPE y Modalidad FOB) */}
                 <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
                   <label className="pt-cost-label" htmlFor="pt-input-inland">
-                    <span>+ Logística activa ({useFspe ? 'FSPE Fábrica' : 'Marché Sans FSPE'})</span>
+                    <span>+ Logística activa ({useFspe ? 'FSPE Fábrica' : 'Mercado Sin FSPE'})</span>
                     <span style={{ fontSize: '9px', color: !useFspe ? '#b45309' : '#0284c7' }}>
                       {commercialModality === 'EXW' ? 'EXW ($0 en FOB ops)' : 'USD/MT'}
                     </span>
@@ -974,10 +1215,10 @@ export default function ProviderTariffSidebar() {
                   </span>
                 </div>
 
-                {/* 7. SGS Inspection */}
+                {/* 7. Gastos de tránsito */}
                 <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
                   <label className="pt-cost-label" htmlFor="pt-input-sgs">
-                    <span>+ Frais Transit / SGS</span>
+                    <span>+ Gastos de tránsito</span>
                     <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
                   </label>
                   <input
@@ -989,17 +1230,17 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.sgsInspection}
                     onChange={(e) => handleNumericChange('sgsInspection', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Frais Transit / SGS"
+                    aria-label="Gastos de tránsito"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
                     {commercialModality === 'FOB' ? `+$${breakdown.sgsInspection.toFixed(2)} USD` : `$${breakdown.sgsInspection.toFixed(2)} USD (EXW)`}
                   </span>
                 </div>
 
-                {/* 8. Tasas Portuarias Bejaia */}
+                {/* 8. Gastos portuarios */}
                 <div className="pt-cost-item" style={{ opacity: commercialModality === 'EXW' ? 0.6 : 1 }}>
                   <label className="pt-cost-label" htmlFor="pt-input-port">
-                    <span>+ Frais Port Bejaia (EPB)</span>
+                    <span>+ Gastos portuarios</span>
                     <span style={{ fontSize: '9px', color: '#64748b' }}>USD/MT</span>
                   </label>
                   <input
@@ -1011,7 +1252,7 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.bejaiaPortDues}
                     onChange={(e) => handleNumericChange('bejaiaPortDues', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Frais Port Bejaia (EPB)"
+                    aria-label="Gastos portuarios"
                   />
                   <span className="pt-cost-value" style={{ fontSize: '11px', marginTop: '2px', color: '#64748b' }}>
                     {commercialModality === 'FOB' ? `+$${breakdown.bejaiaPortDues.toFixed(2)} USD` : `$${breakdown.bejaiaPortDues.toFixed(2)} USD (EXW)`}
@@ -1053,7 +1294,7 @@ export default function ProviderTariffSidebar() {
                 <div className="pt-cost-item pt-cost-item-full highlight-sale">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="pt-cost-label" htmlFor="pt-input-sale-price" style={{ margin: 0 }}>
-                      Precio de Venta Unitario Final ({commercialModality})
+                      PRECIO DE VENTA UNITARIO FINAL ({commercialModality})
                     </label>
                     {isManualEditMode && <span style={{ color: '#059669', fontSize: '9px', fontWeight: '700' }}>Modo Edición</span>}
                   </div>
@@ -1067,9 +1308,9 @@ export default function ProviderTariffSidebar() {
                     value={breakdown.suggestedSalePrice}
                     onChange={(e) => handleNumericChange('suggestedFobSalePrice', e.target.value, e)}
                     readOnly={!isManualEditMode}
-                    aria-label="Precio de Venta Unitario Final"
+                    aria-label="PRECIO DE VENTA UNITARIO FINAL (FOB)"
                   />
-                  <span className="pt-cost-value" style={{ marginTop: '2px', fontSize: '12px' }}>
+                  <span className="pt-cost-value" style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '14px' }}>
                     ${breakdown.suggestedSalePrice.toFixed(2)} / MT
                   </span>
                 </div>
