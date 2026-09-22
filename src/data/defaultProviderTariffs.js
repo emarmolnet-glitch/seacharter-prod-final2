@@ -24,17 +24,101 @@ export const OFFICIAL_EXCHANGE_RATE_DZD_USD = 134.50;
 export const DEFAULT_PROVIDER_TARIFFS = [];
 
 /**
+ * Catálogo de productos oficiales según la matriz Excel definitiva:
+ * Incluye CEM I 42,5N/R, CEM I 52,5N big bag, CEM II 42,5 vrac y Clinker gris granel.
+ * Cada producto tiene su Precio Base (Sin Dto.) y su Factor de Descuento (Rabais, ej. 0.85).
+ */
+export const DEFAULT_EXCEL_MATERIALS = [
+  {
+    id: 'mat-cem-1-42-5',
+    name: 'CEM I 42,5N/R',
+    typology: 'Cemento',
+    productType: 'Cemento envasado',
+    category: 'Minerales y Construcción',
+    unit: 'USD/MT',
+    basePriceDzd: 5800.00,
+    rabaisMultiplier: 0.85, // PRECIO BASE NETO = PRECIO BASE (5800) * 0.85 = 4930 DZD
+    baseMaterialCost: 43.12,
+    packagingCost: 3.50,
+    inlandTransport: 6.80,
+    marketInlandCostPerMt: 4.63,
+    bejaiaPortDues: 3.70,
+    sgsInspection: 0.80,
+    commercialMargin: 5.00,
+    defaultQuantityMT: 10000,
+    notes: 'Matriz Oficial Excel GICA 2026 - CEM I 42,5N/R (Descuento fábrica 0.85)'
+  },
+  {
+    id: 'mat-cem-1-52-5',
+    name: 'CEM I 52,5N big bag',
+    typology: 'Cemento',
+    productType: 'Cemento Big Bag',
+    category: 'Minerales y Construcción',
+    unit: 'USD/MT',
+    basePriceDzd: 6590.50,
+    rabaisMultiplier: 0.9388,
+    baseMaterialCost: 49.00,
+    packagingCost: 3.50,
+    inlandTransport: 6.80,
+    marketInlandCostPerMt: 14.50,
+    bejaiaPortDues: 3.70,
+    sgsInspection: 0.80,
+    commercialMargin: 5.00,
+    defaultQuantityMT: 10000,
+    notes: 'Matriz Oficial Excel GICA 2026 - CEM I 52,5N big bag'
+  },
+  {
+    id: 'mat-cem-2-42-5',
+    name: 'CEM II 42,5 vrac',
+    typology: 'Cemento',
+    productType: 'Cemento a granel',
+    category: 'Minerales y Construcción',
+    unit: 'USD/MT',
+    basePriceDzd: 5514.50,
+    rabaisMultiplier: 0.9512,
+    baseMaterialCost: 41.00,
+    packagingCost: 0.00,
+    inlandTransport: 6.80,
+    marketInlandCostPerMt: 14.50,
+    bejaiaPortDues: 3.70,
+    sgsInspection: 0.80,
+    commercialMargin: 5.00,
+    defaultQuantityMT: 10000,
+    notes: 'Matriz Oficial Excel GICA 2026 - CEM II 42,5 vrac'
+  },
+  {
+    id: 'mat-clinker',
+    name: 'Clinker gris granel',
+    typology: 'Clínker',
+    productType: 'Clínker',
+    category: 'Minerales y Construcción',
+    unit: 'USD/MT',
+    basePriceDzd: 4707.50,
+    rabaisMultiplier: 0.9428,
+    baseMaterialCost: 35.00,
+    packagingCost: 0.00,
+    inlandTransport: 5.20,
+    marketInlandCostPerMt: 11.00,
+    bejaiaPortDues: 2.90,
+    sgsInspection: 0.60,
+    commercialMargin: 5.00,
+    defaultQuantityMT: 10000,
+    notes: 'Matriz Oficial Excel GICA 2026 - Clinker gris granel'
+  }
+];
+
+/**
  * Motor de cálculo financiero exacto:
  * @param {Object} item - Ítem de material con campos de precio y logística
  * @param {Object} overrides - Opciones y sobrescrituras:
  *   - commercialModality: 'FOB' | 'EXW'
  *   - useFspe: boolean (true = Con FSPE / subvencionado, false = Sin FSPE / mercado)
  *   - marketInlandCostPerMt: number (tarifa de mercado Land Charter o de fila Excel, default: 0)
- *   - exchangeRateDzdUsd: number (default: 134.50)
+ *   - exchangeRateDzdUsd / exchangeRateToUsd: number (default: 134.50)
  *   - quantityMT / projectWeightTons: number (default: 10000)
  */
 export function calculateTariffBreakdown(item = {}, overrides = {}) {
-  const exchangeRateDzdUsd = Number(overrides.exchangeRateDzdUsd ?? item.exchangeRateDzdUsd ?? OFFICIAL_EXCHANGE_RATE_DZD_USD) || OFFICIAL_EXCHANGE_RATE_DZD_USD;
+  const exchangeRateDzdUsd = Number(overrides.exchangeRateToUsd ?? overrides.exchangeRateDzdUsd ?? item.exchangeRateDzdUsd ?? OFFICIAL_EXCHANGE_RATE_DZD_USD) || OFFICIAL_EXCHANGE_RATE_DZD_USD;
   const commercialModality = String(overrides.commercialModality || 'FOB').toUpperCase(); // 'FOB' | 'EXW'
   const useFspe = overrides.useFspe !== undefined ? Boolean(overrides.useFspe) : (item.useFspe !== undefined ? Boolean(item.useFspe) : true);
 
@@ -52,8 +136,9 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
       ? Number(overrides.rabaisMultiplier)
       : (item.rabaisMultiplier !== undefined
           ? Number(item.rabaisMultiplier)
-          : (overrides.rabais !== undefined ? Number(overrides.rabais) : 1.0));
+          : (overrides.rabais !== undefined ? Number(overrides.rabais) : (item.rabais !== undefined ? Number(item.rabais) : 1.0)));
     
+    // PRECIO BASE NETO = PRECIO BASE (SIN DTO) * FACTOR DE DESCUENTO (ej. 0.85)
     if (rawMultiplier > 0 && rawMultiplier <= 1) {
       rabaisMultiplier = rawMultiplier;
     } else if (rawMultiplier > 1 && rawMultiplier <= 100) {
@@ -69,7 +154,9 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
   } else {
     // Modo directo en USD
     baseMaterialCost = Number(overrides.baseMaterialCost ?? item.baseMaterialCost ?? 0);
-    const rawRabais = Number(overrides.rabais ?? item.rabais ?? 0);
+    const rawRabais = overrides.rabaisMultiplier !== undefined
+      ? Number(overrides.rabaisMultiplier)
+      : Number(overrides.rabais ?? item.rabaisMultiplier ?? item.rabais ?? 0);
     
     if (rawRabais > 0 && rawRabais <= 1) {
       rabaisMultiplier = rawRabais;
@@ -120,19 +207,27 @@ export function calculateTariffBreakdown(item = {}, overrides = {}) {
   const totalFobCost = Math.round((netMaterialCost + packagingCost + inlandTransport + bejaiaPortDues + sgsInspection + otherCosts) * 100) / 100;
 
   let commercialMargin = Number(overrides.commercialMargin !== undefined ? overrides.commercialMargin : (item.commercialMargin !== undefined ? item.commercialMargin : 0));
+  let commercialMarginPercentage = overrides.commercialMarginPercentage !== undefined
+    ? Number(overrides.commercialMarginPercentage)
+    : (item.commercialMarginPercentage !== undefined ? Number(item.commercialMarginPercentage) : 0);
   let suggestedSalePrice = Number(overrides.suggestedFobSalePrice !== undefined ? overrides.suggestedFobSalePrice : (item.suggestedFobSalePrice !== undefined ? item.suggestedFobSalePrice : 0));
 
   // Validación y cálculo del precio de venta real:
   // Si no hay override manual explícito de precio de venta y el valor detectado es menor o igual al coste unitario o un número pequeño (<= 15, ej. 3 USD),
-  // se descarta como precio de venta y se calcula de forma automática según la fórmula: totalUnitCost + commercialMargin.
+  // se descarta como precio de venta y se calcula de forma automática según la fórmula correspondiente.
   if (overrides.suggestedFobSalePrice === undefined && suggestedSalePrice > 0 && (suggestedSalePrice <= totalUnitCost || suggestedSalePrice <= 15)) {
-    if (commercialMargin === 0 && suggestedSalePrice <= 25) {
+    if (commercialMargin === 0 && commercialMarginPercentage === 0 && suggestedSalePrice <= 25) {
       commercialMargin = suggestedSalePrice;
     }
     suggestedSalePrice = 0;
   }
 
-  if (commercialModality === 'EXW') {
+  // Si se especifica un margen porcentual (ej. 15% o 18%), calcular:
+  // suggestedSalePrice = Math.round(totalUnitCost * (1 + (commercialMarginPercentage / 100)) * 100) / 100;
+  if (commercialMarginPercentage > 0 && overrides.suggestedFobSalePrice === undefined && overrides.commercialMargin === undefined) {
+    suggestedSalePrice = Math.round(totalUnitCost * (1 + (commercialMarginPercentage / 100)) * 100) / 100;
+    commercialMargin = Math.round((suggestedSalePrice - totalUnitCost) * 100) / 100;
+  } else if (commercialModality === 'EXW') {
     if (overrides.suggestedFobSalePrice === undefined || suggestedSalePrice === 0) {
       suggestedSalePrice = Math.round((totalUnitCost + commercialMargin) * 100) / 100;
     }
