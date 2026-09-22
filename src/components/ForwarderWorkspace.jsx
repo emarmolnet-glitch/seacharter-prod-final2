@@ -2761,9 +2761,57 @@ export function ForwarderWorkspace() {
     const w = Math.max(0, parseFloat(item.width) || 0);
     const h = Math.max(0, parseFloat(item.height) || 0);
     const wt = Math.max(0, parseFloat(item.weight) || 0);
-    acc.quantity += qty; acc.m2 += qty * (l * w); acc.m3 += qty * (l * w * h); acc.weight += qty * wt;
+    acc.quantity += qty;
+    acc.m2 += qty * (l * w);
+    acc.m3 += qty * (l * w * h);
+    acc.weight += qty * wt;
+    acc.weightKg = acc.weight;
+    acc.weightTons = acc.weight / 1000;
+    acc.totalWeightTons = acc.weight / 1000;
     return acc;
-  }, { quantity: 0, m2: 0, m3: 0, weight: 0 });
+  }, { quantity: 0, m2: 0, m3: 0, weight: 0, weightKg: 0, weightTons: 0, totalWeightTons: 0 });
+
+  // Single Source of Truth para Tarifa del Armador y Tonelaje del Proyecto (Módulo B2B)
+  const tarifaArmadorUsdMt = Number(
+    fleteCompra ??
+    activeProject?.route_and_chartering?.flete_compra_usd_mt ??
+    activeProject?.route_and_chartering?.freight_rate_cost_usd ??
+    activeProject?.route_and_chartering?.flete_sugerido_armador_compra ??
+    0
+  );
+
+  const quantityMT = Number(
+    totals.totalWeightTons ||
+    totals.weightTons ||
+    (totals.weightKg ? totals.weightKg / 1000 : (totals.weight ? totals.weight / 1000 : 0))
+  ) || 0;
+
+  // Hook reactivo: Cálculo dinámico estricto de Flete Marítimo y Coste Total All-In (Single Source of Truth)
+  useEffect(() => {
+    const fleteTotalReal = (Number(tarifaArmadorUsdMt) || 0) * (Number(quantityMT) || 0);
+    setSubtotalFreight(Math.round(fleteTotalReal * 100) / 100);
+    setOceanFreight(Math.round(fleteTotalReal * 100) / 100);
+
+    const costeTotalAllIn = fleteTotalReal + Number(subtotalFobOperations || 0);
+    setEstimatedCost(Math.round(costeTotalAllIn * 100) / 100);
+
+    const effectiveFleteVenta = Number(
+      fleteVenta ||
+      activeProject?.route_and_chartering?.flete_venta_usd_mt ||
+      activeProject?.route_and_chartering?.freight_rate_sell_usd ||
+      activeProject?.route_and_chartering?.flete_sugerido_fletador_venta ||
+      0
+    );
+    const landCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
+    let targetSalePrice = 0;
+    if (effectiveFleteVenta > 0 && quantityMT > 0) {
+      const targetOceanFreightSale = Math.round(effectiveFleteVenta * quantityMT * 100) / 100;
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(subtotalFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+    } else {
+      targetSalePrice = (Number(costeTotalAllIn) || 0) * 1.15;
+    }
+    setSalePrice((Number(targetSalePrice) || 0).toFixed(2));
+  }, [tarifaArmadorUsdMt, quantityMT, subtotalFobOperations, fleteVenta, activeProject?.land_freight_cost, activeProject?.route_and_chartering]);
 
   const handleCargoCategoryChange = (newCategory) => {
     setCargoCategory(newCategory);
@@ -2979,6 +3027,19 @@ export function ForwarderWorkspace() {
     let calculatedFobOperations = 0;
     let totalEstimatedCost = 0;
 
+    const tarifaArmadorUsdMt = Number(
+      fleteCompra ??
+      activeProject?.route_and_chartering?.flete_compra_usd_mt ??
+      activeProject?.route_and_chartering?.freight_rate_cost_usd ??
+      activeProject?.route_and_chartering?.flete_sugerido_armador_compra ??
+      0
+    );
+    const quantityMT = totalWeightTons;
+    // Eliminado hardcoding y breakeven irreal (oceanFreightCost = revenueTons * 65.0; diasRotacionTotal * effectiveDailyHire * 100):
+    // Single Source of Truth: Cotización directa armador * toneladas
+    const fleteTotalReal = (Number(tarifaArmadorUsdMt) || 0) * (Number(quantityMT) || 0);
+    calculatedOceanFreight = Number(Math.round(fleteTotalReal * 100) / 100);
+
     if (isUnderThreshold) {
       // Regla < 40t: Desactivar TCE del buque y computar costes bajo la modalidad de grupaje LCL
       setTceActive(false);
@@ -2991,21 +3052,18 @@ export function ForwarderWorkspace() {
       const chargeableVolumeCbm = Math.max(0.1, totalVolumeM3);
       const revenueTons = Math.max(1, Math.max(chargeableWeightTons, chargeableVolumeCbm));
 
-      // Subtotal 1: Flete Marítimo LCL
-      const oceanFreightCost = revenueTons * 65.0;
-
       // Subtotal 2: Costes FOB y Operativa Portuaria (CFS, Tasas T3, B/L, almacenaje, surveyor, inland, mercancía)
       const cfsOriginCost = revenueTons * 22.0;
       const cfsDestCost = revenueTons * 25.0;
       const portT3Cost = revenueTons * 4.5;
       const blFee = 85.0;
-      const totalLclFreightCost = oceanFreightCost + cfsOriginCost + cfsDestCost + portT3Cost + blFee;
+      const totalLclFreightCost = calculatedOceanFreight + cfsOriginCost + cfsDestCost + portT3Cost + blFee;
       const terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
 
-      calculatedOceanFreight = Number(oceanFreightCost) || 0;
       calculatedFobOperations = (Number(cfsOriginCost) || 0) + (Number(cfsDestCost) || 0) + (Number(portT3Cost) || 0) + (Number(blFee) || 0) + (Number(terminalStorageCost) || 0) + (Number(currentSurveyorCost) || 0) + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0);
 
-      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + landCost;
+      const costeTotalAllIn = fleteTotalReal + Number(calculatedFobOperations || 0);
+      totalEstimatedCost = costeTotalAllIn;
     } else {
       // Regla >= 40t: Aplicar fletamento completo y cálculo de TCE del buque sugerido
       setTceActive(true);
@@ -3068,9 +3126,6 @@ export function ForwarderWorkspace() {
 
       const effectiveDailyHire = Number(vesselDailyHireUsd) || dailyTce;
 
-      // Subtotal 1: Flete Marítimo Buque Completo / TCE en USD nativo
-      const freightCost = Math.round(diasRotacionTotal * effectiveDailyHire * 100) / 100;
-
       // CÁLCULO Y GESTIÓN DE DEMORAS Y PLANCHA (Demurrage) en USD nativo
       let demurrageCostUsd = 0;
       let totalDemDays = 0;
@@ -3125,10 +3180,10 @@ export function ForwarderWorkspace() {
         terminalStorageCost = Math.ceil(total_m2) * storageDays * 2;
       }
 
-      calculatedOceanFreight = Number(freightCost) || 0;
       calculatedFobOperations = (Number(lashingCost) || 0) + (Number(stevedoringCost) || 0) + (Number(portCraneCost) || 0) + (Number(terminalStorageCost) || 0) + (Number(initialHandlingCost) || 0) + (Number(currentSurveyorCost) || 0) + (Number(inlandCost) || 0) + (Number(customsCost) || 0) + (Number(insuranceCost) || 0) + (Number(demurrageCostUsd) || 0);
 
-      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + landCost;
+      const costeTotalAllIn = fleteTotalReal + Number(calculatedFobOperations || 0);
+      totalEstimatedCost = costeTotalAllIn;
     }
 
     const rawType = String(cargoItems[0]?.type || '').toUpperCase().trim();
@@ -3157,7 +3212,8 @@ export function ForwarderWorkspace() {
 
       const inlandCost = totalWeightTons * appliedTariff.inlandUsdMt;
       calculatedFobOperations = totalWeightTons * (appliedTariff.portDuesUsdMt + appliedTariff.customsUsdMt + appliedTariff.packagingUsdMt) + (Number(customsCost) || 0);
-      totalEstimatedCost = calculatedOceanFreight + calculatedFobOperations + inlandCost;
+      const costeTotalAllIn = fleteTotalReal + Number(calculatedFobOperations || 0);
+      totalEstimatedCost = costeTotalAllIn;
     } else {
       setIsCommodityTariffActive(false);
     }
@@ -3181,10 +3237,11 @@ export function ForwarderWorkspace() {
       targetSalePrice = (Number(totalEstimatedCost) || 0) * 1.15;
     }
 
-    setOceanFreight(Number(calculatedOceanFreight) || 0);
-    setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
+    const costeTotalAllIn = fleteTotalReal + Number(calculatedFobOperations || 0);
+    setOceanFreight(Math.round(fleteTotalReal * 100) / 100);
+    setSubtotalFreight(Math.round(fleteTotalReal * 100) / 100); // setSubtotalFreight((Number(calculatedOceanFreight) || 0).toFixed(2));
     setSubtotalFobOperations((Number(calculatedFobOperations) || 0).toFixed(2));
-    setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2)); // setEstimatedCost(totalEstimatedCost.toFixed(2));
+    setEstimatedCost(Math.round(costeTotalAllIn * 100) / 100); // setEstimatedCost(totalEstimatedCost.toFixed(2)); setEstimatedCost((Number(totalEstimatedCost) || 0).toFixed(2));
     setSalePrice((Number(targetSalePrice) || 0).toFixed(2)); // setSalePrice((totalEstimatedCost * 1.15).toFixed(2));
   };
 
@@ -3691,20 +3748,6 @@ export function ForwarderWorkspace() {
     const reportDemDailyUsd = Number(sourcePayload?.route_and_chartering?.demurrage_daily_rate_usd ?? demurrageDailyRateUsd) || reportDailyHire;
     const demurrageCostNum = Math.round(reportDemDays * reportDemDailyUsd * 100) / 100;
 
-    // Subtotal 1: Flete Marítimo / TCE en USD nativo
-    let fleteCostNum = 0;
-    if (sourcePayload?.financialBreakdown?.subtotalOceanFreight != null && Number(sourcePayload.financialBreakdown.subtotalOceanFreight) > 0) {
-      fleteCostNum = Number(sourcePayload.financialBreakdown.subtotalOceanFreight);
-    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_usd != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd) > 0) {
-      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd);
-    } else if (parseFloat(subtotalFreight) > 0) {
-      fleteCostNum = parseFloat(subtotalFreight);
-    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
-      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur);
-    } else {
-      fleteCostNum = Math.round(diasRotacionTotal * reportDailyHire * 100) / 100;
-    }
-
     // Fletes financieros sincronizados de la Calculadora (Flete Compra Armador y Flete Venta Fletador)
     const manualFleteVentaUnit = Number(
       sourcePayload?.route_and_chartering?.flete_venta_usd_mt ??
@@ -3724,6 +3767,22 @@ export function ForwarderWorkspace() {
       fleteCompra ??
       0
     );
+
+    // Subtotal 1: Flete Marítimo / TCE en USD nativo (Single Source of Truth directo de cotización armador)
+    let fleteCostNum = 0;
+    if (manualFleteCompraUnit > 0 && totalWeightTons > 0) {
+      fleteCostNum = Math.round(manualFleteCompraUnit * totalWeightTons * 100) / 100;
+    } else if (parseFloat(subtotalFreight) > 0) {
+      fleteCostNum = parseFloat(subtotalFreight);
+    } else if (sourcePayload?.financialBreakdown?.subtotalOceanFreight != null && Number(sourcePayload.financialBreakdown.subtotalOceanFreight) > 0) {
+      fleteCostNum = Number(sourcePayload.financialBreakdown.subtotalOceanFreight);
+    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_usd != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd) > 0) {
+      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_usd);
+    } else if (sourcePayload?.financial_summary?.subtotal_ocean_freight_eur != null && Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur) > 0) {
+      fleteCostNum = Number(sourcePayload.financial_summary.subtotal_ocean_freight_eur);
+    } else {
+      fleteCostNum = Math.round((Number(manualFleteCompraUnit) || 0) * (Number(totalWeightTons) || 0) * 100) / 100;
+    }
 
     // Respetar la Simulación: Si se especificó Flete Venta manual en la Calculadora, se utiliza como objetivo principal del tramo marítimo
     let fleteSaleNum = 0;
@@ -6013,9 +6072,18 @@ export function ForwarderWorkspace() {
                         </div>
                         <div className="flex items-baseline">
                           <span className="text-sm font-mono font-bold text-blue-700 mr-1 select-none">$</span>
-                          <span id="modal-flete-sugerido-armador" className="text-xl font-mono font-black text-blue-900">
-                            {Number(fleteCompra || activeProject?.route_and_chartering?.flete_compra_usd_mt || 0).toFixed(2)}
-                          </span>
+                          <input
+                            id="modal-flete-sugerido-armador"
+                            type="number"
+                            step="any"
+                            value={fleteCompra !== '' && fleteCompra !== null && fleteCompra !== undefined ? fleteCompra : ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
+                              setFleteCompra(val);
+                            }}
+                            className="w-24 bg-white border border-blue-300 rounded px-2 py-0.5 text-xl font-mono font-black text-blue-900 text-right focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-inner"
+                            placeholder="0.00"
+                          />
                           <span className="text-[10px] font-mono font-semibold text-blue-700 ml-1">USD/MT</span>
                         </div>
                       </div>
@@ -6032,9 +6100,18 @@ export function ForwarderWorkspace() {
                         </div>
                         <div className="flex items-baseline">
                           <span className="text-sm font-mono font-bold text-emerald-700 mr-1 select-none">$</span>
-                          <span id="modal-flete-sugerido-fletador" className="text-xl font-mono font-black text-emerald-900">
-                            {Number(fleteVenta || activeProject?.route_and_chartering?.flete_venta_usd_mt || 0).toFixed(2)}
-                          </span>
+                          <input
+                            id="modal-flete-sugerido-fletador"
+                            type="number"
+                            step="any"
+                            value={fleteVenta !== '' && fleteVenta !== null && fleteVenta !== undefined ? fleteVenta : ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
+                              setFleteVenta(val);
+                            }}
+                            className="w-24 bg-white border border-emerald-300 rounded px-2 py-0.5 text-xl font-mono font-black text-emerald-900 text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
+                            placeholder="0.00"
+                          />
                           <span className="text-[10px] font-mono font-semibold text-emerald-700 ml-1">USD/MT</span>
                         </div>
                       </div>
