@@ -580,13 +580,15 @@ exports.handler = async (event) => {
       }
 
       const query = `
-        SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
+        SELECT id, project_ref, client_name, status, global_margin_percentage,
                land_origin, land_destination, land_distance, land_freight_cost,
                route_and_chartering,
                valor_total_mercancia_usd, land_freight_sale,
-               TO_CHAR(created_at, 'DD/MM/YYYY') as date 
+               TO_CHAR(created_at, 'DD/MM/YYYY') as date,
+               created_at, updated_at
         FROM forwarder_projects 
-        ORDER BY created_at DESC;
+        ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST
+        LIMIT 50;
       `;
       const result = await pool.query(query);
 
