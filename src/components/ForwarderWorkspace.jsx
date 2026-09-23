@@ -6373,7 +6373,11 @@ export function ForwarderWorkspace() {
                 body * { visibility: hidden !important; }
                 #printable-a4-sheet, #printable-a4-sheet * { visibility: visible !important; }
                 #printable-a4-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 12mm !important; border: none !important; box-shadow: none !important; }
-                .print-hidden { display: none !important; }
+                .print-hidden, .print\\:hidden { display: none !important; }
+                .break-inside-avoid, [class*="break-inside-avoid"] {
+                  break-inside: avoid !important;
+                  page-break-inside: avoid !important;
+                }
                 .stowage-plan-section {
                   page-break-before: always !important;
                   break-before: page !important;
@@ -6415,7 +6419,7 @@ export function ForwarderWorkspace() {
 
             <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
               
-              <header className="border-b-2 border-slate-200 pb-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+              <header className="border-b-2 border-slate-200 pb-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 break-inside-avoid">
                 <div>
                   <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
                     Universal Forwarding / B2B Module
@@ -6502,7 +6506,7 @@ export function ForwarderWorkspace() {
                 </div>
               </header>
 
-              <section className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+              <section className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 break-inside-avoid">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b border-slate-200 pb-1.5">
                   Resumen Operativo (Operational Summary)
                 </h3>
@@ -6539,7 +6543,7 @@ export function ForwarderWorkspace() {
                 </div>
               </section>
 
-              <section className="mb-6">
+              <section className="mb-6 break-inside-avoid">
                 <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 mb-3">
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
                     📋 Desglose Financiero Separado (Flete Marítimo vs. Costes FOB / Operativa Portuaria)
@@ -6739,7 +6743,7 @@ export function ForwarderWorkspace() {
               </section>
 
               {/* Subtotales destacados: Flete vs FOB / Operativa */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-6 break-inside-avoid">
                 <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
                   <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(activeReport.subtotalFreight || fleteCostNum)}</div>
@@ -6765,7 +6769,7 @@ export function ForwarderWorkspace() {
               </div>
 
               {/* Sección: Desglose Unitario Operativo (USD/MT) */}
-              <section className="mb-6">
+              <section className="mb-6 break-inside-avoid">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 border-b-2 border-slate-200 pb-2 flex items-center justify-between">
                   <span>💵 Desglose Unitario Operativo (USD/MT)</span>
                   <span className="text-[10px] font-bold text-slate-500 font-mono">
@@ -6851,7 +6855,7 @@ export function ForwarderWorkspace() {
               </section>
 
               {/* Importe Total de Cotización / Venta (All-In) */}
-              <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8">
+              <div className="bg-slate-100 border-2 border-slate-900 p-6 rounded-lg flex justify-between items-center mb-8 break-inside-avoid">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest block mb-1">
                     {commercialScenario === 'all_in' ? 'Importe Consolidado (Tarifa Única All-In / Liner Terms)' : 'Importe Total Cotización (All-In)'}
@@ -6873,14 +6877,14 @@ export function ForwarderWorkspace() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-16 pt-12 text-center">
+              <div className="grid grid-cols-2 gap-16 pt-12 text-center break-inside-avoid">
                 <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Firma Transitario</p></div>
                 <div><div className="border-b border-slate-400 pb-16 mb-2"></div><p className="text-xs font-bold text-slate-800">Aceptación Cliente</p></div>
               </div>
 
               {/* Croquis Esquemático de Estiba (Stowage Plan) en página dedicada al final del documento */}
               <section
-                className="stowage-plan-section print-exact mt-12 pt-8 border-t-2 border-dashed border-slate-300 print:border-none print:mt-0 print:pt-4"
+                className="stowage-plan-section print-exact mt-12 pt-8 border-t-2 border-dashed border-slate-300 print:border-none print:mt-0 print:pt-4 break-inside-avoid"
                 style={{ pageBreakBefore: 'always', breakBefore: 'page' }}
               >
                 <header className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-end">
@@ -6911,7 +6915,7 @@ export function ForwarderWorkspace() {
                   if (!justification) return null;
 
                   return (
-                    <div className="mt-4 p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl shadow-xs print:bg-white print:border-slate-300">
+                    <div className="mt-4 p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl shadow-xs print:bg-white print:border-slate-300 break-inside-avoid">
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-2.5 flex items-center gap-2 border-b border-slate-200 pb-2">
                         <span className="text-blue-600">📐</span> Razonamiento Técnico de Ingeniería Naval
                       </h4>
@@ -6950,7 +6954,7 @@ export function ForwarderWorkspace() {
                 })()}
 
                 {activeReport?.stowagePlan && (
-                  <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-3">
+                  <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-3 break-inside-avoid">
                     <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                       <div className="flex items-center gap-2">
                         <span className={`px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider ${activeReport.stowagePlan.cargoClassification?.isMixedCargo ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}`}>
