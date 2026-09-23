@@ -38,7 +38,7 @@ test('5. Bottom-left floating controls contain "🖨️ Imprimir / Guardar Repor
 });
 
 test('6. Header section includes forwarder branding, issue date, project_ref, and commercial title', () => {
-  assert.match(forwarderComponentSource, /Universal Forwarding\s*\/\s*B2B Module/);
+  assert.match(forwarderComponentSource, /RODAHMAR SHIPPING SL|OFERTA COMERCIAL - PROJECT CARGO/);
   assert.match(forwarderComponentSource, /Fecha de Emisión:/);
   assert.match(forwarderComponentSource, /Referencia del Proyecto:/);
   assert.match(forwarderComponentSource, /activeProject\?\.project_ref/);
