@@ -134,6 +134,10 @@ export default async function proxyRequest(request) {
         });
     }
 
+    let fallbackRequest = null;
+    let rawBody = null;
+    let promptText = "";
+
     try {
         // 2. Extraer el Content-Type original (Vital para que no se rompan los PDFs)
         const contentType = request.headers.get("content-type");
@@ -151,25 +155,40 @@ export default async function proxyRequest(request) {
         }
 
         // 3. Extraer el cuerpo de la petición de forma binaria para soportar archivos
-        let promptText = "";
-        const req = request;
         if (request.method === "POST") {
+            // Clonar el request antes de cualquier lectura para disponer de una instancia intacta en el fallback local
             try {
-                if (contentType?.includes("multipart/form-data") && typeof req.formData === "function") {
-                    const formData = await req.formData();
-                    const bodyPart = formData.get("body") || formData.get("mensaje") || formData.get("UserContext");
-                    if (bodyPart) {
-                        promptText = typeof bodyPart === "string" ? bodyPart : "";
-                        try {
-                            const parsed = JSON.parse(promptText);
-                            promptText = String(parsed.mensaje || parsed.UserContext || promptText);
-                        } catch {}
-                    }
+                if (typeof request.clone === "function") {
+                    fallbackRequest = request.clone();
                 }
             } catch {}
 
-            const rawBody = await request.arrayBuffer();
+            // Leer el cuerpo de la petición UNA SOLA VEZ y almacenarlo en memoria
+            rawBody = await request.arrayBuffer();
             fetchOptions.body = rawBody;
+
+            // Extraer el texto del prompt usando una instancia derivada del buffer para no consumir el stream original
+            if (contentType?.includes("multipart/form-data")) {
+                try {
+                    const req = new Request(request.url, {
+                        method: request.method,
+                        headers: request.headers,
+                        body: rawBody
+                    });
+                    if (typeof req.formData === "function") {
+                        const formData = await req.formData();
+                        const bodyPart = formData.get("body") || formData.get("mensaje") || formData.get("UserContext");
+                        if (bodyPart) {
+                            promptText = typeof bodyPart === "string" ? bodyPart : "";
+                            try {
+                                const parsed = JSON.parse(promptText);
+                                promptText = String(parsed.mensaje || parsed.UserContext || promptText);
+                            } catch {}
+                        }
+                    }
+                } catch {}
+            }
+
             if (!promptText) {
                 promptText = extractPromptText(rawBody, contentType);
             }
@@ -203,7 +222,14 @@ export default async function proxyRequest(request) {
         console.error("[Proxy Core PRO] Error conectando con Data Bridge; evaluando fallback local:", error);
         try {
             if (typeof chatAssistant === "function") {
-                const fallbackRes = await chatAssistant(request);
+                const targetReq = (fallbackRequest && !fallbackRequest.bodyUsed)
+                    ? fallbackRequest
+                    : (rawBody ? new Request(request.url, {
+                        method: request.method,
+                        headers: request.headers,
+                        body: rawBody
+                    }) : request);
+                const fallbackRes = await chatAssistant(targetReq);
                 return fallbackRes;
             }
         } catch (localError) {
