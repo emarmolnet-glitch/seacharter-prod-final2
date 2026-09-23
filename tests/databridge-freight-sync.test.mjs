@@ -52,12 +52,12 @@ test('3. Inyección en Proyectos: La interfaz muestra explícitamente "Flete Sug
 
 test('4. Respetar la Simulación: autoCalculateEstimates y buildExecutiveReportData priorizan el flete de venta sincronizado sobre el cálculo bottom-up', () => {
   // autoCalculateEstimates debe verificar effectiveFleteVenta
-  assert.match(workspaceSource, /effectiveFleteVenta\s*>\s*0\s*&&\s*effectiveWeightOrRt\s*>\s*0/);
-  assert.match(workspaceSource, /targetOceanFreightSale\s*=\s*Math\.round\(effectiveFleteVenta\s*\*\s*effectiveWeightOrRt\s*\*\s*100\)\s*\/\s*100/);
+  assert.match(workspaceSource, /effectiveFleteVenta\s*>\s*0\s*&&\s*totalWeightTons\s*>\s*0/);
+  assert.match(workspaceSource, /targetOceanFreightSale\s*=\s*Math\.round\(effectiveFleteVenta\s*\*\s*totalWeightTons\s*\*\s*100\)\s*\/\s*100/);
 
-  // buildExecutiveReportData debe respetar manualFleteVentaUnit
-  assert.match(workspaceSource, /manualFleteVentaUnit\s*>\s*0\s*&&\s*reportRT\s*>\s*0/);
-  assert.match(workspaceSource, /fleteSaleNum\s*=\s*Math\.round\(manualFleteVentaUnit\s*\*\s*reportRT\s*\*\s*100\)\s*\/\s*100/);
+  // buildExecutiveReportData debe respetar manualFleteVentaUnit sobre peso físico MT
+  assert.match(workspaceSource, /manualFleteVentaUnit\s*>\s*0\s*&&\s*totalWeightTons\s*>\s*0/);
+  assert.match(workspaceSource, /fleteSaleNum\s*=\s*Math\.round\(manualFleteVentaUnit\s*\*\s*totalWeightTons\s*\*\s*100\)\s*\/\s*100/);
 });
 
 test('5. Simulación funcional: cálculo de cotización respetando el flete venta simulado vs bottom-up', () => {

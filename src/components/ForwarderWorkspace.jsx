@@ -3226,13 +3226,22 @@ export function ForwarderWorkspace() {
       0
     );
 
-    const effectiveWeightOrRt = totalWeightTons > 0 ? totalWeightTons : (isUnderThreshold ? revenueTons : RT);
+    // En Project Cargo / fletamentos marítimos no se aplica regla W/M: base física estricta en MT
+    const effectiveWeightOrRt = totalWeightTons > 0 ? totalWeightTons : (isUnderThreshold ? (totalWeightTons || 1) : totalWeightTons);
 
-    // Respetar la Simulación: La vista de Proyectos debe respetar el flete de venta manual sincronizado desde la Calculadora como el objetivo principal, en lugar de sugerir únicamente el precio automatizado bottom-up.
+    // Respetar la Simulación: La vista de Proyectos respeta el flete de venta sincronizado (o lumpsum de viaje) como objetivo principal.
     let targetSalePrice = 0;
-    if (effectiveFleteVenta > 0 && effectiveWeightOrRt > 0) {
+    if (effectiveFleteVenta > 0 && totalWeightTons > 0) {
+      // Opción A: Tarifa Unitaria * Peso Físico (MT)
+      const targetOceanFreightSale = Math.round(effectiveFleteVenta * totalWeightTons * 100) / 100;
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+    } else if (effectiveFleteVenta > 0 && effectiveWeightOrRt > 0) {
       const targetOceanFreightSale = Math.round(effectiveFleteVenta * effectiveWeightOrRt * 100) / 100;
       targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+    } else if (fleteTotalReal > 0) {
+      // Opción B: Lumpsum total sin multiplicar por volumen
+      const targetOceanFreightSale = Math.round(fleteTotalReal * 1.15 * 100) / 100;
+      targetSalePrice = targetOceanFreightSale + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
     } else {
       targetSalePrice = (Number(totalEstimatedCost) || 0) * 1.15;
     }
@@ -3785,9 +3794,16 @@ export function ForwarderWorkspace() {
     }
 
     // Respetar la Simulación: Si se especificó Flete Venta manual en la Calculadora, se utiliza como objetivo principal del tramo marítimo
+    // En Project Cargo / Heavy Lift: Opción A (Tarifa * Peso MT) u Opción B (Lumpsum directo sin multiplicar)
     let fleteSaleNum = 0;
-    if (manualFleteVentaUnit > 0 && reportRT > 0) {
-      fleteSaleNum = Math.round(manualFleteVentaUnit * reportRT * 100) / 100;
+    if (manualFleteVentaUnit > 0 && totalWeightTons > 0) {
+      // Opción A: Tarifa Unitaria * Peso Físico (MT)
+      fleteSaleNum = Math.round(manualFleteVentaUnit * totalWeightTons * 100) / 100;
+    } else if (fleteCostNum > 0) {
+      // Opción B: Lumpsum directo con margen comercial aplicado sin multiplicar por volumen/RT
+      fleteSaleNum = Math.round(fleteCostNum * 1.15 * 100) / 100;
+    } else if (manualFleteVentaUnit > 0) {
+      fleteSaleNum = Math.round(manualFleteVentaUnit * 100) / 100;
     } else {
       fleteSaleNum = Math.round(fleteCostNum * 1.15 * 100) / 100;
     }
@@ -3862,19 +3878,30 @@ export function ForwarderWorkspace() {
       effectiveInlandCost = totalWeightTons * appliedReportTariff.inlandUsdMt;
     }
 
-    const finalTotalCost = Math.round((fleteCostNum + fobSubtotal + effectiveInlandCost) * 100) / 100;
-
-    // Respetar la Simulación: La vista de Proyectos debe respetar el flete de venta manual sincronizado desde la Calculadora como el objetivo principal, en lugar de sugerir únicamente el precio automatizado bottom-up.
-    let finalTotalSale = 0;
-    if (manualFleteVentaUnit > 0 && reportRT > 0) {
-      finalTotalSale = Math.round(((Number(fleteSaleNum) || 0) + ((Number(fobSubtotal) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15)) * 100) / 100;
-    } else {
-      finalTotalSale = Math.round((finalTotalCost * 1.15) * 100) / 100;
-    }
-    const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
-    const unitRateSale = reportRT > 0 ? finalTotalSale / reportRT : 0;
-
     const toneladas = totalWeightTons > 0 ? totalWeightTons : (reportRT > 0 ? reportRT : 1);
+
+    // Subtotales absolutos directos con regla W/M ya aplicada en pasos anteriores
+    const subtotalFreightCost = fleteCostNum;
+    const subtotalFreightSale = fleteSaleNum;
+    const subtotalFobOperationsCost = appliedReportTariff
+      ? Math.round((fobSubtotal + effectiveInlandCost) * 100) / 100
+      : Math.round(fobSubtotal * 100) / 100;
+    const subtotalFobOperationsSale = Math.round(subtotalFobOperationsCost * 1.15 * 100) / 100;
+
+    // 2. Precio Total de Venta al Cliente: ESTRICTAMENTE la suma directa aritmética de los valores absolutos ya calculados:
+    //    [Subtotal Venta Flete Marítimo] + [Subtotal Venta Costes FOB y Operativa Portuaria]
+    const finalTotalSale = Math.round((subtotalFreightSale + subtotalFobOperationsSale) * 100) / 100;
+
+    // 3. Coste Total All-In: suma directa de:
+    //    [Subtotal Coste Flete Marítimo] + [Subtotal Coste FOB y Operativa Portuaria]
+    const finalTotalCost = Math.round((subtotalFreightCost + subtotalFobOperationsCost) * 100) / 100;
+
+    // 4. Margen Comercial: resta directa de: [Precio Total de Venta] - [Coste Total All-In]
+    const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
+
+    // 5. Tarifa All-In unitaria (USD/MT): calculada a la inversa: [Precio Total de Venta] / [Peso Físico (MT)]
+    const wmApplicableValue = Number(toneladas > 0 ? toneladas : 1);
+    const unitRateSale = wmApplicableValue > 0 ? finalTotalSale / wmApplicableValue : 0;
 
     // Flete total en USD
     let fleteTotalUsd = 0;
@@ -6336,15 +6363,11 @@ export function ForwarderWorkspace() {
         const totalWeightTons = activeReport.totalWeightTons;
         const totalVolumeM3 = activeReport.totalVolumeM3;
         const reportRT = activeReport.reportRT;
-        const finalTotalCost = activeReport.finalTotalCost;
-        const finalTotalSale = activeReport.finalTotalSale;
-        const finalTotalMargin = activeReport.finalTotalMargin;
         const formatCurrency = (val) => '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        const unitRateSale = activeReport.unitRateSale;
-        const fleteCostNum = activeReport.fleteCostNum;
-        const fleteSaleNum = activeReport.fleteSaleNum;
-        const fleteMarginNum = activeReport.fleteMarginNum;
+        const fleteCostNum = Number(activeReport.subtotalFreightCost ?? activeReport.subtotalFreight ?? activeReport.fleteCostNum ?? 0);
+        const fleteSaleNum = Number(activeReport.subtotalFreightSale ?? activeReport.fleteSaleNum ?? (fleteCostNum * 1.15));
+        const fleteMarginNum = Math.round((fleteSaleNum - fleteCostNum) * 100) / 100;
 
         const estibaCostNum = activeReport.estibaCostNum;
         const estibaSaleNum = activeReport.estibaSaleNum;
@@ -6365,6 +6388,35 @@ export function ForwarderWorkspace() {
         const valorTotalMercanciaUsd = Number(activeReport.valor_total_mercancia_usd ?? activeReport.valorTotalMercanciaUsd ?? 0);
         const toneladas = Number(activeReport.toneladas || activeReport.totalWeightTons || (reportRT > 0 ? reportRT : 1));
         const formatUsd = (val) => '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Subtotales absolutos directos ya calculados con regla W/M de pasos anteriores
+        const subtotalVentaFleteMaritimo = fleteSaleNum;
+        const subtotalCosteFleteMaritimo = fleteCostNum;
+
+        const subtotalCosteFobOperativa = Number(
+          activeReport.subtotalFobOperationsCost ??
+          activeReport.subtotalFobOperations ??
+          ((Number(estibaCostNum) || 0) + (Number(matCostNum) || 0) + (Number(periCostNum) || 0) + (Number(activeReport.insuranceCostNum) || 0) + (Number(activeReport.demurrageCostNum) || 0))
+        );
+        const subtotalVentaFobOperativa = Number(
+          activeReport.subtotalFobOperationsSale ??
+          Math.round(subtotalCosteFobOperativa * 1.15 * 100) / 100
+        );
+
+        // 2. Precio Total de Venta al Cliente: ESTRICTAMENTE la suma directa aritmética de los valores absolutos ya calculados:
+        //    [Subtotal Venta Flete Marítimo] + [Subtotal Venta Costes FOB y Operativa Portuaria]
+        const finalTotalSale = Math.round((subtotalVentaFleteMaritimo + subtotalVentaFobOperativa) * 100) / 100;
+
+        // 3. Coste Total All-In: suma directa de:
+        //    [Subtotal Coste Flete Marítimo] + [Subtotal Coste FOB y Operativa Portuaria]
+        const finalTotalCost = Math.round((subtotalCosteFleteMaritimo + subtotalCosteFobOperativa) * 100) / 100;
+
+        // 4. Margen Comercial: resta directa de: [Precio Total de Venta] - [Coste Total All-In]
+        const finalTotalMargin = Math.round((finalTotalSale - finalTotalCost) * 100) / 100;
+
+        // 5. Tarifa All-In unitaria (USD/MT): calculada a la inversa: [Precio Total de Venta] / [Peso Físico (MT)]
+        const wmReglaAplicable = Number(toneladas > 0 ? toneladas : 1);
+        const unitRateSale = wmReglaAplicable > 0 ? (finalTotalSale / wmReglaAplicable) : 0;
 
         return (
           <div className="fixed inset-0 bg-white z-[9000] overflow-y-auto pt-10 pb-28 px-4 sm:px-10 text-slate-900 print:bg-white print:p-0">
@@ -6422,7 +6474,7 @@ export function ForwarderWorkspace() {
               <header className="border-b-2 border-slate-200 pb-4 mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 break-inside-avoid">
                 <div>
                   <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
-                    Universal Forwarding / B2B Module
+                    {activeProject?.tenant_name || activeProject?.company_name || activeProject?.client_name || 'RODAHMAR SHIPPING SL'}
                   </h1>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
                     OFERTA COMERCIAL - PROJECT CARGO
@@ -6621,7 +6673,7 @@ export function ForwarderWorkspace() {
                           <td className="py-2.5 px-3 text-slate-600">
                             {commercialScenario === 'agency_fee' ? (
                               <span>
-                                Flete técnico de coste puro sin margen comercial aplicado · Base {(reportRT || 0).toFixed(2)} RT · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d · TCE base armador {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día.
+                                Flete técnico de coste puro sin margen comercial aplicado · Base {(toneladas || 0).toFixed(2)} MT · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d · TCE base armador {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día.
                               </span>
                             ) : (
                               Number(activeReport.fleteVentaUnit || 0) > 0 ? (
@@ -6630,7 +6682,7 @@ export function ForwarderWorkspace() {
                                 </span>
                               ) : (
                                 <span>
-                                  Ocean Freight / TCE de buque fletado sobre base W/M ({reportRT.toFixed(2)} RT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                                  Ocean Freight / TCE de buque fletado sobre base peso físico ({(toneladas || 0).toFixed(2)} MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
                                 </span>
                               )
                             )}
@@ -6755,14 +6807,14 @@ export function ForwarderWorkspace() {
                   <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">
                     {commercialScenario === 'agency_fee' ? 'Subtotal Costes FOB Reales + Fee' : 'Subtotal Costes FOB y Operativa Portuaria'}
                   </span>
-                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0)))}</div>
+                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || subtotalCosteFobOperativa)}</div>
                   <span className="text-[10px] text-amber-600 font-semibold">
                     Precio Venta Operativa: {formatCurrency(
                       commercialScenario === 'agency_fee'
-                        ? (Number(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) + finalTotalMargin)
+                        ? (Number(activeReport.subtotalFobOperations || subtotalCosteFobOperativa) + finalTotalMargin)
                         : (commercialScenario === 'all_in'
                             ? finalTotalSale
-                            : parseFloat(activeReport.subtotalFobOperations || (estibaCostNum + matCostNum + periCostNum + (activeReport.insuranceCostNum || 0))) * 1.15)
+                            : subtotalVentaFobOperativa)
                     )}
                   </span>
                 </div>
@@ -6862,13 +6914,13 @@ export function ForwarderWorkspace() {
                   </span>
                   <h2 className="text-2xl font-black uppercase text-slate-900">PRECIO TOTAL DE VENTA AL CLIENTE</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1 rounded text-xs font-bold font-mono">
-                      Tarifa All-In: {formatCurrency(unitRateSale)} / RT (W/M)
-                    </span>
                     <span className="bg-indigo-100 text-indigo-900 border border-indigo-200 px-3 py-1 rounded text-xs font-black font-mono">
                       Precio Único: ${(toneladas > 0 ? (finalTotalSale / toneladas).toFixed(2) : '0.00')} USD/MT
                     </span>
-                    <span className="text-[10px] text-slate-500 font-semibold">Cálculo sobre {reportRT.toFixed(2)} Revenue Tons ({toneladas.toFixed(2)} MT)</span>
+                    <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1 rounded text-xs font-bold font-mono">
+                      Total Lumpsum All-In: {formatCurrency(finalTotalSale)}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">Cálculo basado en peso físico ({toneladas.toFixed(2)} MT) · Sin regla W/M</span>
                   </div>
                 </div>
                 <div className="text-right">
