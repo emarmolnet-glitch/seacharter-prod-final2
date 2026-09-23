@@ -669,17 +669,6 @@
                 writeSessionReference(newRef);
                 writeUrlReference(newRef);
                 writeSharedActiveSession(newRef);
-                // Emitir al Parent si estamos dentro de un Iframe (MasterHub)
-                if (window.parent !== window) {
-                  try {
-                    window.parent.postMessage({ 
-                      type: 'SYNC_REFERENCE', 
-                      reference: newRef // Reemplaza por tu variable local de referencia
-                    }, '*');
-                  } catch (e) {
-                    console.warn("No se pudo emitir la referencia al parent", e);
-                  }
-                }
                 return newRef;
             };
             const setActiveContractRef = function(reference) {
@@ -694,17 +683,6 @@
                 writeSessionReference(normalized);
                 writeUrlReference(normalized);
                 writeSharedActiveSession(normalized);
-                // Emitir al Parent si estamos dentro de un Iframe (MasterHub)
-                if (window.parent !== window) {
-                  try {
-                    window.parent.postMessage({ 
-                      type: 'SYNC_REFERENCE', 
-                      reference: normalized // Reemplaza por tu variable local de referencia
-                    }, '*');
-                  } catch (e) {
-                    console.warn("No se pudo emitir la referencia al parent", e);
-                  }
-                }
                 return normalized;
             };
             const clearActiveSession = function() {
@@ -763,27 +741,6 @@
             globalObject.saveSessionState = persistSessionToDatabase;
 
             getOrCreateSyncChannel();
-
-            // Listener para acatar órdenes del orquestador padre (MasterHub)
-            if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-                window.addEventListener('message', (event) => {
-                    if (event && event.data && event.data.type === 'MASTER_FORCE_REFERENCE' && event.data.reference) {
-                        const incomingRef = event.data.reference;
-
-                        // Validar si tenemos una función local para leer la referencia actual
-                        const currentRef = typeof getActiveContractRef === 'function' ? getActiveContractRef() : null;
-
-                        // Si el Jefe dicta una referencia distinta, obedecemos y actualizamos
-                        if (incomingRef !== currentRef) {
-                            console.log("[Subordinado] Acatando referencia maestra de MasterHub:", incomingRef);
-                            // Reemplazar la siguiente línea por la función local que actualiza/persiste la referencia
-                            if (typeof setActiveContractRef === 'function') {
-                                setActiveContractRef(incomingRef);
-                            }
-                        }
-                    }
-                });
-            }
 
             try {
                 if (typeof globalObject.addEventListener === 'function') {
