@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getApiUrl } from '../utils/apiConfig.js';
 import { parsePackingList } from '../utils/packingListParser.js';
 import AgenteProyectosWidget from './AgenteProyectosWidget';
+import VisualStowagePlan from './VisualStowagePlan.jsx';
 import '../../dual-trading-chartering-view.js';
 import {
   buildCBAMCommercialAnalysis,
@@ -4259,7 +4260,7 @@ export function ForwarderWorkspace() {
 
       // 3. Sincronización remota con motor project-parser (con fallback seguro local)
       try {
-        const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
+        const response = await fetch('/.netlify/functions/project-parser', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -6954,7 +6955,15 @@ export function ForwarderWorkspace() {
                   </div>
                 </header>
 
-                <div className="croquis-ascii-container bg-slate-900 text-slate-100 border-2 border-slate-800 p-4 sm:p-5 rounded-xl overflow-x-auto text-[10px] sm:text-[11px] print:text-[10px] leading-snug font-mono whitespace-pre shadow-md">
+                {/* VisualStowagePlan: Representación visual gráfica (2D) del buque y sus bodegas */}
+                <VisualStowagePlan
+                  stowagePlan={activeReport?.stowagePlan || reportData?.stowagePlan || calculateUniversalStowagePlan(cargoItems, totals, { shippingMode, pol, pod })}
+                  vesselType={vesselType}
+                  projectRef={activeProject?.project_ref}
+                />
+
+                {/* Compatibilidad y fallback ASCII estructurado para archivo técnico y auditoría */}
+                <div className="croquis-ascii-container hidden" aria-hidden="true">
                   {getStowageAscii(activeReport)}
                 </div>
 
