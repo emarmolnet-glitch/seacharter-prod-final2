@@ -3,6 +3,7 @@ import { getApiUrl } from '../utils/apiConfig.js';
 import { parsePackingList } from '../utils/packingListParser.js';
 import AgenteProyectosWidget from './AgenteProyectosWidget';
 import VisualStowagePlan from './VisualStowagePlan.jsx';
+import { resolveVesselProfile, adaptRoRoJustification } from './VisualStowagePlan.jsx';
 import '../../dual-trading-chartering-view.js';
 import {
   buildCBAMCommercialAnalysis,
@@ -6975,6 +6976,8 @@ export function ForwarderWorkspace() {
                   const justification = currentStowage?.executiveJustification;
                   if (!justification) return null;
 
+                  const currentProfile = resolveVesselProfile(vesselType, currentStowage?.vesselModel?.type || '');
+
                   return (
                     <div className="mt-4 p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl shadow-xs print:bg-white print:border-slate-300 break-inside-avoid">
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-2.5 flex items-center gap-2 border-b border-slate-200 pb-2">
@@ -6983,10 +6986,11 @@ export function ForwarderWorkspace() {
                       {Array.isArray(justification) ? (
                         <div className="space-y-2 text-sm text-gray-700 leading-relaxed font-sans">
                           {justification.map((point, idx) => {
-                            const colonIndex = point.indexOf(':');
+                            const adaptedPoint = adaptRoRoJustification(point, currentProfile);
+                            const colonIndex = adaptedPoint.indexOf(':');
                             if (colonIndex !== -1) {
-                              const label = point.slice(0, colonIndex + 1);
-                              const content = point.slice(colonIndex + 1);
+                              const label = adaptedPoint.slice(0, colonIndex + 1);
+                              const content = adaptedPoint.slice(colonIndex + 1);
                               return (
                                 <p key={idx} className="flex items-start gap-2">
                                   <span className="font-semibold text-slate-900 shrink-0">•</span>
@@ -7000,99 +7004,260 @@ export function ForwarderWorkspace() {
                             return (
                               <p key={idx} className="flex items-start gap-2">
                                 <span className="font-semibold text-slate-900 shrink-0">•</span>
-                                <span>{point}</span>
+                                <span>{adaptedPoint}</span>
                               </p>
                             );
                           })}
                         </div>
                       ) : (
                         <div className="text-sm text-gray-700 leading-relaxed font-sans whitespace-pre-line">
-                          {justification}
+                          {adaptRoRoJustification(justification, currentProfile)}
                         </div>
                       )}
                     </div>
                   );
                 })()}
 
-                {activeReport?.stowagePlan && (
-                  <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-3 break-inside-avoid">
-                    <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider ${activeReport.stowagePlan.cargoClassification?.isMixedCargo ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}`}>
-                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo ? '🔀 Distribución Multi-Carga Optimizada' : '📦 Estiba Homogénea Monopartida'}
-                        </span>
-                        <span className="text-[11px] text-slate-600 font-bold">
-                          Handysize MPP · 4 Bodegas + Cubierta · Capacidad: 30.300 m³
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] font-mono">
-                        <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          ✓ Resistencia Estructural ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.maxFloorPressureTm2 || 0).toFixed(1)} / 20.0 t/m²)
-                        </span>
-                        <span className="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                          ✓ GM Estabilidad ({Number(activeReport.stowagePlan.hydrodynamicsAndSafety?.metacentricHeightGmEstimatedM || 1.55).toFixed(2)}m)
-                        </span>
-                      </div>
-                    </div>
+                {activeReport?.stowagePlan && (() => {
+                  const currentStowage = activeReport.stowagePlan;
+                  const currentProfile = resolveVesselProfile(vesselType, currentStowage?.vesselModel?.type || '');
+                  const rawHolds = Array.isArray(currentStowage.holds) ? currentStowage.holds : [];
+                  const deck = currentStowage.weatherDeck || {};
+                  const classification = currentStowage.cargoClassification || {};
 
-                    {/* Matriz visual de bodegas 1 a 4 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {/* activeReport.stowagePlan.holds?.map */}
-                      {(Array.isArray(activeReport.stowagePlan.holds) ? activeReport.stowagePlan.holds : []).map((hold, holdIdx) => (
-                        <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
-                            <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                              {Number(hold?.weightPercentage || 0).toFixed(1)}% peso
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-600 mb-1.5">
-                            <span className="font-bold text-slate-900">{Number(hold?.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold?.totalVolumeCbm || 0).toFixed(1)} m³
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${Math.min(100, Math.max(4, hold?.volumeUtilizationPct || 0))}%` }}
-                            />
-                          </div>
-                          <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold?.stowageTier || 'Bodega General'}>
-                            Nivel: <span className="font-bold text-slate-900">{hold?.stowageTier || 'Bodega General'}</span>
-                          </div>
-                          <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold?.securingLegend || ''}>
-                            {hold?.securingLegend || 'Trincaje estándar OMI'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  const rawTotalWeight = Number(
+                    classification.totalWeightTons ||
+                    rawHolds.reduce((acc, h) => acc + (Number(h.totalWeightTons) || 0), 0) +
+                    (Number(deck.totalWeightTons) || 0)
+                  );
+                  const totalW = rawTotalWeight > 0 ? rawTotalWeight : 1;
 
-                    {/* Cubierta y Doble Fondo complementarios */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10.5px]">
-                      <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-slate-800 uppercase text-[10px]">🌊 Cubierta Superior / Weather Deck</span>
-                          <span className="font-mono font-bold text-slate-700 text-[10px]">
-                            {activeReport.stowagePlan.weatherDeck?.totalWeightTons > 0 ? `${Number(activeReport.stowagePlan.weatherDeck.totalWeightTons).toFixed(2)} MT (${Number(activeReport.stowagePlan.weatherDeck.weightPercentage || 0).toFixed(1)}%)` : 'Despejada'}
+                  // Cálculo de cubiertas Ro-Ro (sincronizado con el modelo de VisualStowagePlan)
+                  const weatherWeight = Number(deck.totalWeightTons || (rawTotalWeight * 0.25));
+                  const mainWeight = rawTotalWeight > 0 ? Math.max(0, rawTotalWeight * 0.50) : 0;
+                  const lowerWeight = Math.max(0, rawTotalWeight - weatherWeight - mainWeight);
+
+                  const roroGridCards = [
+                    {
+                      name: 'CUBIERTA SUPERIOR',
+                      subname: 'Weather Deck · Puntal 4.80 m',
+                      weightMT: weatherWeight,
+                      weightPct: (weatherWeight / totalW) * 100,
+                      role: 'Unidades Rodadas / High & Heavy',
+                      securing: 'Estiba rodada asegurada con cadenas G80 y calzos OMI',
+                    },
+                    {
+                      name: 'CUBIERTA PRINCIPAL',
+                      subname: 'Main Car Deck · Puntal 5.20 m',
+                      weightMT: mainWeight,
+                      weightPct: (mainWeight / totalW) * 100,
+                      role: 'Carga Rodada Comercial / Tráilers',
+                      securing: 'Estiba rodada asegurada con cadenas G80 en cubiertas horizontales',
+                    },
+                    {
+                      name: 'CUBIERTA INFERIOR',
+                      subname: 'Lower Hold Deck · Puntal 3.10 m',
+                      weightMT: lowerWeight,
+                      weightPct: (lowerWeight / totalW) * 100,
+                      role: 'Vehículos Ligeros / Plataformas Mafi',
+                      securing: 'Estiba rodada asegurada con cadenas G80 y mafis certificados',
+                    },
+                  ];
+
+                  // Cálculo de bodegas Coaster (solo bodegas 1 y 2, consolidando toneladas y ocultando 3 y 4)
+                  const h1Weight = Number(rawHolds[0]?.totalWeightTons || 0) + Number(rawHolds[2]?.totalWeightTons || 0);
+                  const h2Weight = Number(rawHolds[1]?.totalWeightTons || 0) + Number(rawHolds[3]?.totalWeightTons || 0);
+                  const totalCoasterWeight = h1Weight + h2Weight;
+
+                  const coasterGridCards = [
+                    {
+                      name: 'BODEGA 1',
+                      subname: 'Bodega Diáfana (Proa)',
+                      weightMT: h1Weight,
+                      weightPct: totalCoasterWeight > 0 ? (h1Weight / totalCoasterWeight) * 100 : 0,
+                      volumeCbm: Number(rawHolds[0]?.totalVolumeCbm || 0) + Number(rawHolds[2]?.totalVolumeCbm || 0),
+                      tier: rawHolds[0]?.stowageTier || 'Bodega Corrida Diáfana',
+                      securing: rawHolds[0]?.securingLegend || 'Trincaje estándar OMI / Bodega Corrida',
+                      volPct: Number(rawHolds[0]?.volumeUtilizationPct || 0),
+                    },
+                    {
+                      name: 'BODEGA 2',
+                      subname: 'Bodega Diáfana (Popa)',
+                      weightMT: h2Weight,
+                      weightPct: totalCoasterWeight > 0 ? (h2Weight / totalCoasterWeight) * 100 : 0,
+                      volumeCbm: Number(rawHolds[1]?.totalVolumeCbm || 0) + Number(rawHolds[3]?.totalVolumeCbm || 0),
+                      tier: rawHolds[1]?.stowageTier || 'Bodega Corrida Diáfana',
+                      securing: rawHolds[1]?.securingLegend || 'Trincaje estándar OMI / Bodega Corrida',
+                      volPct: Number(rawHolds[1]?.volumeUtilizationPct || 0),
+                    },
+                  ];
+
+                  return (
+                    <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-3 break-inside-avoid">
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider ${
+                            currentProfile === 'RORO'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                              : currentStowage.cargoClassification?.isMixedCargo
+                              ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                              : 'bg-blue-100 text-blue-800 border border-blue-300'
+                          }`}>
+                            {currentProfile === 'RORO'
+                              ? 'ESTIBA RODADA (RO-RO / PURE CAR CARRIER)'
+                              : currentStowage.cargoClassification?.isMixedCargo
+                              ? '🔀 Distribución Multi-Carga Optimizada'
+                              : '📦 Estiba Homogénea Monopartida'}
+                          </span>
+                          <span className="text-[11px] text-slate-600 font-bold">
+                            {currentProfile === 'RORO'
+                              ? `${vesselType || 'Ro-Ro / Pure Car Carrier'} · 3 Cubiertas Horizontales + Rampa de Popa · Operativa Rodada`
+                              : currentProfile === 'COASTER'
+                              ? `${vesselType || 'Coaster / Mini-Bulker'} · 2 Bodegas Diáfanas · Bodega Corrida Gearless`
+                              : 'Handysize MPP · 4 Bodegas + Cubierta · Capacidad: 30.300 m³'}
                           </span>
                         </div>
-                        <p className="text-[9.5px] text-slate-600 leading-tight">
-                          {activeReport.stowagePlan.weatherDeck?.stowageMethod || 'Cubierta despejada / libre para estiba adicional'}
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] font-mono">
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✓ Resistencia Estructural ({Number(currentStowage.hydrodynamicsAndSafety?.maxFloorPressureTm2 || 0).toFixed(1)} / 20.0 t/m²)
+                          </span>
+                          <span className="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                            ✓ GM Estabilidad ({Number(currentStowage.hydrodynamicsAndSafety?.metacentricHeightGmEstimatedM || 1.55).toFixed(2)}m)
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-slate-800 uppercase text-[10px]">⚓ Doble Fondo / Tanktop & Tween Deck</span>
-                          <span className="font-mono font-bold text-emerald-700 text-[10px]">Resistencia: 20.0 t/m²</span>
+                      {/* Matriz visual de compartimentos según arquitectura naval del perfil */}
+                      {currentProfile === 'RORO' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {roroGridCards.map((deckItem, deckIdx) => (
+                            <div key={`roro-deck-${deckIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[11px] font-black uppercase text-slate-800">{deckItem.name}</span>
+                                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  {Number(deckItem.weightPct || 0).toFixed(1)}% peso
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 mb-1.5">
+                                <span className="font-bold text-slate-900">{Number(deckItem.weightMT || 0).toFixed(2)} MT</span> · {deckItem.subname}
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full"
+                                  style={{ width: `${Math.min(100, Math.max(4, deckItem.weightPct || 0))}%` }}
+                                />
+                              </div>
+                              <div className="text-[10px] font-semibold text-slate-700 truncate" title={deckItem.role}>
+                                Nivel: <span className="font-bold text-slate-900">{deckItem.role}</span>
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={deckItem.securing}>
+                                {deckItem.securing}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-[9.5px] text-slate-600 leading-tight">
-                          {activeReport.stowagePlan.cargoClassification?.isMixedCargo
-                            ? 'Asignación por gravedad: maquinaria y cargas críticas en Tanktop con cunas estructurales; paletizado en Tween Deck con cinchas.'
-                            : (activeReport.stowagePlan.tanktopSummary?.securingMethod || 'Fondo de bodega reforzado para soporte de cargas pesadas.')}
-                        </p>
+                      ) : currentProfile === 'COASTER' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {coasterGridCards.map((hold, holdIdx) => (
+                            <div key={`coaster-hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[11px] font-black uppercase text-slate-800">{hold.name}</span>
+                                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  {Number(hold.weightPct || 0).toFixed(1)}% peso
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 mb-1.5">
+                                <span className="font-bold text-slate-900">{Number(hold.weightMT || 0).toFixed(2)} MT</span> · {Number(hold.volumeCbm || 0).toFixed(1)} m³
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full"
+                                  style={{ width: `${Math.min(100, Math.max(4, hold.volPct || 0))}%` }}
+                                />
+                              </div>
+                              <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold.tier}>
+                                Nivel: <span className="font-bold text-slate-900">{hold.tier}</span>
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold.securing}>
+                                {hold.securing}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {/* activeReport.stowagePlan.holds?.map */}
+                          {rawHolds.map((hold, holdIdx) => (
+                            <div key={hold?.holdNumber || `hold-${holdIdx}`} className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-xs hover:border-blue-400 transition-colors">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[11px] font-black uppercase text-slate-800">{hold?.name || `Bodega ${holdIdx + 1}`}</span>
+                                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  {Number(hold?.weightPercentage || 0).toFixed(1)}% peso
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 mb-1.5">
+                                <span className="font-bold text-slate-900">{Number(hold?.totalWeightTons || 0).toFixed(2)} MT</span> · {Number(hold?.totalVolumeCbm || 0).toFixed(1)} m³
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2 mb-1.5 overflow-hidden border border-slate-200">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full"
+                                  style={{ width: `${Math.min(100, Math.max(4, hold?.volumeUtilizationPct || 0))}%` }}
+                                />
+                              </div>
+                              <div className="text-[10px] font-semibold text-slate-700 truncate" title={hold?.stowageTier || 'Bodega General'}>
+                                Nivel: <span className="font-bold text-slate-900">{hold?.stowageTier || 'Bodega General'}</span>
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 leading-tight mt-1 line-clamp-2" title={hold?.securingLegend || ''}>
+                                {hold?.securingLegend || 'Trincaje estándar OMI'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Cubierta y Doble Fondo complementarios */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10.5px]">
+                        <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-slate-800 uppercase text-[10px]">
+                              {currentProfile === 'RORO' ? '🌊 Rampa de Popa / Stern Ramp' : '🌊 Cubierta Superior / Weather Deck'}
+                            </span>
+                            <span className="font-mono font-bold text-slate-700 text-[10px]">
+                              {currentProfile === 'RORO'
+                                ? 'Operativa Rodada Directa'
+                                : currentStowage.weatherDeck?.totalWeightTons > 0
+                                ? `${Number(currentStowage.weatherDeck.totalWeightTons).toFixed(2)} MT (${Number(currentStowage.weatherDeck.weightPercentage || 0).toFixed(1)}%)`
+                                : 'Despejada'}
+                            </span>
+                          </div>
+                          <p className="text-[9.5px] text-slate-600 leading-tight">
+                            {currentProfile === 'RORO'
+                              ? 'Rampa basculante de popa (Stern Ramp) para tránsito continuo de carga rodada a cubiertas sin maniobras de grúa vertical.'
+                              : (currentStowage.weatherDeck?.stowageMethod || 'Cubierta despejada / libre para estiba adicional')}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-100/80 border border-slate-200 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-slate-800 uppercase text-[10px]">
+                              {currentProfile === 'RORO' ? '⚓ Cubiertas Horizontales Continuas' : '⚓ Doble Fondo / Tanktop & Tween Deck'}
+                            </span>
+                            <span className="font-mono font-bold text-emerald-700 text-[10px]">
+                              {currentProfile === 'RORO' ? 'Trincaje Cadenas G80' : 'Resistencia: 20.0 t/m²'}
+                            </span>
+                          </div>
+                          <p className="text-[9.5px] text-slate-600 leading-tight">
+                            {currentProfile === 'RORO'
+                              ? 'Estiba rodada asegurada con cadenas G80 en cubiertas horizontales y calzos certificados según Código CSS OMI.'
+                              : currentStowage.cargoClassification?.isMixedCargo
+                              ? 'Asignación por gravedad: maquinaria y cargas críticas en Tanktop con cunas estructurales; paletizado en Tween Deck con cinchas.'
+                              : (currentStowage.tanktopSummary?.securingMethod || 'Fondo de bodega reforzado para soporte de cargas pesadas.')}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </section>
             </div>
           </div>

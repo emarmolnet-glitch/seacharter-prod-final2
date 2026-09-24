@@ -19,6 +19,32 @@ export function resolveVesselProfile(vesselType = '', title = '') {
 }
 
 /**
+ * Adapta el razonamiento técnico de ingeniería naval al perfil Ro-Ro,
+ * sustituyendo terminología estática de buques convencionales/MPP (cunas de madera, Tanktop)
+ * por terminología técnica dinámica de buques Ro-Ro / Pure Car Carrier.
+ */
+export function adaptRoRoJustification(text = '', profile = 'HANDYSIZE') {
+  if (profile !== 'RORO' || typeof text !== 'string') return text;
+  return text
+    .replace(/posicionada en el Doble Fondo Reforzado \(Tanktop[^)]*\)\s*sobre cunas estructurales de madera y trincaje pesado G80/gi,
+      'posicionada en cubiertas horizontales con estiba rodada asegurada con cadenas G80 en cubiertas horizontales')
+    .replace(/sobre cunas (?:estructurales de madera|de madera estructurales|de madera)/gi,
+      'con estiba rodada asegurada con cadenas G80 en cubiertas horizontales')
+    .replace(/cunas (?:estructurales de madera|de madera estructurales|de madera)/gi,
+      'estiba rodada asegurada con cadenas G80 en cubiertas horizontales')
+    .replace(/en el Doble Fondo Reforzado \(Tanktop[^)]*\)/gi,
+      'en cubiertas horizontales continuas (Main Deck / Lower Hold Deck)')
+    .replace(/Tanktop \(fondo de bodega\)/gi,
+      'cubiertas horizontales continuas')
+    .replace(/en fondo de bodega \(Tanktop\)/gi,
+      'en cubiertas horizontales continuas')
+    .replace(/\bTanktop\b/gi,
+      'Cubiertas Horizontales')
+    .replace(/en bodegas y compartimentos/gi,
+      'en cubiertas horizontales y niveles de carga rodada');
+}
+
+/**
  * VisualStowagePlan
  *
  * Representación visual gráfica (2D) del buque mercante y sus bodegas de carga
