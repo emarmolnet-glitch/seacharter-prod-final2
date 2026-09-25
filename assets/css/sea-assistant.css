@@ -10,8 +10,10 @@
   --sca-surface: #ffffff;
   --sca-surface-soft: #f3f7fa;
   position: fixed;
-  right: max(24px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  right: 1.5rem;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: 4rem;
+  bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3.5rem));
   z-index: 2147483500;
   display: grid;
   justify-items: end;
@@ -23,7 +25,7 @@
 .sca-panel {
   position: fixed;
   right: max(24px, env(safe-area-inset-right));
-  bottom: max(90px, calc(env(safe-area-inset-bottom) + 66px));
+  bottom: max(130px, calc(env(safe-area-inset-bottom) + 100px));
   z-index: 2147483501;
   width: min(410px, calc(100vw - 32px));
   height: min(640px, calc(100vh - 120px));
@@ -42,8 +44,10 @@
 /* Disparador Flotante (FAB) */
 .sea-assistant-fab {
   position: fixed;
-  right: max(24px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  right: 1.5rem;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: 4rem;
+  bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3.5rem));
   z-index: 2147483400;
   display: inline-flex;
   align-items: center;
@@ -869,14 +873,15 @@
 @media (max-width: 560px) {
   .sea-assistant-fab {
     right: 16px;
-    bottom: max(16px, env(safe-area-inset-bottom));
+    bottom: 3.5rem;
+    bottom: max(3.5rem, calc(env(safe-area-inset-bottom) + 2.5rem));
     width: 50px;
     height: 50px;
   }
 
   .sca-panel {
     right: 12px;
-    bottom: max(76px, calc(env(safe-area-inset-bottom) + 60px));
+    bottom: max(100px, calc(env(safe-area-inset-bottom) + 80px));
     width: calc(100vw - 24px);
     height: min(680px, calc(100dvh - 96px));
     min-height: 360px;

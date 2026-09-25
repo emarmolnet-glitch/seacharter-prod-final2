@@ -6,6 +6,7 @@ export default function AgenteProyectosWidget({
   onUpdatePayload,
   isOpen: controlledIsOpen,
   onToggleOpen,
+  hideFloatingLauncher = false,
   cargoItems = [],
   items = null,
   setCargoItems,
@@ -688,6 +689,9 @@ Contexto actual del proyecto: ${projectContext}`;
   };
 
   if (!effectiveIsOpen || isMinimized) {
+    if (hideFloatingLauncher) {
+      return null;
+    }
     return (
       <button 
         type="button"

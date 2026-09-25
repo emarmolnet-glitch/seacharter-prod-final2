@@ -6449,18 +6449,31 @@ export function ForwarderWorkspace() {
               }
             `}</style>
 
-            <div className="fixed bottom-6 right-8 flex items-center gap-4 z-[9999] print:hidden">
+            <div
+              id="report-actions-center-toolbar"
+              className="fixed bottom-[2rem] left-1/2 -translate-x-1/2 flex items-center justify-center gap-4 z-[999] print:hidden select-none"
+              style={{
+                position: 'fixed',
+                bottom: '2rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'center',
+                zIndex: 999
+              }}
+            >
               <button
                 id="btn-close-executive-report"
                 type="button"
                 onClick={() => setShowExecutiveReport(false)}
-                className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform"
+                className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-2xl font-black text-xs flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform"
                 title="Cerrar Reporte (Esc)"
                 aria-label="Cerrar Reporte"
               >
                 ✖ Cerrar
               </button>
-              <div className="flex items-center bg-slate-900/90 rounded-full p-1 border-2 border-white/20 shadow-2xl gap-1">
+              <div className="flex items-center bg-slate-900/90 rounded-full p-1 border-2 border-white/20 shadow-2xl gap-2">
                 <button
                   id="btn-print-internal-report"
                   type="button"
@@ -6468,7 +6481,7 @@ export function ForwarderWorkspace() {
                     setIsClientMode(false);
                     setTimeout(() => window.print(), 50);
                   }}
-                  className={`px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                     !isClientMode ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
                   }`}
                   title="Imprimir Reporte Interno (con costes y márgenes)"
@@ -6483,7 +6496,7 @@ export function ForwarderWorkspace() {
                     setIsClientMode(true);
                     setTimeout(() => window.print(), 50);
                   }}
-                  className={`px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                     isClientMode ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
                   }`}
                   title="Imprimir Reporte Cliente (ocultando costes de armador y márgenes)"
@@ -6492,16 +6505,6 @@ export function ForwarderWorkspace() {
                   👤 Imprimir Reporte Cliente
                 </button>
               </div>
-              <button
-                id="btn-print-executive-report"
-                type="button"
-                onClick={() => window.print()}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-2xl font-black flex items-center gap-2 border-2 border-white cursor-pointer hover:scale-105 transition-transform"
-                title="Imprimir o Guardar Reporte"
-                aria-label="Imprimir / Guardar Reporte"
-              >
-                🖨️ Imprimir / Guardar Reporte
-              </button>
             </div>
 
             <div id="printable-a4-sheet" className="max-w-4xl mx-auto p-10 bg-white text-slate-900 shadow-xl border border-slate-300 rounded">
@@ -7780,6 +7783,7 @@ export function ForwarderWorkspace() {
         onUpdatePayload={handleApplyProjectPayload}
         isOpen={isAgentVisible}
         onToggleOpen={setIsAgentVisible}
+        hideFloatingLauncher={showExecutiveReport}
         cargoItems={cargoItems}
         items={cargoItems}
         setCargoItems={setCargoItems}
