@@ -46,11 +46,12 @@ export default function VoyageExecutiveReportModal({
   const tce = Number(data.tceOwner || data.tceDaily || 0);
 
   // Costes operativos
-  const costBunkers = Number(data.costBunkers || 0);
-  const costOpex = Number(data.costOpex || 0);
-  const costPda = Number(data.costPda || 0);
-  const costEts = Number(data.etsCost || 0);
-  const costTotal = Number(data.costTotal || (costBunkers + costOpex + costPda + costEts));
+  const costBunkers = Number(data.costBunkers || data.totalBunkers || data.bunkerCost || 0);
+  const costOpex = Number(data.costOpex || data.totalOpex || data.opexCost || (Number(data.opex || data.opexDaily || 0) * totalDays) || 0);
+  const costPda = Number(data.costPda || data.totalPda || data.portCosts || data.portExpenses || 0);
+  const costEts = Number(data.costEts || data.etsCost || data.etsTotalCost || 0);
+  const costTotal = Number(data.costTotal || data.totalExpenses || (costBunkers + costOpex + costPda + costEts));
+  const opexDaily = Number(data.opexDaily || data.opex || (totalDays > 0 ? costOpex / totalDays : 0));
 
   const totalSaleAmount = freightSell * cargoTons;
 
@@ -353,7 +354,7 @@ export default function VoyageExecutiveReportModal({
                   <i className="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform print:hidden"></i>
                 </summary>
                 <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
-                  <p><strong>Fórmula:</strong> Coste Total Operativo / Toneladas Métricas de Carga</p>
+                  <p><strong>Fórmula:</strong> Coste Total Operativo / TM = Break Even</p>
                   <p><strong>Cálculo:</strong> ${costTotal.toLocaleString('en-US')} / {cargoTons.toLocaleString('en-US')} MT = <strong className="text-slate-900">${breakEven.toFixed(2)} / TM</strong></p>
                 </div>
               </details>
@@ -367,6 +368,7 @@ export default function VoyageExecutiveReportModal({
                   <i className="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform print:hidden"></i>
                 </summary>
                 <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
+                  <p><strong>Gasto Total en Bunkers:</strong> ${costBunkers.toLocaleString('en-US')}</p>
                   <p><strong>Gasto de Combustible en Mar y Puerto:</strong> ${costBunkers.toLocaleString('en-US')}</p>
                 </div>
               </details>
@@ -380,8 +382,8 @@ export default function VoyageExecutiveReportModal({
                   <i className="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform print:hidden"></i>
                 </summary>
                 <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
-                  <p><strong>Costo Operativo Diario (OPEX):</strong> ${costOpex.toLocaleString('en-US')}</p>
-                  <p><strong>DWT:</strong> {dwt.toLocaleString('en-US')} · <strong>Clase:</strong> {vesselClass}</p>
+                  <p><strong>OPEX Diario Total:</strong> ${Math.round(opexDaily).toLocaleString('en-US')} / día (Total Viaje: ${costOpex.toLocaleString('en-US')})</p>
+                  <p><strong>Especificaciones:</strong> DWT {dwt.toLocaleString('en-US')} · Clase: {vesselClass}</p>
                 </div>
               </details>
             )}

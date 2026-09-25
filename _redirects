@@ -2,4 +2,5 @@
 /api/dossiers /.netlify/functions/dossiers 200!
 /api/dossiers/* /.netlify/functions/dossiers/:splat 200!
 /api/* /.netlify/functions/:splat 200
+/assets/* /assets/:splat 200
 /* /index.html 200

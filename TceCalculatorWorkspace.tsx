@@ -1,6 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { voyageStore } from './src/stores/voyage-store.js';
 import { getApiUrl } from './src/utils/apiConfig.js';
+import {
+  useDataBridgeSpotConnection,
+  getMarketSpeedVesselClass,
+  extractTheoreticalSpotTce,
+  getTheoreticalSpotTce,
+} from './src/hooks/useDataBridgeSpotConnection.js';
+
+// Fail-safe market indications updater with Data Bridge protection
+export function updateMarketIndications(category = 'Handysize') {
+  try {
+    if (typeof useDataBridgeSpotConnection === 'function') {
+      const spot = getTheoreticalSpotTce(category);
+      return { spotTce: spot, status: 'LIVE' };
+    }
+  } catch (err) {
+    console.warn('Data Bridge desconectado');
+  }
+  return { spotTce: getTheoreticalSpotTce(category), status: 'FALLBACK' };
+}
 
 type ReverseCalculatorState = {
   tceTarget: number | '';
@@ -519,7 +538,7 @@ function calculateCostPlusResults(
   };
 }
 
-function calculateReverseTceResults(values: ReverseCalculatorState) {
+export function calculateReverseTceResults(values: ReverseCalculatorState) {
   const daysSea = safeNumber(values.daysSea);
   const daysPort = safeNumber(values.daysPort);
   const tceTarget = safeNumber(values.tceTarget);
@@ -601,8 +620,34 @@ function calculateReverseTceResults(values: ReverseCalculatorState) {
     laycanFreeDays: safeNumber(values.laycanDiasLibres),
   });
   const demurrageRate = demurrage.demurrageRate;
-  const tceTotal = tceTarget * totalDays;
-  const netProfitTotal = tceTotal - opexDaily * totalDays;
+
+  // HARD-FIX MATEMÁTICO: INYECCIÓN EXACTA DE VARIABLES NAVIERAS
+  const freightBuy = minFreightRate;
+  const cargoTons = cargoVolume;
+  const costBunkers = bunkerCost;
+  const costPda = safeNumber(values.portCosts);
+  const etsCost = etsTotalCost;
+  const costOpex = opexDaily * totalDays;
+
+  // 1. Ingresos Brutos (Flete * Toneladas)
+  const totalGrossRevenueOwner = (Number(freightBuy) || 0) * (Number(cargoTons) || 0);
+
+  // 2. Costes Variables del Viaje (Bunkers + PDAs + ETS)
+  const totalVoyageCosts = (Number(costBunkers) || 0) + (Number(costPda) || 0) + (Number(etsCost) || 0);
+
+  // 3. Costes Fijos (OPEX)
+  const totalOpexCosts = Number(costOpex) || 0;
+
+  // 4. CÁLCULO REAL BENEFICIO NETO ARMADOR (Ingresos - Viaje - OPEX)
+  const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;
+
+  // 5. CÁLCULO REAL TCE (Ingresos - Viaje) -> ¡NUNCA RESTAR NI SUMAR OPEX AQUÍ!
+  const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;
+  const calculatedTceDaily = calculatedTceTotal / (Number(totalDays) || 1);
+
+  const tceTotal = Number.isFinite(tceTarget) && tceTarget > 0 ? (tceTarget * totalDays) : calculatedTceTotal;
+  const tceDaily = totalDays > 0 ? (Number.isFinite(tceTarget) && tceTarget > 0 ? tceTarget : calculatedTceDaily) : 0;
+  const netProfitTotal = calculatedNetOwnerProfit;
   const netProfitDaily = totalDays > 0 ? netProfitTotal / totalDays : 0;
 
   return {
@@ -1239,6 +1284,7 @@ export function ReverseTceCalculator({
   laycanDate = '',
   refreshSignal = 0,
 }: ReverseTceCalculatorProps) {
+  const { spotTce: theoreticalSpotTce, refreshSpot } = useDataBridgeSpotConnection(vesselCategory);
   const [isPurchaseDetailsOpen, setIsPurchaseDetailsOpen] = useState(false);
   const [values, setValues] = useState<ReverseCalculatorState>(DEFAULT_VALUES);
   const [vlsfoPrice, setVlsfoPrice] = useState(DEFAULT_VALUES.vlsfoPrice);
@@ -1260,8 +1306,17 @@ export function ReverseTceCalculator({
 
   const getSyncedValues = (current: ReverseCalculatorState) => {
     const strategy = NAVIGATION_STRATEGIES[navigationStrategy];
+    const spotVal = Number.isFinite(Number(theoreticalSpotTce)) && Number(theoreticalSpotTce) > 0
+      ? Number(theoreticalSpotTce)
+      : getTheoreticalSpotTce(vesselCategory);
+
+    const nextTceTarget = (isSyncEnabled && Number.isFinite(Number(spotVal)) && Number(spotVal) > 0)
+      ? Number(spotVal)
+      : current.tceTarget;
+
     return {
       ...current,
+      tceTarget: nextTceTarget,
       cargoVolume: Number.isFinite(Number(cargoVolume)) ? Number(cargoVolume) : current.cargoVolume,
       daysSea: Number((
         (Number.isFinite(Number(daysSea)) ? Number(daysSea) : current.daysSea) * strategy.daysSeaFactor
@@ -1304,9 +1359,18 @@ export function ReverseTceCalculator({
     }
   };
 
-  const forceRefresh = () => {
+  const forceRefresh = async () => {
+    if (typeof refreshSpot === 'function') {
+      await refreshSpot().catch(() => null);
+    }
     setValues((current) => {
+      const spotVal = Number.isFinite(Number(theoreticalSpotTce)) && Number(theoreticalSpotTce) > 0
+        ? Number(theoreticalSpotTce)
+        : getTheoreticalSpotTce(vesselCategory);
       const nextValues = isSyncEnabled ? getSyncedValues(current) : { ...current };
+      if (isSyncEnabled && Number.isFinite(Number(spotVal)) && Number(spotVal) > 0) {
+        nextValues.tceTarget = Number(spotVal);
+      }
       calculateCoreFreight(nextValues);
       return nextValues;
     });
@@ -1325,6 +1389,27 @@ export function ReverseTceCalculator({
       setMgoPrice((prev) => (prev !== mgoVal ? mgoVal : prev));
     }
   };
+
+  // Disparador de Recálculo (useEffect):
+  // Al cambiar theoreticalSpotTce mediante la inyección del Data Bridge o al estar en modo AUTO,
+  // se actualiza automáticamente el input tceObjetivo (values.tceTarget) y se dispara inmediatamente
+  // la función matemática calculateCoreFreight para recalcular el Flete Mínimo Armador hacia arriba.
+  useEffect(() => {
+    if (isSyncEnabled && Number.isFinite(Number(theoreticalSpotTce)) && Number(theoreticalSpotTce) > 0) {
+      setValues((current) => {
+        if (current.tceTarget === Number(theoreticalSpotTce)) return current;
+        const nextValues = {
+          ...current,
+          tceTarget: Number(theoreticalSpotTce),
+        };
+        calculateCoreFreight(nextValues);
+        return nextValues;
+      });
+      setIsManualOverride(false);
+      const vClass = getMarketSpeedVesselClass(vesselCategory);
+      setIndexSourceLabel(`${vClass} TCE Spot Teórico - Data Bridge - Live`);
+    }
+  }, [theoreticalSpotTce, isSyncEnabled, vesselCategory]);
 
   useEffect(() => {
     if (refreshSignal > 0) {
@@ -1440,13 +1525,13 @@ export function ReverseTceCalculator({
     setIsManualOverride(false);
     setIsFetchingBalticSpot(true);
     try {
-      let response = await fetch(getApiUrl('/api/get-market-data'), {
+      let response = await fetch('/api/get-market-data', {
         cache: 'no-store',
       });
       let payload = await response.json().catch(() => null);
       let marketRecord = findMarketLatestRecord(payload);
       if (!response.ok || !marketRecord) {
-        response = await fetch(getApiUrl('/api/market/latest'), {
+        response = await fetch('/api/market/latest', {
           cache: 'no-store',
         });
         payload = await response.json().catch(() => null);
@@ -1546,10 +1631,27 @@ export function ReverseTceCalculator({
 
   const handleToggleSync = () => {
     setIsSyncEnabled((current) => {
-      if (!current) {
+      const nextSync = !current;
+      if (nextSync) {
         syncFromSectionData();
+        const spotVal = Number.isFinite(Number(theoreticalSpotTce)) && Number(theoreticalSpotTce) > 0
+          ? Number(theoreticalSpotTce)
+          : getTheoreticalSpotTce(vesselCategory);
+        if (Number.isFinite(Number(spotVal)) && Number(spotVal) > 0) {
+          setValues((curr) => {
+            const nextValues = {
+              ...curr,
+              tceTarget: Number(spotVal),
+            };
+            calculateCoreFreight(nextValues);
+            return nextValues;
+          });
+          setIsManualOverride(false);
+          const vClass = getMarketSpeedVesselClass(vesselCategory);
+          setIndexSourceLabel(`${vClass} TCE Spot Teórico - Data Bridge - Live`);
+        }
       }
-      return !current;
+      return nextSync;
     });
   };
 
@@ -1774,6 +1876,8 @@ export function ReverseTceCalculator({
                         <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15">
                           <input
                             id={`reverse-${input.key}`}
+                            name={isTceTarget ? 'tceObjetivo' : input.key}
+                            data-testid={isTceTarget ? 'tce-objetivo' : undefined}
                             type="number"
                             step="any"
                             value={values[input.key]}
@@ -2052,20 +2156,51 @@ export function ReverseTceCalculator({
                     <p className="text-xs font-bold uppercase text-slate-500">Beneficio Armador</p>
                     <span
                       className="cursor-help text-xs font-black text-slate-400"
-                      title={`El Beneficio Neto es el TCE Obtenido menos el OPEX fijo de ${wholeCurrencyFormatter.format(results.opexDaily)}/día.`}
+                      title={`Beneficio Neto Armador = (Flete Compra Armador * TM Carga) - Gastos Viaje (Bunkers + PDAs + ETS) - Gastos OPEX Totales.`}
                     >
                       i
                     </span>
                   </div>
-                  <p className={`text-4xl font-bold tracking-tight ${results.netProfitDaily >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {wholeCurrencyFormatter.format(results.netProfitDaily)}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-500">
-                    Beneficio Neto Diario: {wholeCurrencyFormatter.format(results.netProfitDaily)} / día
-                  </p>
-                  <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-500">
-                    TCE de Mercado: {wholeCurrencyFormatter.format(results.tceDaily)} / día (Total: {wholeCurrencyFormatter.format(results.tceTotal)})
-                  </p>
+                  {(() => {
+                    // HARD-FIX MATEMÁTICO DIRECTO PARA BENEFICIO ARMADOR Y TCE OBTENIDO
+                    const freightBuy = results.minFreightRate;
+                    const cargoTons = cargoVolume;
+                    const costBunkers = results.bunkerCost;
+                    const costPda = safeNumber(values.portCosts);
+                    const etsCost = results.etsTotalCost;
+                    const costOpex = results.opexDaily * results.totalDays;
+                    const totalDays = results.totalDays;
+
+                    // 1. Ingresos Brutos (Flete * Toneladas)
+                    const totalGrossRevenueOwner = (Number(freightBuy) || 0) * (Number(cargoTons) || 0);
+
+                    // 2. Costes Variables del Viaje (Bunkers + PDAs + ETS)
+                    const totalVoyageCosts = (Number(costBunkers) || 0) + (Number(costPda) || 0) + (Number(etsCost) || 0);
+
+                    // 3. Costes Fijos (OPEX)
+                    const totalOpexCosts = Number(costOpex) || 0;
+
+                    // 4. CÁLCULO REAL BENEFICIO NETO ARMADOR (Ingresos - Viaje - OPEX)
+                    const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;
+
+                    // 5. CÁLCULO REAL TCE (Ingresos - Viaje) -> ¡NUNCA RESTAR NI SUMAR OPEX AQUÍ!
+                    const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;
+                    const calculatedTceDaily = calculatedTceTotal / (Number(totalDays) || 1);
+
+                    return (
+                      <>
+                        <p className={`text-4xl font-bold tracking-tight ${calculatedNetOwnerProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          ${calculatedNetOwnerProfit.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                        </p>
+                        <p className="mt-2 text-xs font-semibold text-slate-500">
+                          Beneficio Neto Diario: ${(totalDays > 0 ? calculatedNetOwnerProfit / totalDays : 0).toLocaleString('en-US', {maximumFractionDigits: 0})} / día
+                        </p>
+                        <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-500">
+                          TCE Obtenido: ${calculatedTceDaily.toLocaleString('en-US', {maximumFractionDigits: 0})} / día (Total: ${calculatedTceTotal.toLocaleString('en-US', {maximumFractionDigits: 0})})
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <dl className="grid grid-cols-2 gap-3 rounded-lg border border-teal-200 bg-teal-100/60 p-3 text-xs">

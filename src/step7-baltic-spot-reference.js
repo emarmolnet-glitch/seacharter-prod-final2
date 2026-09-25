@@ -114,6 +114,25 @@ function renderTceSpot(snapshot) {
     'tce-spot-theoretical-status',
     tceSpot?.algorithmLabel || tceSpot?.status || 'No disponible',
   );
+
+  if (typeof window !== 'undefined') {
+    if (window.State) {
+      window.State.marketSnapshot = snapshot;
+      if (Number.isFinite(Number(tceSpot?.theoreticalSpotTce)) && Number(tceSpot.theoreticalSpotTce) > 0) {
+        window.State.theoreticalSpotTce = Number(tceSpot.theoreticalSpotTce);
+      }
+    }
+    if (Number.isFinite(Number(tceSpot?.theoreticalSpotTce)) && Number(tceSpot.theoreticalSpotTce) > 0 && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('MARKET_REFERENCE_UPDATED', {
+        detail: {
+          tce: Number(tceSpot.theoreticalSpotTce),
+          mode: 'live',
+          vesselClass,
+          status: tceSpot.status || 'LIVE',
+        },
+      }));
+    }
+  }
 }
 
 function renderSnapshot(snapshot) {

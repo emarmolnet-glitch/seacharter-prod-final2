@@ -50,7 +50,7 @@ function copyLegacyAssets() {
 }
 
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [copyLegacyAssets()],
   build: {
     assetsInlineLimit: 0,
