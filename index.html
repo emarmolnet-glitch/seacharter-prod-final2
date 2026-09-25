@@ -129,10 +129,83 @@
     </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="build-version" content="2026.09.25-asset-routing-hotfix">
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval' blob:; worker-src * 'self' blob: data:; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';">
     <title>SeaCharter Core PRO - Flujo Completo RODAHMAR</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <script>
+        // 0. Worker & Vendor Monitoring Shield
+        // Silences errors from third-party / hosting monitoring workers (e.g. monitoring.vendor.js)
+        // ensuring they never crash or block the main thread or React rendering.
+        (function installMonitoringShield() {
+            if (typeof window === 'undefined') return;
+
+            window.addEventListener('error', function (event) {
+                try {
+                    const source = String(event.filename || (event.target && event.target.src) || '');
+                    const message = String(event.message || '');
+                    const isWorkerError = (event.target && typeof Worker !== 'undefined' && event.target instanceof Worker) ||
+                                          /worker/i.test(message) ||
+                                          /Worker error/i.test(message) ||
+                                          source.includes('monitoring.vendor') ||
+                                          source.includes('monitoring');
+                    if (isWorkerError) {
+                        console.warn('[Monitoring Guard] Silenced vendor worker error event:', event);
+                        if (typeof event.preventDefault === 'function') event.preventDefault();
+                        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+                        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+                        return true;
+                    }
+                } catch (_) {}
+            }, true);
+
+            window.addEventListener('unhandledrejection', function (event) {
+                try {
+                    const reason = event.reason;
+                    const reasonStr = String((reason && (reason.stack || reason.message)) || reason || '');
+                    if (/monitoring\.vendor/i.test(reasonStr) || /worker/i.test(reasonStr)) {
+                        console.warn('[Monitoring Guard] Silenced vendor worker unhandled rejection:', reason);
+                        if (typeof event.preventDefault === 'function') event.preventDefault();
+                        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+                        return true;
+                    }
+                } catch (_) {}
+            });
+
+            if (typeof window.Worker !== 'undefined') {
+                const NativeWorker = window.Worker;
+                window.Worker = function SeaCharterSafeWorker(scriptURL, options) {
+                    try {
+                        const instance = new NativeWorker(scriptURL, options);
+                        instance.addEventListener('error', function (errEvent) {
+                            const urlStr = String(scriptURL || '');
+                            if (urlStr.includes('monitoring') || urlStr.includes('vendor')) {
+                                console.warn('[Monitoring Guard] Vendor worker reported error, safely silenced:', urlStr);
+                                if (typeof errEvent.preventDefault === 'function') errEvent.preventDefault();
+                                if (typeof errEvent.stopImmediatePropagation === 'function') errEvent.stopImmediatePropagation();
+                            }
+                        });
+                        return instance;
+                    } catch (e) {
+                        const urlStr = String(scriptURL || '');
+                        console.warn('[Monitoring Guard] Safely caught Worker constructor failure for:', urlStr, e);
+                        return {
+                            addEventListener: function () {},
+                            removeEventListener: function () {},
+                            postMessage: function () {},
+                            terminate: function () {},
+                            onmessage: null,
+                            onerror: null
+                        };
+                    }
+                };
+                window.Worker.prototype = NativeWorker.prototype;
+            }
+        })();
+
         // Global State, Constants and Absolute API Shield for Electron & Netlify
         (function initGlobalSafetyAndApiBridge(global) {
             const PRODUCTION_ORIGIN = 'https://neon-seachartercorepro-4ce09d.netlify.app';
@@ -36168,6 +36241,7 @@ function createRouteAnchorElement(type) {
             return false;
         }
         window.hydrateBunkerIndexData = hydrateBunkerIndexData;
+        window.applyBunkerIndexData = applyBunkerIndexData;
 
         function normalizeBunkerMarketPayload(payload, options = {}) {
             const routeRegion = options.routeRegion || getCurrentBunkerRegionContext();
@@ -39008,11 +39082,35 @@ function scheduleReactiveEngine() {
 
             const grossRevOwner = isZeroCalculation ? 0 : voyageFinancials.ownerFreightCost;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
-            const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + portExpensesForMode);
-            const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
-            State.totalCosts = isZeroCalculation ? 0 : adjustedCostTotal;
+            // HARD-FIX MATEMÁTICO: CÁLCULOS EXACTOS PARA RESULTADO DE LA NEGOCIACIÓN
+            const cargoTons = cargo;
+            const costBunkers = totalBunkers;
+            const costPda = portExpensesForMode;
+            const costOpex = totalOpex + totalCapex;
+
+            // 1. Ingresos Brutos (Flete * Toneladas)
+            const totalGrossRevenueOwner = (Number(freightBuy) || 0) * (Number(cargoTons) || 0);
+
+            // 2. Costes Variables del Viaje (Bunkers + PDAs + ETS)
+            const totalVoyageCosts = (Number(costBunkers) || 0) + (Number(costPda) || 0) + (Number(etsCost) || 0);
+
+            // 3. Costes Fijos (OPEX)
+            const totalOpexCosts = Number(costOpex) || 0;
+
+            // 4. CÁLCULO REAL BENEFICIO NETO ARMADOR (Ingresos - Viaje - OPEX)
+            const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;
+
+            // 5. CÁLCULO REAL TCE (Ingresos - Viaje) -> ¡NUNCA RESTAR NI SUMAR OPEX AQUÍ!
+            const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;
+            const calculatedTceDaily = calculatedTceTotal / (Number(totalDays) || 1);
+
+            const netProfitOwner = isZeroCalculation ? 0 : calculatedNetOwnerProfit;
+            const tceTotal = isZeroCalculation ? 0 : calculatedTceTotal;
+            const tceOwner = isZeroCalculation ? 0 : calculatedTceDaily;
+            const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
+
+            State.totalCosts = isZeroCalculation ? 0 : (totalVoyageCosts + totalOpexCosts);
             const sharedTotalCosts = State.totalCosts;
-            const netProfitOwner = isZeroCalculation ? 0 : (voyageRevenues - sharedTotalCosts);
             const grossRevCharterer = isZeroCalculation ? 0 : voyageFinancials.grossRevenue;
             const chartererCommissionCost = isZeroCalculation ? 0 : voyageFinancials.commissionCost;
             const totalRevenue = grossRevCharterer;
@@ -39025,8 +39123,6 @@ function scheduleReactiveEngine() {
             }
             const netProfit = netProfitCharterer;
 
-            const tceOwner = isZeroCalculation ? 0 : (tceTotal / (totalDays || 1));
-            const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
             const historicalRisk = updateHistoricalRiskEngine({
                 riskDays: smartDelayDays,
                 tce: tceOwner,
@@ -39351,12 +39447,12 @@ function scheduleReactiveEngine() {
                 }
             }
 
-            document.getElementById('res-net-profit-owner').innerText = `$${netProfitOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
-            document.getElementById('res-net-profit-owner').className = netProfitOwner >= 0 ? "text-4xl font-bold text-emerald-400 mono leading-none" : "text-4xl font-bold text-red-500 mono leading-none";
-            updateCargoRateArbitrageAlert(netProfitOwner);
+            document.getElementById('res-net-profit-owner').innerText = `$${calculatedNetOwnerProfit.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+            document.getElementById('res-net-profit-owner').className = calculatedNetOwnerProfit >= 0 ? "text-4xl font-bold text-emerald-400 mono leading-none" : "text-4xl font-bold text-red-500 mono leading-none";
+            updateCargoRateArbitrageAlert(calculatedNetOwnerProfit);
             const netProfitOwnerDailyEl = document.getElementById('res-net-profit-owner-daily');
-            if (netProfitOwnerDailyEl) netProfitOwnerDailyEl.innerText = `Beneficio Neto Diario: $${netProfitOwnerDaily.toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
-            document.getElementById('res-tce-label').innerText = `TCE Obtenido: $${tceOwner.toLocaleString('en-US', {maximumFractionDigits:0})} / día (Total: $${tceTotal.toLocaleString('en-US', {maximumFractionDigits:0})})`;
+            if (netProfitOwnerDailyEl) netProfitOwnerDailyEl.innerText = `Beneficio Neto Diario: $${(totalDays > 0 ? calculatedNetOwnerProfit / totalDays : 0).toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
+            document.getElementById('res-tce-label').innerText = `TCE Obtenido: $${calculatedTceDaily.toLocaleString('en-US', {maximumFractionDigits:0})} / día (Total: $${calculatedTceTotal.toLocaleString('en-US', {maximumFractionDigits:0})})`;
             const ownerProfitTooltip = document.getElementById('owner-profit-tooltip');
             if (ownerProfitTooltip) ownerProfitTooltip.title = `Beneficio Neto Armador = Ingresos del viaje - Coste Total Riesgo global. La base incluye bunkers, puertos, OPEX, CAPEX, ETS y ajustes operativos aplicables. Clase: ${ownerClassAnalysis?.shipClass?.label || 'Buque estándar'}.`;
             const ownerGrossRevenueEl = document.getElementById('res-owner-gross-revenue');
@@ -67131,6 +67227,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             isInverseTceSyncEnabled = !isInverseTceSyncEnabled;
             updateInverseTceSyncUi();
             if (isInverseTceSyncEnabled) {
+                isManualBalticSpotOverride = false;
+                const spotRate = window.State?.theoreticalSpotTce ||
+                    Number(String(document.getElementById('tce-spot-theoretical-value')?.textContent || '').replace(/[^0-9.-]/g, '')) ||
+                    Number(window.MarketIntelligenceHydration?.getSnapshot?.()?.tceSpotByClass?.Handysize?.theoreticalSpotTce);
+                if (Number.isFinite(spotRate) && spotRate > 0) {
+                    const tceInput = document.getElementById('inverse-tce-target');
+                    if (tceInput) {
+                        tceInput.value = String(spotRate);
+                    }
+                }
                 if (typeof runEngine === 'function') runEngine();
             }
             calculateInverseTce();
@@ -68413,7 +68519,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const applyHydratedBunkers = snapshot => {
                 const bunkers = snapshot?.bunkers;
                 if (!bunkers || ![bunkers.vlsfo, bunkers.hsfo, bunkers.mgo].every(price => Number(price) > 0)) return;
-                applyBunkerIndexData({
+                const applyFn = typeof applyBunkerIndexData === 'function'
+                    ? applyBunkerIndexData
+                    : (typeof window.applyBunkerIndexData === 'function' ? window.applyBunkerIndexData : null);
+                if (typeof applyFn !== 'function') return;
+                applyFn({
                     vlsfo: Number(bunkers.vlsfo),
                     ifo380: Number(bunkers.hsfo),
                     mgo: Number(bunkers.mgo),
@@ -70327,18 +70437,26 @@ window.actualizarGrabCapacityVisibility = function() {
         <script>
       // Escuchamos el evento del Algoritmo Live del panel derecho
       window.addEventListener('MARKET_REFERENCE_UPDATED', (e) => {
-        const { tce, mode } = e.detail;
+        const { tce, mode } = e.detail || {};
+        const numericTce = Number(tce);
         
-        if (tce !== null && !isNaN(tce)) {
+        if (Number.isFinite(numericTce) && numericTce > 0) {
           // Buscamos el input de la calculadora donde se introduce el TCE objetivo
-          const tceInput = document.querySelector('input[name="tceTarget"]') || document.getElementById('tce-objetivo') || document.querySelector('input[type="number"]');
+          const tceInput = document.getElementById('inverse-tce-target') ||
+            document.querySelector('input[name="tceObjetivo"]') ||
+            document.querySelector('input[name="tceTarget"]') ||
+            document.getElementById('reverse-tceTarget') ||
+            document.getElementById('tce-objetivo');
           
           if (tceInput) {
-            tceInput.value = tce;
+            tceInput.value = String(numericTce);
             
             // Disparamos eventos nativos para que la calculadora detecte el cambio y recalcule
             tceInput.dispatchEvent(new Event('input', { bubbles: true }));
             tceInput.dispatchEvent(new Event('change', { bubbles: true }));
+            if (typeof calculateInverseTce === 'function') {
+              calculateInverseTce();
+            }
           }
         }
       });

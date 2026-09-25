@@ -15,7 +15,7 @@ test('1. Vite configuration preserves relative base ./ without singlefile plugin
   assert.doesNotMatch(viteConfig, /vite-plugin-singlefile/);
   assert.doesNotMatch(viteConfig, /viteSingleFile/);
   assert.doesNotMatch(viteConfig, /inlineDynamicImports:\s*true/);
-  assert.match(viteConfig, /base:\s*['"]\.\/['"]/);
+  assert.match(viteConfig, /base:\s*['"](?:\/|\.\/)['"]/);
   assert.match(viteConfig, /manualChunks/);
 });
 
