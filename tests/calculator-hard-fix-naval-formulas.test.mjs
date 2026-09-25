@@ -6,12 +6,17 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const tceWorkspaceSource = await readFile(new URL('../TceCalculatorWorkspace.tsx', import.meta.url), 'utf8');
 
 test('Hard-fix matemático: index.html implements exact naval formulas in Resultado de la Negociación', () => {
-  assert.match(indexSource, /const totalGrossRevenueOwner = \(Number\(freightBuy\) \|\| 0\) \* \(Number\(cargoTons\) \|\| 0\);/);
-  assert.match(indexSource, /const totalVoyageCosts = \(Number\(costBunkers\) \|\| 0\) \+ \(Number\(costPda\) \|\| 0\) \+ \(Number\(etsCost\) \|\| 0\);/);
-  assert.match(indexSource, /const totalOpexCosts = Number\(costOpex\) \|\| 0;/);
+  assert.match(indexSource, /const totalGrossRevenueOwner = (?:cleanNum\(freightBuy\) \* cleanNum\(cargoTons\)|\(Number\(freightBuy\) \|\| 0\) \* \(Number\(cargoTons\) \|\| 0\));/);
+  assert.match(indexSource, /const totalVoyageCosts = (?:cleanNum\(costBunkers\) \+ cleanNum\(costPda\) \+ cleanNum\(etsCost\)|\(Number\(costBunkers\) \|\| 0\) \+ \(Number\(costPda\) \|\| 0\) \+ \(Number\(etsCost\) \|\| 0\));/);
+  assert.match(indexSource, /const totalOpexCosts = (?:cleanNum\(costOpex\)|Number\(costOpex\) \|\| 0);/);
   assert.match(indexSource, /const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;/);
   assert.match(indexSource, /const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;/);
-  assert.match(indexSource, /const calculatedTceDaily = calculatedTceTotal \/ \(Number\(totalDays\) \|\| 1\);/);
+  assert.match(indexSource, /const calculatedTceDaily = calculatedTceTotal \/ \((?:cleanNum|Number)\(totalDays\) \|\| 1\);/);
+});
+
+test('Hard-fix matemático: index.html extracts cargoTons and freightBuy directly from DOM inputs', () => {
+  assert.match(indexSource, /const cargoTons = document\.getElementById\('cargo-qty'\)\??\.value;/);
+  assert.match(indexSource, /const freightBuy = document\.getElementById\('freight-rate'\)\??\.value;/);
 });
 
 test('Hard-fix matemático: TceCalculatorWorkspace.tsx implements exact naval formulas in Resultado de Negociación', () => {
