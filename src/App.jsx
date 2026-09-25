@@ -749,3 +749,5 @@ export default function App(props) {
 }
 
 export { HashRouter, HashRouter as BrowserRouter };
+export { default as VoyageExecutiveReportModal, buildVoyageStowagePlan } from './components/VoyageExecutiveReportModal.jsx';
+

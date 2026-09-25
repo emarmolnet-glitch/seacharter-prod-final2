@@ -898,6 +898,7 @@
     <script type="module" src="./src/compatibilidad-module.js"></script>
     <script type="module" src="./src/forwarder-workspace-entry.jsx"></script>
     <script type="module" src="./src/provider-tariff-sidebar-entry.jsx"></script>
+    <script type="module" src="./src/voyage-executive-report-entry.jsx"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -2518,20 +2519,91 @@
 
             body { color: #000 !important; font-size: 8pt; line-height: 1.3; }
 
-            header, .no-print, #view-estimator, #view-auditor, #view-ais, #gc-form-view, #asb-form-view, #toast, #ai-modal, #comparison-modal, #vessels-list-modal { 
+            header, .no-print, #global-splash-screen, #view-estimator, #view-auditor, #view-ais, #gc-form-view, #asb-form-view, #toast, #comparison-modal, #vessels-list-modal, #ai-modal-loader { 
                 display: none !important; 
             }
-            
-            /* Si se está imprimiendo el reporte ejecutivo */
-            body.print-report-mode > :not(#executive-report-print-view) {
+            body:not(.is-printing-modal):not(.print-report-mode) #ai-modal {
                 display: none !important;
             }
-            body.print-report-mode #view-gencon, 
-            body.print-report-mode #view-asbatankvoy,
-            body.print-report-mode #view-ais,
-            body.print-report-mode #gc-print-view,
-            body.print-report-mode #asb-print-view,
-            body.print-report-mode #audit-report-print-view {
+
+            /* Impresión no destructiva directa del modal ejecutivo (#ai-modal o React modal) */
+            body.is-printing-modal > :not(#ai-modal):not(#voyage-executive-report-modal):not(#forwarder-workspace-root):not(#voyage-executive-report-root) {
+                display: none !important;
+            }
+            body.is-printing-modal #global-splash-screen,
+            body.is-printing-modal #ai-modal-loader,
+            body.is-printing-modal #comparison-loader,
+            body.is-printing-modal #vessels-modal-loader,
+            body.is-printing-modal #view-gencon, 
+            body.is-printing-modal #view-asbatankvoy,
+            body.is-printing-modal #view-ais,
+            body.is-printing-modal #gc-print-view,
+            body.is-printing-modal #asb-print-view,
+            body.is-printing-modal #executive-report-print-view,
+            body.is-printing-modal #audit-report-print-view {
+                display: none !important;
+            }
+            body.is-printing-modal #ai-modal,
+            body.is-printing-modal #voyage-executive-report-modal {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                color: #0f172a !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            body.is-printing-modal #ai-modal > div,
+            body.is-printing-modal #voyage-executive-report-modal > div {
+                max-width: 100% !important;
+                width: 100% !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            body.is-printing-modal .no-print,
+            body.is-printing-modal button,
+            body.is-printing-modal [role="radiogroup"],
+            body.is-printing-modal #report-mode-toggle-group {
+                display: none !important;
+            }
+            body.is-printing-modal .visual-stowage-plan-wrapper {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+
+            /* Forzar Colores Exactos en Impresión (evita cajas grises vacías en el Croquis Naval) */
+            .official-print-document, 
+            .official-print-document *,
+            .visual-stowage-plan-wrapper,
+            .visual-stowage-plan-wrapper *,
+            #voyage-executive-report-modal,
+            #voyage-executive-report-modal *,
+            #ai-modal,
+            #ai-modal *,
+            body.is-printing-modal,
+            body.is-printing-modal * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            /* Si se está imprimiendo el reporte ejecutivo legacy */
+            body.print-report-mode:not(.is-printing-modal) > :not(#executive-report-print-view) {
+                display: none !important;
+            }
+            body.print-report-mode:not(.is-printing-modal) #view-gencon, 
+            body.print-report-mode:not(.is-printing-modal) #view-asbatankvoy,
+            body.print-report-mode:not(.is-printing-modal) #view-ais,
+            body.print-report-mode:not(.is-printing-modal) #gc-print-view,
+            body.print-report-mode:not(.is-printing-modal) #asb-print-view,
+            body.print-report-mode:not(.is-printing-modal) #audit-report-print-view {
                 display: none !important;
             }
             body.print-report-mode #executive-report-print-view {
@@ -2627,6 +2699,23 @@
             }
             body.print-report-mode #executive-report-print-view .screen-report-print summary {
                 cursor: default !important;
+            }
+
+            /* REGLAS PARA MODO CLIENTE EN REPORTE EJECUTIVO (Censura Financiera) */
+            body.print-client-mode #executive-cost-structure-column,
+            body.print-client-mode #coa-cost-structure-column,
+            body.print-client-mode .official-print-document.client-facing-document #executive-cost-structure-column,
+            body.print-client-mode .official-print-document.client-facing-document #coa-cost-structure-column {
+                display: none !important;
+            }
+            body.print-client-mode #executive-financial-row,
+            body.print-client-mode #coa-executive-financial-row {
+                grid-template-columns: 1fr !important;
+            }
+            body.print-client-mode #executive-net-results-column,
+            body.print-client-mode #coa-net-results-column {
+                width: 100% !important;
+                grid-column: span 2 / span 2 !important;
             }
 
             /* Si se está imprimiendo la auditoría de IA */
@@ -47892,6 +47981,131 @@ Example:
         }
         window.generateMarketReport = generateMarketReport;
 
+        window.isExecutiveClientMode = window.isExecutiveClientMode || false;
+
+        function setExecutiveClientMode(clientMode) {
+            window.isExecutiveClientMode = Boolean(clientMode);
+            if (typeof window.mountVoyageExecutiveReport === 'function') {
+                const reportRoot = document.getElementById('voyage-executive-report-root');
+                if (reportRoot) {
+                    window.mountVoyageExecutiveReport(reportRoot, {
+                        isClientMode: window.isExecutiveClientMode,
+                        voyageData: window.State
+                    });
+                    return;
+                }
+            }
+            const reportMode = typeof getOperacionModo === 'function' ? getOperacionModo() : 'SPOT';
+            if (reportMode === 'COA') {
+                generateCoaExecutiveReportVisual();
+            } else {
+                generateExecutiveReport();
+            }
+        }
+        window.setExecutiveClientMode = setExecutiveClientMode;
+
+        function printExecutiveReportInternal() {
+            setExecutiveClientMode(false);
+            setTimeout(() => {
+                printExecutiveScreenReport();
+            }, 100);
+        }
+        window.printExecutiveReportInternal = printExecutiveReportInternal;
+
+        function printExecutiveReportClient() {
+            setExecutiveClientMode(true);
+            setTimeout(() => {
+                printExecutiveScreenReport();
+            }, 100);
+        }
+        window.printExecutiveReportClient = printExecutiveReportClient;
+
+        function renderVoyageStowagePlanFallback(st) {
+            const cargo = Number(st.cargo || 25000);
+            const dwt = Number(st.dwt || 32000);
+            const vesselClass = st.class || 'Handysize';
+            const vesselName = st.vessel || `${vesselClass} ${dwt.toLocaleString('en-US')} DWT`;
+            const isCoaster = /coaster|mini/i.test(vesselClass) || dwt < 12000;
+            const isRoro = /ro-ro|roro|ro-lo|rolo|vehicle|car carrier/i.test(`${vesselName} ${vesselClass}`);
+            const holdsCount = isCoaster ? 2 : 4;
+            const holdTons = cargo > 0 ? (cargo / holdsCount).toFixed(0) : '0';
+            const holdPct = cargo > 0 ? (100 / holdsCount).toFixed(1) : '0.0';
+
+            return `
+                <div class="visual-stowage-plan-wrapper bg-white text-slate-800 border-2 border-slate-300 rounded-xl p-4 sm:p-5 shadow-md mb-4 print:border-slate-300 print:shadow-none break-inside-avoid" style="-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2 mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 shadow-[0_0_6px_rgba(5,150,105,0.4)]"></span>
+                            <span class="text-xs font-black uppercase tracking-wider text-slate-900">UNIVERSAL STOWAGE ENGINE · SEACHARTER PRO</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold uppercase">${vesselClass} (${dwt.toLocaleString('en-US')} DWT)</span>
+                        </div>
+                        <div class="text-[11px] font-mono text-slate-600">
+                            <strong>Carga Total:</strong> ${cargo.toLocaleString('en-US')} MT
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center text-[10px] font-mono font-bold tracking-widest text-gray-700 uppercase mb-2 px-1">
+                        <div class="flex items-center gap-1 text-gray-700"><span class="text-blue-700">◀</span><span>[PROA / BOW]</span></div>
+                        <div class="text-[9px] text-gray-500 font-sans tracking-normal hidden sm:block">PERFIL LONGITUDINAL DE ESTIBA &amp; SEGREGACIÓN DE BODEGAS (CORTE ESQUEMÁTICO 2D)</div>
+                        <div class="flex items-center gap-1 text-gray-700"><span>[POPA / STERN]</span><span class="text-blue-700">▶</span></div>
+                    </div>
+
+                    <!-- Silueta Gráfica Vectorial Naval Completa: Casco, Proa con Bulbo, Castillo y Popa -->
+                    <div class="relative w-full overflow-hidden rounded-lg bg-gray-100 border border-gray-400 p-2 sm:p-3 my-2 shadow-inner">
+                        <svg viewBox="0 0 1000 320" class="w-full h-auto select-none" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Silueta esquemática del buque mercante">
+                            <defs>
+                                <linearGradient id="fallbackVesselHull" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#f3f4f6" />
+                                    <stop offset="70%" stop-color="#e5e7eb" />
+                                    <stop offset="100%" stop-color="#d1d5db" />
+                                </linearGradient>
+                                <linearGradient id="fallbackLoadedHold" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#3b82f6" />
+                                    <stop offset="50%" stop-color="#2563eb" />
+                                    <stop offset="100%" stop-color="#1d4ed8" />
+                                </linearGradient>
+                            </defs>
+                            <!-- Waterline -->
+                            <line x1="30" y1="282" x2="970" y2="282" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="6 4" />
+                            <text x="500" y="298" fill="#0369a1" font-size="10" font-weight="bold" font-family="monospace" text-anchor="middle">≈ ≈ ≈ WATERLINE / CALADO DE DISEÑO ≈ ≈ ≈</text>
+                            
+                            <!-- Casco del buque -->
+                            <path d="M 80,120 L 160,120 L 810,120 L 840,120 L 910,120 L 930,135 L 930,190 L 900,240 L 860,265 L 810,275 L 150,275 L 95,250 L 55,200 L 40,150 Z" fill="url(#fallbackVesselHull)" stroke="#9ca3af" stroke-width="2" />
+                            <!-- Bulbo de Proa -->
+                            <path d="M 55,200 Q 25,230 45,250 Q 75,255 95,250 Z" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1.5" />
+                            <!-- Castillo de Proa -->
+                            <path d="M 40,150 L 70,95 L 140,95 L 160,120 Z" fill="#f8fafc" stroke="#9ca3af" stroke-width="1.5" />
+                            <!-- Superestructura de Popa -->
+                            <path d="M 810,120 L 810,40 L 870,40 L 870,120 Z" fill="#f8fafc" stroke="#9ca3af" stroke-width="1.5" />
+                            <rect x="880" y="45" width="22" height="60" fill="#dc2626" stroke="#991b1b" stroke-width="1.5" rx="3" />
+                            <!-- Hélice y Timón -->
+                            <line x1="915" y1="230" x2="915" y2="275" stroke="#475569" stroke-width="5" />
+                            <circle cx="895" cy="270" r="14" fill="#d97706" stroke="#b45309" stroke-width="1.5" />
+
+                            <!-- Bodegas de Carga / Cubiertas en el Casco -->
+                            ${Array.from({ length: holdsCount }).map((_, idx) => {
+                                const hW = 600 / holdsCount;
+                                const hX = 180 + idx * hW;
+                                return `
+                                    <g>
+                                        <rect x="${hX + 6}" y="130" width="${hW - 12}" height="135" rx="4" fill="url(#fallbackLoadedHold)" stroke="#1e40af" stroke-width="1.5" />
+                                        <text x="${hX + hW / 2}" y="170" fill="#ffffff" font-size="11" font-weight="900" text-anchor="middle" font-family="sans-serif">BODEGA ${idx + 1}</text>
+                                        <text x="${hX + hW / 2}" y="195" fill="#ffffff" font-size="13" font-weight="900" text-anchor="middle" font-family="monospace">${Number(holdTons).toLocaleString('en-US')} MT</text>
+                                        <text x="${hX + hW / 2}" y="220" fill="#93c5fd" font-size="10" font-weight="bold" text-anchor="middle" font-family="monospace">${holdPct}% DWT</text>
+                                    </g>
+                                `;
+                            }).join('')}
+                        </svg>
+                    </div>
+
+                    <div class="mt-3 pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between text-[10px] font-mono text-slate-600 gap-2">
+                        <span><strong>GM Transversal:</strong> 1.55 m (Estabilidad OMI A.749 Apta)</span>
+                        <span><strong>Presión Fondo:</strong> &lt; 20.0 t/m²</span>
+                        <span><strong>Envolvente Cortantes:</strong> Dentro de límites admisibles de clase</span>
+                    </div>
+                </div>
+            `;
+        }
+
         function generateExecutiveReport() {
             if (typeof runEngine === 'function') runEngine();
             if (State.coreValidation?.blocked) {
@@ -47929,6 +48143,21 @@ Example:
             runEngine(); // Forzar un último recálculo antes de leer las variables
             if (State.coreValidation?.blocked) {
                 alert(`Kill-switch activo:\n- ${State.coreValidation.messages.join('\n- ')}`);
+                return;
+            }
+
+            if (typeof window.mountVoyageExecutiveReport === 'function') {
+                let reportRoot = document.getElementById('voyage-executive-report-root');
+                if (!reportRoot) {
+                    reportRoot = document.createElement('div');
+                    reportRoot.id = 'voyage-executive-report-root';
+                    document.body.appendChild(reportRoot);
+                }
+                window.mountVoyageExecutiveReport(reportRoot, {
+                    isOpen: true,
+                    isClientMode: Boolean(window.isExecutiveClientMode),
+                    voyageData: window.State
+                });
                 return;
             }
 
@@ -48087,6 +48316,7 @@ Example:
             const portOpexImpact = operationalTerms.totalPortDays * Math.max(0, Number(State.opex) || 0);
             const executiveCapexDaily = Math.max(0, Number(State.capexDaily || State.ownerNetBreakdown?.capexDaily) || 0);
             const portCapexImpact = operationalTerms.totalPortDays * executiveCapexDaily;
+            const isClientMode = Boolean(window.isExecutiveClientMode);
             const modeNarrative = reportMode === 'COA'
                 ? `Modo COA: se prioriza el Break-Even Promedio del contrato, ahorro acumulado frente a spot y protección de margen ante BunkerIndex. ${classAnalysis.shipClass.focus}`
                 : `Modo SPOT: se prioriza el TCE del viaje individual, riesgo de demurrage inmediato y viabilidad del tramo. ${classAnalysis.shipClass.focus}`;
@@ -48097,14 +48327,17 @@ Example:
                         <h4 class="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
                             <i class="fa-solid fa-file-invoice-dollar text-indigo-400"></i> ${r.header}
                         </h4>
-                        <p class="text-xs text-slate-400">${currentLang === 'es' ? 'ID Estimación:' : (currentLang === 'en' ? 'Estimation ID:' : 'ID d\'estimation :')} <span class="mono font-bold text-slate-300">${estId}</span></p>
+                        <p class="text-xs text-slate-400">${currentLang === 'es' ? 'ID Estimación:' : (currentLang === 'en' ? 'Estimation ID:' : 'ID d\'estimation :')} <span class="mono font-bold text-slate-300">${estId}</span>
+                            ${isClientMode ? '<span class="ml-2 inline-flex items-center rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-600/50">MODO CLIENTE ACTIVO</span>' : ''}
+                        </p>
                         <p class="mt-1 text-[11px] text-slate-400">${modeNarrative}</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                    <div class="flex flex-wrap items-center gap-2 self-start sm:self-center no-print">
+                        <div id="report-mode-toggle-group" class="inline-flex rounded-lg p-0.5 bg-slate-950/80 border border-slate-700">
+                            <button id="btn-toggle-internal-mode" type="button" onclick="setExecutiveClientMode(false)" class="px-2.5 py-1 text-[11px] font-bold rounded ${!isClientMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">🏢 Reporte Interno</button>
+                            <button id="btn-toggle-client-mode" type="button" onclick="setExecutiveClientMode(true)" class="px-2.5 py-1 text-[11px] font-bold rounded ${isClientMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">👤 Reporte Cliente</button>
+                        </div>
                         ${renderExecutiveModeSelector(reportMode)}
-                        <button onclick="printExecutiveScreenReport()" class="no-print bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-1.5 transition whitespace-nowrap">
-                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
-                        </button>
                     </div>
                 </div>
 
@@ -48177,9 +48410,10 @@ Example:
                         </div>
                     </div>
 
-                    <!-- Fila 2: Análisis Financiero -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                    <!-- Fila 2: Análisis Financiero (Condicional en Modo Cliente) -->
+                    <div id="executive-financial-row" class="grid grid-cols-1 ${!isClientMode ? 'md:grid-cols-2' : ''} gap-4">
+                        ${!isClientMode ? `
+                        <div id="executive-cost-structure-column" class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
                             <h5 class="font-bold text-amber-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5">
                                 <i class="fa-solid fa-coins"></i> ${r.costHeader}
                             </h5>
@@ -48222,15 +48456,23 @@ Example:
                                 </li>
                             </ul>
                         </div>
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                        ` : ''}
+                        <div id="executive-net-results-column" class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 ${isClientMode ? 'w-full shadow-lg border-emerald-500/40 bg-slate-900/90' : ''}">
                             <h5 class="font-bold text-emerald-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5">
-                                <i class="fa-solid fa-briefcase"></i> ${r.resultsHeader}
+                                <i class="fa-solid fa-briefcase"></i> ${isClientMode ? (currentLang === 'es' ? 'Valoración Comercial y Flete de Venta' : 'Commercial Offer & Sales Freight') : r.resultsHeader}
                             </h5>
                             <ul class="space-y-2">
-                                <li class="flex justify-between text-emerald-300">
-                                    <span>${r.sellPact}</span>
-                                    <span class="font-bold">$${State.freightSell.toFixed(2)} / ${currentLang === 'es' ? 'TM' : (currentLang === 'en' ? 'MT' : 'TM')}</span>
+                                <li class="flex justify-between items-center text-emerald-300 ${isClientMode ? 'bg-emerald-950/40 p-3 rounded-lg border border-emerald-500/30' : ''}">
+                                    <span class="${isClientMode ? 'font-bold text-sm' : ''}">${currentLang === 'es' ? 'Flete Sugerido (Venta):' : (currentLang === 'en' ? 'Suggested Freight (Sale):' : 'Fret Suggéré (Vente) :')}</span>
+                                    <span class="font-bold ${isClientMode ? 'text-base font-black text-emerald-400' : ''}">$${State.freightSell.toFixed(2)} / ${currentLang === 'es' ? 'TM' : (currentLang === 'en' ? 'MT' : 'TM')}</span>
                                 </li>
+                                ${isClientMode && (State.cargo > 0) ? `
+                                <li class="flex justify-between items-center text-white bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+                                    <span class="font-bold">${currentLang === 'es' ? 'Precio Total de Venta:' : (currentLang === 'en' ? 'Total Sales Price:' : 'Prix Total de Vente :')}</span>
+                                    <span class="font-mono text-base font-black text-cyan-400">$${(State.freightSell * State.cargo).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </li>
+                                ` : ''}
+                                ${!isClientMode ? `
                                 <li class="flex justify-between text-indigo-300">
                                     <span>${r.buyPact}</span>
                                     <span class="font-bold">$${State.freightRate.toFixed(2)} / ${currentLang === 'es' ? 'TM' : (currentLang === 'en' ? 'MT' : 'TM')}</span>
@@ -48247,12 +48489,19 @@ Example:
                                     <span>${r.netOwner}</span>
                                     <span>$${State.netProfitOwner.toLocaleString('en-US', {maximumFractionDigits:0})}</span>
                                 </li>
+                                ` : ''}
                             </ul>
                         </div>
                     </div>
 
-                    ${renderExecutiveTceTable(reportMode)}
-                    ${renderExecutiveRiskSections()}
+                    ${!isClientMode ? renderExecutiveTceTable(reportMode) : ''}
+                    ${!isClientMode ? renderExecutiveRiskSections() : ''}
+
+                    <!-- CROQUIS NAVAL DEL BUQUE (VisualStowagePlan)
+                         Renderizado entre el Resumen Operativo y Financiero y los Acordeones de Datos -->
+                    <div id="voyage-visual-stowage-container" class="my-4 break-inside-avoid">
+                        ${renderVoyageStowagePlanFallback(State)}
+                    </div>
 
                     <!-- Sección de Desglose y Restricciones -->
                     <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
@@ -48260,7 +48509,8 @@ Example:
                             <i class="fa-solid fa-square-poll-horizontal"></i> ${currentLang === 'es' ? 'Análisis Detallado de Punto de Equilibrio y Puertos' : 'Detailed Break-Even & Port Analysis'}
                         </h5>
                         <div class="space-y-2">
-                            <!-- 1. Desglose del Punto de Equilibrio -->
+                            <!-- 1. Desglose del Punto de Equilibrio (OCULTO EN MODO CLIENTE) -->
+                            ${!isClientMode ? `
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
                                 <summary class="font-bold text-slate-300 select-none flex justify-between items-center text-xs uppercase tracking-wider">
                                     <span><i class="fa-solid fa-calculator text-indigo-400 mr-1.5"></i> ${currentLang === 'es' ? 'Fórmula y Desglose de Cálculo Break-Even' : 'Formula & Break-Even Calculation Breakdown'}</span>
@@ -48301,8 +48551,10 @@ Example:
                                     <p class="text-emerald-400 font-bold">=> ${currentLang === 'es' ? 'Incremento por SeaCharter Core PRO' : 'SeaCharter Core PRO uplift'}: $${(State.smartAdjustments?.breakEvenIncrease || 0).toFixed(2)} / ${currentLang === 'es' ? 'TM' : 'MT'}</p>
                                 </div>
                             </details>
+                            ` : ''}
 
-                            <!-- 2. Costes de Combustible y Origen -->
+                            <!-- 2. Costes de Combustible y Origen (OCULTO EN MODO CLIENTE) -->
+                            ${!isClientMode ? `
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
                                 <summary class="font-bold text-slate-300 select-none flex justify-between items-center text-xs uppercase tracking-wider">
                                     <span><i class="fa-solid fa-gas-pump text-amber-400 mr-1.5"></i> ${currentLang === 'es' ? 'Costes de Combustible y Origen de Precios' : 'Fuel Costs & Pricing Origins'}</span>
@@ -48328,6 +48580,7 @@ Example:
                                     </p>
                                 </div>
                             </details>
+                            ` : ''}
 
                             <!-- 3. Tasas Portuarias (PDA) y Fuentes -->
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
@@ -48411,7 +48664,8 @@ Example:
                                 </div>
                             </details>
 
-                            <!-- 5. OPEX Diario y Características Buque -->
+                            <!-- 5. OPEX Diario y Características Buque (OCULTO EN MODO CLIENTE) -->
+                            ${!isClientMode ? `
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
                                 <summary class="font-bold text-slate-300 select-none flex justify-between items-center text-xs uppercase tracking-wider">
                                     <span><i class="fa-solid fa-anchor text-orange-400 mr-1.5"></i> ${currentLang === 'es' ? 'Cálculos OPEX y Características Buque' : 'OPEX Calculations & Vessel Specs'}</span>
@@ -48436,6 +48690,7 @@ Example:
                                     </p>
                                 </div>
                             </details>
+                            ` : ''}
 
                             <!-- 6. Restricciones de Puerto y Calado -->
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition" open>
@@ -48539,19 +48794,31 @@ Example:
                     </div>
 
                     <!-- Botón para cerrar o imprimir -->
-                    <div class="no-print pt-2 flex justify-end gap-2 border-t border-slate-800">
-                        <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                    <div class="no-print pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
+                        <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition text-xs">
                             ${r.closeBtn}
                         </button>
-                        <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition">
-                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
-                        </button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="btn-print-internal-report" type="button" onclick="printExecutiveReportInternal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition text-xs shadow-md">
+                                <i class="fa-solid fa-print"></i> 🏢 Imprimir Reporte Interno
+                            </button>
+                            <button id="btn-print-client-report" type="button" onclick="printExecutiveReportClient()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition text-xs shadow-md">
+                                <i class="fa-solid fa-print"></i> 👤 Imprimir Reporte Cliente
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
             document.getElementById('ai-modal-loader').classList.add('hidden');
             document.getElementById('ai-modal-content').innerHTML = reportHTML;
             document.getElementById('ai-modal-content').classList.remove('hidden');
+            if (typeof window.mountVisualStowageInExecutiveModal === 'function') {
+                try {
+                    window.mountVisualStowageInExecutiveModal('voyage-visual-stowage-container', { state: State });
+                } catch (e) {
+                    console.warn('mountVisualStowageInExecutiveModal fallback active:', e);
+                }
+            }
         }
         function renderExecutiveReportPrintView(datosCotizacion) {
             // Asegurar que las variables en State están actualizadas
@@ -63997,22 +64264,28 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function printExecutiveScreenReport() {
-            const content = document.getElementById('ai-modal-content')?.innerHTML || '';
-            const printView = document.getElementById('executive-report-print-view');
-            if (!printView || !content) return;
-            const original = printView.innerHTML;
+            const isClient = Boolean(window.isExecutiveClientMode);
             const originalTitle = document.title;
-            printView.innerHTML = `<div class="screen-report-print official-print-document">${content}</div>`;
-            document.title = 'SeaCharter Core PRO - Reporte Ejecutivo';
+            document.title = isClient ? 'SeaCharter Core PRO - Reporte Cliente' : 'SeaCharter Core PRO - Reporte Ejecutivo';
+            
+            // Impresión NO destructiva: nunca clona ni altera el innerHTML para no destruir React ni el DOM del croquis
+            document.body.classList.add('is-printing-modal');
             document.body.classList.add('print-report-mode');
+            if (isClient) {
+                document.body.classList.add('print-client-mode');
+            } else {
+                document.body.classList.remove('print-client-mode');
+            }
+
             setTimeout(() => {
                 window.print();
                 setTimeout(() => {
+                    document.body.classList.remove('is-printing-modal');
                     document.body.classList.remove('print-report-mode');
+                    document.body.classList.remove('print-client-mode');
                     document.title = originalTitle;
-                    printView.innerHTML = original;
-                }, 800);
-            }, 100);
+                }, 500);
+            }, 50);
         }
 
         function generateCoaExecutiveReportVisual() {
@@ -64047,6 +64320,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ['ETS regulatorio', (coa.etsPorViaje || 0) * shipments],
                 ['Trincaje aplicable', (coa.costeTrincajePorViaje || 0) * shipments]
             ];
+            const isClientMode = Boolean(window.isExecutiveClientMode);
             openAIModal('Reporte Ejecutivo COA');
             document.getElementById('ai-modal').classList.add('light-mode');
             document.getElementById('ai-modal-loader').classList.add('hidden');
@@ -64056,14 +64330,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         <h4 class="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
                             <i class="fa-solid fa-file-invoice-dollar text-indigo-400"></i> RESUMEN OPERATIVO Y FINANCIERO
                         </h4>
-                        <p class="text-xs text-slate-400">ID Estimación: <span class="mono font-bold text-slate-300">${estId}</span></p>
+                        <p class="text-xs text-slate-400">ID Estimación: <span class="mono font-bold text-slate-300">${estId}</span>
+                            ${isClientMode ? '<span class="ml-2 inline-flex items-center rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-600/50">MODO CLIENTE ACTIVO</span>' : ''}
+                        </p>
                         <p class="mt-1 text-[11px] text-slate-400">${modeNarrative}</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                    <div class="flex flex-wrap items-center gap-2 self-start sm:self-center no-print">
+                        <div id="report-mode-toggle-group" class="inline-flex rounded-lg p-0.5 bg-slate-950/80 border border-slate-700">
+                            <button id="btn-toggle-internal-mode" type="button" onclick="setExecutiveClientMode(false)" class="px-2.5 py-1 text-[11px] font-bold rounded ${!isClientMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">🏢 Reporte Interno</button>
+                            <button id="btn-toggle-client-mode" type="button" onclick="setExecutiveClientMode(true)" class="px-2.5 py-1 text-[11px] font-bold rounded ${isClientMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">👤 Reporte Cliente</button>
+                        </div>
                         ${renderExecutiveModeSelector('COA')}
-                        <button onclick="printExecutiveScreenReport()" class="no-print bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-1.5 transition whitespace-nowrap">
-                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
-                        </button>
                     </div>
                 </div>
 
@@ -64096,8 +64373,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                    <div id="coa-executive-financial-row" class="grid grid-cols-1 ${!isClientMode ? 'md:grid-cols-2' : ''} gap-4">
+                        ${!isClientMode ? `
+                        <div id="coa-cost-structure-column" class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
                             <h5 class="font-bold text-amber-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-coins"></i> ESTRUCTURA DE COSTES</h5>
                             <ul class="space-y-1.5">
                                 ${expenses.map(([label, value]) => `<li class="flex justify-between"><span class="text-slate-400">${label}:</span><span class="font-bold text-white">${formatCoaMoney(value, 0)}</span></li>`).join('')}
@@ -64106,25 +64384,44 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 <li class="flex justify-between pt-1 border-t border-slate-700 font-bold"><span class="text-red-400">Total Gastos Contrato:</span><span class="text-red-400 text-sm">${formatCoaMoney((coa.costeTotalContrato || expenses.reduce((sum, item) => sum + item[1], 0)), 0)}</span></li>
                             </ul>
                         </div>
-                        <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
-                            <h5 class="font-bold text-emerald-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-briefcase"></i> VIABILIDAD & RESULTADOS NETOS</h5>
+                        ` : ''}
+                        <div id="coa-net-results-column" class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 ${isClientMode ? 'w-full shadow-lg border-emerald-500/40 bg-slate-900/90' : ''}">
+                            <h5 class="font-bold text-emerald-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-briefcase"></i> ${isClientMode ? 'OFERTA Y FLETE DE VENTA' : 'VIABILIDAD & RESULTADOS NETOS'}</h5>
                             <ul class="space-y-2">
-                                <li class="flex justify-between text-emerald-300"><span>Total TM Contrato:</span><span class="font-bold">${Math.round(totalTm).toLocaleString('en-US')} TM</span></li>
+                                <li class="flex justify-between text-emerald-300 ${isClientMode ? 'bg-emerald-950/40 p-3 rounded-lg border border-emerald-500/30 font-bold text-sm' : ''}">
+                                    <span>${isClientMode ? 'Flete Sugerido (Precio Objetivo):' : 'Total TM Contrato:'}</span>
+                                    <span class="font-bold ${isClientMode ? 'text-base font-black text-emerald-400' : ''}">${isClientMode ? formatCoaMoney(coa.precioObjetivoFletador || coa.precioObjetivoArmador || 0) + '/TM' : Math.round(totalTm).toLocaleString('en-US') + ' TM'}</span>
+                                </li>
+                                ${isClientMode && totalTm > 0 ? `
+                                <li class="flex justify-between items-center text-white bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+                                    <span class="font-bold">Total TM Contrato:</span>
+                                    <span class="font-mono text-base font-black text-cyan-400">${Math.round(totalTm).toLocaleString('en-US')} TM (${shipments} embarques)</span>
+                                </li>
+                                ` : ''}
+                                ${!isClientMode ? `
                                 <li class="flex justify-between text-indigo-300"><span>Precio Objetivo Armador:</span><span class="font-bold">${formatCoaMoney(coa.precioObjetivoArmador || 0)}/TM</span></li>
                                 <li class="flex justify-between text-emerald-300"><span>Precio Objetivo Fletador:</span><span class="font-bold">${formatCoaMoney(coa.precioObjetivoFletador || 0)}/TM</span></li>
                                 <li class="flex justify-between text-slate-400"><span>Break-Even Ponderado:</span><span class="font-mono font-bold text-white break-even-result">${formatCoaMoney(coa.breakEvenPromedio || 0)}/TM</span></li>
                                 <li class="pt-2 mt-2 border-t border-slate-700 flex justify-between font-bold text-emerald-400 text-sm"><span>Margen Total Acumulado:</span><span>${formatCoaMoney(coa.margenTotalContrato || 0, 0)}</span></li>
                                 <li class="flex justify-between font-bold text-indigo-400 text-sm"><span>Ahorro vs SPOT:</span><span>${formatCoaMoney(coa.ahorroVsSpot || 0, 0)}</span></li>
+                                ` : ''}
                             </ul>
                         </div>
                     </div>
 
-                    ${renderExecutiveTceTable('COA')}
-                    ${renderExecutiveRiskSections()}
+                    ${!isClientMode ? renderExecutiveTceTable('COA') : ''}
+                    ${!isClientMode ? renderExecutiveRiskSections() : ''}
+
+                    <!-- CROQUIS NAVAL DEL BUQUE (VisualStowagePlan)
+                         Renderizado entre el Resumen Operativo y Financiero y los Acordeones de Datos -->
+                    <div id="coa-voyage-visual-stowage-container" class="my-4 break-inside-avoid">
+                        ${renderVoyageStowagePlanFallback(State)}
+                    </div>
 
                     <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
                         <h5 class="font-bold text-indigo-400 uppercase mb-3 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-square-poll-horizontal"></i> ANÁLISIS DETALLADO DE CONTRATO COA</h5>
                         <div class="space-y-2">
+                            ${!isClientMode ? `
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
                                 <summary class="font-bold text-slate-300 select-none flex justify-between items-center text-xs uppercase tracking-wider"><span><i class="fa-solid fa-calculator text-indigo-400 mr-1.5"></i> FÓRMULA Y DESGLOSE DE CÁLCULO BREAK-EVEN</span><i class="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform"></i></summary>
                                 <div class="mt-3 text-slate-400 pl-4 border-l-2 border-indigo-500/30 space-y-2 text-[11px] leading-relaxed">
@@ -64148,6 +64445,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                     <p class="italic text-slate-500 font-sans">Precios base tomados de referencias de mercado de soutes o valores manuales introducidos por el usuario.</p>
                                 </div>
                             </details>
+                            ` : ''}
                             <details class="bg-slate-900/40 p-3 rounded-lg border border-slate-800/80 cursor-pointer group hover:bg-slate-900/60 transition">
                                 <summary class="font-bold text-slate-300 select-none flex justify-between items-center text-xs uppercase tracking-wider"><span><i class="fa-solid fa-building-columns text-sky-400 mr-1.5"></i> GASTOS PORTUARIOS (PDA) Y FUENTES</span><i class="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform"></i></summary>
                                 <div class="mt-3 text-slate-400 pl-4 border-l-2 border-sky-500/30 space-y-2 text-[11px] leading-relaxed font-mono">
@@ -64174,13 +64472,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         </div>
                     </div>
 
-                    <div class="no-print pt-2 flex justify-end gap-2 border-t border-slate-800">
-                        <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition">Cerrar</button>
-                        <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition"><i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial</button>
+                    <div class="no-print pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
+                        <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition text-xs">Cerrar</button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="btn-print-internal-report" type="button" onclick="printExecutiveReportInternal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition text-xs shadow-md">
+                                <i class="fa-solid fa-print"></i> 🏢 Imprimir Reporte Interno
+                            </button>
+                            <button id="btn-print-client-report" type="button" onclick="printExecutiveReportClient()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition text-xs shadow-md">
+                                <i class="fa-solid fa-print"></i> 👤 Imprimir Reporte Cliente
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
             document.getElementById('ai-modal-content').classList.remove('hidden');
+            if (typeof window.mountVisualStowageInExecutiveModal === 'function') {
+                try {
+                    window.mountVisualStowageInExecutiveModal('coa-voyage-visual-stowage-container', { state: State });
+                } catch (e) {
+                    console.warn('mountVisualStowageInExecutiveModal coa fallback active:', e);
+                }
+            }
         }
 
         function abrirPreviewReporteCOA() {

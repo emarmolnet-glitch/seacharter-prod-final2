@@ -163,7 +163,13 @@ export function VisualStowagePlan({
     : 'HANDYSIZE / BULK CARRIER (4 BODEGAS INDEPENDIENTES & GRÚAS)';
 
   return (
-    <div className="visual-stowage-plan-wrapper bg-white text-slate-800 border-2 border-slate-300 rounded-xl p-4 sm:p-6 shadow-md mb-4 print:bg-white print:text-slate-800 print:border-slate-300 print:shadow-none break-inside-avoid">
+    <div
+      className="visual-stowage-plan-wrapper bg-white text-slate-800 border-2 border-slate-300 rounded-xl p-4 sm:p-6 shadow-md mb-4 print:bg-white print:text-slate-800 print:border-slate-300 print:shadow-none break-inside-avoid"
+      style={{
+        WebkitPrintColorAdjust: 'exact',
+        printColorAdjust: 'exact',
+      }}
+    >
       {/* Barra superior de telemetría y título del plano (Modo Claro) */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 mb-4">
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -796,4 +802,6 @@ export function VisualStowagePlan({
   );
 }
 
+export const MemoizedVisualStowagePlan = React.memo(VisualStowagePlan);
 export default VisualStowagePlan;
+
