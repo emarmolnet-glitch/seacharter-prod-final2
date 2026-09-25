@@ -784,6 +784,7 @@ export function ForwarderWorkspace() {
 
   const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
   const [showExecutiveReport, setShowExecutiveReport] = useState(false);
+  const [isClientMode, setIsClientMode] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -6459,6 +6460,38 @@ export function ForwarderWorkspace() {
               >
                 ✖ Cerrar
               </button>
+              <div className="flex items-center bg-slate-900/90 rounded-full p-1 border-2 border-white/20 shadow-2xl gap-1">
+                <button
+                  id="btn-print-internal-report"
+                  type="button"
+                  onClick={() => {
+                    setIsClientMode(false);
+                    setTimeout(() => window.print(), 50);
+                  }}
+                  className={`px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                    !isClientMode ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
+                  }`}
+                  title="Imprimir Reporte Interno (con costes y márgenes)"
+                  aria-label="Imprimir Reporte Interno"
+                >
+                  🏢 Imprimir Reporte Interno
+                </button>
+                <button
+                  id="btn-print-client-report"
+                  type="button"
+                  onClick={() => {
+                    setIsClientMode(true);
+                    setTimeout(() => window.print(), 50);
+                  }}
+                  className={`px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isClientMode ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
+                  }`}
+                  title="Imprimir Reporte Cliente (ocultando costes de armador y márgenes)"
+                  aria-label="Imprimir Reporte Cliente"
+                >
+                  👤 Imprimir Reporte Cliente
+                </button>
+              </div>
               <button
                 id="btn-print-executive-report"
                 type="button"
@@ -6543,6 +6576,54 @@ export function ForwarderWorkspace() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Selector de Modo: Interno vs Cliente (Toggle) */}
+                  <div className="mt-3 print:hidden">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1.5">
+                      <span>🛡️ Modo de Presentación y Exportación (Privacidad Financiera):</span>
+                      <span className="text-[9px] font-normal text-slate-400 capitalize">
+                        {isClientMode ? '(Modo Cliente Activo: Costes internos y márgenes ocultos)' : '(Modo Interno Activo: Desglose completo visible)'}
+                      </span>
+                    </label>
+                    <div
+                      id="report-mode-toggle-group"
+                      role="radiogroup"
+                      aria-label="Modo de Reporte"
+                      className="inline-flex flex-wrap p-1 bg-slate-100 rounded-lg border border-slate-300 gap-1"
+                    >
+                      <button
+                        type="button"
+                        id="btn-toggle-internal-mode"
+                        aria-pressed={!isClientMode}
+                        onClick={() => setIsClientMode(false)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                          !isClientMode
+                            ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-900'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                        }`}
+                        title="Muestra costes internos de armador, costes FOB y margen comercial"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                        <span>🏢 Imprimir Reporte Interno</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="btn-toggle-client-mode"
+                        aria-pressed={isClientMode}
+                        onClick={() => setIsClientMode(true)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                          isClientMode
+                            ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                        }`}
+                        title="Oculta costes de armador, costes FOB y márgenes comerciales (Client-Facing Mode)"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-white"></span>
+                        <span>👤 Imprimir Reporte Cliente</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="text-right text-[11px] text-slate-600 font-mono self-stretch md:self-auto flex flex-col justify-end">
@@ -6614,9 +6695,13 @@ export function ForwarderWorkspace() {
                     <tr className="bg-slate-100 text-slate-700 uppercase font-bold border-y-2 border-slate-300">
                       <th className="py-2.5 px-3 text-left">Concepto</th>
                       <th className="py-2.5 px-3 text-left">Descripción</th>
-                      <th className="py-2.5 px-3 text-right" title="Coste (€)">Coste ($)</th>
+                      {!isClientMode && (
+                        <th className="py-2.5 px-3 text-right" title="Coste (€)">Coste ($)</th>
+                      )}
                       <th className="py-2.5 px-3 text-right" title="Venta (€)">Venta ($)</th>
-                      <th className="py-2.5 px-3 text-right">Margen</th>
+                      {!isClientMode && (
+                        <th className="py-2.5 px-3 text-right">Margen</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -6636,9 +6721,13 @@ export function ForwarderWorkspace() {
                             gestión y materiales certificados de estiba y transporte portuario para {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
                             ({reportRT.toFixed(2)} RT). Tarifa consolidada única sin desgloses secundarios.
                           </td>
-                          <td className="py-4 px-3 text-right font-mono text-slate-800 font-semibold">{formatCurrency(finalTotalCost)}</td>
+                          {!isClientMode && (
+                            <td className="py-4 px-3 text-right font-mono text-slate-800 font-semibold">{formatCurrency(finalTotalCost)}</td>
+                          )}
                           <td className="py-4 px-3 text-right font-mono font-black text-indigo-900 text-sm">{formatCurrency(finalTotalSale)}</td>
-                          <td className="py-4 px-3 text-right font-mono text-emerald-600 font-black">{formatCurrency(finalTotalMargin)}</td>
+                          {!isClientMode && (
+                            <td className="py-4 px-3 text-right font-mono text-emerald-600 font-black">{formatCurrency(finalTotalMargin)}</td>
+                          )}
                         </tr>
                         {/* Fila invisible para compatibilidad de selectores o tests */}
                         <tr className="hidden" aria-hidden="true">
@@ -6656,13 +6745,15 @@ export function ForwarderWorkspace() {
                           <td className="py-2.5 px-3 font-bold text-sky-900">
                             <div>Flete Marítimo (Base RT)</div>
                             {commercialScenario === 'agency_fee' ? (
-                              <div className="text-[10px] font-mono font-semibold text-sky-700 mt-0.5">
-                                Flete Técnico Puro al Coste: ${(toneladas > 0 ? (fleteCostNum / toneladas).toFixed(2) : '0.00')} USD/MT
-                              </div>
+                              !isClientMode && (
+                                <div className="text-[10px] font-mono font-semibold text-sky-700 mt-0.5">
+                                  Flete Técnico Puro al Coste: ${(toneladas > 0 ? (fleteCostNum / toneladas).toFixed(2) : '0.00')} USD/MT
+                                </div>
+                              )
                             ) : (
                               (Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
                                 <div className="text-[10px] font-mono font-semibold mt-0.5 space-y-0.5">
-                                  {Number(activeReport.fleteCompraUnit || 0) > 0 && (
+                                  {!isClientMode && Number(activeReport.fleteCompraUnit || 0) > 0 && (
                                     <div className="text-blue-800">Flete Sugerido Armador (Compra): ${Number(activeReport.fleteCompraUnit).toFixed(2)} USD/MT</div>
                                   )}
                                   {Number(activeReport.fleteVentaUnit || 0) > 0 && (
@@ -6675,66 +6766,88 @@ export function ForwarderWorkspace() {
                           <td className="py-2.5 px-3 text-slate-600">
                             {commercialScenario === 'agency_fee' ? (
                               <span>
-                                Flete técnico de coste puro sin margen comercial aplicado · Base {(toneladas || 0).toFixed(2)} MT · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d · TCE base armador {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día.
+                                {isClientMode
+                                  ? `Flete marítimo de transporte internacional · Base ${(toneladas || 0).toFixed(2)} MT · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d.`
+                                  : `Flete técnico de coste puro sin margen comercial aplicado · Base ${(toneladas || 0).toFixed(2)} MT · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d · TCE base armador ${(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día.`}
                               </span>
                             ) : (
                               Number(activeReport.fleteVentaUnit || 0) > 0 ? (
                                 <span>
-                                  Ocean Freight simulación respetada (Flete Venta Fletador: ${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · TCE {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                                  {isClientMode
+                                    ? `Ocean Freight transporte internacional · Base ${(toneladas || 0).toFixed(2)} MT · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d (${(activeReport.diasCarga || 1.5).toFixed(2)}d carga, ${(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, ${(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav)`
+                                    : `Ocean Freight simulación respetada (Flete Venta Fletador: $${Number(activeReport.fleteVentaUnit).toFixed(2)} USD/MT) · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d (${(activeReport.diasCarga || 1.5).toFixed(2)}d carga, ${(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, ${(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · TCE ${(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día`}
                                 </span>
                               ) : (
                                 <span>
-                                  Ocean Freight / TCE de buque fletado sobre base peso físico ({(toneladas || 0).toFixed(2)} MT) · Rotación {(activeReport.diasRotacionTotal || 10).toFixed(2)} d ({(activeReport.diasCarga || 1.5).toFixed(2)}d carga, {(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, {(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · {(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
+                                  {isClientMode
+                                    ? `Ocean Freight transporte marítimo sobre base peso físico (${(toneladas || 0).toFixed(2)} MT) · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d`
+                                    : `Ocean Freight / TCE de buque fletado sobre base peso físico (${(toneladas || 0).toFixed(2)} MT) · Rotación ${(activeReport.diasRotacionTotal || 10).toFixed(2)} d (${(activeReport.diasCarga || 1.5).toFixed(2)}d carga, ${(activeReport.diasDescarga || 1.8).toFixed(2)}d descarga, ${(activeReport.diasNavegacion || 6.7).toFixed(2)}d nav) · ${(activeReport.dailyRateUsd || 11500).toLocaleString('es-ES')} USD/día`}
                                 </span>
                               )
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(fleteCostNum)}</td>
+                          )}
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-sky-700">
                             {formatCurrency(commercialScenario === 'agency_fee' ? fleteCostNum : fleteSaleNum)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : fleteMarginNum)}
-                          </td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : fleteMarginNum)}
+                            </td>
+                          )}
                         </tr>
 
                         {/* Fila 2: Estiba y Trincaje (Cuadrillas, Trincadores) */}
                         <tr className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-bold text-slate-900">Estiba y Trincaje (Cuadrillas, Trincadores)</td>
                           <td className="py-2.5 px-3 text-slate-600">Turnos de estibadores en muelle y cuadrillas de trincaje especializado</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(estibaCostNum)}</td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(estibaCostNum)}</td>
+                          )}
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
                             {formatCurrency(commercialScenario === 'agency_fee' ? estibaCostNum : estibaSaleNum)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : estibaMarginNum)}
-                          </td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : estibaMarginNum)}
+                            </td>
+                          )}
                         </tr>
 
                         {/* Fila 3: Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage) */}
                         <tr className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-bold text-slate-900">Materiales Especiales (MAFIs, Heavy Lift, Cadenas, Dunnage)</td>
                           <td className="py-2.5 px-3 text-slate-600">Grúa auxiliar, roll trailers MAFI, dunnage, eslingas y cadenas certificadas</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(matCostNum)}</td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(matCostNum)}</td>
+                          )}
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
                             {formatCurrency(commercialScenario === 'agency_fee' ? matCostNum : matSaleNum)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : matMarginNum)}
-                          </td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : matMarginNum)}
+                            </td>
+                          )}
                         </tr>
 
                         {/* Fila 4: Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía) */}
                         <tr className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-bold text-slate-900">Logística Periférica (Almacenaje Portuario, Surveyor, Transporte Inland, Mercancía)</td>
                           <td className="py-2.5 px-3 text-slate-600">Almacenaje muelle ({activeReport.preStackingDays || (Number(activeReport.storageDays) > 0 ? activeReport.storageDays : (Number(storageDays) > 0 ? storageDays : 5))} d), surveyor portuario, transporte inland y mercancía</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(periCostNum)}</td>
+                          )}
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
                             {formatCurrency(commercialScenario === 'agency_fee' ? periCostNum : periSaleNum)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                            {formatCurrency(commercialScenario === 'agency_fee' ? 0 : periMarginNum)}
-                          </td>
+                          {!isClientMode && (
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : periMarginNum)}
+                            </td>
+                          )}
                         </tr>
 
                         {/* Fila 5: Seguro de Mercancía a Todo Riesgo (Transición a CIF) */}
@@ -6742,13 +6855,17 @@ export function ForwarderWorkspace() {
                           <tr className="hover:bg-slate-50 bg-emerald-50/20">
                             <td className="py-2.5 px-3 font-bold text-slate-900">Seguro de Mercancía a Todo Riesgo</td>
                             <td className="py-2.5 px-3 text-slate-600">Póliza marítima de seguro a todo riesgo para la mercancía bajo cobertura de cláusulas ICC A del Instituto de Londres (condiciones CIF)</td>
-                            <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost)}</td>
+                            {!isClientMode && (
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-800">{formatCurrency(activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost)}</td>
+                            )}
                             <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
                               {formatCurrency(commercialScenario === 'agency_fee' ? (activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) : ((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 1.15))}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : ((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 0.15))}
-                            </td>
+                            {!isClientMode && (
+                              <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                                {formatCurrency(commercialScenario === 'agency_fee' ? 0 : ((activeReport.insuranceCostNum || activeReport.insuranceCost || insuranceCost) * 0.15))}
+                              </td>
+                            )}
                           </tr>
                         )}
 
@@ -6759,13 +6876,17 @@ export function ForwarderWorkspace() {
                             <td className="py-2.5 px-3 text-amber-900">
                               Penalización automática por exceso de tiempo en muelle ({activeReport.demurrageDays.toFixed(2)} d) a {(activeReport.demurrageDailyRateUsd || 11500).toLocaleString('es-ES')} USD/día
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-bold">{formatCurrency(activeReport.demurrageCostNum)}</td>
+                            {!isClientMode && (
+                              <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-bold">{formatCurrency(activeReport.demurrageCostNum)}</td>
+                            )}
                             <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">
                               {formatCurrency(commercialScenario === 'agency_fee' ? activeReport.demurrageCostNum : (activeReport.demurrageCostNum * 1.15))}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                              {formatCurrency(commercialScenario === 'agency_fee' ? 0 : (activeReport.demurrageCostNum * 0.15))}
-                            </td>
+                            {!isClientMode && (
+                              <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                                {formatCurrency(commercialScenario === 'agency_fee' ? 0 : (activeReport.demurrageCostNum * 0.15))}
+                              </td>
+                            )}
                           </tr>
                         )}
 
@@ -6781,13 +6902,17 @@ export function ForwarderWorkspace() {
                             <td className="py-3 px-3 text-emerald-900 text-[10.5px]">
                               Honorarios integrales de agencia, supervisión portuaria, coordinación operativa de buque, gestión documental aduanera y cobertura de riesgo operativo comercial.
                             </td>
-                            <td className="py-3 px-3 text-right font-mono text-slate-800 font-medium">$0.00</td>
+                            {!isClientMode && (
+                              <td className="py-3 px-3 text-right font-mono text-slate-800 font-medium">$0.00</td>
+                            )}
                             <td className="py-3 px-3 text-right font-mono font-black text-emerald-900 text-xs">
                               {formatCurrency(finalTotalMargin)}
                             </td>
-                            <td className="py-3 px-3 text-right font-mono text-emerald-600 font-black">
-                              {formatCurrency(finalTotalMargin)}
-                            </td>
+                            {!isClientMode && (
+                              <td className="py-3 px-3 text-right font-mono text-emerald-600 font-black">
+                                {formatCurrency(finalTotalMargin)}
+                              </td>
+                            )}
                           </tr>
                         )}
                       </>
@@ -6799,26 +6924,50 @@ export function ForwarderWorkspace() {
               {/* Subtotales destacados: Flete vs FOB / Operativa */}
               <div className="grid grid-cols-2 gap-4 mb-6 break-inside-avoid">
                 <div className="bg-sky-50 border border-sky-200 p-4 rounded-lg">
-                  <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">Subtotal Flete Marítimo / TCE</span>
-                  <div className="text-xl font-black font-mono text-sky-900 mt-1">{formatCurrency(activeReport.subtotalFreight || fleteCostNum)}</div>
-                  <span className="text-[10px] text-sky-600 font-semibold">
-                    Precio Venta Flete: {formatCurrency(commercialScenario === 'agency_fee' ? fleteCostNum : (commercialScenario === 'all_in' ? finalTotalSale : fleteSaleNum))}
+                  <span className="block text-[10px] font-bold text-sky-700 uppercase tracking-wide">
+                    {isClientMode ? 'Subtotal Flete Marítimo' : 'Subtotal Flete Marítimo / TCE'}
                   </span>
+                  <div className="text-xl font-black font-mono text-sky-900 mt-1">
+                    {formatCurrency(
+                      isClientMode
+                        ? (commercialScenario === 'agency_fee' ? fleteCostNum : (commercialScenario === 'all_in' ? finalTotalSale : fleteSaleNum))
+                        : (activeReport.subtotalFreight || fleteCostNum)
+                    )}
+                  </div>
+                  {!isClientMode && (
+                    <span className="text-[10px] text-sky-600 font-semibold">
+                      Precio Venta Flete: {formatCurrency(commercialScenario === 'agency_fee' ? fleteCostNum : (commercialScenario === 'all_in' ? finalTotalSale : fleteSaleNum))}
+                    </span>
+                  )}
                 </div>
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
                   <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wide">
-                    {commercialScenario === 'agency_fee' ? 'Subtotal Costes FOB Reales + Fee' : 'Subtotal Costes FOB y Operativa Portuaria'}
+                    {commercialScenario === 'agency_fee'
+                      ? (isClientMode ? 'Subtotal Operativa Portuaria + Fee' : 'Subtotal Costes FOB Reales + Fee')
+                      : (isClientMode ? 'Subtotal Costes y Operativa Portuaria' : 'Subtotal Costes FOB y Operativa Portuaria')}
                   </span>
-                  <div className="text-xl font-black font-mono text-amber-900 mt-1">{formatCurrency(activeReport.subtotalFobOperations || subtotalCosteFobOperativa)}</div>
-                  <span className="text-[10px] text-amber-600 font-semibold">
-                    Precio Venta Operativa: {formatCurrency(
-                      commercialScenario === 'agency_fee'
-                        ? (Number(activeReport.subtotalFobOperations || subtotalCosteFobOperativa) + finalTotalMargin)
-                        : (commercialScenario === 'all_in'
-                            ? finalTotalSale
-                            : subtotalVentaFobOperativa)
+                  <div className="text-xl font-black font-mono text-amber-900 mt-1">
+                    {formatCurrency(
+                      isClientMode
+                        ? (commercialScenario === 'agency_fee'
+                            ? (Number(activeReport.subtotalFobOperations || subtotalCosteFobOperativa) + finalTotalMargin)
+                            : (commercialScenario === 'all_in'
+                                ? finalTotalSale
+                                : subtotalVentaFobOperativa))
+                        : (activeReport.subtotalFobOperations || subtotalCosteFobOperativa)
                     )}
-                  </span>
+                  </div>
+                  {!isClientMode && (
+                    <span className="text-[10px] text-amber-600 font-semibold">
+                      Precio Venta Operativa: {formatCurrency(
+                        commercialScenario === 'agency_fee'
+                          ? (Number(activeReport.subtotalFobOperations || subtotalCosteFobOperativa) + finalTotalMargin)
+                          : (commercialScenario === 'all_in'
+                              ? finalTotalSale
+                              : subtotalVentaFobOperativa)
+                      )}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -6831,45 +6980,49 @@ export function ForwarderWorkspace() {
                   </span>
                 </h3>
 
-                {(Number(activeReport.fleteCompraUnit || 0) > 0 || Number(activeReport.fleteVentaUnit || 0) > 0) && (
-                  <div id="executive-suggested-freights-bar" className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-xl shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-blue-900">
-                          Flete Sugerido Armador (Compra)
-                        </span>
-                        <span className="text-[10px] font-extrabold bg-blue-200 text-blue-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                          USD/MT
-                        </span>
+                {((!isClientMode && Number(activeReport.fleteCompraUnit || 0) > 0) || Number(activeReport.fleteVentaUnit || 0) > 0) && (
+                  <div id="executive-suggested-freights-bar" className={`grid grid-cols-1 ${!isClientMode && Number(activeReport.fleteCompraUnit || 0) > 0 && Number(activeReport.fleteVentaUnit || 0) > 0 ? 'sm:grid-cols-2' : ''} gap-4 mb-4`}>
+                    {!isClientMode && Number(activeReport.fleteCompraUnit || 0) > 0 && (
+                      <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-xl shadow-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-black uppercase tracking-wide text-blue-900">
+                            Flete Sugerido Armador (Compra)
+                          </span>
+                          <span className="text-[10px] font-extrabold bg-blue-200 text-blue-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                            USD/MT
+                          </span>
+                        </div>
+                        <div className="text-2xl font-black font-mono text-blue-950 mt-2">
+                          {Number(activeReport.fleteCompraUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-blue-800">USD/MT</span>
+                        </div>
+                        <p className="text-[10px] text-blue-700 mt-1.5 font-semibold">
+                          Flete base armador sincronizado de la Calculadora
+                        </p>
                       </div>
-                      <div className="text-2xl font-black font-mono text-blue-950 mt-2">
-                        {Number(activeReport.fleteCompraUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-blue-800">USD/MT</span>
-                      </div>
-                      <p className="text-[10px] text-blue-700 mt-1.5 font-semibold">
-                        Flete base armador sincronizado de la Calculadora
-                      </p>
-                    </div>
+                    )}
 
-                    <div className="bg-emerald-50 border-2 border-emerald-300 p-4 rounded-xl shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-emerald-900">
-                          Flete Sugerido Fletador (Venta)
-                        </span>
-                        <span className="text-[10px] font-extrabold bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                          USD/MT
-                        </span>
+                    {Number(activeReport.fleteVentaUnit || 0) > 0 && (
+                      <div className="bg-emerald-50 border-2 border-emerald-300 p-4 rounded-xl shadow-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-black uppercase tracking-wide text-emerald-900">
+                            Flete Sugerido Fletador (Venta)
+                          </span>
+                          <span className="text-[10px] font-extrabold bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                            USD/MT
+                          </span>
+                        </div>
+                        <div className="text-2xl font-black font-mono text-emerald-950 mt-2">
+                          {Number(activeReport.fleteVentaUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-800">USD/MT</span>
+                        </div>
+                        <p className="text-[10px] text-emerald-700 mt-1.5 font-semibold">
+                          Objetivo comercial de venta sincronizado (Target Simulación)
+                        </p>
                       </div>
-                      <div className="text-2xl font-black font-mono text-emerald-950 mt-2">
-                        {Number(activeReport.fleteVentaUnit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-800">USD/MT</span>
-                      </div>
-                      <p className="text-[10px] text-emerald-700 mt-1.5 font-semibold">
-                        Objetivo comercial de venta sincronizado (Target Simulación)
-                      </p>
-                    </div>
+                    )}
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${!isClientMode ? 'md:grid-cols-2' : ''} gap-4`}>
                   {/* Valor del Flete */}
                   <div className="bg-sky-50 border-2 border-sky-300 p-4 rounded-xl shadow-sm">
                     <div className="flex items-center justify-between mb-1">
@@ -6889,22 +7042,24 @@ export function ForwarderWorkspace() {
                   </div>
 
                   {/* Costes FOB + Mercancía */}
-                  <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-xl shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-black uppercase tracking-wide text-amber-900">
-                        Costes FOB + Mercancía
-                      </span>
-                      <span className="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                        USD/MT
-                      </span>
+                  {!isClientMode && (
+                    <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-xl shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-black uppercase tracking-wide text-amber-900">
+                          Costes FOB + Mercancía
+                        </span>
+                        <span className="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                          USD/MT
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black font-mono text-amber-950 mt-2">
+                        {fobMasMercanciaUnitarioUsdMt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-amber-800">USD/MT</span>
+                      </div>
+                      <p className="text-[10px] text-amber-800 mt-1.5 font-semibold">
+                        Costes FOB ({formatUsd(costesFobTotalesUsd)}) + Mercancía ({formatUsd(valorTotalMercanciaUsd)}) sobre {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+                      </p>
                     </div>
-                    <div className="text-2xl font-black font-mono text-amber-950 mt-2">
-                      {fobMasMercanciaUnitarioUsdMt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-amber-800">USD/MT</span>
-                    </div>
-                    <p className="text-[10px] text-amber-800 mt-1.5 font-semibold">
-                      Costes FOB ({formatUsd(costesFobTotalesUsd)}) + Mercancía ({formatUsd(valorTotalMercanciaUsd)}) sobre {toneladas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
-                    </p>
-                  </div>
+                  )}
                 </div>
               </section>
 
@@ -6927,7 +7082,9 @@ export function ForwarderWorkspace() {
                 </div>
                 <div className="text-right">
                   <div className="text-4xl font-black font-mono text-blue-700">{formatCurrency(finalTotalSale)}</div>
-                  <div className="text-xs text-slate-500 mt-1 font-bold">Coste All-In: {formatCurrency(finalTotalCost)} · Margen comercial ({formatCurrency(finalTotalMargin)})</div>
+                  {!isClientMode && (
+                    <div className="text-xs text-slate-500 mt-1 font-bold">Coste All-In: {formatCurrency(finalTotalCost)} · Margen comercial ({formatCurrency(finalTotalMargin)})</div>
+                  )}
                 </div>
               </div>
 
