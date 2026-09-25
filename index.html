@@ -39088,21 +39088,24 @@ function scheduleReactiveEngine() {
             const costPda = portExpensesForMode;
             const costOpex = totalOpex + totalCapex;
 
-            // 1. Ingresos Brutos (Flete * Toneladas)
-            const totalGrossRevenueOwner = (Number(freightBuy) || 0) * (Number(cargoTons) || 0);
+            // Función auxiliar para limpiar texto de moneda (ej. "$25,000" -> 25000)
+        const cleanNum = (val) => Number(String(val).replace(/[^0-9.-]+/g,"")) || 0;
 
-            // 2. Costes Variables del Viaje (Bunkers + PDAs + ETS)
-            const totalVoyageCosts = (Number(costBunkers) || 0) + (Number(costPda) || 0) + (Number(etsCost) || 0);
+        // 1. Ingresos Brutos limpios
+        const totalGrossRevenueOwner = cleanNum(freightBuy) * cleanNum(cargoTons);
 
-            // 3. Costes Fijos (OPEX)
-            const totalOpexCosts = Number(costOpex) || 0;
+        // 2. Costes Variables limpios (Bunkers + PDAs + ETS)
+        const totalVoyageCosts = cleanNum(costBunkers) + cleanNum(costPda) + cleanNum(etsCost);
 
-            // 4. CÁLCULO REAL BENEFICIO NETO ARMADOR (Ingresos - Viaje - OPEX)
-            const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;
+        // 3. Costes Fijos limpios (OPEX)
+        const totalOpexCosts = cleanNum(costOpex);
 
-            // 5. CÁLCULO REAL TCE (Ingresos - Viaje) -> ¡NUNCA RESTAR NI SUMAR OPEX AQUÍ!
-            const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;
-            const calculatedTceDaily = calculatedTceTotal / (Number(totalDays) || 1);
+        // 4. BENEFICIO NETO REAL ARMADOR
+        const calculatedNetOwnerProfit = totalGrossRevenueOwner - totalVoyageCosts - totalOpexCosts;
+
+        // 5. CÁLCULO REAL TCE (Sin restar OPEX)
+        const calculatedTceTotal = totalGrossRevenueOwner - totalVoyageCosts;
+        const calculatedTceDaily = calculatedTceTotal / (cleanNum(totalDays) || 1);
 
             const netProfitOwner = isZeroCalculation ? 0 : calculatedNetOwnerProfit;
             const tceTotal = isZeroCalculation ? 0 : calculatedTceTotal;
