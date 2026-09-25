@@ -7,7 +7,7 @@
 
 /* ==========================================================================
    1. Pestaña flotante de activación (Margen Izquierdo / Left Edge Tab)
-   Ubicada más abajo, alineada a la altura de Agente de Proyectos (bottom: 96px o top: calc(100vh - 160px))
+   Ubicada en el lateral izquierdo a la altura de bottom: 96px para no interferir con botones inferiores ni generar scroll
    ========================================================================== */
 .pt-drawer-trigger-tab {
   position: fixed;

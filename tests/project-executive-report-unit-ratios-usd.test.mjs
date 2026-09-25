@@ -199,13 +199,14 @@ test('5. ForwarderWorkspace incluye sección "Desglose Unitario Operativo (USD/M
   assert.match(workspaceSource, /fobMasMercanciaUnitarioUsdMt[\s\S]*?USD\/MT/);
 });
 
-test('6. Botones del reporte ejecutivo situados abajo a la derecha sin cortes visuales', () => {
-  // Posicionamiento abajo a la derecha
-  assert.match(workspaceSource, /fixed\s+bottom-6\s+right-8\s+flex\s+items-center\s+gap-4\s+z-\[9999\]\s+print:hidden/);
+test('6. Botones del reporte ejecutivo situados abajo al centro sin cortes visuales', () => {
+  // Posicionamiento abajo al centro
+  assert.match(workspaceSource, /fixed\s+bottom-\[?2rem\]?\s+left-1\/2\s+-translate-x-1\/2[\s\S]*?z-\[(?:60|100|999|9999)\]\s+print:hidden/);
 
   // Botones de acción presentes
   assert.match(workspaceSource, /id="btn-close-executive-report"/);
-  assert.match(workspaceSource, /id="btn-print-executive-report"/);
+  assert.match(workspaceSource, /id="btn-print-internal-report"/);
+  assert.match(workspaceSource, /id="btn-print-client-report"/);
 
   // Padding inferior para evitar cortes visuales
   assert.match(workspaceSource, /pb-28/, 'El contenedor debe tener pb-28 para evitar que los botones floten sobre el contenido');
