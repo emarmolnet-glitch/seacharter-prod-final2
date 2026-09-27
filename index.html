@@ -8971,6 +8971,172 @@
             }
         }
 
+        /* ==========================================================================
+           ESTRUCTURA DE CABECERA EJECUTIVA Y BARRA LATERAL (SIDEBAR DE NAVEGACIÓN)
+           ========================================================================== */
+
+        /* Cabecera superior corporativa de fila única inquebrantable al 100% zoom */
+        header.app-header {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            height: 52px !important;
+            min-height: 52px !important;
+            max-height: 52px !important;
+            padding: 0 1rem !important;
+            gap: 0.75rem !important;
+            overflow: visible !important;
+            white-space: nowrap !important;
+            box-sizing: border-box !important;
+            background: #FFFFFF !important;
+            border-bottom: 1px solid #E2E8F0 !important;
+            position: relative !important;
+            z-index: 50 !important;
+        }
+
+        header.app-header > .header-left {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.75rem !important;
+            flex-shrink: 0 !important;
+        }
+
+        header.app-header > .header-center {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            flex-shrink: 0 !important;
+            overflow: visible !important;
+            position: relative !important;
+        }
+
+        header.app-header > .header-actions-right {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.35rem !important;
+            flex-shrink: 0 !important;
+            overflow: visible !important;
+            position: relative !important;
+        }
+
+        /* Sidebar vertical corporativo colapsable */
+        #app-navigation-sidebar {
+            background-color: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 2px 0 10px rgba(15, 23, 42, 0.04);
+            will-change: width;
+        }
+
+        #app-navigation-sidebar.is-compact {
+            width: 56px !important;
+            min-width: 56px !important;
+            max-width: 56px !important;
+        }
+
+        #app-navigation-sidebar.is-expanded {
+            width: 220px !important;
+            min-width: 220px !important;
+            max-width: 220px !important;
+        }
+
+        #app-navigation-sidebar.is-compact .sidebar-nav-item,
+        #app-navigation-sidebar.is-compact .sidebar-toggle-btn {
+            justify-content: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        #app-navigation-sidebar.is-compact .sidebar-text {
+            display: none !important;
+        }
+
+        #app-navigation-sidebar.is-expanded .sidebar-nav-item,
+        #app-navigation-sidebar.is-expanded .sidebar-toggle-btn {
+            justify-content: flex-start !important;
+            padding-left: 0.65rem !important;
+            padding-right: 0.65rem !important;
+        }
+
+        #app-navigation-sidebar.is-expanded .sidebar-text {
+            display: inline-block !important;
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 38px;
+            border-radius: 0.5rem;
+            color: #475569; /* slate-600 */
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+            cursor: pointer;
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item svg {
+            color: #475569;
+            stroke: #475569;
+            flex-shrink: 0;
+            transition: stroke 150ms ease;
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item:hover {
+            background-color: #f1f5f9; /* slate-100 */
+            color: #0f172a; /* slate-900 */
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item:hover svg {
+            color: #0f172a;
+            stroke: #0f172a;
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item[aria-current="page"],
+        #app-navigation-sidebar .sidebar-nav-item.tab-btn.bg-blue-600,
+        #app-navigation-sidebar .sidebar-nav-item.active {
+            background-color: #f0fdfa !important; /* teal-50 */
+            color: #0f766e !important; /* teal-700 */
+            border-left: 3px solid #0f766e !important;
+            font-weight: 700 !important;
+        }
+
+        #app-navigation-sidebar .sidebar-nav-item[aria-current="page"] svg,
+        #app-navigation-sidebar .sidebar-nav-item.tab-btn.bg-blue-600 svg,
+        #app-navigation-sidebar .sidebar-nav-item.active svg {
+            color: #0f766e !important;
+            stroke: #0f766e !important;
+        }
+
+        /* Plegado simultáneo de Input Geográfico y Predictive Congestion Shield */
+        .map-command-shell.input-collapsed #congestion-shield-sidebar-card,
+        .map-command-shell.is-input-collapsed #congestion-shield-sidebar-card,
+        #congestion-shield-sidebar-card.is-collapsed {
+            transform: translateX(calc(-100% - 30px));
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: transform 260ms ease, opacity 260ms ease;
+        }
+
+        #btn-show-route-congestion {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 45;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
+            animation: fadeInRouteCongestionBtn 200ms ease;
+        }
+
+        @keyframes fadeInRouteCongestionBtn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
     <link href="./market-contacts.css" rel="stylesheet">
@@ -8995,26 +9161,41 @@
     </div>
 
     <!-- NAVBAR TOP -->
-    <header class="app-header bg-white border-b border-slate-200 px-4 py-2 md:px-6 flex flex-col lg:flex-row items-center lg:items-center lg:justify-between gap-3 lg:gap-4 shadow-md shrink-0 no-print z-50">
-        <div class="flex items-center gap-3">
-            <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg">
-                <i class="fa-solid fa-ship text-base"></i>
+    <header class="app-header bg-white border-b border-slate-200 px-4 py-2 md:px-6 flex items-center justify-between shadow-md shrink-0 no-print z-50" role="banner" aria-label="Cabecera principal de navegación">
+        <!-- IZQUIERDA: LOGO CORPORATIVO -->
+        <div class="header-left flex items-center gap-3 shrink-0">
+            <div class="bg-blue-600 p-2 rounded-lg text-white shadow-md flex items-center justify-center w-8 h-8">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>
+                    <path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/>
+                    <path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/>
+                    <path d="M12 10v4"/>
+                    <path d="M12 2v3"/>
+                </svg>
             </div>
             <div>
-                <h1 class="text-xs md:text-sm font-bold text-white tracking-tight">SeaCharter Core PRO <span class="text-[9px] md:text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 ml-1 md:ml-2">RODAHMAR ENGINE</span></h1>
+                <h1 class="text-xs md:text-sm font-bold text-slate-900 tracking-tight flex items-center whitespace-nowrap">
+                    <span>SeaCharter Core PRO</span>
+                    <span class="text-[9px] md:text-[10px] bg-blue-500/10 text-blue-700 px-1.5 py-0.5 rounded border border-blue-500/20 ml-1.5 md:ml-2 font-mono font-bold tracking-wider">RODAHMAR ENGINE</span>
+                </h1>
             </div>
         </div>
 
-        <div class="module-tabs-wrapper flex items-center">
-            <div id="connection-status-root"></div>
+        <!-- CENTRO: STATUS BRIDGE, BUSCADOR IMO, VOYAGE REF, INFORME MASTER -->
+        <div class="header-center flex items-center gap-2 md:gap-3 shrink-0">
+            <div id="connection-status-root" class="shrink-0"></div>
+
             <!-- BUSCADOR DIRECTO DE BUQUES EN BASE DE DATOS NEON -->
             <div id="header-vessel-search-container" class="relative inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs shadow-2xs shrink-0 max-w-xs focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-sky-500 transition-all">
-                <i class="fa-solid fa-magnifying-glass text-[11px] text-slate-400"></i>
+                <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
                 <input
                     type="text"
                     id="header-vessel-search-input"
-                    class="bg-transparent font-sans text-xs font-semibold text-slate-800 focus:outline-none w-36 sm:w-44 placeholder:text-slate-400"
-                    placeholder="Buscar buque (IMO / Nombre)..."
+                    class="bg-transparent font-sans text-xs font-semibold text-slate-800 focus:outline-none w-28 sm:w-36 placeholder:text-slate-400"
+                    placeholder="Buscar buque..."
                     aria-label="Buscar buque en base de datos"
                     onkeydown="if (event.key === 'Enter') handleHeaderVesselSearch(this.value);"
                 >
@@ -9022,41 +9203,50 @@
                     type="button"
                     id="header-vessel-search-btn"
                     onclick="handleHeaderVesselSearch(document.getElementById('header-vessel-search-input').value)"
-                    class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-1.5 py-0.5 rounded transition shrink-0"
+                    class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-1.5 py-0.5 rounded transition shrink-0 cursor-pointer"
                     title="Buscar buque en Data Bridge / Neon"
                 >
-                    <i class="fa-solid fa-arrow-right"></i>
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
                 </button>
             </div>
+
+            <!-- SELECTOR REFERENCIA DE VIAJE -->
             <div id="header-voyage-ref-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-xs font-mono shadow-2xs shrink-0" title="Referencia Única del Viaje / Contrato">
                 <i class="fa-solid fa-hashtag text-[10px] text-slate-400"></i>
                 <span class="text-slate-400 font-sans text-[10px] uppercase font-bold tracking-wider">Ref:</span>
-                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-36 transition-all" value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
+                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-28 sm:w-32 transition-all uppercase" value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
             </div>
-            <div class="tools-dropdown-container">
+
+            <!-- BOTÓN TUERCA / CONFIGURACIÓN CON MENÚ DESPLEGABLE -->
+            <div class="tools-dropdown-container relative">
                 <button
                     type="button"
                     id="advanced-modules-btn"
-                    class="tools-dropdown-trigger"
+                    class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
                     onclick="toggleAdvancedModulesMenu(event)"
                     aria-controls="advanced-modules-menu"
                     aria-expanded="false"
                     title="Herramientas Avanzadas"
                     aria-label="Herramientas Avanzadas"
                 >
-                    <i class="fa-solid fa-gear text-base" aria-hidden="true"></i>
+                    <i class="fa-solid fa-gear text-sm" aria-hidden="true"></i>
                 </button>
-                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas"></ul>
+                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas" style="z-index: 9999 !important;"></ul>
             </div>
+
+            <!-- BOTÓN GENERAR INFORME MASTER -->
             <button
                 type="button"
                 id="btn-master-executive-report"
-                onclick="generarInformeMasterOnClick()"
-                class="tools-dropdown-trigger"
+                onclick="generarInformeMasterOnClick(event)"
+                class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs shrink-0"
                 title="Generar Informe Master"
                 aria-label="Generar Informe Master"
             >
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-700">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
                     <path d="M8 13h8" />
@@ -9064,42 +9254,37 @@
                     <path d="M8 9h2" />
                 </svg>
             </button>
-            <div class="mobile-module-nav" aria-label="Navegación móvil de módulos principales">
-                <button
-                    type="button"
-                    id="mobile-module-nav-btn"
-                    class="mobile-module-nav-trigger"
-                    onclick="toggleMobileModuleNav(event)"
-                    aria-controls="mobile-module-nav-menu"
-                    aria-expanded="false"
-                    aria-label="Abrir menú de módulos"
-                    title="Menú de módulos"
-                >
-                    <i class="fa-solid fa-bars mobile-menu-bars" aria-hidden="true"></i>
-                    <span id="mobile-module-nav-current" class="sr-only">Mapa</span>
-                </button>
-                <ul id="mobile-module-nav-menu" class="mobile-module-nav-menu" aria-label="Seleccionar módulo"></ul>
+
+            <!-- MENÚ MÓVIL OCULTO EN ESCRITORIO -->
+            <div class="hidden" style="display:none !important;" aria-hidden="true">
+                <div class="mobile-module-nav">
+                    <button type="button" id="mobile-module-nav-btn" class="mobile-module-nav-trigger" onclick="toggleMobileModuleNav(event)" aria-controls="mobile-module-nav-menu" aria-expanded="false">
+                        <i class="fa-solid fa-bars mobile-menu-bars"></i>
+                        <span id="mobile-module-nav-current">Mapa</span>
+                    </button>
+                    <ul id="mobile-module-nav-menu" class="mobile-module-nav-menu"></ul>
+                </div>
             </div>
-            <div id="primary-module-tabs" class="module-tabs flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos principales"></div>
         </div>
 
-        <div class="header-actions-right flex items-center">
+        <!-- DERECHA: BOTONES DE ACCIÓN (+, ⋮, FAQ, IDIOMA, OWN/CHR, CRM, LOG, COLAPSAR) -->
+        <div class="header-actions-right flex items-center gap-1.5 shrink-0">
             <!-- Session Actions Container -->
-            <div class="flex items-center gap-2" id="session-actions">
+            <div class="flex items-center gap-1.5" id="session-actions">
                 <button
                     id="new-estimation-btn"
                     type="button"
                     onclick="window.DossierManager?.requestNewEstimation(); closeMobileSessionMenu();"
-                    class="tools-dropdown-trigger flex items-center justify-center"
+                    class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
                     title="Nueva Estimación"
                     aria-label="Nueva Estimación"
                 >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14" />
-                        <path d="M5 12h14" />
+                    <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                 </button>
-                <div class="tools-dropdown-container">
+                <div class="tools-dropdown-container relative">
                     <input
                         type="file"
                         id="load-session-file-input"
@@ -9111,87 +9296,46 @@
                         id="mobile-session-menu-btn"
                         type="button"
                         onclick="toggleMobileSessionMenu(event)"
-                        class="tools-dropdown-trigger"
+                        class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
                         aria-controls="tools-dropdown-menu"
                         aria-expanded="false"
-                        title="Utilidades"
-                        aria-label="Utilidades"
+                        title="Utilidades de Sesión"
+                        aria-label="Utilidades de Sesión"
                     >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="5" r="1.5" />
                             <circle cx="12" cy="12" r="1.5" />
                             <circle cx="12" cy="19" r="1.5" />
                         </svg>
                     </button>
+                    <!-- MENÚ ⋮ SOLO CON ACCIONES DE SESIÓN: GUARDAR, CARGAR Y SALIR -->
                     <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button, a')) setTimeout(closeMobileSessionMenu, 0);">
                         <li class="tools-dropdown-item">
-                            <button id="btn-market-report-nav" type="button" onclick="generateMarketReport(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Generar Reporte de Mercado Actual" aria-label="Generar Reporte de Mercado Actual">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                    <polyline points="14 2 14 8 20 8"/>
-                                    <line x1="16" y1="13" x2="8" y2="13"/>
-                                    <line x1="16" y1="17" x2="8" y2="17"/>
-                                    <polyline points="10 9 9 9 8 9"/>
-                                </svg>
-                                <span>Reporte de Mercado</span>
-                            </button>
-                        </li>
-                        <li class="tools-dropdown-item">
                             <button onclick="saveAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Guardar Sesión" aria-label="Guardar Sesión">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M5 3h12l2 2v16H5z" />
-                                    <path d="M8 3v6h8V3" />
-                                    <path d="M8 21v-7h8v7" />
-                                    <path d="M10 17h4" />
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
                                 </svg>
                                 <span>Guardar Sesión</span>
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
                             <button id="load-session-btn" onclick="loadAuditSession()" class="tools-dropdown-action" title="Cargar Sesión" aria-label="Cargar Sesión">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 7.5V19a2 2 0 0 0 2 2h14.2a2 2 0 0 0 1.95-1.55l1.3-6A2 2 0 0 0 20.5 11H7.2a2 2 0 0 0-1.95 1.55L3 19" />
-                                    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6a2 2 0 0 1 2 2v2" />
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
                                 </svg>
                                 <span>Cargar Sesión</span>
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
-                            <a
-                                id="btn-toggle-databridge"
-                                href="https://calm-shortbread-55bcfc.netlify.app/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="tools-dropdown-action"
-                                title="Data Bridge"
-                                aria-label="Data Bridge"
-                                onclick="handleEcosystemLinkClick(event, 'https://calm-shortbread-55bcfc.netlify.app/')"
-                            >
-                                <span id="icon-toggle-databridge" class="hidden" style="display:none !important;" aria-hidden="true"></span>
-                                <span id="databridge-connection-dot" class="hidden" style="display:none !important;" aria-hidden="true"></span>
-                                <span>Data Bridge</span>
-                            </a>
-                        </li>
-                        <li class="tools-dropdown-item">
-                            <a
-                                id="btn-open-land-charter"
-                                href="https://landchartercorepro.netlify.app/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="tools-dropdown-action"
-                                title="Land Charter Core PRO"
-                                aria-label="Land Charter Core PRO"
-                                onclick="handleEcosystemLinkClick(event, 'https://landchartercorepro.netlify.app/')"
-                            >
-                                <span>Land Charter Core PRO</span>
-                            </a>
-                        </li>
-                        <li class="tools-dropdown-item">
                             <button onclick="exitAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Salir" aria-label="Salir">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M10 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
-                                    <path d="M16 17l5-5-5-5" />
-                                    <path d="M21 12H9" />
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                    <polyline points="16 17 21 12 16 7" />
+                                    <line x1="21" y1="12" x2="9" y2="12" />
                                 </svg>
                                 <span>Salir</span>
                             </button>
@@ -9205,35 +9349,41 @@
                 id="btn-open-faq-modal"
                 type="button"
                 onclick="openFaqModal()"
-                class="flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+                class="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer h-8 shrink-0"
                 title="Manual de Usuario y Referencia Técnica (FAQ)"
                 aria-label="Abrir Manual de Usuario y FAQ"
             >
-                <i class="fa-solid fa-circle-question text-sky-400 text-xs" aria-hidden="true"></i>
+                <svg class="w-3.5 h-3.5 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
                 <span>FAQ</span>
             </button>
 
             <!-- Selector de Idioma -->
-            <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 flex-1 lg:flex-none max-w-[150px]">
-                <i class="fa-solid fa-globe text-slate-500 mr-2 text-xs"></i>
-                <select id="language-selector" class="bg-transparent border-none outline-none text-xs text-white w-full cursor-pointer font-bold" onchange="changeLanguage(this.value)">
-                    <option value="es" class="bg-slate-900 text-white">Español</option>
-                    <option value="en" class="bg-slate-900 text-white">English</option>
-                    <option value="fr" class="bg-slate-900 text-white">Français</option>
+            <div class="flex items-center bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 h-8 max-w-[100px] shadow-2xs shrink-0">
+                <svg class="w-3.5 h-3.5 text-slate-500 mr-1 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <select id="language-selector" class="bg-transparent border-none outline-none text-xs text-slate-700 w-full cursor-pointer font-bold" onchange="changeLanguage(this.value)">
+                    <option value="es">ES</option>
+                    <option value="en">EN</option>
+                    <option value="fr">FR</option>
                 </select>
             </div>
-            <!-- Interruptor de contexto de negocio: solo cambia la capa de presentación.
-                 Va al final del rail derecho a propósito: el rail es nowrap y desborda
-                 hacia la izquierda, así que el último hijo es la única posición donde el
-                 interruptor no puede quedar tapado por el resto de acciones del header. -->
-            <div id="global-view-mode-switch" class="relative z-20 inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-sm" role="group" aria-label="Perspectiva de negocio">
+
+            <!-- OWN / CHR Switch -->
+            <div id="global-view-mode-switch" class="relative z-20 inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-2xs h-8" role="group" aria-label="Perspectiva de negocio">
                 <button
                     type="button"
                     id="btn-view-mode-owner"
-                    class="inline-flex w-10 items-center justify-center rounded-md py-1.5 leading-none"
+                    class="inline-flex w-8 sm:w-9 items-center justify-center rounded-md py-1 leading-none text-slate-700 font-bold"
                     onclick="setGlobalViewMode('owner')"
                     aria-pressed="true"
-                    title="Vista Armador (Shipowner): la demora es ingreso y el KPI principal es el TCE"
+                    title="Vista Armador (Shipowner)"
                 >
                     <span aria-hidden="true" class="text-[10px] font-bold tracking-wider uppercase">OWN</span>
                     <span class="sr-only">Vista Armador</span>
@@ -9241,10 +9391,10 @@
                 <button
                     type="button"
                     id="btn-view-mode-charterer"
-                    class="inline-flex w-10 items-center justify-center rounded-md py-1.5 leading-none"
+                    class="inline-flex w-8 sm:w-9 items-center justify-center rounded-md py-1 leading-none text-slate-700 font-bold"
                     onclick="setGlobalViewMode('charterer')"
                     aria-pressed="false"
-                    title="Vista Fletador (Charterer): la demora es penalización y el KPI principal es el coste por tonelada"
+                    title="Vista Fletador (Charterer)"
                 >
                     <span aria-hidden="true" class="text-[10px] font-bold tracking-wider uppercase">CHR</span>
                     <span class="sr-only">Vista Fletador</span>
@@ -9255,7 +9405,7 @@
             <button
                 type="button"
                 id="btn-collapse-header"
-                class="header-toggle-collapse-btn inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 shadow-xs cursor-pointer transition-all duration-150 shrink-0 ml-1 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                class="header-toggle-collapse-btn inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 shadow-2xs cursor-pointer transition-all shrink-0 focus:outline-none"
                 onclick="toggleHeaderVisibility()"
                 title="Ocultar barra de navegación (Alt+H)"
                 aria-label="Ocultar barra de navegación"
@@ -9267,7 +9417,107 @@
         </div>
     </header>
 
-    <aside id="module-help-banner" class="contextual-guide-banner no-print" data-current-module="map" aria-label="Guía del módulo" aria-hidden="false">
+    <!-- WORKSPACE CON SIDEBAR IZQUIERDO Y CONTENEDOR PRINCIPAL -->
+    <div id="app-body-container" class="app-body-container flex-1 flex flex-row overflow-hidden relative w-full min-h-0">
+        <!-- BARRA LATERAL IZQUIERDA COLAPSABLE (SIDEBAR DE NAVEGACIÓN) -->
+        <aside id="app-navigation-sidebar" class="app-navigation-sidebar is-compact flex flex-col justify-between shrink-0 bg-white border-r border-slate-200 z-30 transition-all duration-200 select-none" style="width: 56px;" aria-label="Navegación principal">
+            
+            <!-- PARTE SUPERIOR: BOTÓN COLAPSAR/EXPANDIR Y LISTA DE MÓDULOS -->
+            <div class="flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2">
+                <!-- Botón toggle de Sidebar -->
+                <button
+                    type="button"
+                    id="btn-toggle-sidebar"
+                    onclick="toggleSidebarExpandCollapse()"
+                    class="sidebar-toggle-btn w-full h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors mb-2 cursor-pointer shrink-0"
+                    title="Expandir menú lateral (220px)"
+                    aria-label="Expandir menú lateral"
+                    aria-expanded="false"
+                >
+                    <svg id="sidebar-toggle-icon" class="w-4 h-4 text-slate-600 transition-transform duration-200 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="13 17 18 12 13 7"></polyline>
+                        <polyline points="6 17 11 12 6 7"></polyline>
+                    </svg>
+                    <span class="sidebar-text hidden ml-2 text-xs font-bold text-slate-600 uppercase tracking-wider truncate">Colapsar</span>
+                </button>
+
+                <!-- CONTENEDOR DE BOTONES DE NAVEGACIÓN PRINCIPALES (10 MÓDULOS + REPORTE DE MERCADO) -->
+                <nav id="primary-module-tabs" class="flex flex-col gap-1 w-full" aria-label="Navegación de módulos principales">
+                    <!-- Se renderizan dinámicamente los 10 botones principales + Reporte de Mercado -->
+                    <button
+                        id="btn-market-report-nav"
+                        type="button"
+                        onclick="generateMarketReport()"
+                        class="tab-btn sidebar-nav-item flex items-center h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                        title="Generar Reporte de Mercado Actual"
+                        aria-label="Generar Reporte de Mercado Actual"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Reporte de Mercado</span></span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- PARTE INFERIOR FIJA: ACCESOS DIRECTOS DATA BRIDGE Y LAND CHARTER -->
+            <div class="sidebar-footer shrink-0 border-t border-slate-200 p-2 flex flex-col gap-1 bg-slate-50/70">
+                <!-- Data Bridge -->
+                <a
+                    id="btn-toggle-databridge"
+                    href="https://calm-shortbread-55bcfc.netlify.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="sidebar-nav-item flex items-center h-9 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                    title="Data Bridge"
+                    aria-label="Data Bridge"
+                    onclick="handleEcosystemLinkClick(event, 'https://calm-shortbread-55bcfc.netlify.app/')"
+                >
+                    <span id="icon-toggle-databridge" class="hidden" style="display:none !important;" aria-hidden="true"></span>
+                    <span id="databridge-connection-dot" class="hidden" style="display:none !important;" aria-hidden="true"></span>
+                    <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                    </div>
+                    <span class="sidebar-text hidden ml-2 text-xs font-medium text-slate-700 truncate"><span>Data Bridge</span></span>
+                </a>
+
+                <!-- Land Charter Core PRO -->
+                <a
+                    id="btn-open-land-charter"
+                    href="https://landchartercorepro.netlify.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="sidebar-nav-item flex items-center h-9 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                    title="Land Charter Core PRO"
+                    aria-label="Land Charter Core PRO"
+                    onclick="handleEcosystemLinkClick(event, 'https://landchartercorepro.netlify.app/')"
+                >
+                    <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="1" y="3" width="15" height="13"></rect>
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                        </svg>
+                    </div>
+                    <span class="sidebar-text hidden ml-2 text-xs font-medium text-slate-700 truncate"><span>Land Charter Core PRO</span></span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- ÁREA DE CONTENIDO PRINCIPAL -->
+        <div class="app-workspace-content flex-1 flex flex-col min-w-0 overflow-hidden relative h-full">
+            <aside id="module-help-banner" class="contextual-guide-banner no-print" data-current-module="map" aria-label="Guía del módulo" aria-hidden="false">
         <div class="contextual-guide-banner__content">
             <span class="contextual-guide-banner__icon" aria-hidden="true"><i class="fa-solid fa-compass"></i></span>
             <p class="contextual-guide-banner__text">Define la ruta: Marca coordenadas POL (Carga) y POD (Descarga).</p>
@@ -9311,6 +9561,20 @@
                         <i class="fa-solid fa-expand"></i>
                     </button>
                 </div>
+                <!-- BOTÓN FLOTANTE PARA RESTAURAR RUTA Y CONGESTIÓN CUANDO ESTÁN PLEGADOS -->
+                <button
+                    id="btn-show-route-congestion"
+                    type="button"
+                    onclick="toggleRouteInputPanel(false)"
+                    class="floating-route-congestion-btn hidden items-center gap-1.5 px-3 py-2 bg-slate-900/90 hover:bg-slate-900 text-white rounded-lg shadow-xl border border-slate-700 text-xs font-bold transition cursor-pointer backdrop-blur-md z-45"
+                    title="Mostrar Ruta y Congestión"
+                    aria-label="Mostrar Ruta y Congestión"
+                >
+                    <svg class="w-3.5 h-3.5 text-teal-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span>Mostrar Ruta y Congestión</span>
+                </button>
                 <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4 transition-transform duration-300 z-50 translate-x-0" aria-label="Input geográfico" aria-hidden="false">
                     <div>
                         <div class="flex items-center justify-between gap-3">
@@ -13907,6 +14171,8 @@
             <span class="sea-assistant-alert-badge" hidden aria-live="polite"></span>
         </button>
     </main>
+    </div> <!-- /app-workspace-content -->
+</div> <!-- /app-body-container -->
 
     <!-- BOTÓN FLOTANTE PARA RESTAURAR LA BARRA DE NAVEGACIÓN CUANDO ESTÁ OCULTA -->
     <button
@@ -29062,6 +29328,63 @@ function createRouteAnchorElement(type) {
             return label;
         }
 
+        const MODULE_ICONS = {
+            map: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>',
+            estimator: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="14.01"></line><line x1="12" y1="14" x2="12" y2="14.01"></line><line x1="8" y1="14" x2="8" y2="14.01"></line><line x1="12" y1="18" x2="12" y2="18.01"></line><line x1="8" y1="18" x2="8" y2="18.01"></line><line x1="16" y1="18" x2="16" y2="18.01"></line></svg>',
+            dossiers: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
+            decisiones: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7"></path><line x1="6" y1="9" x2="6" y2="21"></line></svg>',
+            compatibilidad: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>',
+            tracking: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>',
+            ais: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
+            gencon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+            auditor: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>',
+            FORWARDERS: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
+            marketReport: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
+        };
+
+        let isSidebarExpanded = false;
+
+        function toggleSidebarExpandCollapse(forceState) {
+            const sidebar = document.getElementById('app-navigation-sidebar');
+            const toggleBtn = document.getElementById('btn-toggle-sidebar');
+            const toggleIcon = document.getElementById('sidebar-toggle-icon');
+            if (!sidebar) return;
+
+            isSidebarExpanded = typeof forceState === 'boolean' ? forceState : !isSidebarExpanded;
+
+            sidebar.classList.toggle('is-expanded', isSidebarExpanded);
+            sidebar.classList.toggle('is-compact', !isSidebarExpanded);
+            sidebar.style.width = isSidebarExpanded ? '220px' : '56px';
+
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', String(isSidebarExpanded));
+                toggleBtn.setAttribute('title', isSidebarExpanded ? 'Colapsar menú lateral (56px)' : 'Expandir menú lateral (220px)');
+                toggleBtn.setAttribute('aria-label', isSidebarExpanded ? 'Colapsar menú lateral' : 'Expandir menú lateral');
+            }
+            if (toggleIcon) {
+                toggleIcon.innerHTML = isSidebarExpanded
+                    ? '<polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline>'
+                    : '<polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline>';
+            }
+
+            const labels = sidebar.querySelectorAll('.sidebar-text');
+            labels.forEach(label => {
+                label.classList.toggle('hidden', !isSidebarExpanded);
+                label.classList.toggle('inline-block', isSidebarExpanded);
+            });
+
+            const toggleText = toggleBtn?.querySelector('.sidebar-text');
+            if (toggleText) {
+                toggleText.textContent = isSidebarExpanded ? 'Colapsar' : '';
+            }
+
+            if (typeof scheduleRouteMapRedraw === 'function') {
+                scheduleRouteMapRedraw(200);
+            }
+            window.dispatchEvent(new Event('resize'));
+        }
+        window.toggleSidebarExpandCollapse = toggleSidebarExpandCollapse;
+
         function createModuleButton(moduleConfig, variant = 'primary') {
             const button = document.createElement('button');
             button.type = 'button';
@@ -29072,11 +29395,20 @@ function createRouteAnchorElement(type) {
                     : `advanced-tab-btn-${moduleConfig.id}`;
             button.dataset.moduleId = moduleConfig.id;
             button.className = variant === 'primary'
-                ? 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap'
+                ? 'tab-btn sidebar-nav-item flex items-center h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left'
                 : 'tools-dropdown-action';
             const localizedLabel = getLocalizedModuleLabel(moduleConfig.label);
-            button.textContent = localizedLabel;
+            button.setAttribute('title', localizedLabel);
             button.setAttribute('aria-label', localizedLabel);
+            if (variant === 'primary') {
+                const iconSvg = MODULE_ICONS[moduleConfig.id] || '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>';
+                button.innerHTML = `
+                    <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">${iconSvg}</div>
+                    <span class="sidebar-text ${isSidebarExpanded ? 'inline-block' : 'hidden'} ml-2 text-xs font-semibold truncate">${localizedLabel}</span>
+                `;
+            } else {
+                button.textContent = localizedLabel;
+            }
             if (moduleConfig.presentation === 'module-overlay') {
                 button.setAttribute('aria-controls', 'tracking-live-overlay');
             }
@@ -29111,21 +29443,45 @@ function createRouteAnchorElement(type) {
 
                 // Separador visual (línea vertical) y botón 💼 PROYECTOS a la derecha de AUDITORIA
                 const separator = document.createElement('div');
-                separator.className = 'w-px h-5 bg-slate-700/80 mx-1 self-center shrink-0';
+                separator.className = 'w-full h-px bg-slate-200 my-1 shrink-0';
                 separator.setAttribute('aria-hidden', 'true');
+                // w-px bg-slate-700
                 tabs.appendChild(separator);
 
                 const forwarderBtn = document.createElement('button');
                 forwarderBtn.type = 'button';
                 forwarderBtn.id = 'tab-btn-forwarders';
                 forwarderBtn.dataset.moduleId = 'FORWARDERS';
-                forwarderBtn.className = 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap';
-                forwarderBtn.textContent = '💼 PROYECTOS';
+                forwarderBtn.className = 'tab-btn sidebar-nav-item flex items-center h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left';
+                forwarderBtn.setAttribute('title', 'PROYECTOS');
                 forwarderBtn.setAttribute('aria-label', '💼 PROYECTOS');
+                const fwdIcon = MODULE_ICONS['FORWARDERS'];
+                forwarderBtn.innerHTML = `
+                    <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">${fwdIcon}</div>
+                    <span class="sidebar-text ${isSidebarExpanded ? 'inline-block' : 'hidden'} ml-2 text-xs font-semibold truncate">PROYECTOS</span>
+                `;
+                // 💼 PROYECTOS
                 forwarderBtn.addEventListener('click', () => {
                     switchTab('FORWARDERS');
                 });
                 tabs.appendChild(forwarderBtn);
+
+                // Botón Reporte de Mercado en la lista de navegación del Sidebar
+                const marketReportBtn = document.createElement('button');
+                marketReportBtn.type = 'button';
+                marketReportBtn.id = 'btn-market-report-nav';
+                marketReportBtn.className = 'tab-btn sidebar-nav-item flex items-center h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left';
+                marketReportBtn.setAttribute('title', 'Generar Reporte de Mercado Actual');
+                marketReportBtn.setAttribute('aria-label', 'Generar Reporte de Mercado Actual');
+                const mktIcon = MODULE_ICONS['marketReport'];
+                marketReportBtn.innerHTML = `
+                    <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">${mktIcon}</div>
+                    <span class="sidebar-text ${isSidebarExpanded ? 'inline-block' : 'hidden'} ml-2 text-xs font-semibold truncate"><span>Reporte de Mercado</span></span>
+                `;
+                marketReportBtn.addEventListener('click', () => {
+                    generateMarketReport();
+                });
+                tabs.appendChild(marketReportBtn);
             }
             if (mobileMenu) {
                 mobileMenu.innerHTML = '';
@@ -30180,6 +30536,20 @@ function createRouteAnchorElement(type) {
                 panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
                 panel.classList.toggle('translate-x-0', isGeoInputOpen);
                 panel.classList.toggle('-translate-x-[calc(100%-2rem)]', !isGeoInputOpen);
+            }
+
+            const congestionCard = document.getElementById('congestion-shield-sidebar-card');
+            if (congestionCard) {
+                congestionCard.setAttribute('aria-hidden', String(!isGeoInputOpen));
+                congestionCard.classList.toggle('translate-x-0', isGeoInputOpen);
+                congestionCard.classList.toggle('-translate-x-[calc(100%-2rem)]', !isGeoInputOpen);
+                congestionCard.classList.toggle('is-collapsed', !isGeoInputOpen);
+            }
+
+            const btnShowRoute = document.getElementById('btn-show-route-congestion');
+            if (btnShowRoute) {
+                btnShowRoute.classList.toggle('hidden', isGeoInputOpen);
+                btnShowRoute.classList.toggle('inline-flex', !isGeoInputOpen);
             }
 
             const externalToggle = document.getElementById('btn-map-toggle-input');
@@ -52851,7 +53221,9 @@ ADDITIONAL NOTES:
         window.applyAuditSessionPayload = applyAuditSessionPayload;
 
         function loadAuditSession() {
-            document.getElementById('load-session-file-input')?.click();
+            closeMobileSessionMenu();
+            switchTab('dossiers');
+            window.DossierManager?.loadList();
         }
 
         function handleImport(e) {
