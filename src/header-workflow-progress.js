@@ -95,7 +95,7 @@ export function getHeaderWorkflowCompletion(draft, sources = readWorkflowSources
 export function renderHeaderWorkflowProgress(draft = voyageStore.getState().draft) {
     const completion = getHeaderWorkflowCompletion(draft, readWorkflowSources(draft));
     Object.entries(completion).forEach(([moduleId, complete]) => {
-        document.querySelectorAll(`header [data-module-id="${moduleId}"]`).forEach((button) => {
+        document.querySelectorAll(`header [data-module-id="${moduleId}"], #app-navigation-sidebar [data-module-id="${moduleId}"]`).forEach((button) => {
             updateModuleButton(button, complete);
         });
     });

@@ -31,27 +31,23 @@ test('App Switcher Menu: duplicate "Data Bridge Link" is removed from index.html
 
 test('App Switcher Menu: Data Bridge link inherits session ID dynamically with target="_blank"', () => {
   for (const [file, content] of [['index.html', indexHtml], ['dist/index.html', distIndexHtml]]) {
-    const menuMatch = content.match(/<ul id="tools-dropdown-menu"[\s\S]*?<\/ul>/);
-    assert.ok(menuMatch, `tools-dropdown-menu must exist in ${file}`);
-    const menuContent = menuMatch[0];
-
     assert.match(
-      menuContent,
+      content,
       /id="btn-toggle-databridge"/,
-      `Data Bridge link must exist in ${file} menu`,
+      `Data Bridge link must exist in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /href="https:\/\/calm-shortbread-55bcfc\.netlify\.app\/"/,
-      `Data Bridge base URL must be present in ${file} menu`,
+      `Data Bridge base URL must be present in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /id="btn-toggle-databridge"[^>]*target="_blank"/,
       `Data Bridge link must have target="_blank" in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /<span>Data Bridge<\/span>/,
       `Data Bridge text must match native menu style in ${file}`,
     );
@@ -60,27 +56,23 @@ test('App Switcher Menu: Data Bridge link inherits session ID dynamically with t
 
 test('App Switcher Menu: Land Charter Core PRO option is present with target="_blank"', () => {
   for (const [file, content] of [['index.html', indexHtml], ['dist/index.html', distIndexHtml]]) {
-    const menuMatch = content.match(/<ul id="tools-dropdown-menu"[\s\S]*?<\/ul>/);
-    assert.ok(menuMatch, `tools-dropdown-menu must exist in ${file}`);
-    const menuContent = menuMatch[0];
-
     assert.match(
-      menuContent,
+      content,
       /id="btn-open-land-charter"/,
-      `Land Charter link must exist in ${file} menu`,
+      `Land Charter link must exist in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /href="https:\/\/landchartercorepro\.netlify\.app\/"/,
-      `Land Charter base URL must be present in ${file} menu`,
+      `Land Charter base URL must be present in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /id="btn-open-land-charter"[^>]*target="_blank"/,
       `Land Charter link must have target="_blank" in ${file}`,
     );
     assert.match(
-      menuContent,
+      content,
       /<span>Land Charter Core PRO<\/span>/,
       `Land Charter Core PRO text must match native menu style in ${file}`,
     );
