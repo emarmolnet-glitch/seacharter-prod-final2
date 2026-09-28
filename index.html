@@ -70961,6 +70961,304 @@ window.actualizarGrabCapacityVisibility = function() {
             }
         })();
     </script>
+    <!-- ============================================================================
+       INTEGRACIÓN DE TRADUCCIÓN AUTOMÁTICA UNIVERSAL Y SELECTOR DE IDIOMA
+       (RODAHMAR / SEACHARTER CORE PRO)
+       ============================================================================ -->
+  <style id="google-translate-custom-styles">
+    /* Ocultar por completo la barra superior nativa y la ruedita de Google Translate */
+    .goog-te-banner-frame,
+    .skiptranslate iframe,
+    .goog-te-spinner-pos,
+    .VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
+    .VIpgJd-ZVi9od-aZ2wEe-OiiCO,
+    .VIpgJd-ZVi9od-ORHb-OEVmcd,
+    #goog-gt-tt,
+    .goog-te-balloon-frame {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    body {
+      top: 0px !important;
+      position: static !important;
+    }
+    .goog-text-highlight {
+      background: none !important;
+      background-color: transparent !important;
+      box-shadow: none !important;
+    }
+  </style>
+
+  <div id="google_translate_element" style="display:none;" translate="no" class="notranslate"></div>
+
+  <script type="text/javascript">
+    (function() {
+      // --- 1. UTILIDADES PARA MANIPULACIÓN DE COOKIES ---
+      function setGoogTransCookie(targetLang) {
+        const cookieVal = '/es/' + targetLang;
+        document.cookie = 'googtrans=' + cookieVal + '; path=/; SameSite=Lax';
+        const host = window.location.hostname;
+        if (host && host !== 'localhost') {
+          document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=' + host + '; SameSite=Lax';
+          const parts = host.split('.');
+          if (parts.length >= 2) {
+            document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=.' + parts.slice(-2).join('.') + '; SameSite=Lax';
+          }
+        }
+      }
+
+      function clearGoogTransCookie() {
+        const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        document.cookie = 'googtrans=; ' + expiry;
+        const host = window.location.hostname;
+        if (host && host !== 'localhost') {
+          document.cookie = 'googtrans=; ' + expiry + ' domain=' + host + ';';
+          const parts = host.split('.');
+          if (parts.length >= 2) {
+            document.cookie = 'googtrans=; ' + expiry + ' domain=.' + parts.slice(-2).join('.') + ';';
+          }
+        }
+      }
+
+      // --- 2. DETECCIÓN AUTOMÁTICA UNIVERSAL DE IDIOMA (🌐 AUTO PARA CUALQUIER PAÍS) ---
+      let manualLang = null;
+      try {
+        manualLang = localStorage.getItem('rodahmar_lang');
+      } catch (e) {}
+
+      let activeLang = 'es';
+      if (!manualLang || manualLang === 'auto') {
+        const browserLang = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
+        const targetLang = browserLang.startsWith('zh') ? 'zh-CN' : browserLang.split('-')[0];
+        if (targetLang && targetLang !== 'es') {
+          setGoogTransCookie(targetLang);
+          activeLang = targetLang;
+        } else {
+          clearGoogTransCookie();
+        }
+      } else if (manualLang === 'es') {
+        clearGoogTransCookie();
+        activeLang = 'es';
+      } else {
+        setGoogTransCookie(manualLang);
+        activeLang = manualLang;
+      }
+
+      // Configuración silenciosa de Google Translate
+      window.googleTranslateElementInit = function() {
+        try {
+          if (window.google && window.google.translate) {
+            new window.google.translate.TranslateElement({
+              pageLanguage: 'es',
+              autoDisplay: false
+            }, 'google_translate_element');
+          }
+        } catch (err) {
+          console.warn('[GoogleTranslate] Error de inicialización:', err);
+        }
+      };
+
+      // Inyección oficial del script de Google Translate
+      const gtScript = document.createElement('script');
+      gtScript.type = 'text/javascript';
+      gtScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+      gtScript.async = true;
+      document.head.appendChild(gtScript);
+
+      // --- 3. CONECTAR Y POBLAR EL SELECTOR DE IDIOMA EN EL HEADER ---
+      function syncSelectorUI() {
+        const selector = document.getElementById('language-selector');
+        if (!selector) return;
+
+        // Si el selector aún no tiene la opción 'auto', inyectamos la lista universal completa
+        if (!selector.querySelector('option[value="auto"]')) {
+          selector.innerHTML = [
+            '<option value="auto">🌐 AUTO</option>',
+            '<option value="es">ES - Español</option>',
+            '<option value="en">EN - English</option>',
+            '<option value="fr">FR - Français</option>',
+            '<option value="ar">AR - العربية</option>',
+            '<option value="pt">PT - Português</option>',
+            '<option value="de">DE - Deutsch</option>',
+            '<option value="it">IT - Italiano</option>',
+            '<option value="tr">TR - Türkçe</option>',
+            '<option value="zh-CN">ZH - 中文</option>'
+          ].join('');
+        }
+
+        const currentPref = manualLang || 'auto';
+        if (selector.value !== currentPref) {
+          selector.value = currentPref;
+        }
+      }
+
+      let isChanging = false;
+      function onRodahmarLanguageChange(val) {
+        if (isChanging) return;
+        isChanging = true;
+        try {
+          localStorage.setItem('rodahmar_lang', val);
+          localStorage.setItem('seacharter_lang', val === 'auto' ? 'es' : val);
+        } catch (e) {}
+
+        if (val === 'es') {
+          clearGoogTransCookie();
+          if (document.documentElement) document.documentElement.lang = 'es';
+          location.reload();
+          return;
+        }
+
+        let target = val;
+        if (val === 'auto') {
+          const browserLang = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
+          const targetLang = browserLang.startsWith('zh') ? 'zh-CN' : browserLang.split('-')[0];
+          if (!targetLang || targetLang === 'es') {
+            clearGoogTransCookie();
+            location.reload();
+            return;
+          }
+          target = targetLang;
+        }
+
+        setGoogTransCookie(target);
+        if (document.documentElement) document.documentElement.lang = target;
+
+        const combo = document.querySelector('.goog-te-combo');
+        if (combo) {
+          combo.value = target;
+          combo.dispatchEvent(new Event('change'));
+          isChanging = false;
+        } else {
+          location.reload();
+        }
+      }
+
+      window.handleRodahmarLanguageChange = onRodahmarLanguageChange;
+      window.changeLanguage = function(val) {
+        onRodahmarLanguageChange(val);
+      };
+
+      // --- 4. PROTECCIÓN DE NÚMEROS Y SIGLAS TÉCNICAS (notranslate) ---
+      function applyNotranslateProtections() {
+        try {
+          // 1) Todos los <input>, <select> de referencia y campos numéricos
+          document.querySelectorAll('input, #global-ref-selector, #dossier-modal-reference, #new-estimation-current-reference').forEach(el => {
+            el.setAttribute('translate', 'no');
+            el.classList.add('notranslate');
+          });
+
+          // 2) Siglas operativas marítimas y terrestres
+          const acronyms = ['POL', 'POD', 'MT', 'RT', 'NM', 'DWT', 'TCE', 'LDM', 'OWN', 'CHR', 'CRM', 'LOG', 'IMO', 'AIS', 'FOB', 'CIF', 'BDI'];
+          const acronymRegex = new RegExp('\\b(' + acronyms.join('|') + ')\\b', 'g');
+
+          document.querySelectorAll('span, th, td, label, div, b, strong').forEach(el => {
+            if (el.children.length === 0) {
+              const txt = (el.textContent || '').trim();
+              if (acronyms.includes(txt) || txt.startsWith('RDM/') || txt.startsWith('# REF:')) {
+                el.setAttribute('translate', 'no');
+                el.classList.add('notranslate');
+              }
+            }
+          });
+
+          // Envolver siglas dentro de textos para que Google Translate no las altere
+          const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            {
+              acceptNode: function(node) {
+                if (!node.nodeValue || !acronymRegex.test(node.nodeValue)) {
+                  return NodeFilter.FILTER_REJECT;
+                }
+                const parent = node.parentElement;
+                if (!parent) return NodeFilter.FILTER_REJECT;
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION'].includes(parent.tagName)) {
+                  return NodeFilter.FILTER_REJECT;
+                }
+                if (parent.classList.contains('notranslate') || parent.getAttribute('translate') === 'no') {
+                  return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+              }
+            }
+          );
+
+          const nodesToWrap = [];
+          let currNode;
+          while ((currNode = walker.nextNode())) {
+            nodesToWrap.push(currNode);
+          }
+
+          nodesToWrap.forEach(node => {
+            const val = node.nodeValue;
+            acronymRegex.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let lastIdx = 0;
+            let match;
+            while ((match = acronymRegex.exec(val)) !== null) {
+              if (match.index > lastIdx) {
+                frag.appendChild(document.createTextNode(val.substring(lastIdx, match.index)));
+              }
+              const span = document.createElement('span');
+              span.setAttribute('translate', 'no');
+              span.className = 'notranslate';
+              span.textContent = match[0];
+              frag.appendChild(span);
+              lastIdx = acronymRegex.lastIndex;
+            }
+            if (lastIdx < val.length) {
+              frag.appendChild(document.createTextNode(val.substring(lastIdx)));
+            }
+            if (node.parentNode) {
+              node.parentNode.replaceChild(frag, node);
+            }
+          });
+        } catch (e) {}
+      }
+
+      function initLanguageIntegration() {
+        syncSelectorUI();
+        applyNotranslateProtections();
+        const selector = document.getElementById('language-selector');
+        if (selector && !selector.dataset.gtBound) {
+          selector.dataset.gtBound = 'true';
+          selector.addEventListener('change', function() {
+            onRodahmarLanguageChange(this.value);
+          });
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLanguageIntegration);
+      } else {
+        initLanguageIntegration();
+      }
+
+      // Observador de mutaciones para proteger nuevos inputs dinámicos
+      try {
+        const observer = new MutationObserver(mutations => {
+          let hasNewNodes = false;
+          for (const m of mutations) {
+            if (m.addedNodes && m.addedNodes.length > 0) {
+              hasNewNodes = true;
+              break;
+            }
+          }
+          if (hasNewNodes) {
+            document.querySelectorAll('input:not([translate="no"])').forEach(input => {
+              input.setAttribute('translate', 'no');
+              input.classList.add('notranslate');
+            });
+          }
+        });
+        if (document.body) {
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>
 <!-- Phase 1 structural stabilization synchronization marker; no runtime effect. -->
