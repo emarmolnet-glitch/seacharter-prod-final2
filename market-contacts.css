@@ -525,6 +525,424 @@
 .market-directory-toast.is-visible { opacity: 1; transform: translateY(0); }
 .market-directory-toast.is-error { background: #8a3434; }
 
+/* Company wrapper and fleet indicator */
+.market-directory-company-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+}
+
+.market-directory-fleet-pill-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    width: fit-content;
+    margin-top: 0.22rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #b8d8df;
+    border-radius: 999px;
+    background: #eaf4f6;
+    color: #0f5f73;
+    font-size: 0.62rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+.market-directory-fleet-pill-badge:hover {
+    background: #0f5f73;
+    color: #fff;
+    border-color: #0f5f73;
+}
+
+.market-directory-row-action--toggle.is-active {
+    background: #0f5f73;
+    color: #fff;
+    border-color: #0f5f73;
+}
+
+.market-directory-main-row.is-expanded {
+    background: #f7fafb;
+}
+
+.market-directory-detail-row {
+    background: #f8fafb;
+    border-bottom: 2px solid #dde5e8;
+}
+
+.market-directory-detail-row td {
+    padding: 0.4rem 1rem 1.1rem !important;
+}
+
+.market-directory-detail-content {
+    display: grid;
+    gap: 0.75rem;
+    border-left: 3px solid #0f5f73;
+    padding-left: 1rem;
+    margin-left: 0.2rem;
+}
+
+/* Flota Gestionada section */
+.market-directory-fleet-section {
+    display: grid;
+    gap: 0.6rem;
+    background: #fff;
+    border: 1px solid #d9e3e7;
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 3px rgba(15, 95, 115, 0.04);
+}
+
+.market-directory-fleet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eef2f4;
+}
+
+.market-directory-fleet-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.48rem;
+    flex-wrap: wrap;
+}
+
+.market-directory-fleet-icon {
+    display: inline-grid;
+    width: 1.7rem;
+    height: 1.7rem;
+    place-items: center;
+    background: #eef6f7;
+    color: #0f5f73;
+    border-radius: 0.45rem;
+    font-size: 0.78rem;
+}
+
+.market-directory-fleet-title {
+    margin: 0;
+    color: #173747;
+    font-family: Georgia, serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.market-directory-fleet-count-tag {
+    display: inline-block;
+    padding: 0.16rem 0.48rem;
+    border-radius: 999px;
+    background: #eff6f7;
+    color: #0f5f73;
+    font-size: 0.63rem;
+    font-weight: 700;
+}
+
+.market-directory-fleet-role-tag {
+    display: inline-block;
+    padding: 0.16rem 0.48rem;
+    border-radius: 999px;
+    background: #fdf5e6;
+    color: #945700;
+    font-size: 0.63rem;
+    font-weight: 700;
+}
+
+.market-directory-fleet-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid #d0dce0;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #3b5765;
+    padding: 0.28rem 0.55rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+.market-directory-fleet-edit-btn:hover {
+    border-color: #0f5f73;
+    color: #0f5f73;
+    background: #f4f8f9;
+}
+
+.market-directory-fleet-body {
+    min-height: 2.2rem;
+}
+
+.market-fleet-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 0.4rem;
+    color: #0f5f73;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.market-fleet-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.8rem;
+    background: #fafbfb;
+    border: 1px dashed #d2dee2;
+    border-radius: 0.6rem;
+    color: #556c78;
+    font-size: 0.74rem;
+}
+
+.market-fleet-empty i {
+    color: #8da4ae;
+    font-size: 1.1rem;
+    margin-top: 0.1rem;
+}
+
+.market-fleet-empty strong {
+    display: block;
+    color: #274452;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+}
+
+.market-fleet-empty p {
+    margin: 0;
+    color: #657984;
+}
+
+.market-fleet-cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.market-fleet-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0.75rem;
+    background: #f7fafb;
+    border: 1px solid #d2dfe3;
+    border-radius: 0.6rem;
+    transition: all 130ms ease;
+    cursor: default;
+}
+
+.market-fleet-card:hover {
+    border-color: #0f5f73;
+    background: #f0f6f8;
+    box-shadow: 0 2px 6px rgba(15, 95, 115, 0.08);
+}
+
+.market-fleet-card-icon {
+    color: #0f5f73;
+    font-size: 0.85rem;
+}
+
+.market-fleet-card-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+
+.market-fleet-card-name {
+    font-weight: 800;
+    font-size: 0.76rem;
+    color: #173747;
+}
+
+.market-fleet-card-imo {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.71rem;
+    font-weight: 600;
+    color: #0f5f73;
+}
+
+.market-fleet-card-tags {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.market-fleet-card-dwt {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.35rem;
+    background: #e8f3f5;
+    color: #185260;
+    font-size: 0.62rem;
+    font-weight: 700;
+}
+
+.market-fleet-card-type {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.35rem;
+    background: #eef2f4;
+    color: #4b606c;
+    font-size: 0.61rem;
+    font-weight: 600;
+}
+
+.market-fleet-card-flag {
+    display: inline-block;
+    padding: 0.1rem 0.32rem;
+    border-radius: 0.35rem;
+    background: #f4efe4;
+    color: #79571e;
+    font-size: 0.6rem;
+    font-weight: 800;
+}
+
+.market-fleet-card-year {
+    font-size: 0.62rem;
+    color: #748894;
+}
+
+.market-fleet-card--unmatched {
+    border-style: dashed;
+    background: #fdfdfd;
+}
+
+.market-fleet-card--unmatched .market-fleet-card-icon {
+    color: #8b9ea7;
+}
+
+.market-fleet-card-badge-unmatched {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.35rem;
+    background: #fff1f0;
+    color: #a82e2e;
+    font-size: 0.61rem;
+    font-weight: 700;
+}
+
+.market-directory-detail-notes {
+    padding: 0.65rem 0.85rem;
+    background: #fff;
+    border: 1px solid #e2eaec;
+    border-radius: 0.55rem;
+    font-size: 0.72rem;
+    color: #405561;
+}
+
+.market-directory-detail-notes-title {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #617784;
+}
+
+.market-directory-detail-notes-body {
+    margin: 0;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+/* IMO Tags input in editor */
+.market-contact-label-tag {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.08rem 0.38rem;
+    border-radius: 0.35rem;
+    background: #e8f4f6;
+    color: #0f5f73;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.market-contact-tags-box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #cfdadf;
+    border-radius: 0.6rem;
+    background: #fff;
+    min-height: 2.65rem;
+    cursor: text;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.market-contact-tags-box:focus-within {
+    border-color: #3c8796;
+    box-shadow: 0 0 0 3px rgba(15,95,115,0.1);
+}
+
+.market-contact-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.market-contact-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.45rem;
+    background: #e8f3f5;
+    border: 1px solid #b7d6dc;
+    border-radius: 0.45rem;
+    color: #0e5263;
+    font-size: 0.69rem;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.market-contact-tag i {
+    font-size: 0.65rem;
+    color: #0f5f73;
+}
+
+.market-contact-tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    padding: 0;
+    margin-left: 0.15rem;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #316b79;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 100ms ease, color 100ms ease;
+}
+
+.market-contact-tag-remove:hover {
+    background: #c7e2e7;
+    color: #842323;
+}
+
+#market-contact-imo-input {
+    flex: 1 1 12rem;
+    min-width: 10rem;
+    border: 0;
+    outline: none;
+    padding: 0.25rem 0.3rem;
+    background: transparent;
+    font-size: 0.74rem;
+    color: #274452;
+}
+
+#market-contact-imo-input::placeholder {
+    color: #98a7af;
+}
+
 @media (max-width: 900px) {
     .market-directory-toolbar { grid-template-columns: 1fr; gap: 0.7rem; }
     .market-directory-table thead { display: none; }
@@ -537,6 +955,10 @@
     .market-directory-table td { padding: 0.35rem 0; border: 0; }
     .market-directory-table-wrap { border: 0; background: transparent; }
     .market-directory-row-actions { justify-content: flex-start; padding-top: 0.25rem; }
+    .market-directory-detail-row { display: block; width: 100%; border: 0; padding: 0; background: transparent; }
+    .market-directory-detail-row td { display: block; width: 100%; padding: 0 0 0.5rem 0 !important; }
+    .market-directory-detail-content { border-left-width: 2px; padding-left: 0.5rem; margin-left: 0; }
+    .market-fleet-card { width: 100%; justify-content: space-between; }
 }
 
 @media (max-width: 620px) {

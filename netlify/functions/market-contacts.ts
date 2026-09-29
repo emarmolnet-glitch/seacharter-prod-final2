@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { getPool } from "../../db/index.js";
 
-const CONTACT_ROLES = ["OWNER", "BROKER", "AGENT", "LOGISTICS", "CHARTERER"] as const;
+const CONTACT_ROLES = ["OWNER", "BROKER", "AGENT", "LOGISTICS", "CHARTERER", "SHIPMANAGEMENT"] as const;
 type ContactRole = typeof CONTACT_ROLES[number];
 
 const jsonHeaders = {
@@ -18,6 +18,14 @@ function cleanList(value: unknown, maxItems = 8, maxLength = 320) {
   return [...new Set(rawValues
     .map((item) => cleanText(item, maxLength))
     .filter(Boolean))]
+    .slice(0, maxItems);
+}
+
+function cleanImos(value: unknown, maxItems = 100): string[] {
+  const rawValues = Array.isArray(value) ? value : String(value ?? "").split(/[\n,;\s]+/);
+  return [...new Set(rawValues
+    .map((item) => String(item ?? "").replace(/[^0-9]/g, ""))
+    .filter((imo) => imo.length >= 6 && imo.length <= 8))]
     .slice(0, maxItems);
 }
 
@@ -38,8 +46,9 @@ function normalizePayload(body: Record<string, unknown>) {
   const country = cleanText(body.country, 100) || null;
   const notes = cleanText(body.notes, 2000) || null;
   const contactRole = cleanRole(body.contact_role ?? body.contactRole);
+  const linkedImos = cleanImos(body.linked_imos ?? body.linkedImos ?? body.linked_imo ?? body.linkedImo);
 
-  return { companyName, contactName, emails, phones, country, notes, contactRole };
+  return { companyName, contactName, emails, phones, country, notes, contactRole, linkedImos };
 }
 
 function validationError(contact: ReturnType<typeof normalizePayload>) {
@@ -54,6 +63,7 @@ function validationError(contact: ReturnType<typeof normalizePayload>) {
 function mapContact(row: Record<string, unknown>) {
   const emails = cleanList(Array.isArray(row.emails) && row.emails.length > 0 ? row.emails : row.email);
   const phones = cleanList(Array.isArray(row.phones) && row.phones.length > 0 ? row.phones : row.phone);
+  const linkedImos = cleanImos(row.linked_imos ?? row.linkedImos);
   return {
     id: row.id,
     company_name: row.company_name,
@@ -63,6 +73,7 @@ function mapContact(row: Record<string, unknown>) {
     country: row.country,
     contact_role: row.contact_role,
     notes: row.notes,
+    linked_imos: linkedImos,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -76,6 +87,25 @@ export default async (req: Request) => {
   try {
     if (req.method === "GET") {
       const url = new URL(req.url);
+
+      // Dedicated action for querying master fleet by IMOs
+      if (url.searchParams.get("action") === "fleet" || url.searchParams.has("imos")) {
+        const imos = cleanImos(url.searchParams.get("imos") || "");
+        if (imos.length === 0) {
+          return Response.json({ success: true, fleet: [] }, { headers: jsonHeaders });
+        }
+        const fleetResult = await pool.query(
+          `SELECT imo_number, vessel_name, dwt, vessel_type, flag, year_built,
+                  draft_meters, loa_meters, beam_meters, last_port, current_destination
+           FROM vessels_master
+           WHERE imo_number::text = ANY($1::text[])
+              OR REGEXP_REPLACE(imo_number::text, '[^0-9]', '', 'g') = ANY($1::text[])
+           ORDER BY vessel_name ASC NULLS LAST`,
+          [imos],
+        );
+        return Response.json({ success: true, fleet: fleetResult.rows }, { headers: jsonHeaders });
+      }
+
       const search = cleanText(url.searchParams.get("q"), 180);
       const role = cleanRole(url.searchParams.get("role"));
       const values: string[] = [];
@@ -87,6 +117,7 @@ export default async (req: Request) => {
           company_name ILIKE $${values.length}
           OR COALESCE(contact_name, '') ILIKE $${values.length}
           OR COALESCE(country, '') ILIKE $${values.length}
+          OR EXISTS (SELECT 1 FROM unnest(linked_imos) AS imo WHERE imo ILIKE $${values.length})
         )`);
       }
       if (role) {
@@ -96,7 +127,7 @@ export default async (req: Request) => {
 
       const result = await pool.query(
         `SELECT id, company_name, contact_name, email, phone, emails, phones, country,
-                contact_role::text AS contact_role, notes, "createdAt", "updatedAt"
+                contact_role::text AS contact_role, notes, linked_imos, "createdAt", "updatedAt"
          FROM "Market_Contacts"
          ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
          ORDER BY company_name ASC, contact_name ASC NULLS LAST
@@ -115,10 +146,10 @@ export default async (req: Request) => {
 
       const result = await pool.query(
         `INSERT INTO "Market_Contacts"
-          (company_name, contact_name, email, phone, emails, phones, country, contact_role, notes, "updatedAt")
-         VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8::"ContactRole", $9, CURRENT_TIMESTAMP)
+          (company_name, contact_name, email, phone, emails, phones, country, contact_role, notes, linked_imos, "updatedAt")
+         VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8::"ContactRole", $9, $10::text[], CURRENT_TIMESTAMP)
          RETURNING id, company_name, contact_name, email, phone, emails, phones, country,
-                   contact_role::text AS contact_role, notes, "createdAt", "updatedAt"`,
+                   contact_role::text AS contact_role, notes, linked_imos, "createdAt", "updatedAt"`,
         [
           contact.companyName,
           contact.contactName,
@@ -129,6 +160,7 @@ export default async (req: Request) => {
           contact.country,
           contact.contactRole,
           contact.notes,
+          contact.linkedImos,
         ],
       );
 
@@ -157,10 +189,11 @@ export default async (req: Request) => {
              country = $8,
              contact_role = $9::"ContactRole",
              notes = $10,
+             linked_imos = $11::text[],
              "updatedAt" = CURRENT_TIMESTAMP
          WHERE id = $1::uuid
          RETURNING id, company_name, contact_name, email, phone, emails, phones, country,
-                   contact_role::text AS contact_role, notes, "createdAt", "updatedAt"`,
+                   contact_role::text AS contact_role, notes, linked_imos, "createdAt", "updatedAt"`,
         [
           id,
           contact.companyName,
@@ -172,6 +205,7 @@ export default async (req: Request) => {
           contact.country,
           contact.contactRole,
           contact.notes,
+          contact.linkedImos,
         ],
       );
 

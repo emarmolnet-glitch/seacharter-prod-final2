@@ -354,6 +354,40 @@ export async function ensureApplicationSchema() {
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS valor_total_mercancia_usd NUMERIC;
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_sale NUMERIC;
+
+    DO $market_contacts_schema$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ContactRole') THEN
+        CREATE TYPE "ContactRole" AS ENUM ('OWNER', 'BROKER', 'AGENT', 'LOGISTICS', 'CHARTERER', 'SHIPMANAGEMENT');
+      ELSE
+        BEGIN
+          ALTER TYPE "ContactRole" ADD VALUE IF NOT EXISTS 'SHIPMANAGEMENT';
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END;
+      END IF;
+
+      CREATE TABLE IF NOT EXISTS "Market_Contacts" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_name TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        emails TEXT[] DEFAULT '{}'::text[],
+        phones TEXT[] DEFAULT '{}'::text[],
+        country TEXT,
+        contact_role "ContactRole" NOT NULL DEFAULT 'BROKER',
+        notes TEXT,
+        linked_imos TEXT[] DEFAULT '{}'::text[],
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      ALTER TABLE "Market_Contacts" ADD COLUMN IF NOT EXISTS linked_imos TEXT[] DEFAULT '{}'::text[];
+      ALTER TABLE "Market_Contacts" ADD COLUMN IF NOT EXISTS emails TEXT[] DEFAULT '{}'::text[];
+      ALTER TABLE "Market_Contacts" ADD COLUMN IF NOT EXISTS phones TEXT[] DEFAULT '{}'::text[];
+    END
+    $market_contacts_schema$;
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;
