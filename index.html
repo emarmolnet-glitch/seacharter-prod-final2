@@ -7200,6 +7200,7 @@
         #view-estimator .bg-blue-950\/40,
         #view-map .route-sync-card,
         #view-map #map-route-summary > div,
+        #view-map #bottom-metrics-container > div,
         #view-auditor .bg-white,
         #view-auditor #resultsContent > div {
             background: var(--surface) !important;
@@ -9123,6 +9124,16 @@
             transition: transform 260ms ease, opacity 260ms ease;
         }
 
+        /* Plegado simultáneo de Input Geográfico y Métricas Inferiores (LASTRE, POL, POD, MILLAS, LAYCAN) */
+        .map-command-shell.input-collapsed #bottom-metrics-container,
+        .map-command-shell.is-input-collapsed #bottom-metrics-container,
+        .map-command-shell.input-collapsed #map-route-summary,
+        .map-command-shell.is-input-collapsed #map-route-summary,
+        #bottom-metrics-container.hidden,
+        #map-route-summary.hidden {
+            display: none !important;
+        }
+
         #btn-show-route-congestion {
             position: absolute;
             top: 1rem;
@@ -9615,7 +9626,7 @@
                 </section>
                 <div id="nlp-input-widget-root"></div>
                 <div id="maritime-weather-panel-root"></div>
-                <div id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs">
+                <div id="bottom-metrics-container" data-legacy-id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs transition-all duration-300">
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POD</span><strong id="sync-pod-label">TBA</strong></div>
@@ -30546,6 +30557,14 @@ function createRouteAnchorElement(type) {
                 congestionCard.classList.toggle('is-collapsed', !isGeoInputOpen);
             }
 
+            const bottomMetrics = document.getElementById('bottom-metrics-container') || document.getElementById('map-route-summary');
+            if (bottomMetrics) {
+                bottomMetrics.classList.toggle('hidden', !isGeoInputOpen);
+                bottomMetrics.classList.toggle('opacity-0', !isGeoInputOpen);
+                bottomMetrics.classList.toggle('pointer-events-none', !isGeoInputOpen);
+                bottomMetrics.setAttribute('aria-hidden', String(!isGeoInputOpen));
+            }
+
             const btnShowRoute = document.getElementById('btn-show-route-congestion');
             if (btnShowRoute) {
                 btnShowRoute.classList.toggle('hidden', isGeoInputOpen);
@@ -30577,6 +30596,25 @@ function createRouteAnchorElement(type) {
         const setIsGeoInputOpen = setRouteInputPanelOpen;
         window.setRouteInputPanelOpen = setRouteInputPanelOpen;
         window.setIsGeoInputOpen = setRouteInputPanelOpen;
+
+        function syncInitialBottomMetricsState() {
+            const panel = document.getElementById('map-input-overlay');
+            const isPanelCurrentlyOpen = panel
+                ? !panel.classList.contains('-translate-x-[calc(100%-2rem)]') && panel.getAttribute('aria-hidden') !== 'true'
+                : isGeoInputOpen;
+            const bottomMetrics = document.getElementById('bottom-metrics-container') || document.getElementById('map-route-summary');
+            if (bottomMetrics) {
+                bottomMetrics.classList.toggle('hidden', !isPanelCurrentlyOpen);
+                bottomMetrics.classList.toggle('opacity-0', !isPanelCurrentlyOpen);
+                bottomMetrics.classList.toggle('pointer-events-none', !isPanelCurrentlyOpen);
+                bottomMetrics.setAttribute('aria-hidden', String(!isPanelCurrentlyOpen));
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', syncInitialBottomMetricsState, { once: true });
+        } else {
+            syncInitialBottomMetricsState();
+        }
 
         function toggleRouteInputPanel(forceCollapsed) {
             const nextOpen = typeof forceCollapsed === 'boolean'
