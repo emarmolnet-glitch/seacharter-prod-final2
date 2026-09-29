@@ -41329,6 +41329,13 @@ function scheduleReactiveEngine() {
 
             renderizarRecomendaciones(recomendaciones);
             renderizarRatioTiempo(totalPortDaysCalc, seaDays);
+
+            // Sincronizar tabla comparativa de escenarios
+            if (typeof renderizarComparativaEscenarios === 'function') {
+                const cmpActual = (typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : null) || window.dssBaseActualState || dssFormState || (typeof estadoInicial !== 'undefined' ? estadoInicial : null);
+                const cmpOptimo = dssSimulationState || (typeof calcularEscenarioOptimoDesdeBase === 'function' ? calcularEscenarioOptimoDesdeBase(cmpActual) : cmpActual);
+                renderizarComparativaEscenarios(cmpActual, cmpOptimo);
+            }
         }
         window.generarAuditoriaOperativa = generarAuditoriaOperativa;
 
@@ -42338,10 +42345,31 @@ function scheduleReactiveEngine() {
             }
 
             if (btnOptimo) {
-                if (act === 'optimo') {
+                if (act === 'optimo' || act === 'comparativa') {
                     btnOptimo.className = "px-3 py-1.5 text-xs font-bold bg-emerald-800 text-white border border-emerald-400 ring-2 ring-emerald-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
                 } else {
                     btnOptimo.className = "px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+
+            const btnComparativa = document.getElementById('btn-tab-comparativa');
+            if (btnComparativa) {
+                if (act === 'comparativa') {
+                    btnComparativa.className = "px-3 py-1.5 text-xs font-bold bg-cyan-700 text-white border border-cyan-400 ring-2 ring-cyan-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
+                } else {
+                    btnComparativa.className = "px-3 py-1.5 text-xs font-medium bg-cyan-900/40 text-cyan-300 hover:bg-cyan-900/60 border border-cyan-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+
+            const btnAplicarTop = document.getElementById('btn-aplicar-valores-optimos-top');
+            if (btnAplicarTop && btnAplicarTop.classList && typeof btnAplicarTop.classList.toggle === 'function') {
+                btnAplicarTop.classList.toggle('hidden', !(act === 'optimo' || act === 'comparativa'));
+            }
+
+            const panelComparativa = document.getElementById('panel-comparativo-dss');
+            if (panelComparativa && panelComparativa.classList && typeof panelComparativa.classList.toggle === 'function') {
+                if (act === 'optimo' || act === 'comparativa') {
+                    panelComparativa.classList.toggle('hidden', false);
                 }
             }
 
@@ -42522,7 +42550,7 @@ function scheduleReactiveEngine() {
                     breakEvenUnitario: Number((baseBreakEvenUnitario * 0.95).toFixed(2)),
                     breakEven: Number((baseBreakEvenUnitario * 0.95).toFixed(2))
                 };
-            } else if (tipo === 'optimo') {
+            } else if (tipo === 'optimo' || tipo === 'comparativa') {
                 // Escenario Óptimo = Proyección de mejora alta relativa sobre la realidad (+30% eficiencia en ritmos)
                 const simLaycanDays = Number((voyageDays + 10).toFixed(1));
                 stressMutations = {
@@ -42571,10 +42599,18 @@ function scheduleReactiveEngine() {
             if (typeof window !== 'undefined') {
                 window.dssSimulationState = dssSimulationState;
                 window.dssFormState = dssFormState;
+                window.dssBaseActualState = baseState;
             }
 
             sincronizarFormularioDesdeEstado(dssFormState);
             generarAuditoriaOperativa(dssFormState);
+            if (typeof renderizarComparativaEscenarios === 'function') {
+                renderizarComparativaEscenarios(baseState, updatedState);
+            }
+            const panelComparativa = document.getElementById('panel-comparativo-dss');
+            if (panelComparativa && panelComparativa.classList && typeof panelComparativa.classList.toggle === 'function') {
+                panelComparativa.classList.toggle('hidden', false);
+            }
             actualizarEstiloBotonesEscenario(tipo);
         }
 
@@ -42590,6 +42626,299 @@ function scheduleReactiveEngine() {
         function cargarEscenarioAlerta() {
             return cargarEscenario('alerta');
         }
+
+        function calcularEscenarioOptimoDesdeBase(baseState) {
+            if (!baseState) return null;
+            const currentLoadRate = Number(baseState.loadRate) || 5000;
+            const currentDischargeRate = Number(baseState.dischargeRate) || currentLoadRate || 5000;
+            const voyageDays = Number(baseState.estimatedVoyageDays || baseState.seaDays) || 8;
+            const baseFleteUnitario = Number(baseState.fleteUnitario || baseState.fleteEstimado || 35);
+            const baseBreakEvenUnitario = Number(baseState.breakEvenUnitario || baseState.breakEven || 25);
+            const clampRate = (rate) => Math.min(100000, Math.max(1500, Math.round(Number(rate) || 1500)));
+
+            const simLaycanDays = Number((voyageDays + 10).toFixed(1));
+            const today = new Date();
+            return {
+                ...baseState,
+                laycanDaysLeft: simLaycanDays,
+                cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
+                loadRate: clampRate(currentLoadRate * 1.30),
+                dischargeRate: clampRate(currentDischargeRate * 1.30),
+                fleteUnitario: baseFleteUnitario,
+                fleteEstimado: baseFleteUnitario,
+                breakEvenUnitario: Number((baseBreakEvenUnitario * 0.90).toFixed(2)),
+                breakEven: Number((baseBreakEvenUnitario * 0.90).toFixed(2))
+            };
+        }
+
+        function renderizarComparativaEscenarios(actualState, optimoState) {
+            if (!actualState) return;
+            const today = new Date();
+            const opt = optimoState || (typeof calcularEscenarioOptimoDesdeBase === 'function' ? calcularEscenarioOptimoDesdeBase(actualState) : actualState) || actualState;
+
+            // Fechas y Laycan Actual
+            let actualCancelDate = actualState.cancellingDate;
+            if (typeof actualCancelDate === 'string' && actualCancelDate.includes('/')) {
+                const parts = actualCancelDate.split('/');
+                if (parts.length === 3) actualCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            } else if (actualCancelDate && !(actualCancelDate instanceof Date)) {
+                actualCancelDate = new Date(actualCancelDate);
+            }
+            if (!actualCancelDate || isNaN(actualCancelDate.getTime())) {
+                actualCancelDate = new Date(today.getTime() + Math.max(0, Number(actualState.laycanDaysLeft) || 10) * 86400000);
+            }
+
+            const voyageDays = Number(actualState.estimatedVoyageDays || actualState.seaDays) || 8;
+            const etaDate = new Date(today.getTime() + Math.max(0, voyageDays) * 86400000);
+
+            const calcDays = (d1, d2) => {
+                if (typeof differenceInDays === 'function') {
+                    return differenceInDays(d1, d2);
+                }
+                return Math.round((d1.getTime() - d2.getTime()) / 86400000);
+            };
+
+            const actualBuffer = calcDays(actualCancelDate, etaDate);
+            const actualLaycanDays = calcDays(actualCancelDate, today);
+
+            // Fechas y Laycan Óptimo
+            let optCancelDate = opt.cancellingDate;
+            if (typeof optCancelDate === 'string' && optCancelDate.includes('/')) {
+                const parts = optCancelDate.split('/');
+                if (parts.length === 3) optCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            } else if (optCancelDate && !(optCancelDate instanceof Date)) {
+                optCancelDate = new Date(optCancelDate);
+            }
+            if (!optCancelDate || isNaN(optCancelDate.getTime())) {
+                optCancelDate = new Date(today.getTime() + Math.max(0, Number(opt.laycanDaysLeft) || 18) * 86400000);
+            }
+
+            const optBuffer = calcDays(optCancelDate, etaDate);
+            const optLaycanDays = calcDays(optCancelDate, today);
+
+            // Ritmos y Operaciones
+            const actualLoad = Math.max(1, Number(actualState.loadRate) || 5000);
+            const actualDisch = Math.max(1, Number(actualState.dischargeRate) || actualLoad);
+            const optLoad = Math.max(1, Number(opt.loadRate) || Math.round(actualLoad * 1.30));
+            const optDisch = Math.max(1, Number(opt.dischargeRate) || Math.round(actualDisch * 1.30));
+
+            const cargoQty = Math.max(1, Number(actualState.cargoQty) || 1);
+            const actualPortDays = (cargoQty / actualLoad) + (cargoQty / actualDisch);
+            const optPortDays = (cargoQty / optLoad) + (cargoQty / optDisch);
+
+            // Rentabilidad
+            const fleteUnit = Number(actualState.fleteUnitario || actualState.fleteEstimado || 35);
+            const actualBreakEven = Number(actualState.breakEvenUnitario || actualState.breakEven || 25);
+            const optBreakEven = Number(opt.breakEvenUnitario || opt.breakEven || (actualBreakEven * 0.90));
+
+            const actualMargen = fleteUnit > 0 ? ((fleteUnit - actualBreakEven) / fleteUnit) * 100 : 0;
+            const optMargen = fleteUnit > 0 ? ((fleteUnit - optBreakEven) / fleteUnit) * 100 : 0;
+
+            const actualBeneficio = (fleteUnit - actualBreakEven) * cargoQty;
+            const optBeneficio = (fleteUnit - optBreakEven) * cargoQty;
+
+            const setText = (id, txt) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = txt;
+            };
+
+            const formatDateStr = (d) => {
+                if (!d || isNaN(d.getTime())) return '--';
+                return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            };
+
+            // Inyectar en DOM
+            setText('cmp-actual-buffer', `${actualBuffer.toFixed(1)} días`);
+            setText('cmp-actual-laycan-days', `${actualLaycanDays.toFixed(1)} días`);
+            setText('cmp-actual-cancelling-date', formatDateStr(actualCancelDate));
+
+            setText('cmp-optimo-buffer', `${optBuffer.toFixed(1)} días`);
+            setText('cmp-delta-buffer', `+${Math.max(0, optBuffer - actualBuffer).toFixed(1)} d`);
+            setText('cmp-optimo-laycan-days', `${optLaycanDays.toFixed(1)} días`);
+            setText('cmp-optimo-cancelling-date', formatDateStr(optCancelDate));
+
+            setText('cmp-actual-loadrate', `${Number(actualLoad).toLocaleString('es-ES')} MT/d`);
+            setText('cmp-actual-dischargerate', `${Number(actualDisch).toLocaleString('es-ES')} MT/d`);
+            setText('cmp-actual-portdays', `${actualPortDays.toFixed(1)} d`);
+
+            setText('cmp-optimo-loadrate', `${Number(optLoad).toLocaleString('es-ES')} MT/d`);
+            setText('cmp-optimo-dischargerate', `${Number(optDisch).toLocaleString('es-ES')} MT/d`);
+            setText('cmp-optimo-portdays', `${optPortDays.toFixed(1)} d`);
+            const portDaysDiff = actualPortDays - optPortDays;
+            setText('cmp-delta-portdays', `(-${Math.max(0, portDaysDiff).toFixed(1)} d)`);
+
+            setText('cmp-actual-margen', `${actualMargen.toFixed(1)}%`);
+            setText('cmp-actual-breakeven', `$${actualBreakEven.toFixed(2)} / MT`);
+            setText('cmp-actual-beneficio', `$${Math.round(actualBeneficio).toLocaleString('en-US')}`);
+
+            setText('cmp-optimo-margen', `${optMargen.toFixed(1)}%`);
+            setText('cmp-delta-margen', `+${Math.max(0, optMargen - actualMargen).toFixed(1)}%`);
+            setText('cmp-optimo-breakeven', `$${optBreakEven.toFixed(2)} / MT`);
+            setText('cmp-optimo-beneficio', `$${Math.round(optBeneficio).toLocaleString('en-US')}`);
+            const beneficioDiff = optBeneficio - actualBeneficio;
+            setText('cmp-delta-beneficio', `(+$${Math.round(Math.max(0, beneficioDiff)).toLocaleString('en-US')})`);
+        }
+
+        function aplicarValoresOptimosAlProyecto() {
+            try {
+                if (typeof showToast === 'function') {
+                    showToast('Aplicando valores óptimos al proyecto...', true);
+                }
+
+                const base = (typeof getDSSCurrentState === 'function')
+                    ? getDSSCurrentState()
+                    : (window.dssBaseActualState || dssFormState || {});
+
+                const currentLoad = Number(base.loadRate) || 5000;
+                const currentDisch = Number(base.dischargeRate) || currentLoad || 5000;
+                const voyageDays = Number(base.estimatedVoyageDays || base.seaDays) || 8;
+                const clampRate = (rate) => Math.min(100000, Math.max(1500, Math.round(Number(rate) || 1500)));
+
+                const simLaycanDays = Number((voyageDays + 10).toFixed(1));
+                const today = new Date();
+                const activeSim = (typeof dssSimulationState !== 'undefined' && dssSimulationState) ? dssSimulationState : null;
+
+                const optimalCancellingDate = (activeSim && activeSim.cancellingDate)
+                    ? (activeSim.cancellingDate instanceof Date ? activeSim.cancellingDate : new Date(activeSim.cancellingDate))
+                    : new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+
+                const optimalLoadRate = (activeSim && activeSim.loadRate)
+                    ? Number(activeSim.loadRate)
+                    : clampRate(currentLoad * 1.30);
+                const optimalDischargeRate = (activeSim && activeSim.dischargeRate)
+                    ? Number(activeSim.dischargeRate)
+                    : clampRate(currentDisch * 1.30);
+                const optimalLaycanDays = (activeSim && activeSim.laycanDaysLeft)
+                    ? Number(activeSim.laycanDaysLeft)
+                    : simLaycanDays;
+
+                const formatIsoDate = (d) => {
+                    if (!d) return '';
+                    const dateObj = d instanceof Date ? d : new Date(d);
+                    if (isNaN(dateObj.getTime())) return '';
+                    const year = dateObj.getFullYear();
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const day = String(dateObj.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                };
+
+                const isoDate = formatIsoDate(optimalCancellingDate);
+                const visualDate = optimalCancellingDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                // 1. Actualizar State global
+                if (typeof State !== 'undefined' && State) {
+                    State.loadRate = optimalLoadRate;
+                    State.dischRate = optimalDischargeRate;
+                    if (isoDate) {
+                        State.cancellingDate = isoDate;
+                        State.laycanEnd = isoDate;
+                    }
+                    State.laycanDaysLeft = optimalLaycanDays;
+                }
+
+                // 2. Actualizar SeaCharterStore
+                if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore.set) {
+                    SeaCharterStore.set({
+                        loadRate: optimalLoadRate,
+                        dischRate: optimalDischargeRate,
+                        cancellingDate: isoDate || (typeof State !== 'undefined' ? State.cancellingDate : ''),
+                        laycanDaysLeft: optimalLaycanDays
+                    });
+                }
+
+                // 3. Persistencia en LocalStorage
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('calculator_rate_load', String(optimalLoadRate));
+                    localStorage.setItem('calculator_rate_disch', String(optimalDischargeRate));
+                    localStorage.setItem('calculator_load_rate', String(optimalLoadRate));
+                    localStorage.setItem('calculator_discharge_rate', String(optimalDischargeRate));
+                    if (isoDate) {
+                        localStorage.setItem('calculator_cancelling_date', isoDate);
+                        localStorage.setItem('calculator_laycan', isoDate);
+                    }
+                    localStorage.setItem('dss_optimal_applied', JSON.stringify({
+                        loadRate: optimalLoadRate,
+                        dischargeRate: optimalDischargeRate,
+                        cancellingDate: isoDate,
+                        laycanDaysLeft: optimalLaycanDays,
+                        appliedAt: new Date().toISOString()
+                    }));
+                }
+
+                // 4. Sincronizar inputs en el DOM
+                const setValSafe = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.value = val;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                };
+
+                setValSafe('rate-load', optimalLoadRate);
+                setValSafe('rate-disch', optimalDischargeRate);
+                setValSafe('input-loadRate', optimalLoadRate);
+                setValSafe('input-dischargeRate', optimalDischargeRate);
+                setValSafe('gc-laytime-load-val', optimalLoadRate);
+                setValSafe('gc-laytime-disch-val', optimalDischargeRate);
+
+                if (isoDate) {
+                    setValSafe('gc-cancel-date', isoDate);
+                    setValSafe('asb-cancel-date', isoDate);
+                    setValSafe('map-cancelling-date', isoDate);
+                }
+                setValSafe('input-laycanDaysLeft', optimalLaycanDays);
+
+                // 5. Recalcular calculadora y sincronizar
+                if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+                if (typeof syncGlobalStateToForms === 'function') syncGlobalStateToForms();
+                if (typeof runEngine === 'function') runEngine();
+
+                limpiarDssSimulationState();
+
+                const updatedBase = {
+                    ...base,
+                    loadRate: optimalLoadRate,
+                    dischargeRate: optimalDischargeRate,
+                    cancellingDate: optimalCancellingDate,
+                    laycanDaysLeft: optimalLaycanDays
+                };
+                dssFormState = { ...updatedBase };
+                if (typeof window !== 'undefined') {
+                    window.dssFormState = dssFormState;
+                    window.dssBaseActualState = { ...updatedBase };
+                }
+
+                sincronizarFormularioDesdeEstado(dssFormState);
+                generarAuditoriaOperativa(dssFormState);
+                actualizarEstiloBotonesEscenario('actual');
+
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('voyageCalculated', { detail: typeof State !== 'undefined' ? State : {} }));
+                    window.dispatchEvent(new CustomEvent('core-pro:optimal-applied', {
+                        detail: {
+                            loadRate: optimalLoadRate,
+                            dischargeRate: optimalDischargeRate,
+                            cancellingDate: isoDate,
+                            laycanDaysLeft: optimalLaycanDays
+                        }
+                    }));
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`✅ Valores óptimos aplicados al proyecto (Ritmo: ${optimalLoadRate.toLocaleString()} MT/d, Cancelling: ${visualDate})`);
+                }
+            } catch (err) {
+                console.error('Error al aplicar valores óptimos al proyecto:', err);
+                if (typeof showToast === 'function') {
+                    showToast('❌ Error al aplicar valores óptimos al proyecto');
+                }
+            }
+        }
+
+        window.calcularEscenarioOptimoDesdeBase = calcularEscenarioOptimoDesdeBase;
+        window.renderizarComparativaEscenarios = renderizarComparativaEscenarios;
+        window.aplicarValoresOptimosAlProyecto = aplicarValoresOptimosAlProyecto;
 
         window.cargarEscenario = cargarEscenario;
         window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
