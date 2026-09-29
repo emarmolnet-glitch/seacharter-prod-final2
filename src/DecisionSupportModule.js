@@ -29,7 +29,14 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                             🟡 Escenario Alerta
                         </button>
                         <button type="button" id="btn-tab-optimo" onclick="cargarEscenario('optimo')" class="px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5">
-                            🟢 Escenario Óptimo
+                            🟢 Posicionamiento Óptimo
+                        </button>
+                        <button type="button" id="btn-tab-comparativa" onclick="cargarEscenario('comparativa')" class="px-3 py-1.5 text-xs font-medium bg-cyan-900/40 text-cyan-300 hover:bg-cyan-900/60 border border-cyan-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                            ⚖️ Comparativa
+                        </button>
+                        <button type="button" id="btn-aplicar-valores-optimos-top" onclick="aplicarValoresOptimosAlProyecto()" class="hidden px-3.5 py-1.5 text-xs font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-950/50 border border-emerald-400/40 cursor-pointer">
+                            <i class="fa-solid fa-wand-magic-sparkles text-emerald-200"></i>
+                            <span>Aplicar Valores Óptimos al Proyecto</span>
                         </button>
                         <button type="button" id="btn-toggle-parametros" onclick="toggleParametros()" class="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg transition-all flex items-center gap-1">
                             ⚙️ Ajustar Variables <i id="icon-toggle-parametros" class="fa-solid fa-chevron-down text-[10px] ml-1 transition-transform duration-300"></i>
@@ -55,7 +62,7 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                 <div id="dss-empty-state" class="rounded-xl border border-dashed border-slate-600 bg-slate-800/70 px-5 py-10 text-center text-sm" style="color: white !important;"></div>
 
                 <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE / ACORDEONES) -->
-                <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-xl transition-all text-slate-800 duration-300 ease-in-out overflow-hidden">
+                <section id="panel-parametros" class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all text-slate-800 duration-300 ease-in-out overflow-hidden">
                     <!-- HEADER GENERAL CON BOTÓN TOGGLE / CHEVRON -->
                     <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4 cursor-pointer select-none" onclick="toggleParametros()">
                         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
@@ -258,8 +265,224 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                     </div>
                 </section>
 
-                <!-- GRID DE 3 COLUMNAS PARA SEMÁFOROS (RIESGO CRÍTICO, ADVERTENCIA, SEGURO) -->
-                <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- PANEL COMPARATIVO Y DE MONITORIZACIÓN DE ESCENARIOS (SPLIT VIEW / TABLA) -->
+                <section id="panel-comparativo-dss" class="space-y-4">
+                    <!-- ENCABEZADO DE COMPARATIVA Y ACCIÓN DESTACADA DE APLICACIÓN -->
+                    <div id="dss-comparativa-header" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 text-lg">
+                                <i class="fa-solid fa-code-compare"></i>
+                            </span>
+                            <div>
+                                <h2 class="text-sm md:text-base font-bold text-slate-800 flex items-center gap-2">
+                                    <span>Comparativa de Escenarios: Situación Actual vs Posicionamiento Óptimo</span>
+                                    <span id="badge-comparativa-mode" class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                        FRENTE A FRENTE
+                                    </span>
+                                </h2>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Enfrentamiento simultáneo cara a cara de métricas operativas y propuesta de optimización algorítmica.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <!-- BOTÓN DESTACADO: APLICAR VALORES ÓPTIMOS AL PROYECTO -->
+                            <button type="button" id="btn-aplicar-valores-optimos" onclick="aplicarValoresOptimosAlProyecto()" class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl shadow-sm border border-emerald-500 flex items-center gap-2 transition-all transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                                <i class="fa-solid fa-wand-magic-sparkles text-emerald-100"></i>
+                                <span>Aplicar Valores Óptimos al Proyecto</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TABLA COMPARATIVA CON 3 COLUMNAS: Métrica | Situación Actual | Situación Óptima (TEMA CLARO) -->
+                    <div id="dss-tabla-comparativa-container" class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-600 border-b border-slate-200">
+                                    <th scope="col" class="py-3 px-4 font-bold text-slate-700 w-1/3">Métrica</th>
+                                    <th scope="col" class="py-3 px-4 font-bold text-indigo-700 w-1/3 bg-indigo-50/60 border-l border-slate-200">
+                                        <div class="flex items-center justify-between">
+                                            <span class="flex items-center gap-1.5">
+                                                <i class="fa-solid fa-circle-dot text-indigo-600 text-[10px]"></i>
+                                                <span>Situación Actual</span>
+                                            </span>
+                                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold">Línea Base</span>
+                                        </div>
+                                    </th>
+                                    <th scope="col" class="py-3 px-4 font-bold text-emerald-700 w-1/3 bg-emerald-50/60 border-l border-slate-200">
+                                        <div class="flex items-center justify-between">
+                                            <span class="flex items-center gap-1.5">
+                                                <i class="fa-solid fa-wand-magic-sparkles text-emerald-600 text-[10px]"></i>
+                                                <span>Situación Óptima</span>
+                                            </span>
+                                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold">Recomendación DSS</span>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 text-slate-700">
+                                <!-- FILA 1: MARGEN DE LAYCAN (DÍAS) -->
+                                <tr class="hover:bg-slate-50/70 transition-colors">
+                                    <td class="py-3.5 px-4 font-semibold align-top">
+                                        <div class="flex items-center gap-2 text-slate-800 font-bold">
+                                            <i class="fa-solid fa-calendar-day text-red-500"></i>
+                                            <span>Margen de Laycan (días)</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500 mt-1">
+                                            Buffer neto de seguridad entre llegada estimada (ETA) y fecha de cancelación (Cancelling Date).
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-indigo-50/20 border-l border-slate-200 align-top" id="col-actual-laycan">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Buffer de Seguridad:</span>
+                                                <strong id="cmp-actual-buffer" class="font-bold text-amber-700 text-sm">--</strong>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Días Restantes Laycan:</span>
+                                                <span id="cmp-actual-laycan-days" class="text-slate-700 font-mono">--</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Cancelling Date:</span>
+                                                <span id="cmp-actual-cancelling-date" class="text-slate-700 font-mono font-semibold">--</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-emerald-50/20 border-l border-slate-200 align-top" id="col-optimo-laycan">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Buffer de Seguridad:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <strong id="cmp-optimo-buffer" class="font-bold text-emerald-700 text-sm">--</strong>
+                                                    <span id="cmp-delta-buffer" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">+0 d</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Días Restantes Laycan:</span>
+                                                <span id="cmp-optimo-laycan-days" class="text-emerald-700 font-mono font-semibold">--</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Cancelling Date Sugerida:</span>
+                                                <span id="cmp-optimo-cancelling-date" class="text-emerald-700 font-mono font-bold">--</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- FILA 2: RITMO DE OPERACIONES (MT/DÍA) -->
+                                <tr class="hover:bg-slate-50/70 transition-colors">
+                                    <td class="py-3.5 px-4 font-semibold align-top">
+                                        <div class="flex items-center gap-2 text-slate-800 font-bold">
+                                            <i class="fa-solid fa-boxes-packing text-amber-500"></i>
+                                            <span>Ritmo de Operaciones (MT/día)</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500 mt-1">
+                                            Velocidades de carga en origen (POL) y descarga en destino (POD) y su impacto en días de puerto.
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-indigo-50/20 border-l border-slate-200 align-top" id="col-actual-ritmos">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Ritmo Carga (POL):</span>
+                                                <strong id="cmp-actual-loadrate" class="font-bold text-slate-800 text-xs">-- MT/d</strong>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Ritmo Descarga (POD):</span>
+                                                <strong id="cmp-actual-dischargerate" class="font-bold text-slate-800 text-xs">-- MT/d</strong>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                                                <span>Total Port Days:</span>
+                                                <span id="cmp-actual-portdays" class="text-amber-700 font-bold font-mono">-- d</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-emerald-50/20 border-l border-slate-200 align-top" id="col-optimo-ritmos">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Ritmo Carga Optimizado:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <strong id="cmp-optimo-loadrate" class="font-bold text-emerald-700 text-xs">-- MT/d</strong>
+                                                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">+30%</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Ritmo Descarga Optimizado:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <strong id="cmp-optimo-dischargerate" class="font-bold text-emerald-700 text-xs">-- MT/d</strong>
+                                                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">+30%</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                                                <span>Total Port Days Reducidos:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span id="cmp-optimo-portdays" class="text-emerald-700 font-bold font-mono">-- d</span>
+                                                    <span id="cmp-delta-portdays" class="text-[10px] font-bold text-emerald-800">(-0 d)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- FILA 3: RENTABILIDAD (MARGEN BRUTO / BENEFICIO) -->
+                                <tr class="hover:bg-slate-50/70 transition-colors">
+                                    <td class="py-3.5 px-4 font-semibold align-top">
+                                        <div class="flex items-center gap-2 text-slate-800 font-bold">
+                                            <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                                            <span>Rentabilidad (Margen Bruto / Beneficio)</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500 mt-1">
+                                            Margen porcentual sobre flete cotizado, reducción de costes Break-Even y beneficio neto global.
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-indigo-50/20 border-l border-slate-200 align-top" id="col-actual-rentabilidad">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Margen Bruto (%):</span>
+                                                <strong id="cmp-actual-margen" class="font-bold text-indigo-700 text-sm">--%</strong>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Break-Even Unitario:</span>
+                                                <span id="cmp-actual-breakeven" class="text-slate-700 font-mono">$0.00 / MT</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                                                <span>Beneficio Estimado:</span>
+                                                <strong id="cmp-actual-beneficio" class="text-slate-800 font-mono">$0</strong>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-4 bg-emerald-50/20 border-l border-slate-200 align-top" id="col-optimo-rentabilidad">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-500 text-[11px]">Margen Bruto (%):</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <strong id="cmp-optimo-margen" class="font-bold text-emerald-700 text-sm">--%</strong>
+                                                    <span id="cmp-delta-margen" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">+0%</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                                <span>Break-Even Unitario Optimizado:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span id="cmp-optimo-breakeven" class="text-emerald-700 font-mono font-bold">$0.00 / MT</span>
+                                                    <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-800">-10%</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                                                <span>Beneficio Estimado Optimizado:</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <strong id="cmp-optimo-beneficio" class="text-emerald-700 font-mono font-bold">$0</strong>
+                                                    <span id="cmp-delta-beneficio" class="text-[10px] font-bold text-emerald-800">(+$0)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- GRID DE 3 COLUMNAS PARA SEMÁFOROS (OCULTO - SUSTITUIDO POR TABLA COMPARATIVA) -->
+                <section class="hidden grid-cols-1 md:grid-cols-3 gap-6" style="display: none !important;" aria-hidden="true">
 
                     <!-- TARJETA 1: RIESGO DE LAYCAN -->
                     <div id="card-laycan" class="bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
@@ -524,4 +747,304 @@ export function mountDecisionSupportModule(container) {
     renderDecisionSupportEmptyState();
     hydrateDecisionSupportState();
     return container;
+}
+
+export function calcularEscenarioOptimoDesdeBase(baseState) {
+    if (!baseState) return null;
+    const currentLoadRate = Number(baseState.loadRate) || 5000;
+    const currentDischargeRate = Number(baseState.dischargeRate) || currentLoadRate || 5000;
+    const voyageDays = Number(baseState.estimatedVoyageDays || baseState.seaDays) || 8;
+    const baseFleteUnitario = Number(baseState.fleteUnitario || baseState.fleteEstimado || 35);
+    const baseBreakEvenUnitario = Number(baseState.breakEvenUnitario || baseState.breakEven || 25);
+    const clampRate = (rate) => Math.min(100000, Math.max(1500, Math.round(Number(rate) || 1500)));
+
+    const simLaycanDays = Number((voyageDays + 10).toFixed(1));
+    const today = new Date();
+    return {
+        ...baseState,
+        laycanDaysLeft: simLaycanDays,
+        cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
+        loadRate: clampRate(currentLoadRate * 1.30),
+        dischargeRate: clampRate(currentDischargeRate * 1.30),
+        fleteUnitario: baseFleteUnitario,
+        fleteEstimado: baseFleteUnitario,
+        breakEvenUnitario: Number((baseBreakEvenUnitario * 0.90).toFixed(2)),
+        breakEven: Number((baseBreakEvenUnitario * 0.90).toFixed(2))
+    };
+}
+
+export function renderizarComparativaEscenarios(actualState, optimoState) {
+    if (!actualState) return;
+    const today = new Date();
+    const opt = optimoState || calcularEscenarioOptimoDesdeBase(actualState) || actualState;
+
+    // Fechas y Laycan Actual
+    let actualCancelDate = actualState.cancellingDate;
+    if (typeof actualCancelDate === 'string' && actualCancelDate.includes('/')) {
+        const parts = actualCancelDate.split('/');
+        if (parts.length === 3) actualCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    } else if (actualCancelDate && !(actualCancelDate instanceof Date)) {
+        actualCancelDate = new Date(actualCancelDate);
+    }
+    if (!actualCancelDate || isNaN(actualCancelDate.getTime())) {
+        actualCancelDate = new Date(today.getTime() + Math.max(0, Number(actualState.laycanDaysLeft) || 10) * 86400000);
+    }
+
+    const voyageDays = Number(actualState.estimatedVoyageDays || actualState.seaDays) || 8;
+    const etaDate = new Date(today.getTime() + Math.max(0, voyageDays) * 86400000);
+
+    const calcDays = (d1, d2) => {
+        if (typeof window !== 'undefined' && typeof window.differenceInDays === 'function') {
+            return window.differenceInDays(d1, d2);
+        }
+        return Math.round((d1.getTime() - d2.getTime()) / 86400000);
+    };
+
+    const actualBuffer = calcDays(actualCancelDate, etaDate);
+    const actualLaycanDays = calcDays(actualCancelDate, today);
+
+    // Fechas y Laycan Óptimo
+    let optCancelDate = opt.cancellingDate;
+    if (typeof optCancelDate === 'string' && optCancelDate.includes('/')) {
+        const parts = optCancelDate.split('/');
+        if (parts.length === 3) optCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    } else if (optCancelDate && !(optCancelDate instanceof Date)) {
+        optCancelDate = new Date(optCancelDate);
+    }
+    if (!optCancelDate || isNaN(optCancelDate.getTime())) {
+        optCancelDate = new Date(today.getTime() + Math.max(0, Number(opt.laycanDaysLeft) || 18) * 86400000);
+    }
+
+    const optBuffer = calcDays(optCancelDate, etaDate);
+    const optLaycanDays = calcDays(optCancelDate, today);
+
+    // Ritmos y Operaciones
+    const actualLoad = Math.max(1, Number(actualState.loadRate) || 5000);
+    const actualDisch = Math.max(1, Number(actualState.dischargeRate) || actualLoad);
+    const optLoad = Math.max(1, Number(opt.loadRate) || Math.round(actualLoad * 1.30));
+    const optDisch = Math.max(1, Number(opt.dischargeRate) || Math.round(actualDisch * 1.30));
+
+    const cargoQty = Math.max(1, Number(actualState.cargoQty) || 1);
+    const actualPortDays = (cargoQty / actualLoad) + (cargoQty / actualDisch);
+    const optPortDays = (cargoQty / optLoad) + (cargoQty / optDisch);
+
+    // Rentabilidad
+    const fleteUnit = Number(actualState.fleteUnitario || actualState.fleteEstimado || 35);
+    const actualBreakEven = Number(actualState.breakEvenUnitario || actualState.breakEven || 25);
+    const optBreakEven = Number(opt.breakEvenUnitario || opt.breakEven || (actualBreakEven * 0.90));
+
+    const actualMargen = fleteUnit > 0 ? ((fleteUnit - actualBreakEven) / fleteUnit) * 100 : 0;
+    const optMargen = fleteUnit > 0 ? ((fleteUnit - optBreakEven) / fleteUnit) * 100 : 0;
+
+    const actualBeneficio = (fleteUnit - actualBreakEven) * cargoQty;
+    const optBeneficio = (fleteUnit - optBreakEven) * cargoQty;
+
+    const setText = (id, txt) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = txt;
+    };
+
+    const formatDateStr = (d) => {
+        if (!d || isNaN(d.getTime())) return '--';
+        return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    // Inyectar en DOM
+    setText('cmp-actual-buffer', `${actualBuffer.toFixed(1)} días`);
+    setText('cmp-actual-laycan-days', `${actualLaycanDays.toFixed(1)} días`);
+    setText('cmp-actual-cancelling-date', formatDateStr(actualCancelDate));
+
+    setText('cmp-optimo-buffer', `${optBuffer.toFixed(1)} días`);
+    setText('cmp-delta-buffer', `+${Math.max(0, optBuffer - actualBuffer).toFixed(1)} d`);
+    setText('cmp-optimo-laycan-days', `${optLaycanDays.toFixed(1)} días`);
+    setText('cmp-optimo-cancelling-date', formatDateStr(optCancelDate));
+
+    setText('cmp-actual-loadrate', `${Number(actualLoad).toLocaleString('es-ES')} MT/d`);
+    setText('cmp-actual-dischargerate', `${Number(actualDisch).toLocaleString('es-ES')} MT/d`);
+    setText('cmp-actual-portdays', `${actualPortDays.toFixed(1)} d`);
+
+    setText('cmp-optimo-loadrate', `${Number(optLoad).toLocaleString('es-ES')} MT/d`);
+    setText('cmp-optimo-dischargerate', `${Number(optDisch).toLocaleString('es-ES')} MT/d`);
+    setText('cmp-optimo-portdays', `${optPortDays.toFixed(1)} d`);
+    const portDaysDiff = actualPortDays - optPortDays;
+    setText('cmp-delta-portdays', `(-${Math.max(0, portDaysDiff).toFixed(1)} d)`);
+
+    setText('cmp-actual-margen', `${actualMargen.toFixed(1)}%`);
+    setText('cmp-actual-breakeven', `$${actualBreakEven.toFixed(2)} / MT`);
+    setText('cmp-actual-beneficio', `$${Math.round(actualBeneficio).toLocaleString('en-US')}`);
+
+    setText('cmp-optimo-margen', `${optMargen.toFixed(1)}%`);
+    setText('cmp-delta-margen', `+${Math.max(0, optMargen - actualMargen).toFixed(1)}%`);
+    setText('cmp-optimo-breakeven', `$${optBreakEven.toFixed(2)} / MT`);
+    setText('cmp-optimo-beneficio', `$${Math.round(optBeneficio).toLocaleString('en-US')}`);
+    const beneficioDiff = optBeneficio - actualBeneficio;
+    setText('cmp-delta-beneficio', `(+$${Math.round(Math.max(0, beneficioDiff)).toLocaleString('en-US')})`);
+}
+
+export function aplicarValoresOptimosAlProyecto() {
+    try {
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+            window.showToast('Aplicando valores óptimos al proyecto...', true);
+        }
+
+        const base = (typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function')
+            ? window.getDSSCurrentState()
+            : ((typeof window !== 'undefined' && (window.dssBaseActualState || window.dssFormState)) || {});
+
+        const currentLoad = Number(base.loadRate) || 5000;
+        const currentDisch = Number(base.dischargeRate) || currentLoad || 5000;
+        const voyageDays = Number(base.estimatedVoyageDays || base.seaDays) || 8;
+        const clampRate = (rate) => Math.min(100000, Math.max(1500, Math.round(Number(rate) || 1500)));
+
+        const simLaycanDays = Number((voyageDays + 10).toFixed(1));
+        const today = new Date();
+        const activeSim = (typeof window !== 'undefined' && window.dssSimulationState) ? window.dssSimulationState : null;
+
+        const optimalCancellingDate = (activeSim && activeSim.cancellingDate)
+            ? (activeSim.cancellingDate instanceof Date ? activeSim.cancellingDate : new Date(activeSim.cancellingDate))
+            : new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+
+        const optimalLoadRate = (activeSim && activeSim.loadRate)
+            ? Number(activeSim.loadRate)
+            : clampRate(currentLoad * 1.30);
+        const optimalDischargeRate = (activeSim && activeSim.dischargeRate)
+            ? Number(activeSim.dischargeRate)
+            : clampRate(currentDisch * 1.30);
+        const optimalLaycanDays = (activeSim && activeSim.laycanDaysLeft)
+            ? Number(activeSim.laycanDaysLeft)
+            : simLaycanDays;
+
+        const formatIsoDate = (d) => {
+            if (!d) return '';
+            const dateObj = d instanceof Date ? d : new Date(d);
+            if (isNaN(dateObj.getTime())) return '';
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const isoDate = formatIsoDate(optimalCancellingDate);
+        const visualDate = optimalCancellingDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        // 1. Actualizar State global
+        if (typeof window !== 'undefined' && window.State) {
+            window.State.loadRate = optimalLoadRate;
+            window.State.dischRate = optimalDischargeRate;
+            if (isoDate) {
+                window.State.cancellingDate = isoDate;
+                window.State.laycanEnd = isoDate;
+            }
+            window.State.laycanDaysLeft = optimalLaycanDays;
+        }
+
+        // 2. Actualizar SeaCharterStore
+        if (typeof window !== 'undefined' && window.SeaCharterStore && window.SeaCharterStore.set) {
+            window.SeaCharterStore.set({
+                loadRate: optimalLoadRate,
+                dischRate: optimalDischargeRate,
+                cancellingDate: isoDate || (window.State ? window.State.cancellingDate : ''),
+                laycanDaysLeft: optimalLaycanDays
+            });
+        }
+
+        // 3. Persistencia en LocalStorage
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('calculator_rate_load', String(optimalLoadRate));
+            localStorage.setItem('calculator_rate_disch', String(optimalDischargeRate));
+            localStorage.setItem('calculator_load_rate', String(optimalLoadRate));
+            localStorage.setItem('calculator_discharge_rate', String(optimalDischargeRate));
+            if (isoDate) {
+                localStorage.setItem('calculator_cancelling_date', isoDate);
+                localStorage.setItem('calculator_laycan', isoDate);
+            }
+            localStorage.setItem('dss_optimal_applied', JSON.stringify({
+                loadRate: optimalLoadRate,
+                dischargeRate: optimalDischargeRate,
+                cancellingDate: isoDate,
+                laycanDaysLeft: optimalLaycanDays,
+                appliedAt: new Date().toISOString()
+            }));
+        }
+
+        // 4. Sincronizar inputs en el DOM
+        const setValSafe = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+
+        setValSafe('rate-load', optimalLoadRate);
+        setValSafe('rate-disch', optimalDischargeRate);
+        setValSafe('input-loadRate', optimalLoadRate);
+        setValSafe('input-dischargeRate', optimalDischargeRate);
+        setValSafe('gc-laytime-load-val', optimalLoadRate);
+        setValSafe('gc-laytime-disch-val', optimalDischargeRate);
+
+        if (isoDate) {
+            setValSafe('gc-cancel-date', isoDate);
+            setValSafe('asb-cancel-date', isoDate);
+            setValSafe('map-cancelling-date', isoDate);
+        }
+        setValSafe('input-laycanDaysLeft', optimalLaycanDays);
+
+        // 5. Recalcular calculadora y sincronizar
+        if (typeof window !== 'undefined') {
+            if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
+            if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
+            if (typeof window.runEngine === 'function') window.runEngine();
+
+            if (typeof window.limpiarDssSimulationState === 'function') {
+                window.limpiarDssSimulationState();
+            }
+
+            const updatedBase = {
+                ...base,
+                loadRate: optimalLoadRate,
+                dischargeRate: optimalDischargeRate,
+                cancellingDate: optimalCancellingDate,
+                laycanDaysLeft: optimalLaycanDays
+            };
+            window.dssFormState = { ...updatedBase };
+            window.dssBaseActualState = { ...updatedBase };
+
+            if (typeof window.sincronizarFormularioDesdeEstado === 'function') {
+                window.sincronizarFormularioDesdeEstado(window.dssFormState);
+            }
+            if (typeof window.generarAuditoriaOperativa === 'function') {
+                window.generarAuditoriaOperativa(window.dssFormState);
+            }
+            if (typeof window.actualizarEstiloBotonesEscenario === 'function') {
+                window.actualizarEstiloBotonesEscenario('actual');
+            }
+
+            window.dispatchEvent(new CustomEvent('voyageCalculated', { detail: window.State }));
+            window.dispatchEvent(new CustomEvent('core-pro:optimal-applied', {
+                detail: {
+                    loadRate: optimalLoadRate,
+                    dischargeRate: optimalDischargeRate,
+                    cancellingDate: isoDate,
+                    laycanDaysLeft: optimalLaycanDays
+                }
+            }));
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`✅ Valores óptimos aplicados al proyecto (Ritmo: ${optimalLoadRate.toLocaleString()} MT/d, Cancelling: ${visualDate})`);
+            }
+        }
+    } catch (err) {
+        console.error('Error al aplicar valores óptimos al proyecto:', err);
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+            window.showToast('❌ Error al aplicar valores óptimos al proyecto');
+        }
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.calcularEscenarioOptimoDesdeBase = calcularEscenarioOptimoDesdeBase;
+    window.renderizarComparativaEscenarios = renderizarComparativaEscenarios;
+    window.aplicarValoresOptimosAlProyecto = aplicarValoresOptimosAlProyecto;
 }
