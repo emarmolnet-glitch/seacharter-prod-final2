@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   numeric,
+  pgEnum,
   pgTable,
   serial,
   text,
@@ -406,3 +407,29 @@ export const forwarderProjects = pgTable("forwarder_projects", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
+export const contactRoleEnum = pgEnum("ContactRole", [
+  "OWNER",
+  "BROKER",
+  "AGENT",
+  "LOGISTICS",
+  "CHARTERER",
+  "SHIPMANAGEMENT",
+]);
+
+export const marketContacts = pgTable("Market_Contacts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name"),
+  email: text("email"),
+  phone: text("phone"),
+  emails: text("emails").array().default(sql`'{}'::text[]`),
+  phones: text("phones").array().default(sql`'{}'::text[]`),
+  country: text("country"),
+  contactRole: contactRoleEnum("contact_role").default("BROKER").notNull(),
+  notes: text("notes"),
+  linkedImos: text("linked_imos").array().default(sql`'{}'::text[]`),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+

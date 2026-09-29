@@ -2,6 +2,7 @@ const CONTACT_ROLES = Object.freeze({
     ALL: 'Todos',
     BROKER: 'Brokers',
     OWNER: 'Armadores',
+    SHIPMANAGEMENT: 'Shipmanagement',
     CHARTERER: 'Fletadores',
     AGENT: 'Agentes',
     LOGISTICS: 'Operadores'
@@ -14,6 +15,10 @@ const state = {
     loading: false,
     loaded: false,
     editingId: null,
+    editingImos: [],
+    expandedIds: new Set(),
+    fleetCache: new Map(),
+    fleetLoadingIds: new Set(),
     previousFocus: null,
     toastTimer: null
 };
@@ -27,6 +32,16 @@ function escapeHtml(value) {
         .replaceAll("'", '&#039;');
 }
 
+function cleanImo(value) {
+    const digits = String(value ?? '').replace(/[^0-9]/g, '');
+    return digits.length >= 6 && digits.length <= 8 ? digits : null;
+}
+
+function isOwnerOrManagerRole(role) {
+    const r = String(role || '').toUpperCase();
+    return r === 'OWNER' || r === 'SHIPMANAGEMENT';
+}
+
 function getElements() {
     return {
         shell: document.getElementById('market-directory-shell'),
@@ -37,6 +52,9 @@ function getElements() {
         editor: document.getElementById('market-contact-editor'),
         form: document.getElementById('market-contact-form'),
         formError: document.getElementById('market-contact-form-error'),
+        tagsList: document.getElementById('market-contact-tags-list'),
+        imoInput: document.getElementById('market-contact-imo-input'),
+        tagsBox: document.getElementById('market-contact-tags-box'),
         toast: document.getElementById('market-directory-toast')
     };
 }
@@ -72,7 +90,7 @@ function createDirectory() {
             <div class="market-directory-toolbar">
                 <label class="market-directory-search" for="market-directory-search">
                     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input id="market-directory-search" type="search" autocomplete="off" placeholder="Buscar empresa, broker, armador o país…">
+                    <input id="market-directory-search" type="search" autocomplete="off" placeholder="Buscar empresa, broker, armador, IMO o país…">
                 </label>
                 <div class="market-directory-filters" role="group" aria-label="Filtrar por categoría">
                     ${Object.entries(CONTACT_ROLES).map(([role, label]) => `
@@ -109,6 +127,7 @@ function createDirectory() {
                             <select id="market-contact-role" name="contact_role" required>
                                 <option value="BROKER">Broker</option>
                                 <option value="OWNER">Armador</option>
+                                <option value="SHIPMANAGEMENT">Shipmanagement</option>
                                 <option value="CHARTERER">Fletador</option>
                                 <option value="AGENT">Agente</option>
                                 <option value="LOGISTICS">Operador logístico</option>
@@ -127,6 +146,17 @@ function createDirectory() {
                             <label for="market-contact-phones">Teléfonos</label>
                             <textarea id="market-contact-phones" name="phones" placeholder="+34 600 000 000, +44 20 0000 0000"></textarea>
                             <small>Separa varios teléfonos con comas o saltos de línea.</small>
+                        </div>
+                        <div class="market-contact-field market-contact-field--wide" id="market-contact-imos-field">
+                            <label for="market-contact-imo-input">
+                                Buques vinculados (Números IMO)
+                                <span class="market-contact-label-tag">Flota gestionada / Armador</span>
+                            </label>
+                            <div id="market-contact-tags-box" class="market-contact-tags-box" tabindex="-1">
+                                <div id="market-contact-tags-list" class="market-contact-tags-list" role="list"></div>
+                                <input id="market-contact-imo-input" type="text" placeholder="Escribe o pega nº IMO y pulsa Enter o coma…" autocomplete="off" inputmode="numeric">
+                            </div>
+                            <small>Introduce los números IMO (7 dígitos) operados por la empresa. Puedes pegar varios números a la vez separados por comas, espacios o saltos de línea.</small>
                         </div>
                         <div class="market-contact-field market-contact-field--wide">
                             <label for="market-contact-notes">Notas comerciales</label>
@@ -156,14 +186,98 @@ function roleLabel(role) {
     return CONTACT_ROLES[role] || role || 'Sin categoría';
 }
 
+function renderImoTags() {
+    const { tagsList } = getElements();
+    if (!tagsList) return;
+    if (state.editingImos.length === 0) {
+        tagsList.innerHTML = '';
+        return;
+    }
+    tagsList.innerHTML = state.editingImos.map(imo => `
+        <span class="market-contact-tag" role="listitem">
+            <i class="fa-solid fa-ship" aria-hidden="true"></i>
+            <span class="market-contact-tag-label">IMO ${escapeHtml(imo)}</span>
+            <button type="button" class="market-contact-tag-remove" data-remove-imo="${escapeHtml(imo)}" aria-label="Eliminar IMO ${escapeHtml(imo)}" title="Eliminar">&times;</button>
+        </span>
+    `).join('');
+}
+
+function addImosFromText(rawText) {
+    if (!rawText) return;
+    const tokens = String(rawText).split(/[\s,;]+/);
+    let addedCount = 0;
+    tokens.forEach(token => {
+        const cleaned = cleanImo(token);
+        if (cleaned && !state.editingImos.includes(cleaned)) {
+            state.editingImos.push(cleaned);
+            addedCount++;
+        }
+    });
+    if (addedCount > 0) {
+        renderImoTags();
+    }
+}
+
+function removeImoTag(imo) {
+    state.editingImos = state.editingImos.filter(item => item !== imo);
+    renderImoTags();
+}
+
 function filteredContacts() {
     const search = state.search.trim().toLocaleLowerCase('es');
     return state.contacts.filter(contact => {
         if (state.role !== 'ALL' && contact.contact_role !== state.role) return false;
         if (!search) return true;
-        return [contact.company_name, contact.contact_name, contact.country]
+        const imos = Array.isArray(contact.linked_imos) ? contact.linked_imos : [];
+        return [contact.company_name, contact.contact_name, contact.country, ...imos]
             .some(value => String(value || '').toLocaleLowerCase('es').includes(search));
     });
+}
+
+async function fetchFleetForContact(contact) {
+    const imos = Array.isArray(contact.linked_imos) ? contact.linked_imos : [];
+    if (imos.length === 0) {
+        state.fleetCache.set(contact.id, []);
+        renderDirectory();
+        return;
+    }
+    if (state.fleetCache.has(contact.id) || state.fleetLoadingIds.has(contact.id)) return;
+
+    state.fleetLoadingIds.add(contact.id);
+    renderDirectory();
+
+    try {
+        const baseUrl = typeof window !== 'undefined' && window.getApiUrl ? window.getApiUrl('/api/market-contacts') : '/api/market-contacts';
+        const url = `${baseUrl}?action=fleet&imos=${encodeURIComponent(imos.join(','))}`;
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+            throw new Error(data.error || 'Error al consultar flota.');
+        }
+        state.fleetCache.set(contact.id, Array.isArray(data.fleet) ? data.fleet : []);
+    } catch (err) {
+        console.warn('[market-contacts] No se pudo obtener la flota vinculada:', err);
+        state.fleetCache.set(contact.id, []);
+    } finally {
+        state.fleetLoadingIds.delete(contact.id);
+        renderDirectory();
+    }
+}
+
+function toggleContactDetails(contactId) {
+    const contact = state.contacts.find(item => item.id === contactId);
+    if (!contact) return;
+    if (state.expandedIds.has(contactId)) {
+        state.expandedIds.delete(contactId);
+        renderDirectory();
+    } else {
+        state.expandedIds.add(contactId);
+        if (isOwnerOrManagerRole(contact.contact_role) || (Array.isArray(contact.linked_imos) && contact.linked_imos.length > 0)) {
+            fetchFleetForContact(contact);
+        } else {
+            renderDirectory();
+        }
+    }
 }
 
 function renderDirectory() {
@@ -196,28 +310,48 @@ function renderDirectory() {
         <div class="market-directory-table-wrap">
             <table class="market-directory-table">
                 <thead><tr>
-                    <th style="width:21%">Empresa</th>
+                    <th style="width:23%">Empresa</th>
                     <th style="width:16%">Contacto</th>
-                    <th style="width:23%">Emails</th>
-                    <th style="width:18%">Teléfonos</th>
-                    <th style="width:12%">Categoría</th>
+                    <th style="width:22%">Emails</th>
+                    <th style="width:16%">Teléfonos</th>
+                    <th style="width:13%">Categoría</th>
                     <th style="width:10%;text-align:right">Acciones</th>
                 </tr></thead>
-                <tbody>${contacts.map(renderContactRow).join('')}</tbody>
+                <tbody>${contacts.map(renderContactRowGroup).join('')}</tbody>
             </table>
         </div>`;
 }
 
-function renderContactRow(contact) {
+function renderContactRowGroup(contact) {
+    const isExpanded = state.expandedIds.has(contact.id);
+    const mainRow = renderContactRow(contact, isExpanded);
+    if (!isExpanded) return mainRow;
+    const detailRow = renderContactDetailRow(contact);
+    return mainRow + detailRow;
+}
+
+function renderContactRow(contact, isExpanded = false) {
     const emails = Array.isArray(contact.emails) ? contact.emails : [];
     const phones = Array.isArray(contact.phones) ? contact.phones : [];
     const primaryPhone = phones[0] || '';
     const primaryEmail = emails[0] || '';
+    const imos = Array.isArray(contact.linked_imos) ? contact.linked_imos : [];
+    const hasFleet = isOwnerOrManagerRole(contact.contact_role) || imos.length > 0;
+
     return `
-        <tr>
+        <tr class="market-directory-main-row${isExpanded ? ' is-expanded' : ''}" data-contact-id="${escapeHtml(contact.id)}">
             <td>
-                <span class="market-directory-company">${escapeHtml(contact.company_name)}</span>
-                <span class="market-directory-country">${contact.country ? `<i class="fa-solid fa-location-dot"></i> ${escapeHtml(contact.country)}` : 'Mercado no indicado'}</span>
+                <div class="market-directory-company-wrapper">
+                    <span class="market-directory-company">${escapeHtml(contact.company_name)}</span>
+                    <span class="market-directory-country">${contact.country ? `<i class="fa-solid fa-location-dot"></i> ${escapeHtml(contact.country)}` : 'Mercado no indicado'}</span>
+                    ${hasFleet ? `
+                        <button type="button" class="market-directory-fleet-pill-badge" data-toggle-details="${escapeHtml(contact.id)}" title="${isExpanded ? 'Ocultar flota gestionada' : 'Ver buques de la flota gestionada'}">
+                            <i class="fa-solid fa-ship"></i>
+                            <span>${imos.length} ${imos.length === 1 ? 'buque vinculado' : 'buques vinculados'}</span>
+                            <i class="fa-solid fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
+                        </button>
+                    ` : ''}
+                </div>
             </td>
             <td>${contact.contact_name ? `<span class="market-directory-contact-name">${escapeHtml(contact.contact_name)}</span>` : '<span class="market-directory-empty-value">Sin persona asignada</span>'}</td>
             <td><div class="market-directory-stack">${emails.map(email => `<a class="market-directory-link" href="mailto:${encodeURIComponent(email)}"><i class="fa-regular fa-envelope"></i>${escapeHtml(email)}</a>`).join('') || '<span class="market-directory-empty-value">Sin email</span>'}</div></td>
@@ -225,12 +359,120 @@ function renderContactRow(contact) {
             <td><span class="market-directory-role">${escapeHtml(roleLabel(contact.contact_role))}</span></td>
             <td>
                 <div class="market-directory-row-actions">
+                    <button type="button" class="market-directory-row-action market-directory-row-action--toggle${isExpanded ? ' is-active' : ''}" data-toggle-details="${escapeHtml(contact.id)}" aria-label="${isExpanded ? 'Ocultar detalles y flota' : 'Ver detalles y flota'}" title="${isExpanded ? 'Ocultar detalles y flota' : 'Ver detalles y flota'}" aria-expanded="${isExpanded ? 'true' : 'false'}">
+                        <i class="fa-solid fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
+                    </button>
                     <button type="button" class="market-directory-row-action" data-copy-phone="${escapeHtml(primaryPhone)}" aria-label="Copiar teléfono" title="Copiar teléfono" ${primaryPhone ? '' : 'disabled'}><i class="fa-regular fa-copy"></i></button>
                     <a class="market-directory-row-action" href="${primaryEmail ? `mailto:${encodeURIComponent(primaryEmail)}` : '#'}" aria-label="Enviar email" title="Enviar email" ${primaryEmail ? '' : 'aria-disabled="true"'}><i class="fa-regular fa-envelope"></i></a>
                     <button type="button" class="market-directory-row-action" data-edit-contact="${escapeHtml(contact.id)}" aria-label="Editar contacto" title="Editar contacto"><i class="fa-solid fa-pen"></i></button>
                 </div>
             </td>
         </tr>`;
+}
+
+function renderContactDetailRow(contact) {
+    const isOwnerOrManager = isOwnerOrManagerRole(contact.contact_role);
+    const imos = Array.isArray(contact.linked_imos) ? contact.linked_imos : [];
+    const showFleet = isOwnerOrManager || imos.length > 0;
+
+    return `
+        <tr class="market-directory-detail-row" data-detail-id="${escapeHtml(contact.id)}">
+            <td colspan="6">
+                <div class="market-directory-detail-content">
+                    ${showFleet ? `
+                        <section class="market-directory-fleet-section" aria-label="Flota Gestionada">
+                            <div class="market-directory-fleet-header">
+                                <div class="market-directory-fleet-heading">
+                                    <div class="market-directory-fleet-icon"><i class="fa-solid fa-ship" aria-hidden="true"></i></div>
+                                    <h4 class="market-directory-fleet-title">Flota Gestionada</h4>
+                                    <span class="market-directory-fleet-count-tag">${imos.length} ${imos.length === 1 ? 'buque registrado' : 'buques registrados'}</span>
+                                    ${isOwnerOrManager ? `<span class="market-directory-fleet-role-tag">${escapeHtml(roleLabel(contact.contact_role))}</span>` : ''}
+                                </div>
+                                <button type="button" class="market-directory-fleet-edit-btn" data-edit-contact="${escapeHtml(contact.id)}">
+                                    <i class="fa-solid fa-pen-to-square"></i><span>Vincular / editar buques</span>
+                                </button>
+                            </div>
+                            <div class="market-directory-fleet-body">
+                                ${renderFleetCards(contact)}
+                            </div>
+                        </section>
+                    ` : ''}
+                    ${contact.notes ? `
+                        <div class="market-directory-detail-notes">
+                            <span class="market-directory-detail-notes-title"><i class="fa-regular fa-clipboard"></i> Notas comerciales</span>
+                            <p class="market-directory-detail-notes-body">${escapeHtml(contact.notes)}</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </td>
+        </tr>`;
+}
+
+function renderFleetCards(contact) {
+    const imos = Array.isArray(contact.linked_imos) ? contact.linked_imos : [];
+    if (state.fleetLoadingIds.has(contact.id)) {
+        return `
+            <div class="market-fleet-loading">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>Consultando flota maestra (vessels_master en Neon DB)…</span>
+            </div>`;
+    }
+
+    if (imos.length === 0) {
+        return `
+            <div class="market-fleet-empty">
+                <i class="fa-solid fa-anchor"></i>
+                <div>
+                    <strong>Sin buques vinculados actualmente.</strong>
+                    <p>Haz clic en "Vincular / editar buques" para agregar números IMO a la flota de ${escapeHtml(contact.company_name)}.</p>
+                </div>
+            </div>`;
+    }
+
+    const masterFleet = state.fleetCache.get(contact.id) || [];
+    const masterMap = new Map();
+    masterFleet.forEach(v => {
+        const cleanNumber = String(v.imo_number ?? '').replace(/[^0-9]/g, '');
+        if (cleanNumber) masterMap.set(cleanNumber, v);
+    });
+
+    return `
+        <div class="market-fleet-cards-grid">
+            ${imos.map(imo => {
+                const vessel = masterMap.get(imo);
+                if (vessel) {
+                    const vesselName = vessel.vessel_name || 'Buque';
+                    const vesselImo = vessel.imo_number || imo;
+                    const vesselType = vessel.vessel_type;
+                    const dwt = vessel.dwt ? `${Number(vessel.dwt).toLocaleString('es-ES')} DWT` : null;
+                    const flag = vessel.flag && vessel.flag !== 'N/A' ? vessel.flag : null;
+                    const year = vessel.year_built ? `Año ${vessel.year_built}` : null;
+                    return `
+                        <article class="market-fleet-card" title="Nombre del Buque: ${escapeHtml(vesselName)} · IMO: ${escapeHtml(vesselImo)}${dwt ? ` · ${dwt}` : ''}${vesselType ? ` · ${escapeHtml(vesselType)}` : ''}">
+                            <div class="market-fleet-card-icon"><i class="fa-solid fa-ship"></i></div>
+                            <div class="market-fleet-card-info">
+                                <span class="market-fleet-card-name">${escapeHtml(vesselName)}</span>
+                                <span class="market-fleet-card-imo">(${escapeHtml(vesselImo)})</span>
+                            </div>
+                            <div class="market-fleet-card-tags">
+                                ${dwt ? `<span class="market-fleet-card-dwt">${escapeHtml(dwt)}</span>` : ''}
+                                ${vesselType ? `<span class="market-fleet-card-type">${escapeHtml(vesselType)}</span>` : ''}
+                                ${flag ? `<span class="market-fleet-card-flag" title="Bandera: ${escapeHtml(flag)}">${escapeHtml(flag)}</span>` : ''}
+                                ${year ? `<span class="market-fleet-card-year">${escapeHtml(year)}</span>` : ''}
+                            </div>
+                        </article>`;
+                }
+                return `
+                    <article class="market-fleet-card market-fleet-card--unmatched" title="Buque IMO ${escapeHtml(imo)} pendiente de registro en flota maestra">
+                        <div class="market-fleet-card-icon"><i class="fa-regular fa-circle-question"></i></div>
+                        <div class="market-fleet-card-info">
+                            <span class="market-fleet-card-name">Buque</span>
+                            <span class="market-fleet-card-imo">(${escapeHtml(imo)})</span>
+                        </div>
+                        <span class="market-fleet-card-badge-unmatched">No indexado</span>
+                    </article>`;
+            }).join('')}
+        </div>`;
 }
 
 async function loadContacts(force = false) {
@@ -277,9 +519,10 @@ function closeDirectory() {
 }
 
 function openEditor(contact = null) {
-    const { editor, form, formError } = getElements();
+    const { editor, form, formError, imoInput } = getElements();
     if (!editor || !form) return;
     state.editingId = contact?.id || null;
+    state.editingImos = Array.isArray(contact?.linked_imos) ? [...contact.linked_imos] : [];
     document.getElementById('market-contact-editor-title').textContent = contact ? 'Editar contacto' : 'Nuevo contacto';
     form.reset();
     form.elements.company_name.value = contact?.company_name || '';
@@ -289,6 +532,8 @@ function openEditor(contact = null) {
     form.elements.emails.value = (contact?.emails || []).join('\n');
     form.elements.phones.value = (contact?.phones || []).join('\n');
     form.elements.notes.value = contact?.notes || '';
+    renderImoTags();
+    if (imoInput) imoInput.value = '';
     if (formError) formError.hidden = true;
     editor.hidden = false;
     editor.scrollTop = 0;
@@ -303,12 +548,17 @@ function closeEditor() {
     if (editor) editor.hidden = true;
     if (formError) formError.hidden = true;
     state.editingId = null;
+    state.editingImos = [];
 }
 
 async function submitContact(event) {
     event.preventDefault();
-    const { form, formError } = getElements();
+    const { form, formError, imoInput } = getElements();
     if (!form) return;
+    if (imoInput && imoInput.value.trim()) {
+        addImosFromText(imoInput.value);
+        imoInput.value = '';
+    }
     const submitButton = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
     const wasEditing = Boolean(state.editingId);
@@ -320,7 +570,8 @@ async function submitContact(event) {
         country: formData.get('country'),
         emails: splitValues(formData.get('emails')),
         phones: splitValues(formData.get('phones')),
-        notes: formData.get('notes')
+        notes: formData.get('notes'),
+        linked_imos: [...state.editingImos]
     };
 
     if (formError) formError.hidden = true;
@@ -342,6 +593,13 @@ async function submitContact(event) {
         if (index >= 0) state.contacts[index] = contact;
         else state.contacts.push(contact);
         state.contacts.sort((a, b) => String(a.company_name).localeCompare(String(b.company_name), 'es'));
+
+        // Invalidate cached fleet for this contact
+        state.fleetCache.delete(contact.id);
+        if (state.expandedIds.has(contact.id)) {
+            fetchFleetForContact(contact);
+        }
+
         closeEditor();
         renderDirectory();
         showToast(wasEditing ? 'Contacto actualizado.' : 'Contacto añadido a la agenda.');
@@ -387,7 +645,7 @@ function showToast(message, isError = false) {
 }
 
 function bindDirectoryEvents() {
-    const { shell, search, form } = getElements();
+    const { shell, search, form, tagsBox, imoInput } = getElements();
     shell?.addEventListener('click', event => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
@@ -412,12 +670,62 @@ function bindDirectoryEvents() {
 
         const copyButton = target.closest('[data-copy-phone]');
         if (copyButton) copyPhone(copyButton.dataset.copyPhone);
+
+        const toggleBtn = target.closest('[data-toggle-details]');
+        if (toggleBtn) {
+            event.stopPropagation();
+            toggleContactDetails(toggleBtn.dataset.toggleDetails);
+        }
+
+        const removeTagBtn = target.closest('[data-remove-imo]');
+        if (removeTagBtn) {
+            event.stopPropagation();
+            removeImoTag(removeTagBtn.dataset.removeImo);
+        }
+    });
+
+    tagsBox?.addEventListener('click', event => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('[data-remove-imo]')) return;
+        imoInput?.focus();
+    });
+
+    imoInput?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ',') {
+            event.preventDefault();
+            if (imoInput.value.trim()) {
+                addImosFromText(imoInput.value);
+                imoInput.value = '';
+            }
+        } else if (event.key === 'Backspace' && !imoInput.value) {
+            if (state.editingImos.length > 0) {
+                state.editingImos.pop();
+                renderImoTags();
+            }
+        }
+    });
+
+    imoInput?.addEventListener('paste', event => {
+        const pastedText = (event.clipboardData || window.clipboardData)?.getData('text');
+        if (pastedText) {
+            event.preventDefault();
+            addImosFromText(pastedText);
+            imoInput.value = '';
+        }
+    });
+
+    imoInput?.addEventListener('blur', () => {
+        if (imoInput.value.trim()) {
+            addImosFromText(imoInput.value);
+            imoInput.value = '';
+        }
     });
 
     search?.addEventListener('input', event => {
         state.search = event.target.value || '';
         renderDirectory();
     });
+
     form?.addEventListener('submit', submitContact);
 }
 
