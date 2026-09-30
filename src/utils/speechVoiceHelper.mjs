@@ -1,4 +1,98 @@
 /**
+ * Diccionario de mapeo exacto de códigos cortos de UI a formato BCP-47
+ * requerido por la Web Speech API (SpeechRecognition y SpeechSynthesis).
+ */
+export const SPEECH_LANG_MAP = Object.freeze({
+  es: 'es-ES',
+  en: 'en-US',
+  fr: 'fr-FR',
+  ar: 'ar-SA',
+  pt: 'pt-PT',
+  de: 'de-DE',
+  it: 'it-IT',
+  tr: 'tr-TR',
+  zh: 'zh-CN',
+});
+
+/**
+ * Convierte un código corto de idioma de la UI (ej. 'fr', 'en', 'auto') al formato BCP-47
+ * requerido por la Web Speech API (SpeechRecognition / SpeechSynthesis).
+ * Si la UI está en modo 'AUTO', detecta el idioma base del navegador y le aplica el mapeo,
+ * o usa 'en-US' como fallback seguro.
+ *
+ * @param {string} [langCode]
+ * @param {string} [fallback='en-US']
+ * @returns {string}
+ */
+export function mapLanguageToBcp47(langCode, fallback = 'en-US') {
+  const clean = String(langCode || '').trim();
+  const lower = clean.toLowerCase();
+
+  if (!lower || lower === 'auto') {
+    let browserLang = '';
+    try {
+      if (typeof navigator !== 'undefined') {
+        browserLang = String(navigator.language || navigator.userLanguage || '').trim();
+      }
+    } catch {
+      browserLang = '';
+    }
+
+    if (browserLang) {
+      const base = browserLang.split('-')[0].toLowerCase();
+      if (SPEECH_LANG_MAP[base]) {
+        return SPEECH_LANG_MAP[base];
+      }
+      if (browserLang.includes('-')) {
+        const parts = browserLang.split('-');
+        return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+      }
+      return `${base}-${base.toUpperCase()}`;
+    }
+    return fallback;
+  }
+
+  if (clean.includes('-')) {
+    const parts = clean.split('-');
+    return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  }
+
+  if (SPEECH_LANG_MAP[lower]) {
+    return SPEECH_LANG_MAP[lower];
+  }
+
+  const base = lower.split('-')[0];
+  if (SPEECH_LANG_MAP[base]) {
+    return SPEECH_LANG_MAP[base];
+  }
+
+  return fallback;
+}
+
+/**
+ * Obtiene dinámicamente el idioma actual de la UI mapeado a BCP-47 para SpeechRecognition.
+ * Comprueba el selector lateral del DOM, localStorage ('seacharter_lang' / 'rodahmar_lang'),
+ * el atributo lang del documento html y la configuración del navegador.
+ *
+ * @param {string} [fallback='en-US']
+ * @returns {string}
+ */
+export function getSpeechRecognitionLanguage(fallback = 'en-US') {
+  if (typeof window === 'undefined') return fallback;
+  let raw = '';
+  try {
+    raw = (typeof document !== 'undefined' && document.getElementById('language-selector')?.value)
+      || (typeof localStorage !== 'undefined' && (localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang')))
+      || (typeof document !== 'undefined' && document.documentElement?.lang)
+      || (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage))
+      || fallback;
+  } catch {
+    raw = fallback;
+  }
+  return mapLanguageToBcp47(raw, fallback);
+}
+
+/**
  * Resolves the active UI language from the DOM / localStorage / browser settings,
  * returning standard BCP-47 language tags (e.g. 'en-US', 'fr-FR', 'es-ES').
  *
@@ -9,7 +103,7 @@ export function getUILanguage(fallback = 'es-ES') {
   if (typeof window === 'undefined') return fallback;
   let raw = '';
   try {
-    raw = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang'))
+    raw = (typeof localStorage !== 'undefined' && (localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang')))
       || (typeof document !== 'undefined' && document.getElementById('language-selector')?.value)
       || (typeof document !== 'undefined' && document.documentElement?.lang)
       || (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage))
@@ -21,22 +115,11 @@ export function getUILanguage(fallback = 'es-ES') {
   const clean = String(raw || '').trim();
   if (!clean) return fallback;
 
-  if (clean.includes('-')) {
-    const parts = clean.split('-');
-    return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  if (clean.toLowerCase() === 'auto') {
+    return mapLanguageToBcp47('auto', 'en-US');
   }
 
-  const lower = clean.toLowerCase();
-  if (lower === 'en') return 'en-US';
-  if (lower === 'fr') return 'fr-FR';
-  if (lower === 'es') return 'es-ES';
-  if (lower === 'de') return 'de-DE';
-  if (lower === 'it') return 'it-IT';
-  if (lower === 'pt') return 'pt-PT';
-  if (lower === 'ar') return 'ar-SA';
-  if (lower === 'tr') return 'tr-TR';
-  if (lower === 'zh' || lower === 'zh-cn') return 'zh-CN';
-  return `${lower}-${lower.toUpperCase()}`;
+  return mapLanguageToBcp47(clean, fallback);
 }
 
 /**
