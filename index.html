@@ -45925,10 +45925,123 @@ function scheduleReactiveEngine() {
         }
 
         function generateVoyageRefFallback() {
-            const year = new Date().getFullYear();
             const suffix = Math.floor(1000 + Math.random() * 9000);
-            return `RDM/${year}-${suffix}`;
+            return `RDM/2026-${suffix}`;
         }
+        window.generateRandomProjectRef = generateVoyageRefFallback;
+        window.generateNewProjectRef = generateVoyageRefFallback;
+
+        function clearGeographicData() {
+            const geoInputIds = [
+                'port-ballast', 'port-pol', 'port-pod',
+                'map-port-ballast', 'map-port-pol', 'map-port-pod',
+                'match-load-port', 'match-unload-port'
+            ];
+            geoInputIds.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = '';
+                    try {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (_) {}
+                }
+            });
+
+            ['dist-ballast', 'dist-laden'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = '0';
+                    try {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (_) {}
+                }
+            });
+
+            ['port-ballast-limits', 'port-pol-limits', 'port-pod-limits'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
+
+            ['port-ballast-draft', 'port-ballast-length', 'port-pol-draft', 'port-pol-length', 'port-pod-draft', 'port-pod-length'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = '-';
+            });
+
+            if (typeof State !== 'undefined') {
+                State.portBallast = '';
+                State.pol = '';
+                State.pod = '';
+                State.portBallastCoordinates = null;
+                State.polCoordinates = null;
+                State.podCoordinates = null;
+                State.distBallast = 0;
+                State.distLaden = 0;
+            }
+
+            if (window.SeaCharterStore?.set) {
+                try {
+                    window.SeaCharterStore.set({
+                        pol: '',
+                        pod: '',
+                        portBallast: '',
+                        distBallast: 0,
+                        distLaden: 0
+                    });
+                } catch (_) {}
+            }
+
+            try {
+                if (typeof window.clearRouteFromMap === 'function') window.clearRouteFromMap();
+                if (typeof window.clearMapRoute === 'function') window.clearMapRoute();
+                if (window.MapController?.clearRoute) window.MapController.clearRoute();
+                window.dispatchEvent(new CustomEvent('seacharter:bunker-route-change', {
+                    detail: { source: 'clearGeographicData', pol: '', pod: '' }
+                }));
+            } catch (_) {}
+        }
+        window.clearGeographicData = clearGeographicData;
+
+        let lastNewProjectTick = 0;
+        function handleNewProject() {
+            const now = Date.now();
+            if (now - lastNewProjectTick < 100 && window.activeProjectRef) {
+                return window.activeProjectRef;
+            }
+            lastNewProjectTick = now;
+
+            // a) Generar una constante:
+            const newRef = "RDM/2026-" + Math.floor(1000 + Math.random() * 9000);
+
+            // b) Actualizar el estado global:
+            if (typeof window.setActiveProjectRef === 'function') {
+                window.setActiveProjectRef(newRef);
+            } else {
+                window.activeProjectRef = newRef;
+                if (typeof State !== 'undefined') {
+                    State.activeProjectRef = newRef;
+                    State.activeReference = newRef;
+                }
+                syncActiveContractReference(newRef);
+            }
+
+            const quickRefEl = document.getElementById('quick-ref');
+            if (quickRefEl && quickRefEl.value !== newRef) {
+                quickRefEl.value = newRef;
+            }
+
+            // c) Limpiar los estados de los puertos (POL, POD):
+            clearGeographicData();
+
+            if (typeof showToast === 'function') {
+                showToast(`✨ Nuevo expediente iniciado: ${newRef}`, 'success');
+            }
+
+            return newRef;
+        }
+        window.handleNewProject = handleNewProject;
+        window.createNewProject = handleNewProject;
 
         function generateAndFillProjectRef() {
             const input = document.getElementById('project-init-input');
@@ -45981,15 +46094,33 @@ function scheduleReactiveEngine() {
                     if (typeof window.setActiveProjectRef === 'function') {
                         window.setActiveProjectRef(urlRef);
                     }
+                    const quickRefEl = document.getElementById('quick-ref');
+                    if (quickRefEl && quickRefEl.value !== urlRef) {
+                        quickRefEl.value = urlRef;
+                    }
                     return;
                 }
             } catch (_) {}
 
-            setTimeout(() => {
-                if (!window.activeProjectRef) {
-                    openProjectInitModal(false);
-                }
-            }, 150);
+            // Al cargar la aplicación (en el inicio), si la URL no contiene un parámetro de referencia previo,
+            // el estado activeProjectRef DEBE inicializarse llamando a esta función generadora.
+            // El input del Header debe mostrar inmediatamente este nuevo ID generado.
+            const newRef = window.activeProjectRef || (typeof window.generateRandomProjectRef === 'function'
+                ? window.generateRandomProjectRef()
+                : (typeof window.generateNewProjectRef === 'function'
+                    ? window.generateNewProjectRef()
+                    : generateVoyageRefFallback()));
+
+            window.activeProjectRef = newRef;
+            State.activeProjectRef = newRef;
+            syncActiveContractReference(newRef);
+            if (typeof window.setActiveProjectRef === 'function') {
+                window.setActiveProjectRef(newRef);
+            }
+            const quickRefEl = document.getElementById('quick-ref');
+            if (quickRefEl && quickRefEl.value !== newRef) {
+                quickRefEl.value = newRef;
+            }
         }
 
         window.openProjectInitModal = openProjectInitModal;

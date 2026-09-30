@@ -152,16 +152,9 @@ export function ConnectionStatusBar() {
       }
     };
 
-    const initialRef =
-      window.ContractRefManager?.getActiveContractRef?.() ||
-      window.ContractReference?.getActiveContractRef?.() ||
-      window.getActiveContractRef?.() ||
-      (typeof window.sessionStorage !== "undefined" ? window.sessionStorage.getItem("active_contract_ref") : null) ||
-      "";
-    if (initialRef) {
-      persistActiveSessionToBackend(initialRef);
-    }
-
+    // 2. DETENER ESCRITURA AUTOMÁTICA EN NEON (GUARDADO PREMATURO):
+    // La aplicación SOLO debe hacer el POST/UPSERT a Neon cuando el usuario pulse explícitamente
+    // el botón de "Calcular ruta" o "Guardar", no por el simple hecho de generar un ID aleatorio o montar el componente.
     channel.onmessage = (event) => {
       const data = event?.data;
       if (data?.type === "PING_SESSION" || data === "PING_SESSION") {
@@ -177,10 +170,6 @@ export function ConnectionStatusBar() {
           type: "CORE_SESSION_ACTIVE",
           reference: currentSessionRef,
         });
-
-        if (currentSessionRef && currentSessionRef !== lastPersistedRef) {
-          persistActiveSessionToBackend(currentSessionRef);
-        }
       }
     };
 

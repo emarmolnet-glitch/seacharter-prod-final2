@@ -189,17 +189,57 @@
     }
 
     function requestNewEstimation() {
-        const elements = newEstimationModalElements();
-        if (!elements.modal) return;
-        elements.reference.textContent = `REF: ${text('quick-ref') || 'Pendiente de asignación'}`;
-        elements.error.textContent = '';
-        elements.error.classList.add('hidden');
-        elements.save.disabled = false;
-        elements.discard.disabled = false;
-        elements.save.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar y Continuar';
-        elements.modal.classList.add('is-open');
-        elements.modal.setAttribute('aria-hidden', 'false');
-        window.setTimeout(() => elements.save.focus(), 0);
+        // a) Generar una constante:
+        const newRef = "RDM/2026-" + Math.floor(1000 + Math.random() * 9000);
+
+        // b) Actualizar el estado global:
+        if (typeof window.setActiveProjectRef === 'function') {
+            window.setActiveProjectRef(newRef);
+        } else {
+            window.activeProjectRef = newRef;
+            if (window.State) {
+                window.State.activeProjectRef = newRef;
+                window.State.activeReference = newRef;
+            }
+            if (typeof window.syncActiveContractReference === 'function') {
+                window.syncActiveContractReference(newRef);
+            }
+        }
+        const quickRefEl = document.getElementById('quick-ref');
+        if (quickRefEl) quickRefEl.value = newRef;
+
+        // c) Limpiar los estados de los puertos (POL, POD):
+        if (typeof window.clearGeographicData === 'function') {
+            window.clearGeographicData();
+        } else {
+            const portIds = [
+                'port-pol', 'port-pod', 'map-port-pol', 'map-port-pod',
+                'port-ballast', 'map-port-ballast', 'match-load-port', 'match-unload-port'
+            ];
+            portIds.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = '';
+                    try {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (_) {}
+                }
+            });
+            ['dist-ballast', 'dist-laden'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = '0';
+            });
+            if (window.State) {
+                window.State.pol = '';
+                window.State.pod = '';
+                window.State.portBallast = '';
+                window.State.distBallast = 0;
+                window.State.distLaden = 0;
+            }
+        }
+
+        return newRef;
     }
 
     function closeNewEstimationModal() {
