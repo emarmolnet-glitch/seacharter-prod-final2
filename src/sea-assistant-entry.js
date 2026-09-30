@@ -1908,31 +1908,35 @@ const fileInput = root.querySelector("#sca-file-input");
   };
 
   const speakText = (text) => {
-    if (!speechEnabled || !supportsSpeechSynthesis || panel.hidden) return;
-    const cleanText = cleanTextForSpeech(text);
-    if (!cleanText) return;
+    try {
+      if (!speechEnabled || !supportsSpeechSynthesis || panel.hidden) return;
+      const cleanText = cleanTextForSpeech(text);
+      if (!cleanText) return;
 
-    const uiLang = getUILanguage();
-    const utterance = new window.SpeechSynthesisUtterance(cleanText);
-    utterance.lang = uiLang;
-    utterance.rate = 1.1;
-    utterance.pitch = 1;
+      const uiLang = getUILanguage();
+      const utterance = new window.SpeechSynthesisUtterance(cleanText);
+      utterance.lang = uiLang;
+      utterance.rate = 1.1;
+      utterance.pitch = 1;
 
-    const selectedVoice = selectBestVoice(speechSynthesis, uiLang);
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
+      const selectedVoice = selectBestVoice(speechSynthesis, uiLang);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onstart = () => {
+        isSpeaking = true;
+        syncStopControl();
+      };
+      utterance.onend = () => {
+        isSpeaking = false;
+        syncStopControl();
+      };
+      utterance.onerror = utterance.onend;
+      speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('[SeaAssistant] Speech synthesis failed or voice unavailable:', err);
     }
-
-    utterance.onstart = () => {
-      isSpeaking = true;
-      syncStopControl();
-    };
-    utterance.onend = () => {
-      isSpeaking = false;
-      syncStopControl();
-    };
-    utterance.onerror = utterance.onend;
-    speechSynthesis.speak(utterance);
   };
 
   const appendMessage = (message) => {
