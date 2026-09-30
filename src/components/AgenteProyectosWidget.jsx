@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getApiUrl } from '../utils/apiConfig.js';
+import { getUILanguage, selectBestVoice, initSpeechVoices } from '../utils/speechVoiceHelper.js';
 import './AgenteProyectosWidget.css';
 
 export default function AgenteProyectosWidget({
@@ -93,15 +94,26 @@ export default function AgenteProyectosWidget({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAnalyzing]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      initSpeechVoices(window.speechSynthesis);
+    }
+  }, []);
+
   const speakMessage = (text) => {
     if (isMuted) return;
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
       const clean = text.replace(/[✅📂📎🎙️🔊🔇●✕🗕•]/g, '').trim();
+      const uiLang = getUILanguage();
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = 'es-ES';
+      utterance.lang = uiLang;
       utterance.rate = 1.05;
+      const selectedVoice = selectBestVoice(window.speechSynthesis, uiLang);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
       window.speechSynthesis.speak(utterance);
     } catch {
       // Ignorar fallos de síntesis de voz
@@ -120,6 +132,7 @@ export default function AgenteProyectosWidget({
     setIsAnalyzing(true);
 
     try {
+      const uiLanguage = getUILanguage();
       const projectContext = JSON.stringify({
         items: currentProjectItems, // Reemplazar con la variable real de tu estado
         financials: currentFinancialBreakdown, // Reemplazar con la variable real
@@ -208,6 +221,8 @@ Tienes acceso en tiempo real a los datos que el usuario está operando, pero con
 
 Contexto actual del proyecto: ${projectContext}`;
 
+      const dynamicSystemInstruction = `IMPORTANT: The user interface is currently set to ${uiLanguage}. You MUST generate your entire response strictly in ${uiLanguage}. Do not use Spanish unless ${uiLanguage} is Spanish.\n\n${systemInstruction}`;
+
       const response = await fetch(getApiUrl('/api/project-chat'), {
         method: 'POST',
         headers: {
@@ -222,9 +237,10 @@ Contexto actual del proyecto: ${projectContext}`;
           pod: routeData?.pod,
           loadingRate: routeData?.loadingRate,
           dischargingRate: routeData?.dischargingRate,
-          systemInstruction,
+          systemInstruction: dynamicSystemInstruction,
           projectContext,
           history: messages,
+          uiLanguage,
         }),
       });
 
@@ -454,6 +470,7 @@ Contexto actual del proyecto: ${projectContext}`;
         ? rawDataBase64.split(',')[1].trim()
         : (typeof rawDataBase64 === 'string' ? rawDataBase64.trim() : '');
 
+      const uiLanguage = getUILanguage();
       const projectContext = JSON.stringify({
         items: currentProjectItems,
         financials: currentFinancialBreakdown,
@@ -542,6 +559,8 @@ Tienes acceso en tiempo real a los datos que el usuario está operando, pero con
 
 Contexto actual del proyecto: ${projectContext}`;
 
+      const dynamicSystemInstruction = `IMPORTANT: The user interface is currently set to ${uiLanguage}. You MUST generate your entire response strictly in ${uiLanguage}. Do not use Spanish unless ${uiLanguage} is Spanish.\n\n${systemInstruction}`;
+
       const response = await fetch(getApiUrl('/.netlify/functions/project-parser'), {
         method: 'POST',
         headers: {
@@ -552,10 +571,11 @@ Contexto actual del proyecto: ${projectContext}`;
           fileBase64: cleanBase64,
           fileName: file.name,
           mimeType: file.type || 'application/pdf',
-          systemInstruction,
-          systemPrompt: systemInstruction,
+          systemInstruction: dynamicSystemInstruction,
+          systemPrompt: dynamicSystemInstruction,
           projectContext,
           history: messages,
+          uiLanguage,
         })
       });
       const data = await response.json();

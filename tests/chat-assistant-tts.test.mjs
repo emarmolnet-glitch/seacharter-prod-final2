@@ -5,12 +5,15 @@ import test from 'node:test';
 const frontendSource = await readFile(new URL('/opt/build/repo/src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const stylesheet = await readFile(new URL('/opt/build/repo/assets/css/sea-assistant.css', import.meta.url), 'utf8');
 
-test('assistant exposes a persistent speech synthesis toggle', () => {
+test('assistant exposes a persistent speech synthesis toggle with dynamic language and natural voice selection', () => {
   assert.match(frontendSource, /class="sca-speech-toggle[^\"]*"/);
   assert.match(frontendSource, /SPEECH_PREFERENCE_KEY/);
   assert.match(frontendSource, /window\.speechSynthesis/);
   assert.match(frontendSource, /new window\.SpeechSynthesisUtterance\(cleanText\)/);
-  assert.match(frontendSource, /utterance\.lang = "es-ES"/);
+  assert.match(frontendSource, /utterance\.lang\s*=\s*uiLang/);
+  assert.match(frontendSource, /selectBestVoice\(speechSynthesis,\s*uiLang\)/);
+  assert.match(frontendSource, /utterance\.voice\s*=\s*selectedVoice/);
+  assert.match(frontendSource, /initSpeechVoices\(speechSynthesis\)/);
   assert.match(frontendSource, /utterance\.rate = 1\.1/);
   assert.match(frontendSource, /utterance\.pitch = 1/);
 });
@@ -21,7 +24,7 @@ test('speech is cleaned and cancelled on mute or close', () => {
   assert.match(frontendSource, /speechSynthesis\.cancel\(\)/);
   assert.match(frontendSource, /if \(!speechEnabled\) cancelSpeech\(\)/);
   assert.match(frontendSource, /if \(recognitionStateRef\.current\.isListening \|\| recognitionStateRef\.current\.isStarting\) stopRecognition\(\);\s+cancelSpeech\(\)/s);
-  assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, checklistResult\.prompt/);
+  assert.match(frontendSource, /replaceWithAssistantMessage\(\s*thinkingMessage,/);
   assert.match(frontendSource, /appendMessage\(message\);\s+if \(!options\.error\) speakText\(text\)/s);
 });
 

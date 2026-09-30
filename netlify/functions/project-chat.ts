@@ -24,9 +24,11 @@ export function formatProjectContext(body: any = {}): string {
   return JSON.stringify(fallbackContext);
 }
 
-export function buildAgenteProyectosSystemInstruction(projectContext: any = '{}'): string {
+export function buildAgenteProyectosSystemInstruction(projectContext: any = '{}', uiLanguage: string = 'es-ES'): string {
   const pContext = typeof projectContext === 'string' ? projectContext : JSON.stringify(projectContext);
-  return `Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente.
+  return `IMPORTANT: The user interface is currently set to ${uiLanguage}. You MUST generate your entire response strictly in ${uiLanguage}. Do not use Spanish unless ${uiLanguage} is Spanish.
+
+Eres el Agente de Proyectos de SeaCharter Core PRO, impulsado por Gemini. Eres un consultor estratégico marítimo y un socio conversacional altamente inteligente.
 
 REGLA CERO - SALUDOS Y MENSAJES CASUALES:
 Si el usuario te saluda ("hola", "buenos días", "qué tal") o hace una pregunta informal, responde ÚNICAMENTE con un saludo natural, humano y cercano, abriendo la puerta a la conversación. ¡PROHIBIDO! No escupas desgloses financieros, costes ni datos del JSON a menos que el usuario te pida explícitamente números, cálculos o análisis específicos.
@@ -440,11 +442,18 @@ export async function handler(eventOrRequest: any, context?: any): Promise<Respo
     const requestOptions = baseUrl ? { baseUrl } : undefined;
 
     const projectContext = formatProjectContext(body);
-    const systemInstruction = body.systemInstruction
+    const uiLanguage = body.uiLanguage || body.ui_language || body.lang || body.language || 'es-ES';
+    const langDirective = `IMPORTANT: The user interface is currently set to ${uiLanguage}. You MUST generate your entire response strictly in ${uiLanguage}. Do not use Spanish unless ${uiLanguage} is Spanish.`;
+
+    let systemInstruction = body.systemInstruction
       ? (body.systemInstruction.includes('REGLA DE FORMATO DE FUENTES (BÚSQUEDA WEB)')
           ? body.systemInstruction
           : `${body.systemInstruction}\n\nREGLA DE FORMATO DE FUENTES (BÚSQUEDA WEB): \nCuando consultes información en internet, NUNCA incluyas URLs crudas, enlaces HTTP, ni metadatos de redirección en tu respuesta. Si debes citar de dónde has sacado el dato, menciona ÚNICAMENTE el nombre del sitio web en texto plano (por ejemplo: "Según Rome2Rio..." o "Fuente: Reuters"). La respuesta debe ser 100% conversacional y limpia.`)
-      : buildAgenteProyectosSystemInstruction(projectContext);
+      : buildAgenteProyectosSystemInstruction(projectContext, uiLanguage);
+
+    if (!systemInstruction.includes('IMPORTANT: The user interface is currently set to')) {
+      systemInstruction = `${langDirective}\n\n${systemInstruction}`;
+    }
 
     // Extract any file parts (if empty/missing, text order runs with complete normality)
     const fileParts = extractFileParts(body);

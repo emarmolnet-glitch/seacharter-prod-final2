@@ -3,6 +3,9 @@ import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 import { getApiUrl } from "./utils/apiConfig.js";
+import { getUILanguage, selectBestVoice, initSpeechVoices } from "./utils/speechVoiceHelper.js";
+
+export { getUILanguage, selectBestVoice, initSpeechVoices };
 
 const DEFAULT_CEREBRO_IA_ENDPOINT = getApiUrl("/api/cerebro-ia");
 const DEFAULT_CHAT_ASSISTANT_ENDPOINT = getApiUrl("/.netlify/functions/chat-assistant");
@@ -299,6 +302,7 @@ function sanitizePayloadForAI(payload = {}) {
         content: sanitizeAiText(entry?.content, AI_HISTORY_MESSAGE_MAX_CHARS),
       }))
       .filter((entry) => entry.content),
+    uiLanguage: payload.uiLanguage || getUILanguage(),
   };
 }
 
@@ -332,12 +336,14 @@ function getActiveAssistantEndpoint() {
 
 async function requestAssistantResponse(userText, historyElement, signal, attachedFiles = []) {
   const historial = collectConversationHistory(historyElement);
+  const uiLanguage = getUILanguage();
   
   const requestPayload = {
     CalculationData: collectCalculationData(),
     MarketData: collectMarketData(),
     UserContext: userText,
     ConversationHistory: historial,
+    uiLanguage,
   };
 
   if (attachedFiles.length > 0 || (iaActiva === 'local' && isSimulationQuery(userText))) {
@@ -350,7 +356,10 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
   try {
     if (attachedFiles.length > 0) {
       const formData = new FormData();
-      formData.append("body", JSON.stringify(sanitizePayloadForAI(requestPayload)));
+      const sanitized = sanitizePayloadForAI(requestPayload);
+      sanitized.uiLanguage = uiLanguage;
+      formData.append("body", JSON.stringify(sanitized));
+      formData.append("uiLanguage", uiLanguage);
 
       attachedFiles.forEach((file, index) => {
         formData.append(`documento_${index}`, file);
@@ -364,7 +373,11 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
     } else {
       const sanitizedPayload = sanitizePayloadForAI(requestPayload);
       sanitizedPayload.contexto = sanitizeAiContextValue(collectChatContext());
+      if (sanitizedPayload.contexto && typeof sanitizedPayload.contexto === "object") {
+        sanitizedPayload.contexto.uiLanguage = uiLanguage;
+      }
       sanitizedPayload.mensaje = userText;
+      sanitizedPayload.uiLanguage = uiLanguage;
 
       response = await fetch(endpointUrl, {
         method: "POST",
@@ -1545,6 +1558,7 @@ function collectChatContext() {
   };
 
   return {
+    uiLanguage: getUILanguage(),
     modulo: activeModule,
     moduloId: activeModuleDescriptor.id,
     rol: roleMode === "charterer" ? "Fletador/Charterer" : "Armador/Shipowner",
@@ -1834,6 +1848,9 @@ const fileInput = root.querySelector("#sca-file-input");
   };
   const speechSynthesis = window.speechSynthesis;
   const supportsSpeechSynthesis = Boolean(speechSynthesis && window.SpeechSynthesisUtterance);
+  if (supportsSpeechSynthesis) {
+    initSpeechVoices(speechSynthesis);
+  }
   let speechEnabled = false;
   let isSpeaking = false;
   let activeRequestController = null;
@@ -1895,10 +1912,17 @@ const fileInput = root.querySelector("#sca-file-input");
     const cleanText = cleanTextForSpeech(text);
     if (!cleanText) return;
 
+    const uiLang = getUILanguage();
     const utterance = new window.SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "es-ES";
+    utterance.lang = uiLang;
     utterance.rate = 1.1;
     utterance.pitch = 1;
+
+    const selectedVoice = selectBestVoice(speechSynthesis, uiLang);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
     utterance.onstart = () => {
       isSpeaking = true;
       syncStopControl();
@@ -1992,7 +2016,7 @@ const fileInput = root.querySelector("#sca-file-input");
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.lang = "es-ES";
+    recognition.lang = getUILanguage();
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
