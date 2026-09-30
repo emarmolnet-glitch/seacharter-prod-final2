@@ -12,6 +12,16 @@
   transform: translateY(-50%);
   pointer-events: none;
   font-family: inherit;
+  opacity: 1;
+  visibility: visible;
+  transition: all 0.3s ease-in-out;
+}
+
+.maritime-weather-panel.is-collapsed {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(-50%) translateX(30px);
 }
 
 .maritime-weather-card {

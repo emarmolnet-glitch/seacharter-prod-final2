@@ -87,16 +87,54 @@ test('index.html contains collapse button with toggle function and visible click
     'setRouteInputPanelOpen must toggle rotate-180 on chevron'
   );
 
-  // CSS ensures button remains visible and clickable on screen margin
+  // CSS ensures 100% clean leftward collapse of container and subcomponents
   assert.match(
     indexHtmlSource,
-    /\.map-command-shell\.input-collapsed\s+#map-input-overlay[\s\S]*?transform:\s*translateX\(calc\(-100%\s*\+\s*\d+px\)\)/,
-    'Collapsed overlay must leave margin visible on screen'
+    /\.map-command-shell\.input-collapsed[\s\S]*?#map-input-overlay[\s\S]*?transform:\s*translateX\(calc\(-100%/,
+    'Collapsed overlay must hide 100% cleanly towards the left margin'
   );
   assert.match(
     indexHtmlSource,
-    /\.map-command-shell\.input-collapsed\s+#map-input-overlay[\s\S]*?pointer-events:\s*auto/,
-    'Collapsed overlay must allow pointer-events for clicking the collapse button'
+    /id="btn-show-route-congestion"/,
+    'index.html provides minimal floating trigger button to restore collapsed panels'
+  );
+});
+
+test('Left panel unified container and right weather forecast cards collapse and restore in synchronized unison', () => {
+  // 1. Unified container wraps geographic input
+  assert.match(
+    indexHtmlSource,
+    /id="map-left-panels-container"/,
+    'index.html must have unified #map-left-panels-container'
+  );
+
+  // 2. Minimalist '>' floating trigger button anchored to sidebar
+  assert.match(
+    indexHtmlSource,
+    /id="btn-show-route-congestion"[^>]*class="[^"]*floating-route-trigger[^"]*"/,
+    'Restore trigger must be a minimalist floating button'
+  );
+  assert.match(
+    indexHtmlSource,
+    /fa-chevron-right/,
+    'Restore trigger must display a minimalist chevron-right (>) icon'
+  );
+
+  // 3. Weather forecast cards synchronization
+  assert.match(
+    indexHtmlSource,
+    /weatherRoot\.classList\.toggle\('weather-panel-collapsed',\s*!isGeoInputOpen\)/,
+    'setRouteInputPanelOpen must synchronize weather panel collapsed state'
+  );
+  assert.match(
+    indexHtmlSource,
+    /\.map-command-shell\.input-collapsed #maritime-weather-panel-root/,
+    'CSS must hide maritime weather panel when input is collapsed'
+  );
+  assert.match(
+    indexHtmlSource,
+    /window\.isGeoPanelOpen\s*=\s*isGeoInputOpen/,
+    'setRouteInputPanelOpen must update isGeoPanelOpen boolean state'
   );
 });
 
