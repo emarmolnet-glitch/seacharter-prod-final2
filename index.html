@@ -8759,30 +8759,28 @@
             }
 
             header.app-header > .header-actions-right {
-                order: initial !important;
-                display: flex !important;
-                width: auto !important;
-                gap: 0 !important;
-                justify-self: end !important;
-            }
-
-            header.app-header > .header-actions-right > :not(#session-actions) {
                 display: none !important;
             }
 
-            header.app-header #session-actions {
-                display: flex !important;
+            header.app-header > .header-left .header-app-title {
+                display: none !important;
             }
 
-            header.app-header #btn-collapse-header {
-                display: inline-flex !important;
-                width: 34px !important;
-                height: 34px !important;
-                min-height: 34px !important;
-                padding: 0 !important;
-                border-radius: 7px !important;
-                align-items: center !important;
-                justify-content: center !important;
+            header.app-header > .header-center {
+                flex: 1 1 auto !important;
+                width: 100% !important;
+                justify-content: flex-end !important;
+                gap: 0.35rem !important;
+            }
+
+            #header-vessel-search-container {
+                flex: 1 1 140px !important;
+                max-width: none !important;
+                min-width: 120px !important;
+            }
+
+            #header-voyage-ref-container {
+                flex-shrink: 0 !important;
             }
         }
 
@@ -9128,6 +9126,149 @@
             stroke: #0f766e !important;
         }
 
+        /* Sidebar Action Buttons and Dropdown Menus */
+        #app-navigation-sidebar .sidebar-action-buttons-top {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        #app-navigation-sidebar #new-estimation-btn,
+        #app-navigation-sidebar #btn-master-executive-report,
+        #app-navigation-sidebar #advanced-modules-btn,
+        #app-navigation-sidebar #mobile-session-menu-btn {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 38px;
+            border-radius: 0.5rem;
+            color: #475569; /* slate-600 */
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid transparent;
+            background: transparent;
+            transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #app-navigation-sidebar #new-estimation-btn svg,
+        #app-navigation-sidebar #btn-master-executive-report svg,
+        #app-navigation-sidebar #advanced-modules-btn i,
+        #app-navigation-sidebar #mobile-session-menu-btn svg {
+            color: #475569;
+            stroke: #475569;
+            flex-shrink: 0;
+            transition: stroke 150ms ease, color 150ms ease;
+        }
+
+        #app-navigation-sidebar #new-estimation-btn:hover,
+        #app-navigation-sidebar #btn-master-executive-report:hover,
+        #app-navigation-sidebar #advanced-modules-btn:hover,
+        #app-navigation-sidebar #mobile-session-menu-btn:hover {
+            background-color: #f1f5f9 !important; /* slate-100 */
+            color: #0f172a !important; /* slate-900 */
+        }
+
+        #app-navigation-sidebar #new-estimation-btn:hover svg,
+        #app-navigation-sidebar #btn-master-executive-report:hover svg,
+        #app-navigation-sidebar #advanced-modules-btn:hover i,
+        #app-navigation-sidebar #mobile-session-menu-btn:hover svg {
+            color: #0f172a !important;
+            stroke: #0f172a !important;
+        }
+
+        #app-navigation-sidebar.is-compact #new-estimation-btn,
+        #app-navigation-sidebar.is-compact #btn-master-executive-report,
+        #app-navigation-sidebar.is-compact #advanced-modules-btn,
+        #app-navigation-sidebar.is-compact #mobile-session-menu-btn {
+            justify-content: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        #app-navigation-sidebar.is-expanded #new-estimation-btn,
+        #app-navigation-sidebar.is-expanded #btn-master-executive-report,
+        #app-navigation-sidebar.is-expanded #advanced-modules-btn,
+        #app-navigation-sidebar.is-expanded #mobile-session-menu-btn {
+            justify-content: flex-start !important;
+            padding-left: 0.65rem !important;
+            padding-right: 0.65rem !important;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-container {
+            width: 100%;
+            position: relative;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-menu {
+            position: absolute !important;
+            left: calc(100% + 8px) !important;
+            bottom: 0 !important;
+            top: auto !important;
+            right: auto !important;
+            z-index: 9999 !important;
+            width: 230px !important;
+            display: none !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            padding: 0.5rem 0 !important;
+            margin: 0 !important;
+            list-style: none !important;
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 12px 30px -5px rgba(15, 23, 42, 0.2), 0 4px 10px rgba(15, 23, 42, 0.05) !important;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-menu.is-open {
+            display: flex !important;
+        }
+
+        #app-navigation-sidebar #advanced-modules-menu {
+            width: min(85vw, 320px) !important;
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-item {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-action {
+            width: 100% !important;
+            min-height: 38px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.65rem !important;
+            padding: 0.5rem 1rem !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: #0f172a !important;
+            font-size: 0.78rem !important;
+            font-weight: 600 !important;
+            text-align: left !important;
+            text-decoration: none !important;
+            cursor: pointer !important;
+            transition: background-color 150ms ease, color 150ms ease;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-action:hover,
+        #app-navigation-sidebar .tools-dropdown-action:focus-visible {
+            background: #f1f5f9 !important;
+            color: #0284c7 !important;
+            outline: none !important;
+        }
+
+        #app-navigation-sidebar .tools-dropdown-action .header-utility-icon {
+            color: #003366 !important;
+            stroke: currentColor !important;
+        }
+
         /* Contenedor Unificado del Panel Izquierdo (Input Geográfico + Predictive Congestion Shield) */
         .map-left-panels-container {
             position: absolute;
@@ -9262,12 +9403,12 @@
             </div>
         </div>
 
-        <!-- CENTRO: STATUS BRIDGE, BUSCADOR IMO, VOYAGE REF, INFORME MASTER -->
-        <div class="header-center flex items-center gap-2 md:gap-3 shrink-0">
+        <!-- CENTRO: STATUS BRIDGE, BUSCADOR IMO, VOYAGE REF -->
+        <div class="header-center flex items-center gap-2 md:gap-3 flex-1 justify-center max-w-3xl mx-2 md:mx-4">
             <div id="connection-status-root" class="shrink-0"></div>
 
             <!-- BUSCADOR DIRECTO DE BUQUES EN BASE DE DATOS NEON -->
-            <div id="header-vessel-search-container" class="relative inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs shadow-2xs shrink-0 max-w-xs focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-sky-500 transition-all">
+            <div id="header-vessel-search-container" class="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs shadow-2xs flex-1 min-w-[160px] focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-sky-500 transition-all">
                 <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -9275,8 +9416,8 @@
                 <input
                     type="text"
                     id="header-vessel-search-input"
-                    class="bg-transparent font-sans text-xs font-semibold text-slate-800 focus:outline-none w-28 sm:w-36 placeholder:text-slate-400"
-                    placeholder="Buscar buque..."
+                    class="bg-transparent font-sans text-xs font-semibold text-slate-800 focus:outline-none w-full placeholder:text-slate-400"
+                    placeholder="Buscar buque por nombre o IMO..."
                     aria-label="Buscar buque en base de datos"
                     onkeydown="if (event.key === 'Enter') handleHeaderVesselSearch(this.value);"
                 >
@@ -9284,7 +9425,7 @@
                     type="button"
                     id="header-vessel-search-btn"
                     onclick="handleHeaderVesselSearch(document.getElementById('header-vessel-search-input').value)"
-                    class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-1.5 py-0.5 rounded transition shrink-0 cursor-pointer"
+                    class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-2 py-0.5 rounded transition shrink-0 cursor-pointer"
                     title="Buscar buque en Data Bridge / Neon"
                 >
                     <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -9295,136 +9436,15 @@
             </div>
 
             <!-- SELECTOR REFERENCIA DE VIAJE / EXPEDIENTE ACTIVO -->
-            <div id="header-voyage-ref-container" class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-50/90 border border-blue-300 text-blue-900 text-xs font-mono shadow-xs shrink-0 transition-all hover:border-blue-400" title="Expediente Activo (project_ref)">
+            <div id="header-voyage-ref-container" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50/90 border border-blue-300 text-blue-900 text-xs font-mono shadow-xs shrink-0 transition-all hover:border-blue-400" title="Expediente Activo (project_ref)">
                 <i class="fa-solid fa-folder-closed text-xs text-blue-600"></i>
                 <span class="text-blue-800 font-sans text-[10px] uppercase font-black tracking-wider bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200">Expediente:</span>
                 <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 w-28 sm:w-36 transition-all uppercase placeholder-blue-300" placeholder="RDM/2026-..." value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Expediente (project_ref)">
             </div>
-
-            <!-- BOTÓN TUERCA / CONFIGURACIÓN CON MENÚ DESPLEGABLE -->
-            <div class="tools-dropdown-container relative">
-                <button
-                    type="button"
-                    id="advanced-modules-btn"
-                    class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                    onclick="toggleAdvancedModulesMenu(event)"
-                    aria-controls="advanced-modules-menu"
-                    aria-expanded="false"
-                    title="Herramientas Avanzadas"
-                    aria-label="Herramientas Avanzadas"
-                >
-                    <i class="fa-solid fa-gear text-sm" aria-hidden="true"></i>
-                </button>
-                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas" style="z-index: 9999 !important;"></ul>
-            </div>
-
-            <!-- BOTÓN GENERAR INFORME MASTER -->
-            <button
-                type="button"
-                id="btn-master-executive-report"
-                onclick="generarInformeMasterOnClick(event)"
-                class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs shrink-0"
-                title="Generar Informe Master"
-                aria-label="Generar Informe Master"
-            >
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-700">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6" />
-                    <path d="M8 13h8" />
-                    <path d="M8 17h5" />
-                    <path d="M8 9h2" />
-                </svg>
-            </button>
-
-            <!-- MENÚ MÓVIL OCULTO EN ESCRITORIO -->
-            <div class="hidden" style="display:none !important;" aria-hidden="true">
-                <div class="mobile-module-nav">
-                    <button type="button" id="mobile-module-nav-btn" class="mobile-module-nav-trigger" onclick="toggleMobileModuleNav(event)" aria-controls="mobile-module-nav-menu" aria-expanded="false">
-                        <i class="fa-solid fa-bars mobile-menu-bars"></i>
-                        <span id="mobile-module-nav-current">Mapa</span>
-                    </button>
-                    <ul id="mobile-module-nav-menu" class="mobile-module-nav-menu"></ul>
-                </div>
-            </div>
         </div>
 
-        <!-- DERECHA: BOTONES DE ACCIÓN (+, ⋮, FAQ, IDIOMA, OWN/CHR, CRM, LOG, COLAPSAR) -->
-        <div class="header-actions-right flex items-center gap-1.5 shrink-0">
-            <!-- Session Actions Container -->
-            <div class="flex items-center gap-1.5" id="session-actions">
-                <button
-                    id="new-estimation-btn"
-                    type="button"
-                    onclick="window.DossierManager?.requestNewEstimation(); closeMobileSessionMenu();"
-                    class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                    title="Nueva Estimación"
-                    aria-label="Nueva Estimación"
-                >
-                    <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                </button>
-                <div class="tools-dropdown-container relative">
-                    <input
-                        type="file"
-                        id="load-session-file-input"
-                        accept=".json,application/json"
-                        onchange="handleImport(event)"
-                        style="display: none;"
-                    />
-                    <button
-                        id="mobile-session-menu-btn"
-                        type="button"
-                        onclick="toggleMobileSessionMenu(event)"
-                        class="tools-dropdown-trigger flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                        aria-controls="tools-dropdown-menu"
-                        aria-expanded="false"
-                        title="Utilidades de Sesión"
-                        aria-label="Utilidades de Sesión"
-                    >
-                        <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="5" r="1.5" />
-                            <circle cx="12" cy="12" r="1.5" />
-                            <circle cx="12" cy="19" r="1.5" />
-                        </svg>
-                    </button>
-                    <!-- MENÚ ⋮ SOLO CON ACCIONES DE SESIÓN: GUARDAR, CARGAR Y SALIR -->
-                    <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button, a')) setTimeout(closeMobileSessionMenu, 0);">
-                        <li class="tools-dropdown-item">
-                            <button onclick="saveAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Guardar Sesión" aria-label="Guardar Sesión">
-                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                                    <polyline points="17 21 17 13 7 13 7 21" />
-                                    <polyline points="7 3 7 8 15 8" />
-                                </svg>
-                                <span>Guardar Sesión</span>
-                            </button>
-                        </li>
-                        <li class="tools-dropdown-item">
-                            <button id="load-session-btn" onclick="loadAuditSession()" class="tools-dropdown-action" title="Cargar Sesión" aria-label="Cargar Sesión">
-                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                <span>Cargar Sesión</span>
-                            </button>
-                        </li>
-                        <li class="tools-dropdown-item">
-                            <button onclick="exitAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Salir" aria-label="Salir">
-                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                    <polyline points="16 17 21 12 16 7" />
-                                    <line x1="21" y1="12" x2="9" y2="12" />
-                                </svg>
-                                <span>Salir</span>
-                            </button>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
+        <!-- DERECHA: BOTONES DE ACCIÓN (FAQ, OWN/CHR, COLAPSAR) -->
+        <div class="header-actions-right hidden md:flex items-center gap-1.5 shrink-0">
             <!-- Botón FAQ / Manual -->
             <button
                 id="btn-open-faq-modal"
@@ -9531,10 +9551,133 @@
                         <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Reporte de Mercado</span></span>
                     </button>
                 </nav>
+
+                <!-- BOTONES DE ACCIÓN OPERATIVA (AÑADIR + E INFORME MASTER) -->
+                <div class="sidebar-action-buttons-top flex flex-col gap-1 w-full mt-1.5 pt-1.5 border-t border-slate-200 shrink-0">
+                    <button
+                        id="new-estimation-btn"
+                        type="button"
+                        onclick="window.DossierManager?.requestNewEstimation(); closeMobileSessionMenu();"
+                        class="tools-dropdown-trigger flex items-center justify-center"
+                        title="Nueva Estimación"
+                        aria-label="Nueva Estimación"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Nueva Estimación</span></span>
+                    </button>
+
+                    <button
+                        type="button"
+                        id="btn-master-executive-report"
+                        onclick="generarInformeMasterOnClick(event)"
+                        class="tools-dropdown-trigger flex items-center justify-center sidebar-nav-item h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                        title="Generar Informe Master"
+                        aria-label="Generar Informe Master"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-600">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <path d="M14 2v6h6" />
+                                <path d="M8 13h8" />
+                                <path d="M8 17h5" />
+                                <path d="M8 9h2" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Informe Master</span></span>
+                    </button>
+                </div>
             </div>
 
-            <!-- PARTE INFERIOR FIJA: ACCESOS DIRECTOS DATA BRIDGE Y LAND CHARTER -->
+            <!-- PARTE INFERIOR FIJA: CONFIGURACIÓN, SESIÓN, IDIOMA Y ACCESOS DIRECTOS -->
             <div class="sidebar-footer shrink-0 border-t border-slate-200 p-2 flex flex-col gap-1 bg-slate-50/70">
+                <!-- BOTÓN TUERCA / CONFIGURACIÓN CON MENÚ DESPLEGABLE -->
+                <div class="tools-dropdown-container relative w-full">
+                    <button
+                        type="button"
+                        id="advanced-modules-btn"
+                        class="tools-dropdown-trigger flex items-center justify-center sidebar-nav-item h-9 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                        onclick="toggleAdvancedModulesMenu(event)"
+                        aria-controls="advanced-modules-menu"
+                        aria-expanded="false"
+                        title="Herramientas Avanzadas"
+                        aria-label="Herramientas Avanzadas"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <i class="fa-solid fa-gear text-sm" aria-hidden="true"></i>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Configuración</span></span>
+                    </button>
+                    <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas" style="z-index: 9999 !important;"></ul>
+                </div>
+
+                <!-- BOTÓN OPCIONES / MENÚ SESIÓN (3 PUNTOS VERTICALES) -->
+                <div class="tools-dropdown-container relative w-full" id="session-actions">
+                    <input
+                        type="file"
+                        id="load-session-file-input"
+                        accept=".json,application/json"
+                        onchange="handleImport(event)"
+                        style="display: none;"
+                    />
+                    <button
+                        id="mobile-session-menu-btn"
+                        type="button"
+                        onclick="toggleMobileSessionMenu(event)"
+                        class="tools-dropdown-trigger flex items-center justify-center sidebar-nav-item h-9 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                        aria-controls="tools-dropdown-menu"
+                        aria-expanded="false"
+                        title="Utilidades de Sesión"
+                        aria-label="Utilidades de Sesión"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="5" r="1.5" />
+                                <circle cx="12" cy="12" r="1.5" />
+                                <circle cx="12" cy="19" r="1.5" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Opciones</span></span>
+                    </button>
+                    <!-- MENÚ ⋮ SOLO CON ACCIONES DE SESIÓN: GUARDAR, CARGAR Y SALIR -->
+                    <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button, a')) setTimeout(closeMobileSessionMenu, 0);">
+                        <li class="tools-dropdown-item">
+                            <button onclick="saveAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Guardar Sesión" aria-label="Guardar Sesión">
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
+                                </svg>
+                                <span>Guardar Sesión</span>
+                            </button>
+                        </li>
+                        <li class="tools-dropdown-item">
+                            <button id="load-session-btn" onclick="loadAuditSession()" class="tools-dropdown-action" title="Cargar Sesión" aria-label="Cargar Sesión">
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <span>Cargar Sesión</span>
+                            </button>
+                        </li>
+                        <li class="tools-dropdown-item">
+                            <button onclick="exitAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Salir" aria-label="Salir">
+                                <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                    <polyline points="16 17 21 12 16 7" />
+                                    <line x1="21" y1="12" x2="9" y2="12" />
+                                </svg>
+                                <span>Salir</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
                 <!-- Selector de Idioma (Sidebar) -->
                 <div id="sidebar-language-container" class="relative w-full">
                     <!-- select oculto para interoperabilidad con motores globales y tests -->
