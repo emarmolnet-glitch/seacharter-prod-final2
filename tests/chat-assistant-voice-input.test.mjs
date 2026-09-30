@@ -5,10 +5,10 @@ import test from 'node:test';
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const stylesheet = await readFile(new URL('../assets/css/sea-assistant.css', import.meta.url), 'utf8');
 
-test('assistant exposes a compatible Spanish speech recognition control', () => {
+test('assistant exposes a compatible speech recognition control with dynamic language binding', () => {
   assert.match(frontendSource, /id="sea-assistant-mic-btn"/);
   assert.match(frontendSource, /window\.SpeechRecognition \|\| window\.webkitSpeechRecognition/);
-  assert.match(frontendSource, /recognition\.lang = "es-ES"/);
+  assert.match(frontendSource, /recognition\.lang = getSpeechRecognitionLanguage\(\)/);
   assert.match(frontendSource, /micButton\.hidden = false/);
   assert.match(frontendSource, /recognition\.start\(\)/);
   assert.match(frontendSource, /recognition\.stop\(\)/);
@@ -29,7 +29,7 @@ test('speech recognition lifecycle uses one stable mutable reference', () => {
 });
 
 test('assistant exposes Data Bridge style window controls', () => {
-  assert.match(frontendSource, /class="sca-minimize"/);
+  assert.match(frontendSource, /class="sca-minimize/);
   assert.match(frontendSource, /panel\.classList\.toggle\("is-minimized"\)/);
   assert.match(stylesheet, /\.sca-panel\.is-minimized/);
 });

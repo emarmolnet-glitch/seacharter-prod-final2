@@ -3,9 +3,9 @@ import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 import { getApiUrl } from "./utils/apiConfig.js";
-import { getUILanguage, selectBestVoice, initSpeechVoices } from "./utils/speechVoiceHelper.js";
+import { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP } from "./utils/speechVoiceHelper.js";
 
-export { getUILanguage, selectBestVoice, initSpeechVoices };
+export { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP };
 
 const DEFAULT_CEREBRO_IA_ENDPOINT = getApiUrl("/api/cerebro-ia");
 const DEFAULT_CHAT_ASSISTANT_ENDPOINT = getApiUrl("/.netlify/functions/chat-assistant");
@@ -2020,7 +2020,7 @@ const fileInput = root.querySelector("#sca-file-input");
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.lang = getUILanguage();
+    recognition.lang = getSpeechRecognitionLanguage();
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
@@ -2082,6 +2082,7 @@ const fileInput = root.querySelector("#sca-file-input");
       recognitionStateRef.current.shouldSubmit = false;
       recognitionStateRef.current.isStarting = true;
       try {
+        recognition.lang = getSpeechRecognitionLanguage();
         recognition.start();
       } catch (error) {
         console.error("❌ [Cerebro.ia/Voz] Error iniciando el reconocimiento", error);

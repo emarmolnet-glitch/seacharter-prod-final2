@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getApiUrl } from '../utils/apiConfig.js';
-import { getUILanguage, selectBestVoice, initSpeechVoices } from '../utils/speechVoiceHelper.js';
+import { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP } from '../utils/speechVoiceHelper.js';
 import './AgenteProyectosWidget.css';
 
 export default function AgenteProyectosWidget({
@@ -654,7 +654,7 @@ Contexto actual del proyecto: ${projectContext}`;
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!recognitionRef.current) {
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.lang = 'es-ES';
+        recognitionRef.current.lang = getSpeechRecognitionLanguage();
         recognitionRef.current.continuous = false;
         recognitionRef.current.interimResults = false;
 
@@ -673,6 +673,7 @@ Contexto actual del proyecto: ${projectContext}`;
         recognitionRef.current.stop();
         setIsListening(false);
       } else {
+        recognitionRef.current.lang = getSpeechRecognitionLanguage();
         recognitionRef.current.start();
         setIsListening(true);
       }
