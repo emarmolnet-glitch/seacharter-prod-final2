@@ -376,14 +376,8 @@
     }
 
     function generateVoyageRef() {
-        const randomValues = new Uint32Array(1);
-        if (globalObject.crypto?.getRandomValues) {
-            globalObject.crypto.getRandomValues(randomValues);
-        } else {
-            randomValues[0] = Math.floor(Math.random() * 0xFFFFFFFF);
-        }
-        const suffix = String(randomValues[0] % 10000).padStart(4, '0');
-        return `RDM/${new Date().getFullYear()}-${suffix}`;
+        const suffix = Math.floor(1000 + Math.random() * 9000);
+        return `RDM/2026-${suffix}`;
     }
 
     const generateReference = generateVoyageRef;
@@ -619,6 +613,8 @@
         updateEcosystemMenuLinks,
         getActiveProjectRef: () => activeCachedReference || getCurrentReference(),
         setActiveProjectRef: setActiveContractRef,
+        generateRandomProjectRef: generateVoyageRef,
+        generateNewProjectRef: generateVoyageRef,
     });
 
     globalObject.ContractRefManager = contractReferenceManager;
@@ -627,6 +623,8 @@
     globalObject.setActiveContractRef = setActiveContractRef;
     globalObject.getActiveProjectRef = () => activeCachedReference || getCurrentReference();
     globalObject.setActiveProjectRef = setActiveContractRef;
+    globalObject.generateRandomProjectRef = generateVoyageRef;
+    globalObject.generateNewProjectRef = generateVoyageRef;
     globalObject.clearActiveCoreProSession = clearActiveSession;
     globalObject.generateVoyageRef = generateVoyageRef;
     globalObject.broadcastCoreSessionActive = broadcastCoreSessionActive;
