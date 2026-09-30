@@ -33,6 +33,9 @@ export function getUILanguage(fallback = 'es-ES') {
   if (lower === 'de') return 'de-DE';
   if (lower === 'it') return 'it-IT';
   if (lower === 'pt') return 'pt-PT';
+  if (lower === 'ar') return 'ar-SA';
+  if (lower === 'tr') return 'tr-TR';
+  if (lower === 'zh' || lower === 'zh-cn') return 'zh-CN';
   return `${lower}-${lower.toUpperCase()}`;
 }
 
@@ -40,41 +43,49 @@ export function getUILanguage(fallback = 'es-ES') {
  * Filters available speech synthesis voices for the target interface language
  * and prioritizes natural/premium voices containing "Google", "Natural", "Premium", or "Online".
  * Falls back to the first available voice for that language if no premium voice matches.
+ * Wraps execution in try/catch to safely handle missing voices or unsupported browser locales.
  *
  * @param {SpeechSynthesis} speechSynthesisInstance
- * @param {string} targetLang - BCP-47 tag (e.g. 'en-US', 'fr-FR', 'es-ES')
+ * @param {string} targetLang - BCP-47 tag (e.g. 'en-US', 'fr-FR', 'es-ES', 'pt-PT', 'de-DE')
  * @returns {SpeechSynthesisVoice|null}
  */
 export function selectBestVoice(speechSynthesisInstance, targetLang) {
-  if (!speechSynthesisInstance || typeof speechSynthesisInstance.getVoices !== 'function') {
+  try {
+    if (!speechSynthesisInstance || typeof speechSynthesisInstance.getVoices !== 'function') {
+      return null;
+    }
+    const voices = speechSynthesisInstance.getVoices() || [];
+    if (!voices.length) return null;
+
+    const normalizedTarget = String(targetLang || '').replace('_', '-').toLowerCase();
+    const langPrefix = normalizedTarget.split('-')[0];
+
+    // 1. Filtrar las voces disponibles por el idioma seleccionado en la interfaz (exacto o prefijo ej. pt-PT / pt-BR)
+    const exactVoices = voices.filter(
+      (v) => v.lang && v.lang.replace('_', '-').toLowerCase() === normalizedTarget
+    );
+    const prefixVoices = voices.filter(
+      (v) => v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(langPrefix)
+    );
+    const candidateVoices = exactVoices.length > 0 ? exactVoices : prefixVoices;
+
+    if (!candidateVoices.length) {
+      return null;
+    }
+
+    // 2. Priorización: buscar aquellas que contengan "Google", "Natural", "Premium" o "Online"
+    const premiumVoice = candidateVoices.find((v) =>
+      /Google|Natural|Premium|Online/i.test(v.name || '')
+    );
+
+    // 3. Asignar la voz premium o la primera voz disponible para ese idioma
+    return premiumVoice || candidateVoices[0] || null;
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[selectBestVoice] Error finding voice for locale:', targetLang, err);
+    }
     return null;
   }
-  const voices = speechSynthesisInstance.getVoices() || [];
-  if (!voices.length) return null;
-
-  const normalizedTarget = String(targetLang || '').replace('_', '-').toLowerCase();
-  const langPrefix = normalizedTarget.split('-')[0];
-
-  // 1. Filtrar las voces disponibles por el idioma seleccionado en la interfaz
-  const exactVoices = voices.filter(
-    (v) => v.lang && v.lang.replace('_', '-').toLowerCase() === normalizedTarget
-  );
-  const prefixVoices = voices.filter(
-    (v) => v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(langPrefix)
-  );
-  const candidateVoices = exactVoices.length > 0 ? exactVoices : prefixVoices;
-
-  if (!candidateVoices.length) {
-    return null;
-  }
-
-  // 2. Priorización: buscar aquellas que contengan "Google", "Natural", "Premium" o "Online"
-  const premiumVoice = candidateVoices.find((v) =>
-    /Google|Natural|Premium|Online/i.test(v.name || '')
-  );
-
-  // 3. Asignar la voz premium o la primera voz disponible para ese idioma
-  return premiumVoice || candidateVoices[0] || null;
 }
 
 /**
