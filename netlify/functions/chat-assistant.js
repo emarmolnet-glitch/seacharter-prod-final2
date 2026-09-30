@@ -137,7 +137,14 @@ export async function extractTextFromPDF(buffer, customLoader = null) {
   }
 }
 
-export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
+export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL, uiLanguage = null) {
+  const resolvedUiLanguage = uiLanguage
+    || contexto?.uiLanguage
+    || contexto?.ui_language
+    || contexto?.language
+    || contexto?.lang
+    || "es-ES";
+  const languageInstruction = `IMPORTANT: The user interface is currently set to ${resolvedUiLanguage}. You MUST generate your entire response strictly in ${resolvedUiLanguage}. Do not use Spanish unless ${resolvedUiLanguage} is Spanish.`;
   const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso total a internet y a fuentes externas en tiempo real (mediante la búsqueda web nativa de Google Search y herramientas web) para responder a cualquier pregunta o duda del usuario sobre actualidad, tecnología, datos de empresas, navieras, armadores, fletes, mercados o información general. Tienes acceso directo a los datos meteorológicos y al estado actual de la pantalla del usuario. Debes proporcionar pronósticos de puertos, auditorías de costes, desglose de PDAs y validación de cálculos cuando el usuario lo solicite. Si el usuario te pregunta por la corrección de un cálculo (ej. PDAs, fletes, búnkeres o márgenes), analiza rigurosamente los datos que aparecen en el contexto de la pantalla o en la imagen adjunta en lugar de rechazar la consulta. Nunca rechaces una consulta meteorológica o de auditoría por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const vesselLocationInstruction = `
 \nREGLA ABSOLUTA Y DE MÁXIMA PRIORIDAD — LOCALIZACIÓN DE BUQUES:
@@ -357,7 +364,7 @@ Asegúrate de que los saltos de línea (\\n) se escapan correctamente en el JSON
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
 
-  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${projectDocumentParserRule}\n\n${actionExecutionDirective}\n\n${vesselLocationInstruction}`;
+  const finalInstruction = `${languageInstruction}\n\n${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${moduleInstruction}\n\n${expertRules}\n\n${dualModeRules}\n\n${partialUpdateRules}\n\n${projectDocumentParserRule}\n\n${actionExecutionDirective}\n\n${vesselLocationInstruction}`;
   return finalInstruction;
 }
 
@@ -528,8 +535,16 @@ export default async (req) => {
       });
     }
 
+    const uiLanguage = body?.uiLanguage
+      || body?.ui_language
+      || body?.lang
+      || body?.language
+      || rawContexto?.uiLanguage
+      || (contentType.includes("multipart/form-data") && typeof formData !== "undefined" && formData?.get?.("uiLanguage") ? formData.get("uiLanguage") : null)
+      || "es-ES";
+
     const intent = classifyChatIntent(mensaje || "Analiza esta imagen", { context: normalizedContext });
-    const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
+    const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent, uiLanguage);
     const action = intent === CHAT_INTENTS.SIMULATION
       ? buildCalculatorAutofillAction(mensaje || "", normalizedContext)
       : null;
