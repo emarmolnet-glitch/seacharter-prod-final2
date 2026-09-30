@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { voyageStore } from "../stores/voyage-store.js";
 import "./MaritimeWeatherPanel.css";
 
@@ -138,7 +138,7 @@ function WeatherCard({ weather, role, mode, daysUntilLaycan }) {
   );
 }
 
-export default function MaritimeWeatherPanel({ pol, pod, laydays, cancelling }) {
+export default function MaritimeWeatherPanel({ pol, pod, laydays, cancelling, isGeoPanelOpen, isOpen: propIsOpen }) {
   const snapshot = useMemo(
     () => buildMaritimeWeatherSnapshot({ pol, pod, laydays, cancelling }),
     [pol, pod, laydays, cancelling],
@@ -148,10 +148,49 @@ export default function MaritimeWeatherPanel({ pol, pod, laydays, cancelling }) 
     voyageStore.getState().setWeatherSnapshot(snapshot);
   }, [snapshot]);
 
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof isGeoPanelOpen === "boolean") return isGeoPanelOpen;
+    if (typeof propIsOpen === "boolean") return propIsOpen;
+    if (typeof window !== "undefined") {
+      if (typeof window.isGeoPanelOpen === "boolean") return window.isGeoPanelOpen;
+      if (typeof window.isGeoInputOpen === "boolean") return window.isGeoInputOpen;
+      const shell = document.getElementById("map-command-shell");
+      if (shell) return !shell.classList.contains("input-collapsed");
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (typeof isGeoPanelOpen === "boolean") {
+      setIsOpen(isGeoPanelOpen);
+      return;
+    }
+    if (typeof propIsOpen === "boolean") {
+      setIsOpen(propIsOpen);
+      return;
+    }
+    const handleToggle = (e) => {
+      const next = e?.detail?.isGeoPanelOpen ?? e?.detail?.isOpen;
+      if (typeof next === "boolean") {
+        setIsOpen(next);
+      }
+    };
+    window.addEventListener("map:geo-input-toggled", handleToggle);
+    window.addEventListener("map:geo-panel-toggled", handleToggle);
+    return () => {
+      window.removeEventListener("map:geo-input-toggled", handleToggle);
+      window.removeEventListener("map:geo-panel-toggled", handleToggle);
+    };
+  }, [isGeoPanelOpen, propIsOpen]);
+
   if (!snapshot) return null;
 
   return (
-    <aside className="maritime-weather-panel" aria-label="Previsión marítima de puertos">
+    <aside
+      className={`maritime-weather-panel ${isOpen ? "is-open" : "is-collapsed"}`}
+      aria-label="Previsión marítima de puertos"
+      aria-hidden={!isOpen}
+    >
       {snapshot.ports.pol && (
         <WeatherCard
           weather={snapshot.ports.pol}

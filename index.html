@@ -1642,12 +1642,16 @@
             transition: transform 220ms ease, opacity 220ms ease;
         }
 
+        .map-command-shell.input-collapsed #map-left-panels-container,
+        .map-command-shell.is-input-collapsed #map-left-panels-container,
+        #map-left-panels-container.is-collapsed,
         .map-command-shell.input-collapsed #map-input-overlay,
         .map-command-shell.is-input-collapsed #map-input-overlay {
-            transform: translateX(calc(-100% + 54px));
-            opacity: 1;
-            pointer-events: auto;
+            transform: translateX(calc(-100% - 30px));
+            opacity: 0 !important;
+            pointer-events: none !important;
             overflow: hidden;
+            transition: all 0.3s ease-in-out;
         }
 
         .map-floating-panel .input-gc {
@@ -7138,6 +7142,16 @@
                 padding: 0.85rem !important;
             }
 
+            .map-left-panels-container {
+                top: 0.75rem !important;
+                left: 0.75rem !important;
+                right: 0.75rem !important;
+                width: auto !important;
+                max-height: min(60svh, 30rem) !important;
+            }
+
+            .map-command-shell.input-collapsed .map-left-panels-container,
+            .map-command-shell.is-input-collapsed .map-left-panels-container,
             .map-command-shell.input-collapsed #map-input-overlay {
                 transform: translateY(calc(-100% - 1rem));
             }
@@ -9114,14 +9128,46 @@
             stroke: #0f766e !important;
         }
 
+        /* Contenedor Unificado del Panel Izquierdo (Input Geográfico + Predictive Congestion Shield) */
+        .map-left-panels-container {
+            position: absolute;
+            top: 18px;
+            left: 18px;
+            z-index: 50;
+            width: min(390px, calc(100vw - 36px));
+            max-height: calc(100% - 36px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+            transform: translateX(0);
+            opacity: 1;
+            transition: all 0.3s ease-in-out;
+            scrollbar-width: thin;
+        }
+
+        .map-left-panels-container > * {
+            pointer-events: auto !important;
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
         /* Plegado simultáneo de Input Geográfico y Predictive Congestion Shield */
+        .map-command-shell.input-collapsed .map-left-panels-container,
+        .map-command-shell.is-input-collapsed .map-left-panels-container,
+        .map-left-panels-container.is-collapsed,
         .map-command-shell.input-collapsed #congestion-shield-sidebar-card,
         .map-command-shell.is-input-collapsed #congestion-shield-sidebar-card,
         #congestion-shield-sidebar-card.is-collapsed {
             transform: translateX(calc(-100% - 30px));
             opacity: 0 !important;
             pointer-events: none !important;
-            transition: transform 260ms ease, opacity 260ms ease;
+            transition: all 0.3s ease-in-out;
         }
 
         /* Plegado simultáneo de Input Geográfico y Métricas Inferiores (LASTRE, POL, POD, MILLAS, LAYCAN) */
@@ -9134,13 +9180,37 @@
             display: none !important;
         }
 
+        /* Sincronización de tarjetas meteorológicas (POL / POD) al unísono con el panel geográfico */
+        #maritime-weather-panel-root {
+            transition: all 0.3s ease-in-out;
+        }
+
+        .map-command-shell.input-collapsed #maritime-weather-panel-root,
+        .map-command-shell.is-input-collapsed #maritime-weather-panel-root,
+        #maritime-weather-panel-root.weather-panel-collapsed,
+        .map-command-shell.input-collapsed .maritime-weather-panel,
+        .map-command-shell.is-input-collapsed .maritime-weather-panel,
+        .maritime-weather-panel.is-collapsed {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            visibility: hidden !important;
+            transform: translateY(-50%) translateX(30px);
+            transition: all 0.3s ease-in-out;
+        }
+
+        /* Disparador minimalista flotante ('>') anclado a la barra lateral para volver a desplegar el panel */
         #btn-show-route-congestion {
             position: absolute;
-            top: 1rem;
-            left: 1rem;
+            top: 18px;
+            left: 0;
             z-index: 45;
-            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+            transition: all 0.3s ease-in-out;
             animation: fadeInRouteCongestionBtn 200ms ease;
+        }
+
+        #btn-show-route-congestion:hover {
+            transform: translateX(2px);
         }
 
         @keyframes fadeInRouteCongestionBtn {
@@ -9697,25 +9767,24 @@
                         <i class="fa-solid fa-expand"></i>
                     </button>
                 </div>
-                <!-- BOTÓN FLOTANTE PARA RESTAURAR RUTA Y CONGESTIÓN CUANDO ESTÁN PLEGADOS -->
+                <!-- DISPARADOR MINIMALISTA FLOTANTE ('>') ANCLADO AL LATERAL PARA DESPLEGAR PANEL -->
                 <button
                     id="btn-show-route-congestion"
                     type="button"
                     onclick="toggleRouteInputPanel(false)"
-                    class="floating-route-congestion-btn hidden items-center gap-1.5 px-3 py-2 bg-slate-900/90 hover:bg-slate-900 text-white rounded-lg shadow-xl border border-slate-700 text-xs font-bold transition cursor-pointer backdrop-blur-md z-45"
+                    class="floating-route-trigger hidden items-center justify-center w-8 h-9 bg-slate-900/90 hover:bg-slate-800 text-teal-400 rounded-r-md shadow-lg border-y border-r border-slate-700/80 text-xs font-bold transition-all duration-300 cursor-pointer backdrop-blur-md z-45 focus:outline-none focus:ring-2 focus:ring-teal-400"
                     title="Mostrar Ruta y Congestión"
                     aria-label="Mostrar Ruta y Congestión"
                 >
-                    <svg class="w-3.5 h-3.5 text-teal-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                    <span>Mostrar Ruta y Congestión</span>
+                    <i class="fa-solid fa-chevron-right text-xs transition-transform duration-200 hover:scale-125" aria-hidden="true"></i>
+                    <span class="sr-only">Mostrar Ruta y Congestión</span>
                 </button>
+                <div id="map-left-panels-container" class="map-left-panels-container transition-all duration-300 z-50">
                 <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4 transition-transform duration-300 z-50 translate-x-0" aria-label="Input geográfico" aria-hidden="false">
                     <div>
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="text-sm font-bold uppercase text-[#002060]" data-i18n="map_input_header"><i class="fa-solid fa-map-location-dot mr-2"></i> Input geográfico</h2>
-                            <button id="btn-map-collapse-input" onclick="toggleRouteInputPanel()" class="map-icon-button !w-8 !h-8 !shadow-none cursor-pointer" title="Colapsar Input geográfico" aria-label="Colapsar Input geográfico" aria-expanded="true" aria-controls="map-input-overlay">
+                            <button id="btn-map-collapse-input" onclick="toggleRouteInputPanel()" class="map-icon-button !w-8 !h-8 !shadow-none cursor-pointer" title="Colapsar Input geográfico" aria-label="Colapsar Input geográfico" aria-expanded="true" aria-controls="map-left-panels-container">
                                 <i class="fa-solid fa-chevron-left text-xs transition-transform duration-300"></i>
                             </button>
                         </div>
@@ -9749,6 +9818,7 @@
                         </button>
                     </div>
                 </section>
+                </div>
                 <div id="nlp-input-widget-root"></div>
                 <div id="maritime-weather-panel-root"></div>
                 <div id="bottom-metrics-container" data-legacy-id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs transition-all duration-300">
@@ -30791,11 +30861,18 @@ function createRouteAnchorElement(type) {
             shell.classList.toggle('input-collapsed', !isGeoInputOpen);
             shell.classList.toggle('is-input-collapsed', !isGeoInputOpen);
 
+            const container = document.getElementById('map-left-panels-container');
+            if (container) {
+                container.setAttribute('aria-hidden', String(!isGeoInputOpen));
+                container.classList.toggle('is-collapsed', !isGeoInputOpen);
+            }
+
             const panel = document.getElementById('map-input-overlay');
             if (panel) {
                 panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
                 panel.classList.toggle('translate-x-0', isGeoInputOpen);
                 panel.classList.toggle('-translate-x-[calc(100%-2rem)]', !isGeoInputOpen);
+                panel.classList.toggle('is-collapsed', !isGeoInputOpen);
             }
 
             const congestionCard = document.getElementById('congestion-shield-sidebar-card');
@@ -30812,6 +30889,15 @@ function createRouteAnchorElement(type) {
                 bottomMetrics.classList.toggle('opacity-0', !isGeoInputOpen);
                 bottomMetrics.classList.toggle('pointer-events-none', !isGeoInputOpen);
                 bottomMetrics.setAttribute('aria-hidden', String(!isGeoInputOpen));
+            }
+
+            const weatherRoot = document.getElementById('maritime-weather-panel-root');
+            if (weatherRoot) {
+                weatherRoot.classList.toggle('hidden', !isGeoInputOpen);
+                weatherRoot.classList.toggle('opacity-0', !isGeoInputOpen);
+                weatherRoot.classList.toggle('pointer-events-none', !isGeoInputOpen);
+                weatherRoot.classList.toggle('weather-panel-collapsed', !isGeoInputOpen);
+                weatherRoot.setAttribute('aria-hidden', String(!isGeoInputOpen));
             }
 
             const btnShowRoute = document.getElementById('btn-show-route-congestion');
@@ -30840,11 +30926,16 @@ function createRouteAnchorElement(type) {
                 }
             }
 
-            window.dispatchEvent(new CustomEvent('map:geo-input-toggled', { detail: { isOpen: isGeoInputOpen } }));
+            window.isGeoPanelOpen = isGeoInputOpen;
+            window.dispatchEvent(new CustomEvent('map:geo-input-toggled', { detail: { isOpen: isGeoInputOpen, isGeoPanelOpen: isGeoInputOpen } }));
+            window.dispatchEvent(new CustomEvent('map:geo-panel-toggled', { detail: { isOpen: isGeoInputOpen, isGeoPanelOpen: isGeoInputOpen } }));
         }
         const setIsGeoInputOpen = setRouteInputPanelOpen;
+        const setIsGeoPanelOpen = setRouteInputPanelOpen;
         window.setRouteInputPanelOpen = setRouteInputPanelOpen;
         window.setIsGeoInputOpen = setRouteInputPanelOpen;
+        window.setIsGeoPanelOpen = setRouteInputPanelOpen;
+        window.isGeoPanelOpen = isGeoInputOpen;
 
         function syncInitialBottomMetricsState() {
             const panel = document.getElementById('map-input-overlay');
@@ -30857,6 +30948,14 @@ function createRouteAnchorElement(type) {
                 bottomMetrics.classList.toggle('opacity-0', !isPanelCurrentlyOpen);
                 bottomMetrics.classList.toggle('pointer-events-none', !isPanelCurrentlyOpen);
                 bottomMetrics.setAttribute('aria-hidden', String(!isPanelCurrentlyOpen));
+            }
+            const weatherRoot = document.getElementById('maritime-weather-panel-root');
+            if (weatherRoot) {
+                weatherRoot.classList.toggle('hidden', !isPanelCurrentlyOpen);
+                weatherRoot.classList.toggle('opacity-0', !isPanelCurrentlyOpen);
+                weatherRoot.classList.toggle('pointer-events-none', !isPanelCurrentlyOpen);
+                weatherRoot.classList.toggle('weather-panel-collapsed', !isPanelCurrentlyOpen);
+                weatherRoot.setAttribute('aria-hidden', String(!isPanelCurrentlyOpen));
             }
         }
         if (document.readyState === 'loading') {
