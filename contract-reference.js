@@ -5,7 +5,7 @@
     const SHARED_STORAGE_KEY = 'active_core_pro_session';
     const BROADCAST_CHANNEL_NAME = 'core_bridge_sync';
     const SYNC_BROADCAST_CHANNEL_NAME = 'seacharter_sync_channel';
-    const URL_KEYS = ['ref', 'contract_ref', 'reference', 'target_session_id', 'targetSessionId', 'sessionId', 'session_id'];
+    const URL_KEYS = ['ref', 'project_ref', 'contract_ref', 'reference', 'target_session_id', 'targetSessionId', 'sessionId', 'session_id'];
 
     let activeCachedReference = '';
     let lastPersistedReference = '';
@@ -412,8 +412,35 @@
         writeUrlReference(normalized);
         writeSharedActiveSession(normalized);
 
+        // Sync activeProjectRef in globals and stores
+        globalObject.activeProjectRef = normalized;
+        if (globalObject.State) {
+            globalObject.State.activeProjectRef = normalized;
+        }
+        if (globalObject.SeaCharterStore?.set) {
+            try {
+                globalObject.SeaCharterStore.set({ activeProjectRef: normalized }, { silent: true });
+            } catch (_) {}
+        }
+        if (globalObject.document) {
+            const badge = globalObject.document.getElementById('header-active-project-badge');
+            if (badge) {
+                badge.textContent = normalized;
+                badge.dataset.projectRef = normalized;
+            }
+            const quickRefEl = globalObject.document.getElementById('quick-ref');
+            if (quickRefEl && quickRefEl.value !== normalized) {
+                quickRefEl.value = normalized;
+            }
+            const headerContainer = globalObject.document.getElementById('header-voyage-ref-container');
+            if (headerContainer) {
+                headerContainer.dataset.projectRef = normalized;
+                headerContainer.title = `Expediente Activo: ${normalized}`;
+            }
+        }
+
         if (notify && isChanged && typeof globalObject.dispatchEvent === 'function' && typeof globalObject.CustomEvent === 'function') {
-            globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:changed', { detail: { reference: normalized } }));
+            globalObject.dispatchEvent(new globalObject.CustomEvent('contract-reference:changed', { detail: { reference: normalized, activeProjectRef: normalized } }));
         }
         return normalized;
     }
@@ -590,12 +617,16 @@
         extractCurrentVoyageReference,
         handleEcosystemLinkClick,
         updateEcosystemMenuLinks,
+        getActiveProjectRef: () => activeCachedReference || getCurrentReference(),
+        setActiveProjectRef: setActiveContractRef,
     });
 
     globalObject.ContractRefManager = contractReferenceManager;
     globalObject.ContractReference = contractReferenceManager;
     globalObject.getActiveContractRef = getActiveContractRef;
     globalObject.setActiveContractRef = setActiveContractRef;
+    globalObject.getActiveProjectRef = () => activeCachedReference || getCurrentReference();
+    globalObject.setActiveProjectRef = setActiveContractRef;
     globalObject.clearActiveCoreProSession = clearActiveSession;
     globalObject.generateVoyageRef = generateVoyageRef;
     globalObject.broadcastCoreSessionActive = broadcastCoreSessionActive;

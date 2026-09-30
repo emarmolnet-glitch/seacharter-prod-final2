@@ -1,6 +1,5 @@
 (function () {
-    const getApiUrl = (typeof window !== 'undefined' && window.getApiUrl) || function(url) { return url; };
-    const DOSSIERS_API_URL = getApiUrl('/.netlify/functions/dossiers');
+    const DOSSIERS_API_URL = '/.netlify/functions/dossiers';
 
     const state = {
         activeId: null,
@@ -19,7 +18,7 @@
 
     function metadata(payload, clientName, internalNotes) {
         return {
-            reference: text('quick-ref') || payload?.calculatorState?.activeReference || '',
+            reference: window.activeProjectRef || (typeof window.getActiveProjectRef === 'function' ? window.getActiveProjectRef() : '') || text('quick-ref') || payload?.calculatorState?.activeReference || '',
             pol: text('port-pol') || text('map-port-pol'),
             pod: text('port-pod') || text('map-port-pod'),
             cargoName: cargoLabel(),
@@ -28,6 +27,64 @@
             internalNotes,
             status: state.activeStatus,
         };
+    }
+
+    async function syncDossierToDataBridge(projectRef, payload) {
+        if (!projectRef) return;
+        try {
+            const calcState = payload?.calculatorState || {};
+            const pol = text('port-pol') || text('map-port-pol') || calcState.pol || '';
+            const pod = text('port-pod') || text('map-port-pod') || calcState.pod || '';
+            const cargo = cargoLabel();
+            const cargoQty = Number(text('cargo-qty')) || Number(calcState.cargo) || 0;
+            const fleteCompra = Number(text('freight-rate')) || Number(calcState.freightRate) || 0;
+            const fleteVenta = Number(text('freight-sell')) || Number(calcState.freightSell) || 0;
+            const distLaden = Number(text('dist-laden')) || Number(calcState.distLaden) || 0;
+            const spdLaden = Number(text('spd-laden')) || Number(calcState.spdLaden) || 11;
+            const loadRate = Number(text('rate-load')) || Number(calcState.loadRate) || 0;
+            const dischRate = Number(text('rate-disch')) || Number(calcState.dischargeRate) || 0;
+            const tceOwner = Number(calcState.tceOwner || 0);
+
+            const isBigBags = cargo.toLowerCase().includes('big');
+            const isPallets = cargo.toLowerCase().includes('pallet');
+            const isBulk = !isBigBags && !isPallets;
+
+            const route_and_chartering = {
+                project_ref: projectRef,
+                pol,
+                pod,
+                cargo,
+                cargo_qty_mt: cargoQty,
+                is_big_bags: isBigBags,
+                is_pallets: isPallets,
+                is_bulk: isBulk,
+                flete_compra_usd_mt: fleteCompra,
+                flete_venta_usd_mt: fleteVenta,
+                freight_rate_cost_usd: fleteCompra,
+                freight_rate_sell_usd: fleteVenta,
+                flete_sugerido_armador_compra: fleteCompra,
+                flete_sugerido_fletador_venta: fleteVenta,
+                distance_nm: distLaden,
+                vessel_speed_knots: spdLaden,
+                loading_rate_mt_day: loadRate,
+                discharging_rate_mt_day: dischRate,
+                tce_owner: tceOwner,
+                updated_at: new Date().toISOString()
+            };
+
+            await fetch('/.netlify/functions/forwarder-projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({
+                    project_ref: projectRef,
+                    client_name: `Expediente ${projectRef}`,
+                    status: 'COTIZADO',
+                    route_and_chartering,
+                })
+            });
+        } catch (e) {
+            console.warn('[dossiers] Error sincronizando con Data Bridge:', e);
+        }
     }
 
     async function request(path = '', options = {}) {
@@ -45,6 +102,7 @@
         if (!payload) throw new Error('El estado global no está disponible');
         payload.clientName = clientName;
         payload.internalNotes = internalNotes;
+        const activeRef = window.activeProjectRef || (typeof window.getActiveProjectRef === 'function' ? window.getActiveProjectRef() : '') || text('quick-ref') || payload?.calculatorState?.activeReference || '';
         const dossierData = { ...metadata(payload, clientName, internalNotes), sessionPayload: payload };
         const data = state.activeId
             ? await request(`/${state.activeId}`, { method: 'PUT', body: JSON.stringify(dossierData) })
@@ -55,14 +113,19 @@
         state.activeInternalNotes = data.dossier.internalNotes || '';
         window.persistLocalAuditSession?.(payload);
         document.body.dataset.activeDossierId = state.activeId;
-        if (data.dossier.reference) {
-            window.syncActiveContractReference?.(data.dossier.reference);
-            window.ContractRefManager?.broadcastCoreSessionActive?.(data.dossier.reference)
-                || window.broadcastCoreSessionActive?.(data.dossier.reference)
-                || window.emitActiveSession?.(data.dossier.reference);
+        const finalRef = data.dossier.reference || activeRef;
+        if (finalRef) {
+            window.syncActiveContractReference?.(finalRef);
+            window.ContractRefManager?.broadcastCoreSessionActive?.(finalRef)
+                || window.broadcastCoreSessionActive?.(finalRef)
+                || window.emitActiveSession?.(finalRef);
         }
-        window.showToast?.(`Dossier ${data.dossier.reference} guardado`, false, 'success');
+        window.showToast?.(`Dossier ${finalRef} guardado`, false, 'success');
         if (document.getElementById('view-dossiers')?.classList.contains('active-block')) await loadList();
+
+        // Sincronizar automáticamente con Data Bridge (UPSERT bajo project_ref)
+        void syncDossierToDataBridge(finalRef, payload);
+
         return data.dossier;
     }
 
@@ -116,7 +179,13 @@
     }
 
     function requestSave() {
-        openSaveModal('save');
+        // En SeaCharter Core PRO invertido: guardar directamente con activeProjectRef sin abrir modal
+        if (typeof window.exportarACrmOperaciones === 'function') {
+            return window.exportarACrmOperaciones();
+        }
+        const activeRef = window.activeProjectRef || (typeof window.getActiveProjectRef === 'function' ? window.getActiveProjectRef() : '') || text('quick-ref') || '';
+        const clientName = state.activeClientName || inferredClientName() || (activeRef ? `Expediente ${activeRef}` : 'Sin especificar');
+        return persistCurrent(clientName, state.activeInternalNotes);
     }
 
     function requestNewEstimation() {
@@ -158,6 +227,7 @@
             await persistCurrent(state.activeClientName || inferredClientName(), state.activeInternalNotes);
             closeNewEstimationModal();
             resetGlobalState();
+            setTimeout(() => window.openProjectInitModal?.(true), 100);
         } catch (error) {
             elements.error.textContent = error.message || 'No se pudo guardar la estimación. El trabajo actual se mantiene intacto.';
             elements.error.classList.remove('hidden');
@@ -170,6 +240,7 @@
     function discardAndStartNewEstimation() {
         closeNewEstimationModal();
         resetGlobalState();
+        setTimeout(() => window.openProjectInitModal?.(true), 100);
     }
 
     async function confirmSave() {
@@ -287,6 +358,38 @@
         if (document.getElementById('new-estimation-modal')?.classList.contains('is-open')) closeNewEstimationModal();
         else if (document.getElementById('dossier-save-modal')?.classList.contains('is-open')) closeSaveModal();
     });
+
+    window.exportarACrmOperaciones = async function () {
+        const activeRef = window.activeProjectRef ||
+                          (typeof window.getActiveProjectRef === 'function' ? window.getActiveProjectRef() : '') ||
+                          (typeof window.getActiveContractRef === 'function' ? window.getActiveContractRef() : '') ||
+                          text('quick-ref') ||
+                          '';
+
+        if (!activeRef) {
+            if (typeof window.openProjectInitModal === 'function') {
+                window.openProjectInitModal();
+            }
+            return;
+        }
+
+        const clientName = state.activeClientName || inferredClientName() || `Expediente ${activeRef}`;
+        const internalNotes = state.activeInternalNotes || '';
+
+        try {
+            const dossier = await persistCurrent(clientName, internalNotes);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`✅ Expediente ${activeRef} guardado y sincronizado con Data Bridge`, false, 'success');
+            }
+            return dossier;
+        } catch (error) {
+            console.error('Error al exportar a CRM / Operaciones:', error);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Error al exportar: ${error.message || 'Error de conexión'}`, false, 'error');
+            }
+            throw error;
+        }
+    };
 
     window.DossierManager = { requestSave, requestNewEstimation, openDossier, loadList, clearActive };
 })();

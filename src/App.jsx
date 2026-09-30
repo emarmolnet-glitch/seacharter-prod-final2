@@ -740,14 +740,19 @@ export function AppLayout({ children, currentView: initialView = 'MAP', defaultH
   );
 }
 
+import { ProjectProvider, ProjectContext, useProject, useProjectRef } from './context/ProjectContext.jsx';
+
 export default function App(props) {
   return (
     <HashRouter>
-      <AppLayout {...props} />
+      <ProjectProvider>
+        <AppLayout {...props} />
+      </ProjectProvider>
     </HashRouter>
   );
 }
 
 export { HashRouter, HashRouter as BrowserRouter };
+export { ProjectProvider, ProjectContext, useProject, useProjectRef };
 export { default as VoyageExecutiveReportModal, buildVoyageStowagePlan } from './components/VoyageExecutiveReportModal.jsx';
 
