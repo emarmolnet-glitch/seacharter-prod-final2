@@ -9224,11 +9224,11 @@
                 </button>
             </div>
 
-            <!-- SELECTOR REFERENCIA DE VIAJE -->
-            <div id="header-voyage-ref-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-xs font-mono shadow-2xs shrink-0" title="Referencia Única del Viaje / Contrato">
-                <i class="fa-solid fa-hashtag text-[10px] text-slate-400"></i>
-                <span class="text-slate-400 font-sans text-[10px] uppercase font-bold tracking-wider">Ref:</span>
-                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-28 sm:w-32 transition-all uppercase" value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
+            <!-- SELECTOR REFERENCIA DE VIAJE / EXPEDIENTE ACTIVO -->
+            <div id="header-voyage-ref-container" class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-50/90 border border-blue-300 text-blue-900 text-xs font-mono shadow-xs shrink-0 transition-all hover:border-blue-400" title="Expediente Activo (project_ref)">
+                <i class="fa-solid fa-folder-closed text-xs text-blue-600"></i>
+                <span class="text-blue-800 font-sans text-[10px] uppercase font-black tracking-wider bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200">Expediente:</span>
+                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 w-28 sm:w-36 transition-all uppercase placeholder-blue-300" placeholder="RDM/2026-..." value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Expediente (project_ref)">
             </div>
 
             <!-- BOTÓN TUERCA / CONFIGURACIÓN CON MENÚ DESPLEGABLE -->
@@ -14386,6 +14386,64 @@
         </section>
     </div>
 
+    <!-- MODAL INELUDIBLE: INICIALIZACIÓN PREVIA DE EXPEDIENTE (project_ref) -->
+    <div id="project-init-modal" class="fixed inset-0 z-[12000] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="project-init-title">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 sm:p-7 relative overflow-hidden">
+            <div class="flex items-center gap-3.5 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl font-black shrink-0 shadow-xs">
+                    <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <div>
+                    <h2 id="project-init-title" class="text-lg font-black text-slate-900 tracking-tight leading-tight">Inicialización de Expediente</h2>
+                    <p class="text-xs text-slate-500 font-medium">SeaCharter Core PRO · Sincronización Data Bridge</p>
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-600 mb-5 leading-relaxed">
+                Para comenzar a operar y sincronizar automáticamente con Data Bridge y Land Charter, introduce la <strong>Referencia del Expediente</strong> (ej. <code class="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-mono font-bold">RDM/2026-5345</code>) o genera una nueva clave automáticamente.
+            </p>
+
+            <form id="project-init-form" onsubmit="event.preventDefault(); window.confirmProjectInit();" class="space-y-4">
+                <div>
+                    <label for="project-init-input" class="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Referencia del Expediente (project_ref)
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">#</span>
+                        <input
+                            type="text"
+                            id="project-init-input"
+                            class="w-full bg-slate-50 border border-slate-300 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg pl-9 pr-3 py-2.5 font-mono text-sm font-bold text-slate-800 placeholder-slate-400 uppercase transition-all"
+                            placeholder="ej. RDM/2026-5345"
+                            autocomplete="off"
+                            spellcheck="false"
+                            required
+                        />
+                    </div>
+                    <p id="project-init-error" class="text-xs text-rose-600 mt-1.5 font-semibold hidden"></p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+                    <button
+                        type="button"
+                        id="btn-project-init-generate"
+                        onclick="window.generateAndFillProjectRef()"
+                        class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                    >
+                        <i class="fa-solid fa-wand-magic-sparkles text-blue-600"></i> Generar Automática
+                    </button>
+                    <button
+                        type="submit"
+                        id="btn-project-init-confirm"
+                        class="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer"
+                    >
+                        <i class="fa-solid fa-arrow-right"></i> Iniciar Expediente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- SECCIÓN DE IMPRESIÓN DEL INFORME EJECUTIVO -->
     <div id="executive-report-print-view" class="hidden font-sans">
         <!-- Header -->
@@ -17174,6 +17232,7 @@
 
         const State = {
             activeReference: window.generateVoyageRef?.() || '',
+            activeProjectRef: window.activeProjectRef || window.generateVoyageRef?.() || '',
             vessel: "", dwt: 0, gt: 0, loa: 0, class: "", opex: 0, vesselDwtFixed: false,
             userHasEditedSpecialty: false,
             uploadedFile: null,
@@ -17447,7 +17506,8 @@
                 height,
                 handlingMode,
                 projectHandlingMode: handlingMode,
-                projectCargo
+                projectCargo,
+                activeProjectRef: firstText(source.activeProjectRef, source.project_ref, base.activeProjectRef, window.activeProjectRef)
             };
         }
         window.normalizeActiveVoyageState = normalizeActiveVoyageState;
@@ -45561,24 +45621,146 @@ function scheduleReactiveEngine() {
             if (State.activeReference !== activeReference) {
                 State.activeReference = activeReference;
             }
+            State.activeProjectRef = activeReference;
+            window.activeProjectRef = activeReference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== activeReference) input.value = activeReference;
             });
+            const headerContainer = document.getElementById('header-voyage-ref-container');
+            if (headerContainer) {
+                headerContainer.dataset.projectRef = activeReference;
+                headerContainer.title = `Expediente Activo: ${activeReference}`;
+            }
             return activeReference;
         }
 
         window.syncActiveContractReference = syncActiveContractReference;
 
         window.addEventListener('contract-reference:changed', (event) => {
-            const reference = event.detail?.reference;
+            const reference = event.detail?.reference || event.detail?.activeProjectRef;
             if (!reference || State.activeReference === reference) return;
             State.activeReference = reference;
+            State.activeProjectRef = reference;
+            window.activeProjectRef = reference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== reference) input.value = reference;
             });
+            const headerContainer = document.getElementById('header-voyage-ref-container');
+            if (headerContainer) {
+                headerContainer.dataset.projectRef = reference;
+                headerContainer.title = `Expediente Activo: ${reference}`;
+            }
         });
+
+        function openProjectInitModal(isNew = false) {
+            const modal = document.getElementById('project-init-modal');
+            const input = document.getElementById('project-init-input');
+            const error = document.getElementById('project-init-error');
+            if (!modal) return;
+            if (error) {
+                error.textContent = '';
+                error.classList.add('hidden');
+            }
+            if (input) {
+                if (isNew) {
+                    input.value = window.ContractRefManager?.generateVoyageRef?.() || generateVoyageRefFallback();
+                } else {
+                    input.value = window.activeProjectRef || State.activeProjectRef || (document.getElementById('quick-ref')?.value || '');
+                }
+            }
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(() => input?.focus(), 60);
+        }
+
+        function closeProjectInitModal() {
+            const modal = document.getElementById('project-init-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function generateVoyageRefFallback() {
+            const year = new Date().getFullYear();
+            const suffix = Math.floor(1000 + Math.random() * 9000);
+            return `RDM/${year}-${suffix}`;
+        }
+
+        function generateAndFillProjectRef() {
+            const input = document.getElementById('project-init-input');
+            const newRef = window.ContractRefManager?.generateVoyageRef?.() || generateVoyageRefFallback();
+            if (input) {
+                input.value = newRef;
+                input.focus();
+            }
+            const error = document.getElementById('project-init-error');
+            if (error) {
+                error.textContent = '';
+                error.classList.add('hidden');
+            }
+        }
+
+        function confirmProjectInit() {
+            const input = document.getElementById('project-init-input');
+            const error = document.getElementById('project-init-error');
+            const val = String(input?.value || '').trim().toUpperCase();
+            if (!val || val.length < 3) {
+                if (error) {
+                    error.textContent = 'Introduce una referencia válida para el expediente (ej. RDM/2026-5345)';
+                    error.classList.remove('hidden');
+                }
+                return;
+            }
+
+            window.activeProjectRef = val;
+            State.activeProjectRef = val;
+            syncActiveContractReference(val);
+            if (typeof window.setActiveProjectRef === 'function') {
+                window.setActiveProjectRef(val);
+            }
+
+            closeProjectInitModal();
+
+            if (typeof showToast === 'function') {
+                showToast(`🚀 Expediente activo: ${val}`, 'success');
+            }
+        }
+
+        function checkStartupProjectRef() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const urlRef = (params.get('ref') || params.get('project_ref') || params.get('contract_ref') || '').trim();
+                if (urlRef) {
+                    window.activeProjectRef = urlRef;
+                    State.activeProjectRef = urlRef;
+                    syncActiveContractReference(urlRef);
+                    if (typeof window.setActiveProjectRef === 'function') {
+                        window.setActiveProjectRef(urlRef);
+                    }
+                    return;
+                }
+            } catch (_) {}
+
+            setTimeout(() => {
+                if (!window.activeProjectRef) {
+                    openProjectInitModal(false);
+                }
+            }, 150);
+        }
+
+        window.openProjectInitModal = openProjectInitModal;
+        window.closeProjectInitModal = closeProjectInitModal;
+        window.generateAndFillProjectRef = generateAndFillProjectRef;
+        window.confirmProjectInit = confirmProjectInit;
+        window.checkStartupProjectRef = checkStartupProjectRef;
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkStartupProjectRef, { once: true });
+        } else {
+            setTimeout(checkStartupProjectRef, 50);
+        }
 
         function updateChartererNegotiationSimulator() {
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {

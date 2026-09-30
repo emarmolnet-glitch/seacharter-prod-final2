@@ -238,7 +238,7 @@ exports.handler = async (event) => {
               route_and_chartering = COALESCE($12::jsonb, route_and_chartering),
               valor_total_mercancia_usd = COALESCE($13, valor_total_mercancia_usd),
               land_freight_sale = COALESCE($14, land_freight_sale)
-          WHERE id = $4 OR project_ref = $5
+          WHERE id = $4 OR project_ref = $5 OR (project_ref IS NOT NULL AND $5 IS NOT NULL AND UPPER(TRIM(project_ref)) = UPPER(TRIM($5)))
           RETURNING *;
         `;
         const sanitizedDocs = data.documents !== undefined ? sanitizeDocuments(data.documents) : null;
@@ -440,7 +440,7 @@ exports.handler = async (event) => {
             route_and_chartering = COALESCE($12::jsonb, route_and_chartering),
             valor_total_mercancia_usd = COALESCE($13, valor_total_mercancia_usd),
             land_freight_sale = COALESCE($14, land_freight_sale)
-        WHERE id = $4 OR project_ref = $5
+        WHERE id = $4 OR project_ref = $5 OR (project_ref IS NOT NULL AND $5 IS NOT NULL AND UPPER(TRIM(project_ref)) = UPPER(TRIM($5)))
         RETURNING *;
       `;
       const putSanitizedDocs = data.documents !== undefined ? sanitizeDocuments(data.documents) : null;
