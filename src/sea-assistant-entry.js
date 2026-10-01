@@ -102,6 +102,25 @@ function updateAiUI(type) {
   }
 }
 
+function setActiveAgent(agent) {
+  const normalized = String(agent || '').toLowerCase();
+  if (normalized === 'core' || normalized === 'local' || normalized.includes('core') || normalized.includes('asistente')) {
+    updateAiUI('local');
+  } else {
+    updateAiUI('cerebro');
+  }
+}
+
+function setSelectedModel(model) {
+  setActiveAgent(model);
+}
+
+if (typeof window !== 'undefined') {
+  window.setActiveAgent = setActiveAgent;
+  window.setSelectedModel = setSelectedModel;
+  window.updateAiUI = updateAiUI;
+}
+
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
   message.className = `sca-message sca-message--${role}${options.error ? " sca-message--error" : ""}`;
@@ -2269,6 +2288,7 @@ const fileInput = root.querySelector("#sca-file-input");
     console.group("📨 [Cerebro.ia/Chat] Procesando respuesta normalizada");
     try {
       const response = await requestAssistantResponse(userText, history, controller.signal, filesToSend);
+      const wasCerebro = (iaActiva === 'cerebro');
       console.log("Respuesta recibida por el submit:", response);
 
       const actionableResponse = extractActionableAiResponse(response.respuesta);
@@ -2297,9 +2317,23 @@ const fileInput = root.querySelector("#sca-file-input");
       replaceWithAssistantMessage(
         thinkingMessage,
         textoVisible,
-        { meta: formatTime(), error: actionResult?.error === true },
+        { meta: formatTime(), error: actionResult?.error === true, aiType: wasCerebro ? 'cerebro' : 'local' },
       );
       console.groupEnd();
+
+      const actionName = action?.action || action?.intent || action?.type || action?.name || response?.action;
+      const isUpdateFields = String(actionName || "").toLowerCase() === "update_fields";
+      const isCalculatorUpdate = isUpdateFields || ["calculate_route", "fill_complete_form", "update_field"].includes(String(actionName || "").toLowerCase());
+      const isSuccessfulCalculation = isCalculatorUpdate && (!actionResult || actionResult.error !== true);
+
+      if (wasCerebro && isSuccessfulCalculation) {
+        setActiveAgent("core");
+        const transitionMessage = "✅ Los cálculos de Cerebro se han volcado en pantalla. Ya estoy al mando. ¿Quieres que ajustemos márgenes, servicios adicionales o generemos el reporte?";
+        createAndSpeakAssistantMessage(transitionMessage, {
+          meta: formatTime(),
+          aiType: "local",
+        });
+      }
     } catch (error) {
       console.error("❌ [Cerebro.ia/Chat] Error procesando la respuesta del asistente", error);
       console.groupEnd();
