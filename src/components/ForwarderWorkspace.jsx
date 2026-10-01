@@ -2525,7 +2525,7 @@ export function ForwarderWorkspace() {
         body: JSON.stringify({
           client_name: input.trim(),
           documents: [],
-          project_ref: currentGlobalRef ? `${currentGlobalRef}-EXP-${Date.now().toString().slice(-4)}` : undefined,
+          project_ref: currentGlobalRef || undefined,
           dossier_ref: currentGlobalRef || undefined,
           parent_ref: currentGlobalRef || undefined,
         }),
@@ -4615,7 +4615,7 @@ export function ForwarderWorkspace() {
         : null;
 
       const targetProject = existingRdmProject || (hasActiveRdm && activeProject ? { ...activeProject, project_ref: globalActiveRef.trim() } : activeProject) || {
-        project_ref: activeProjectRef || `EXP-${Date.now().toString().slice(-6)}`,
+        project_ref: activeProjectRef || `RDM/${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
         client_name: hasActiveRdm ? `Expediente Corporativo ${globalActiveRef.trim()}` : `REF: ${activeProject?.project_ref || ''} ${activeProject?.client_name || activeProject?.name || ''}`.trim(),
         status: 'Borrador',
         line_items: [],

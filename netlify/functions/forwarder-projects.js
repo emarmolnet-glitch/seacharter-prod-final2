@@ -275,7 +275,7 @@ exports.handler = async (event) => {
         }
 
         // UPSERT: Si no existía fila previa con ese project_ref (ej. RDM), crearla preservando la referencia
-        const upsertRef = data.project_ref || `EXP-${Date.now().toString().slice(-6)}`;
+        const upsertRef = data.project_ref || `RDM/${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const upsertStatus = statusValue || 'BORRADOR';
         const upsertMargin = marginValue || '0';
 
@@ -338,7 +338,7 @@ exports.handler = async (event) => {
 
       // MODO CREACIÓN (Nuevo Proyecto)
       const { client_name, status, documents, items, line_items, services, global_margin_percentage } = data;
-      const projectRef = `EXP-${Date.now().toString().slice(-6)}`;
+      const projectRef = data.project_ref || `RDM/${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const projectStatus = (status && typeof status === 'string' && status.trim()) ? status.trim() : 'BORRADOR';
       const marginPercentage = (global_margin_percentage !== undefined && global_margin_percentage !== null)
         ? String(global_margin_percentage)
