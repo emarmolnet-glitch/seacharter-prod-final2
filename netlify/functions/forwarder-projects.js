@@ -100,6 +100,8 @@ async function ensureForwarderSchema() {
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS valor_total_mercancia_usd NUMERIC;
       ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_sale NUMERIC;
+      ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS project_title VARCHAR(255);
+      ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS description TEXT;
     `);
     schemaEnsured = true;
   } catch (_err) {
@@ -182,6 +184,8 @@ function sanitizeProjectResponseRow(row) {
   if (!row) return row;
   return {
     ...row,
+    project_title: row.project_title || row.projectTitle || null,
+    description: row.description || null,
     documents: sanitizeDocuments(row.documents),
     items: sanitizeProjectItems(row.items)
   };
@@ -555,7 +559,7 @@ exports.handler = async (event) => {
 
       if (targetId || targetRef) {
         const singleQuery = `
-          SELECT id, project_ref, client_name, status, global_margin_percentage, documents, items,
+          SELECT id, project_ref, project_title, description, client_name, status, global_margin_percentage, documents, items,
                  land_origin, land_destination, land_distance, land_freight_cost,
                  route_and_chartering,
                  valor_total_mercancia_usd, land_freight_sale,
@@ -580,7 +584,7 @@ exports.handler = async (event) => {
       }
 
       const query = `
-        SELECT id, project_ref, client_name, status, global_margin_percentage,
+        SELECT id, project_ref, project_title, description, client_name, status, global_margin_percentage,
                land_origin, land_destination, land_distance, land_freight_cost,
                route_and_chartering,
                valor_total_mercancia_usd, land_freight_sale,

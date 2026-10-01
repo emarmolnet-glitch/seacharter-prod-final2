@@ -354,6 +354,8 @@ export async function ensureApplicationSchema() {
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS route_and_chartering JSONB;
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS valor_total_mercancia_usd NUMERIC;
     ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS land_freight_sale NUMERIC;
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS project_title VARCHAR(255);
+    ALTER TABLE forwarder_projects ADD COLUMN IF NOT EXISTS description TEXT;
 
     DO $market_contacts_schema$
     BEGIN
