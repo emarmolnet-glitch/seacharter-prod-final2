@@ -46014,7 +46014,7 @@ function scheduleReactiveEngine() {
             // a) Generar una constante:
             const newRef = "RDM/2026-" + Math.floor(1000 + Math.random() * 9000);
 
-            // b) Actualizar el estado global:
+            // b) Actualizar el estado global y caché con la nueva referencia:
             if (typeof window.setActiveProjectRef === 'function') {
                 window.setActiveProjectRef(newRef);
             } else {
@@ -46025,14 +46025,61 @@ function scheduleReactiveEngine() {
                 }
                 syncActiveContractReference(newRef);
             }
+            try {
+                window.sessionStorage?.setItem('active_project_ref', newRef);
+                window.sessionStorage?.setItem('active_contract_ref', newRef);
+                window.localStorage?.setItem('active_contract_ref', newRef);
+                window.localStorage?.setItem('active_core_pro_session', JSON.stringify({ reference: newRef, timestamp: Date.now() }));
+            } catch (_) {}
 
             const quickRefEl = document.getElementById('quick-ref');
             if (quickRefEl && quickRefEl.value !== newRef) {
                 quickRefEl.value = newRef;
             }
 
-            // c) Limpiar los estados de los puertos (POL, POD):
+            // c) Limpiar los estados de los puertos (POL, POD) y ruta marítima:
             clearGeographicData();
+
+            // Limpiar variables de mercancía, camiones y costes
+            const cargoAndTruckIds = [
+                'cargo-qty', 'cargo-type', 'cargo-product', 'cargo-sf',
+                'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min',
+                'camion-tolva-camiones-totales', 'camion-tolva-ritmo-sugerido',
+                'ritmo_nominal_pol', 'ritmo_nominal_pod', 'rate-load', 'rate-disch'
+            ];
+            cargoAndTruckIds.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (id === 'cargo-qty' || id.startsWith('camion-') || id.startsWith('ritmo_') || id.startsWith('rate-')) {
+                        el.value = '0';
+                    } else {
+                        el.value = '';
+                    }
+                    try {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (_) {}
+                }
+            });
+
+            if (typeof State !== 'undefined') {
+                State.cargo = 0;
+                State.cargoQty = 0;
+                State.cargoQuantity = 0;
+                State.cargoType = '';
+            }
+
+            try {
+                localStorage.removeItem('seacharter_active_project_weight_tons');
+                localStorage.removeItem('seacharter_active_project_land_cost');
+                localStorage.removeItem('seacharter_active_project_land_rate_usd_mt');
+                localStorage.removeItem('calculator_cargo_qty');
+                localStorage.removeItem('calculator_cargo_type');
+                localStorage.removeItem('calculator_pol');
+                localStorage.removeItem('calculator_laycan');
+                localStorage.removeItem('calculator_cancelling_date');
+                localStorage.removeItem('seacharter_session_draft');
+            } catch (_) {}
 
             if (typeof showToast === 'function') {
                 showToast(`✨ Nuevo expediente iniciado: ${newRef}`, 'success');
@@ -46103,13 +46150,13 @@ function scheduleReactiveEngine() {
             } catch (_) {}
 
             // Al cargar la aplicación (en el inicio), si la URL no contiene un parámetro de referencia previo,
-            // el estado activeProjectRef DEBE inicializarse llamando a esta función generadora.
+            // el sistema DEBE IGNORAR la caché guardada y generar inmediatamente una referencia nueva.
             // El input del Header debe mostrar inmediatamente este nuevo ID generado.
-            const newRef = window.activeProjectRef || (typeof window.generateRandomProjectRef === 'function'
+            const newRef = typeof window.generateRandomProjectRef === 'function'
                 ? window.generateRandomProjectRef()
                 : (typeof window.generateNewProjectRef === 'function'
                     ? window.generateNewProjectRef()
-                    : generateVoyageRefFallback()));
+                    : generateVoyageRefFallback());
 
             window.activeProjectRef = newRef;
             State.activeProjectRef = newRef;

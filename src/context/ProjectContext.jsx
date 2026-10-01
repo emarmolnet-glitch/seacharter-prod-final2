@@ -19,15 +19,8 @@ function getInitialProjectRef() {
     if (urlRef) return urlRef;
   } catch (_) {}
 
-  // Check window or session storage if already present
-  if (typeof window !== 'undefined') {
-    const existing = window.activeProjectRef || window.sessionStorage?.getItem('active_project_ref');
-    if (existing && typeof existing === 'string' && existing.trim()) {
-      return existing.trim();
-    }
-  }
-
-  return '';
+  // Si no hay parámetro ?ref= explícito en la URL, IGNORAR la caché guardada y generar inmediatamente una nueva referencia limpia
+  return generateRandomProjectRef();
 }
 
 export function ProjectProvider({ children, initialRef = '' }) {
@@ -199,10 +192,22 @@ export function ProjectProvider({ children, initialRef = '' }) {
       // a) Generar una constante:
       const newRef = "RDM/2026-" + Math.floor(1000 + Math.random() * 9000);
 
-      // b) Actualizar el estado global:
+      // b) Actualizar el estado global y sobrescribir caché con la nueva referencia:
       setActiveProjectRef(newRef);
+      if (typeof window.setActiveContractRef === 'function') {
+        window.setActiveContractRef(newRef);
+      }
+      if (window.ContractRefManager?.setActiveContractRef) {
+        window.ContractRefManager.setActiveContractRef(newRef);
+      }
+      try {
+        window.sessionStorage?.setItem('active_project_ref', newRef);
+        window.sessionStorage?.setItem('active_contract_ref', newRef);
+        window.localStorage?.setItem('active_contract_ref', newRef);
+        window.localStorage?.setItem('active_core_pro_session', JSON.stringify({ reference: newRef, timestamp: Date.now() }));
+      } catch (_) {}
 
-      // c) Limpiar los estados de los puertos (POL, POD):
+      // c) Limpiar los estados de los puertos (POL, POD) y ruta marítima:
       const portIds = [
         'port-pol', 'port-pod', 'map-port-pol', 'map-port-pod',
         'port-ballast', 'map-port-ballast', 'match-load-port', 'match-unload-port'
@@ -211,6 +216,28 @@ export function ProjectProvider({ children, initialRef = '' }) {
         const el = document.getElementById(id);
         if (el) {
           el.value = '';
+          try {
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (_) {}
+        }
+      });
+
+      // Limpiar inputs y variables de mercancía, camiones y costes/rutas
+      const cargoAndTruckIds = [
+        'cargo-qty', 'cargo-type', 'cargo-product', 'cargo-sf',
+        'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min',
+        'camion-tolva-camiones-totales', 'camion-tolva-ritmo-sugerido',
+        'ritmo_nominal_pol', 'ritmo_nominal_pod', 'rate-load', 'rate-disch'
+      ];
+      cargoAndTruckIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          if (id === 'cargo-qty' || id.startsWith('camion-') || id.startsWith('ritmo_') || id.startsWith('rate-')) {
+            el.value = '0';
+          } else {
+            el.value = '';
+          }
           try {
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -238,6 +265,10 @@ export function ProjectProvider({ children, initialRef = '' }) {
         window.State.portBallastCoordinates = null;
         window.State.distBallast = 0;
         window.State.distLaden = 0;
+        window.State.cargo = 0;
+        window.State.cargoQty = 0;
+        window.State.cargoQuantity = 0;
+        window.State.cargoType = '';
       }
 
       if (window.SeaCharterStore?.set) {
@@ -247,15 +278,36 @@ export function ProjectProvider({ children, initialRef = '' }) {
             pod: '',
             portBallast: '',
             distBallast: 0,
-            distLaden: 0
+            distLaden: 0,
+            cargo: 0,
+            cargoQty: 0
           });
         } catch (_) {}
       }
+
+      // Limpiar almacenamiento local relacionado con proyecto anterior
+      try {
+        localStorage.removeItem('seacharter_active_project_weight_tons');
+        localStorage.removeItem('seacharter_active_project_land_cost');
+        localStorage.removeItem('seacharter_active_project_land_rate_usd_mt');
+        localStorage.removeItem('calculator_cargo_qty');
+        localStorage.removeItem('calculator_cargo_type');
+        localStorage.removeItem('calculator_pol');
+        localStorage.removeItem('calculator_laycan');
+        localStorage.removeItem('calculator_cancelling_date');
+        localStorage.removeItem('seacharter_session_draft');
+      } catch (_) {}
 
       try {
         if (typeof window.clearRouteFromMap === 'function') window.clearRouteFromMap();
         if (typeof window.clearMapRoute === 'function') window.clearMapRoute();
         if (window.MapController?.clearRoute) window.MapController.clearRoute();
+        if (typeof window.clearGeographicData === 'function') window.clearGeographicData();
+        if (typeof window.resetGlobalState === 'function') {
+          window.resetGlobalState({ silent: true });
+        } else if (typeof window.resetTotalEstimation === 'function') {
+          window.resetTotalEstimation({ silent: true });
+        }
       } catch (_) {}
     };
 

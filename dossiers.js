@@ -205,10 +205,16 @@
                 window.syncActiveContractReference(newRef);
             }
         }
+        try {
+            window.sessionStorage?.setItem('active_project_ref', newRef);
+            window.sessionStorage?.setItem('active_contract_ref', newRef);
+            window.localStorage?.setItem('active_contract_ref', newRef);
+            window.localStorage?.setItem('active_core_pro_session', JSON.stringify({ reference: newRef, timestamp: Date.now() }));
+        } catch (_) {}
         const quickRefEl = document.getElementById('quick-ref');
         if (quickRefEl) quickRefEl.value = newRef;
 
-        // c) Limpiar los estados de los puertos (POL, POD):
+        // c) Limpiar los estados de los puertos (POL, POD) y ruta marítima:
         if (typeof window.clearGeographicData === 'function') {
             window.clearGeographicData();
         } else {
@@ -238,6 +244,47 @@
                 window.State.distLaden = 0;
             }
         }
+
+        // Limpiar variables de mercancía, camiones y costes
+        const cargoAndTruckIds = [
+            'cargo-qty', 'cargo-type', 'cargo-product', 'cargo-sf',
+            'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min',
+            'camion-tolva-camiones-totales', 'camion-tolva-ritmo-sugerido',
+            'ritmo_nominal_pol', 'ritmo_nominal_pod', 'rate-load', 'rate-disch'
+        ];
+        cargoAndTruckIds.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (id === 'cargo-qty' || id.startsWith('camion-') || id.startsWith('ritmo_') || id.startsWith('rate-')) {
+                    el.value = '0';
+                } else {
+                    el.value = '';
+                }
+                try {
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch (_) {}
+            }
+        });
+
+        if (window.State) {
+            window.State.cargo = 0;
+            window.State.cargoQty = 0;
+            window.State.cargoQuantity = 0;
+            window.State.cargoType = '';
+        }
+
+        try {
+            localStorage.removeItem('seacharter_active_project_weight_tons');
+            localStorage.removeItem('seacharter_active_project_land_cost');
+            localStorage.removeItem('seacharter_active_project_land_rate_usd_mt');
+            localStorage.removeItem('calculator_cargo_qty');
+            localStorage.removeItem('calculator_cargo_type');
+            localStorage.removeItem('calculator_pol');
+            localStorage.removeItem('calculator_laycan');
+            localStorage.removeItem('calculator_cancelling_date');
+            localStorage.removeItem('seacharter_session_draft');
+        } catch (_) {}
 
         return newRef;
     }
