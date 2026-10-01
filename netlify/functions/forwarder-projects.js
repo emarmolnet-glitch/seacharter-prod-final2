@@ -191,6 +191,125 @@ function sanitizeProjectResponseRow(row) {
   };
 }
 
+/**
+ * Consolida los valores financieros de la flota completa recibidos desde el módulo terrestre Land Charter / Data Bridge.
+ * Evita persistir tarifas unitarias de un solo camión si existen los importes totales consolidados o la multiplicación por flota.
+ */
+function extractConsolidatedLandValues(data) {
+  if (!data || typeof data !== 'object') return { totalCost: 0, totalSale: 0, trucksNeeded: 1 };
+  const items = Array.isArray(data.items)
+    ? data.items
+    : (Array.isArray(data.line_items)
+        ? data.line_items
+        : (Array.isArray(data.services) ? data.services : []));
+
+  const landItem = items.find((it) => {
+    if (!it || typeof it !== 'object') return false;
+    const type = String(it.type || it.service_type || it.category || it.module || it.source || it.id || '').toLowerCase();
+    const desc = String(it.description || it.name || it.title || it.concept || '').toLowerCase();
+    return (
+      type === 'land_charter' ||
+      type.includes('land_charter') ||
+      desc.includes('flete terrestre') ||
+      desc.includes('transporte terrestre') ||
+      it.is_land_charter === true ||
+      it.is_transport === true
+    );
+  });
+
+  const lcObj = data.land_charter || data.landCharter || {};
+  const trucksNeeded = Number(
+    landItem?.trucks_needed ??
+    landItem?.trucksNeeded ??
+    landItem?.trucks ??
+    landItem?.truck_count ??
+    landItem?.num_trucks ??
+    landItem?.camiones ??
+    lcObj.trucks_needed ??
+    lcObj.trucksNeeded ??
+    lcObj.trucks ??
+    lcObj.truck_count ??
+    lcObj.camiones ??
+    data.trucks_needed ??
+    data.trucksNeeded ??
+    data.trucks ??
+    data.camiones ??
+    1
+  ) || 1;
+
+  let totalCost = Number(
+    landItem?.total_cost ??
+    landItem?.totalCost ??
+    landItem?.total_cost_usd ??
+    landItem?.total_cost_eur ??
+    landItem?.payload_data?.total_cost ??
+    landItem?.payload_data?.totalCost ??
+    lcObj.total_cost ??
+    lcObj.totalCost ??
+    lcObj.total_cost_usd ??
+    lcObj.total_cost_eur ??
+    data.total_land_cost ??
+    data.land_total_cost ??
+    0
+  );
+
+  const unitCost = Number(
+    landItem?.cost_eur ??
+    landItem?.costEur ??
+    landItem?.cost ??
+    landItem?.cost_usd ??
+    landItem?.costUsd ??
+    landItem?.unit_cost ??
+    landItem?.tarifa_camion ??
+    lcObj.cost ??
+    lcObj.freight_cost ??
+    0
+  );
+
+  if (!totalCost && unitCost > 0 && trucksNeeded > 1) {
+    totalCost = Math.round(unitCost * trucksNeeded * 100) / 100;
+  }
+
+  let totalSale = Number(
+    landItem?.total_sale ??
+    landItem?.totalSale ??
+    landItem?.total_sale_usd ??
+    landItem?.total_sale_eur ??
+    landItem?.payload_data?.total_sale ??
+    landItem?.payload_data?.totalSale ??
+    lcObj.total_sale ??
+    lcObj.totalSale ??
+    lcObj.total_sale_usd ??
+    lcObj.total_sale_eur ??
+    data.total_land_sale ??
+    data.land_total_sale ??
+    0
+  );
+
+  const unitSale = Number(
+    landItem?.sale_price_eur ??
+    landItem?.salePriceEur ??
+    landItem?.sale_price ??
+    landItem?.salePrice ??
+    landItem?.sale ??
+    landItem?.sale_usd ??
+    landItem?.unit_sale ??
+    lcObj.sale ??
+    lcObj.sale_price ??
+    0
+  );
+
+  if (!totalSale && unitSale > 0 && trucksNeeded > 1) {
+    totalSale = Math.round(unitSale * trucksNeeded * 100) / 100;
+  }
+
+  if (!totalSale && totalCost > 0) {
+    totalSale = Math.round(totalCost * 1.15 * 100) / 100;
+  }
+
+  return { totalCost, totalSale, trucksNeeded };
+}
+
 exports.handler = async (event) => {
   const { httpMethod, body } = event;
 
@@ -212,6 +331,17 @@ exports.handler = async (event) => {
         ? Number(data.land_freight_sale)
         : ((data.landFreightSale !== undefined && data.landFreightSale !== null) ? Number(data.landFreightSale) : null);
       
+      const consolidatedLand = extractConsolidatedLandValues(data);
+      const rawPostLandCost = (data.land_freight_cost !== undefined && data.land_freight_cost !== null)
+        ? Number(data.land_freight_cost)
+        : (consolidatedLand.totalCost > 0 ? consolidatedLand.totalCost : null);
+      const finalLandCost = consolidatedLand.totalCost > 0
+        ? (rawPostLandCost === null || rawPostLandCost < consolidatedLand.totalCost ? consolidatedLand.totalCost : rawPostLandCost)
+        : rawPostLandCost;
+      const finalLandSale = consolidatedLand.totalSale > 0
+        ? (landFreightSale === null || landFreightSale < consolidatedLand.totalSale ? consolidatedLand.totalSale : landFreightSale)
+        : landFreightSale;
+
       // MODO ACTUALIZACIÓN (Si ya existe ID o REF)
       if (data.id || data.project_ref) {
         const statusValue = (data.status !== undefined && data.status !== null && String(data.status).trim())
@@ -223,7 +353,7 @@ exports.handler = async (event) => {
         const landOrigin = data.land_origin !== undefined ? data.land_origin : null;
         const landDestination = data.land_destination !== undefined ? data.land_destination : null;
         const landDistance = data.land_distance !== undefined && data.land_distance !== null ? Number(data.land_distance) : null;
-        const landFreightCost = data.land_freight_cost !== undefined && data.land_freight_cost !== null ? Number(data.land_freight_cost) : null;
+        const landFreightCost = finalLandCost;
         const routeAndChartering = (data.route_and_chartering !== undefined && data.route_and_chartering !== null)
           ? JSON.stringify(data.route_and_chartering)
           : ((data.routeAndChartering !== undefined && data.routeAndChartering !== null) ? JSON.stringify(data.routeAndChartering) : null);
@@ -263,7 +393,7 @@ exports.handler = async (event) => {
           landFreightCost,
           routeAndChartering,
           valorTotalMercanciaUsd,
-          landFreightSale
+          finalLandSale
         ];
         const updateResult = await pool.query(updateQuery, updateValues);
         if (updateResult.rows.length > 0) {
@@ -416,6 +546,17 @@ exports.handler = async (event) => {
         ? Number(data.land_freight_sale)
         : ((data.landFreightSale !== undefined && data.landFreightSale !== null) ? Number(data.landFreightSale) : null);
       
+      const consolidatedLand = extractConsolidatedLandValues(data);
+      const rawPutLandCost = (data.land_freight_cost !== undefined && data.land_freight_cost !== null)
+        ? Number(data.land_freight_cost)
+        : (consolidatedLand.totalCost > 0 ? consolidatedLand.totalCost : null);
+      const finalLandCost = consolidatedLand.totalCost > 0
+        ? (rawPutLandCost === null || rawPutLandCost < consolidatedLand.totalCost ? consolidatedLand.totalCost : rawPutLandCost)
+        : rawPutLandCost;
+      const finalLandSale = consolidatedLand.totalSale > 0
+        ? (landFreightSale === null || landFreightSale < consolidatedLand.totalSale ? consolidatedLand.totalSale : landFreightSale)
+        : landFreightSale;
+
       const statusValue = (data.status !== undefined && data.status !== null && String(data.status).trim())
         ? String(data.status).trim()
         : null;
@@ -425,7 +566,7 @@ exports.handler = async (event) => {
       const landOrigin = data.land_origin !== undefined ? data.land_origin : null;
       const landDestination = data.land_destination !== undefined ? data.land_destination : null;
       const landDistance = data.land_distance !== undefined && data.land_distance !== null ? Number(data.land_distance) : null;
-      const landFreightCost = data.land_freight_cost !== undefined && data.land_freight_cost !== null ? Number(data.land_freight_cost) : null;
+      const landFreightCost = finalLandCost;
       const routeAndChartering = (data.route_and_chartering !== undefined && data.route_and_chartering !== null)
         ? JSON.stringify(data.route_and_chartering)
         : ((data.routeAndChartering !== undefined && data.routeAndChartering !== null) ? JSON.stringify(data.routeAndChartering) : null);
@@ -465,7 +606,7 @@ exports.handler = async (event) => {
         landFreightCost,
         routeAndChartering,
         valorTotalMercanciaUsd,
-        landFreightSale
+        finalLandSale
       ];
       
       const result = await pool.query(query, values);
@@ -490,12 +631,12 @@ exports.handler = async (event) => {
             JSON.stringify(sanitizeDocuments(data.documents || [])),
             JSON.stringify(sanitizeProjectItems(data.items || data.line_items || data.services || [])),
             valorTotalMercanciaUsd,
-            landFreightSale
+            finalLandSale
           ];
           const insertResult = await pool.query(insertQuery, insertValues);
           const createdProject = insertResult.rows[0];
 
-          if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering || valorTotalMercanciaUsd != null || landFreightSale != null) {
+          if (landOrigin || landDestination || landDistance != null || landFreightCost != null || routeAndChartering || valorTotalMercanciaUsd != null || finalLandSale != null) {
             try {
               const landUpdate = await pool.query(
                 `UPDATE forwarder_projects
@@ -516,7 +657,7 @@ exports.handler = async (event) => {
                   createdProject.id,
                   routeAndChartering,
                   valorTotalMercanciaUsd,
-                  landFreightSale
+                  finalLandSale
                 ]
               );
               return {
