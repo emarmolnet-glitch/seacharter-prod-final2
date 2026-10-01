@@ -1339,13 +1339,196 @@ export function ForwarderWorkspace() {
   const setCustCost = setCustomsCost;
   const setMercanciaCost = setCustomsCost;
 
+  /**
+   * Consolida y sintetiza los valores totales de flota para el servicio terrestre proveniente de Land Charter / Data Bridge.
+   * Evita el uso de tarifas unitarias por vehículo y extrae el coste/venta total consolidado de la flota.
+   */
+  const extractLandCharterFleetTotals = (project, explicitItem = null) => {
+    const p = project || {};
+    const items = Array.isArray(p.line_items)
+      ? p.line_items
+      : (Array.isArray(p.items)
+          ? p.items
+          : (Array.isArray(p.services) ? p.services : []));
+
+    // Localizar servicio terrestre por tipo 'land_charter' o descripción 'Flete Terrestre' / 'Transporte Terrestre'
+    const landItem = explicitItem || items.find((it) => {
+      if (!it || typeof it !== 'object') return false;
+      const type = String(it.type || it.service_type || it.category || it.module || it.source || it.id || '').toLowerCase();
+      const desc = String(it.description || it.name || it.title || it.concept || '').toLowerCase();
+      return (
+        type === 'land_charter' ||
+        type.includes('land_charter') ||
+        desc.includes('flete terrestre') ||
+        desc.includes('transporte terrestre') ||
+        it.is_land_charter === true ||
+        it.is_transport === true
+      );
+    });
+
+    const lcObj = p.land_charter || p.landCharter || {};
+
+    // Extraer número de camiones / flota completa (trucks_needed)
+    const trucksNeeded = Number(
+      landItem?.trucks_needed ??
+      landItem?.trucksNeeded ??
+      landItem?.trucks ??
+      landItem?.truck_count ??
+      landItem?.num_trucks ??
+      landItem?.camiones ??
+      landItem?.cantidad_camiones ??
+      landItem?.payload_data?.trucks_needed ??
+      landItem?.payload_data?.trucks ??
+      lcObj.trucks_needed ??
+      lcObj.trucksNeeded ??
+      lcObj.trucks ??
+      lcObj.truck_count ??
+      lcObj.camiones ??
+      p.trucks_needed ??
+      p.trucksNeeded ??
+      p.trucks ??
+      p.camiones ??
+      1
+    ) || 1;
+
+    // 1. COSTE TOTAL CONSOLIDADO DE LA FLOTA:
+    // Prioridad 1: campos de total explícito (total_cost, totalCost, etc.)
+    let consolidatedCost = Number(
+      landItem?.total_cost ??
+      landItem?.totalCost ??
+      landItem?.total_cost_usd ??
+      landItem?.total_cost_eur ??
+      landItem?.payload_data?.total_cost ??
+      landItem?.payload_data?.totalCost ??
+      lcObj.total_cost ??
+      lcObj.totalCost ??
+      lcObj.total_cost_usd ??
+      lcObj.total_cost_eur ??
+      p.total_land_cost ??
+      p.land_total_cost ??
+      0
+    );
+
+    // Prioridad 2: multiplicación explícita de coste unitario * camiones necesarios (cost * trucks_needed)
+    const itemUnitCost = Number(
+      landItem?.cost_eur ??
+      landItem?.costEur ??
+      landItem?.cost ??
+      landItem?.cost_usd ??
+      landItem?.costUsd ??
+      landItem?.unit_cost ??
+      landItem?.tarifa_camion ??
+      landItem?.payload_data?.cost ??
+      landItem?.payload_data?.cost_eur ??
+      0
+    );
+
+    if (!consolidatedCost && itemUnitCost > 0) {
+      consolidatedCost = trucksNeeded > 1
+        ? Math.round(itemUnitCost * trucksNeeded * 100) / 100
+        : itemUnitCost;
+    }
+
+    // Prioridad 3: valores directos de proyecto / land_charter
+    if (!consolidatedCost) {
+      const rawCost = Number(
+        lcObj.total_cost ??
+        lcObj.totalCost ??
+        p.land_freight_cost_eur ??
+        p.land_freight_cost ??
+        p.landFreightCost ??
+        lcObj.cost ??
+        lcObj.freight_cost ??
+        0
+      );
+      if (rawCost > 0) {
+        if (trucksNeeded > 1 && (lcObj.cost === rawCost || rawCost < 1000) && !p.land_freight_cost_is_total) {
+          consolidatedCost = Math.round(rawCost * trucksNeeded * 100) / 100;
+        } else {
+          consolidatedCost = rawCost;
+        }
+      }
+    }
+
+    // 2. VENTA TOTAL CONSOLIDADA DE LA FLOTA:
+    let consolidatedSale = Number(
+      landItem?.total_sale ??
+      landItem?.totalSale ??
+      landItem?.total_sale_usd ??
+      landItem?.total_sale_eur ??
+      landItem?.payload_data?.total_sale ??
+      landItem?.payload_data?.totalSale ??
+      lcObj.total_sale ??
+      lcObj.totalSale ??
+      lcObj.total_sale_usd ??
+      lcObj.total_sale_eur ??
+      p.total_land_sale ??
+      p.land_total_sale ??
+      0
+    );
+
+    const itemUnitSale = Number(
+      landItem?.sale_price_eur ??
+      landItem?.salePriceEur ??
+      landItem?.sale_price ??
+      landItem?.salePrice ??
+      landItem?.sale ??
+      landItem?.sale_usd ??
+      landItem?.unit_sale ??
+      landItem?.payload_data?.sale_price ??
+      landItem?.payload_data?.sale_price_eur ??
+      0
+    );
+
+    if (!consolidatedSale && itemUnitSale > 0) {
+      consolidatedSale = trucksNeeded > 1
+        ? Math.round(itemUnitSale * trucksNeeded * 100) / 100
+        : itemUnitSale;
+    }
+
+    if (!consolidatedSale) {
+      const rawSale = Number(
+        lcObj.total_sale ??
+        lcObj.totalSale ??
+        p.land_freight_sale_eur ??
+        p.land_freight_sale ??
+        p.landFreightSale ??
+        lcObj.sale ??
+        0
+      );
+      if (rawSale > 0) {
+        if (trucksNeeded > 1 && (lcObj.sale === rawSale || rawSale < 1000) && !p.land_freight_sale_is_total) {
+          consolidatedSale = Math.round(rawSale * trucksNeeded * 100) / 100;
+        } else {
+          consolidatedSale = rawSale;
+        }
+      }
+    }
+
+    if (!consolidatedSale && consolidatedCost > 0) {
+      consolidatedSale = Math.round(consolidatedCost * 1.15 * 100) / 100;
+    }
+
+    return {
+      consolidatedCost,
+      consolidatedSale,
+      trucksNeeded,
+      hasLandCharter: Boolean(landItem || consolidatedCost > 0 || consolidatedSale > 0 || p.land_origin || p.land_destination),
+      landItem,
+    };
+  };
+
   const getLandTransportData = (project, payload = null) => {
     const p = project || {};
     const pl = payload || {};
     const origin = (p.land_origin || p.landOrigin || pl.land_origin || pl.landOrigin || p.land_charter?.origin || pl.land_charter?.origin || '').trim();
     const destination = (p.land_destination || p.landDestination || pl.land_destination || pl.landDestination || p.land_charter?.destination || pl.land_charter?.destination || '').trim();
     const distance = Number(p.land_distance ?? p.landDistance ?? pl.land_distance ?? pl.landDistance ?? p.land_charter?.distance ?? p.land_distance_km ?? pl.land_distance_km ?? 0) || 0;
-    const freightCost = Number(p.land_freight_cost ?? p.landFreightCost ?? pl.land_freight_cost ?? pl.landFreightCost ?? p.land_charter?.cost ?? p.land_charter?.freight_cost ?? p.land_truck_cost ?? pl.land_truck_cost ?? 0) || 0;
+    
+    const { consolidatedCost, consolidatedSale, trucksNeeded } = extractLandCharterFleetTotals(p);
+    const rawCost = Number(p.land_freight_cost ?? p.landFreightCost ?? pl.land_freight_cost ?? pl.landFreightCost ?? p.land_charter?.cost ?? p.land_charter?.freight_cost ?? p.land_truck_cost ?? pl.land_truck_cost ?? 0) || 0;
+    const freightCost = consolidatedCost > 0 ? consolidatedCost : rawCost;
+    const freightSale = consolidatedSale > 0 ? consolidatedSale : (freightCost > 0 ? Math.round(freightCost * 1.15 * 100) / 100 : 0);
 
     const hasData = Boolean((origin && destination) || freightCost > 0 || distance > 0 || origin || destination);
     const routeText = (origin && destination)
@@ -1358,6 +1541,8 @@ export function ForwarderWorkspace() {
       destination,
       distance,
       freightCost,
+      freightSale,
+      trucksNeeded,
       routeText,
     };
   };
@@ -1578,8 +1763,14 @@ export function ForwarderWorkspace() {
       if (activeProject) {
         const updated = enrichedList.find((p) => p.id === activeProject.id || p.project_ref === activeProject.project_ref);
         if (updated) {
-          setActiveProject(updated);
-          setprojectDocuments(updated.documents || updated.files || []);
+          setActiveProject((prev) => ({
+            ...(prev || {}),
+            ...updated,
+            items: (updated.items && updated.items.length > 0) ? updated.items : (prev?.items || []),
+            line_items: (updated.line_items && updated.line_items.length > 0) ? updated.line_items : (prev?.line_items || []),
+            services: (updated.services && updated.services.length > 0) ? updated.services : (prev?.services || []),
+          }));
+          setprojectDocuments(updated.documents || updated.files || activeProject.documents || activeProject.files || []);
           if (updated.valor_total_mercancia_usd !== undefined && updated.valor_total_mercancia_usd !== null) {
             setCustCost(Number(updated.valor_total_mercancia_usd) || 0);
           }
@@ -1587,7 +1778,13 @@ export function ForwarderWorkspace() {
       } else if (hasActiveRdm) {
         const matchingRdm = enrichedList.find((p) => (p.project_ref && p.project_ref.toUpperCase() === globalActiveRef.trim().toUpperCase()) || isProjectMatchingActiveDossier(p, globalActiveRef));
         if (matchingRdm) {
-          setActiveProject(matchingRdm);
+          setActiveProject((prev) => ({
+            ...(prev || {}),
+            ...matchingRdm,
+            items: (matchingRdm.items && matchingRdm.items.length > 0) ? matchingRdm.items : (prev?.items || []),
+            line_items: (matchingRdm.line_items && matchingRdm.line_items.length > 0) ? matchingRdm.line_items : (prev?.line_items || []),
+            services: (matchingRdm.services && matchingRdm.services.length > 0) ? matchingRdm.services : (prev?.services || []),
+          }));
           setprojectDocuments(matchingRdm.documents || matchingRdm.files || []);
           if (matchingRdm.valor_total_mercancia_usd !== undefined && matchingRdm.valor_total_mercancia_usd !== null) {
             setCustCost(Number(matchingRdm.valor_total_mercancia_usd) || 0);
@@ -1797,7 +1994,7 @@ export function ForwarderWorkspace() {
     }
 
       // Absorción inversa de Costes Terrestres (DataBridge / Land Charter ➔ Core PRO):
-      // Extrae coste terrestre y mercancía, convirtiendo EUR a USD según el tipo de cambio del proyecto
+      // Extrae coste terrestre consolidado de la flota y mercancía, convirtiendo EUR a USD según el tipo de cambio del proyecto
       const activeExRate = Number(
         projectRoute?.exchange_rate ??
         projectRoute?.exchangeRate ??
@@ -1806,18 +2003,22 @@ export function ForwarderWorkspace() {
         0.92
       ) || 0.92;
 
-      const rawLandCostEur = Number(
-        activeProject.land_freight_cost_eur ??
-        activeProject.land_freight_cost ??
-        activeProject.landFreightCost ??
-        activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
-        activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
-        activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost ??
-        activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost ??
-        activeProject.land_charter?.cost ??
-        activeProject.land_charter?.freight_cost ??
-        0
-      ) || 0;
+      const { consolidatedCost: lcConsolidatedCost } = extractLandCharterFleetTotals(activeProject);
+      const rawLandCostEur = lcConsolidatedCost > 0
+        ? lcConsolidatedCost
+        : (Number(
+            activeProject.land_freight_cost_eur ??
+            activeProject.land_freight_cost ??
+            activeProject.landFreightCost ??
+            activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
+            activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost_eur ??
+            activeProject.line_items?.[0]?.payload_data?.peripheral_services?.inland_cost ??
+            activeProject.services?.[0]?.payload_data?.peripheral_services?.inland_cost ??
+            activeProject.land_charter?.total_cost ??
+            activeProject.land_charter?.cost ??
+            activeProject.land_charter?.freight_cost ??
+            0
+          ) || 0);
 
       if (rawLandCostEur > 0) {
         const landCostUsd = Math.round((rawLandCostEur / activeExRate) * 100) / 100;
@@ -2435,14 +2636,17 @@ export function ForwarderWorkspace() {
         0.92
       ) || 0.92;
 
-      const rawLandCostEur = Number(
-        activeProject.land_freight_cost_eur ??
-        activeProject.land_freight_cost ??
-        activeProject.landFreightCost ??
-        sessionSource.landFreightCost ??
-        sessionSource.landCost ??
-        0
-      ) || 0;
+      const { consolidatedCost: lcSyncCost } = extractLandCharterFleetTotals(activeProject);
+      const rawLandCostEur = lcSyncCost > 0
+        ? lcSyncCost
+        : (Number(
+            activeProject.land_freight_cost_eur ??
+            activeProject.land_freight_cost ??
+            activeProject.landFreightCost ??
+            sessionSource.landFreightCost ??
+            sessionSource.landCost ??
+            0
+          ) || 0);
 
       let syncedInlandCost = Number(inlandCost) || 0;
       if (rawLandCostEur > 0) {
@@ -2806,10 +3010,12 @@ export function ForwarderWorkspace() {
       0
     );
     const landCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
+    const { consolidatedCost: fleetLandCost } = extractLandCharterFleetTotals(activeProject);
+    const effectiveLandCost = fleetLandCost > 0 ? fleetLandCost : landCost;
     let targetSalePrice = 0;
     if (effectiveFleteVenta > 0 && quantityMT > 0) {
       const targetOceanFreightSale = Math.round(effectiveFleteVenta * quantityMT * 100) / 100;
-      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(subtotalFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(subtotalFobOperations) || 0) * 1.15) + ((Number(effectiveLandCost) || 0) * 1.15);
     } else {
       targetSalePrice = (Number(costeTotalAllIn) || 0) * 1.15;
     }
@@ -3233,18 +3439,21 @@ export function ForwarderWorkspace() {
     const effectiveWeightOrRt = totalWeightTons > 0 ? totalWeightTons : (isUnderThreshold ? (totalWeightTons || 1) : totalWeightTons);
 
     // Respetar la Simulación: La vista de Proyectos respeta el flete de venta sincronizado (o lumpsum de viaje) como objetivo principal.
+    const { consolidatedCost: fleetLandCost } = extractLandCharterFleetTotals(activeProject);
+    const effectiveLandCost = fleetLandCost > 0 ? fleetLandCost : landCost;
+
     let targetSalePrice = 0;
     if (effectiveFleteVenta > 0 && totalWeightTons > 0) {
       // Opción A: Tarifa Unitaria * Peso Físico (MT)
       const targetOceanFreightSale = Math.round(effectiveFleteVenta * totalWeightTons * 100) / 100;
-      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(effectiveLandCost) || 0) * 1.15);
     } else if (effectiveFleteVenta > 0 && effectiveWeightOrRt > 0) {
       const targetOceanFreightSale = Math.round(effectiveFleteVenta * effectiveWeightOrRt * 100) / 100;
-      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+      targetSalePrice = (Number(targetOceanFreightSale) || 0) + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(effectiveLandCost) || 0) * 1.15);
     } else if (fleteTotalReal > 0) {
       // Opción B: Lumpsum total sin multiplicar por volumen
       const targetOceanFreightSale = Math.round(fleteTotalReal * 1.15 * 100) / 100;
-      targetSalePrice = targetOceanFreightSale + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(landCost) || 0) * 1.15);
+      targetSalePrice = targetOceanFreightSale + ((Number(calculatedFobOperations) || 0) * 1.15) + ((Number(effectiveLandCost) || 0) * 1.15);
     } else {
       targetSalePrice = (Number(totalEstimatedCost) || 0) * 1.15;
     }
@@ -5305,18 +5514,26 @@ export function ForwarderWorkspace() {
                       : (Array.isArray(activeProject.services) ? activeProject.services : []));
 
                 const transportCost = Number(activeProject?.land_freight_cost ?? 0) || 0;
+                const { consolidatedCost: fleetTransportCost, consolidatedSale: fleetTransportSale } = extractLandCharterFleetTotals(activeProject);
+                const effectiveTransportCost = fleetTransportCost > 0 ? fleetTransportCost : transportCost;
+                const effectiveTransportSale = fleetTransportSale > 0 ? fleetTransportSale : Math.round(effectiveTransportCost * 1.15 * 100) / 100;
+
                 const hasExplicitTransportItem = projectItemsList.some(
-                  (it) => !it.description || /transporte/i.test(it.description)
+                  (it) => !it.description || /transporte/i.test(it.description) || /flete\s*terrestre/i.test(it.description) || it.type === 'land_charter' || it.service_type === 'land_charter' || it.is_transport || it.is_land_charter
                 );
-                const effectiveItemsList = (!hasExplicitTransportItem && (transportCost > 0 || activeProject?.land_origin || activeProject?.land_destination))
+                const effectiveItemsList = (!hasExplicitTransportItem && (effectiveTransportCost > 0 || activeProject?.land_origin || activeProject?.land_destination))
                   ? [
                       ...projectItemsList,
                       {
                         id: 'land-transport-auto',
-                        description: 'Servicio de Transporte',
-                        cost_eur: transportCost,
-                        sale_price_eur: Math.round(transportCost * 1.15 * 100) / 100,
+                        type: 'land_charter',
+                        description: 'Servicio de Transporte Terrestre (Flota Completa)',
+                        cost_eur: effectiveTransportCost,
+                        sale_price_eur: effectiveTransportSale,
+                        total_cost: effectiveTransportCost,
+                        total_sale: effectiveTransportSale,
                         is_transport: true,
+                        is_land_charter: true,
                       },
                     ]
                   : projectItemsList;
@@ -5341,14 +5558,23 @@ export function ForwarderWorkspace() {
                         <thead className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700"><tr><th className="px-4 py-3 text-left">Servicio</th><th className="px-4 py-3 text-right">Coste (€)</th><th className="px-4 py-3 text-right">Venta (€)</th><th className="px-4 py-3 text-center">Acciones</th></tr></thead>
                         <tbody className="divide-y divide-slate-100 text-slate-800">
                           {effectiveItemsList.map((item, idx) => {
-                            const isTransportService = !item.description || /transporte/i.test(item.description) || item.is_transport;
-                            const transportCost = Number(activeProject?.land_freight_cost ?? 0) || 0;
-                            const costEur = isTransportService && transportCost > 0
-                              ? transportCost
-                              : (Number(item.cost_eur ?? item.costEur ?? 0) || (isTransportService ? transportCost : 0));
-                            const saleEur = isTransportService && costEur > 0
-                              ? Math.round(costEur * 1.15 * 100) / 100
-                              : (Number(item.sale_price_eur ?? item.salePriceEur ?? 0) || (isTransportService ? Math.round(costEur * 1.15 * 100) / 100 : 0));
+                            const isTransportService = !item.description || /transporte/i.test(item.description) || /flete\s*terrestre/i.test(item.description) || item.type === 'land_charter' || item.service_type === 'land_charter' || item.is_transport || item.is_land_charter;
+                            
+                            let costEur = 0;
+                            let saleEur = 0;
+
+                            if (isTransportService) {
+                              const itemFleetTotals = extractLandCharterFleetTotals(activeProject, item);
+                              costEur = itemFleetTotals.consolidatedCost > 0
+                                ? itemFleetTotals.consolidatedCost
+                                : (effectiveTransportCost > 0 ? effectiveTransportCost : (Number(item.cost_eur ?? item.costEur ?? item.cost ?? 0) || (isTransportService ? transportCost : 0)));
+                              saleEur = itemFleetTotals.consolidatedSale > 0
+                                ? itemFleetTotals.consolidatedSale
+                                : (costEur > 0 ? Math.round(costEur * 1.15 * 100) / 100 : (Number(item.sale_price_eur ?? item.salePriceEur ?? item.sale ?? 0) || (isTransportService ? Math.round(costEur * 1.15 * 100) / 100 : 0)));
+                            } else {
+                              costEur = Number(item.cost_eur ?? item.costEur ?? item.cost ?? 0) || 0;
+                              saleEur = Number(item.sale_price_eur ?? item.salePriceEur ?? item.sale_price ?? item.sale ?? 0) || (costEur > 0 ? Math.round(costEur * 1.15 * 100) / 100 : 0);
+                            }
                             return (
                               <tr key={item.id || `item-row-${idx}`} className="border-b border-slate-100">
                                 <td className="px-4 py-3 font-semibold">{item.description || 'Servicio de Transporte'}</td>
@@ -5446,8 +5672,11 @@ export function ForwarderWorkspace() {
                     ? Math.round(controlTowerFleteVentaUnit * controlTowerWeightOrRt * 100) / 100
                     : (controlTowerMaritimeCost > 0 ? Math.round(controlTowerMaritimeCost * 1.15 * 100) / 100 : 0);
 
-                  const controlTowerLandCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
-                  const controlTowerLandSale = Number(activeProject?.land_freight_sale ?? activeProject?.landFreightSale ?? 0) || 0;
+                  const rawControlTowerLandCost = Number(activeProject?.land_freight_cost ?? activeProject?.landFreightCost ?? 0) || 0;
+                  const rawControlTowerLandSale = Number(activeProject?.land_freight_sale ?? activeProject?.landFreightSale ?? 0) || 0;
+                  const { consolidatedCost: fleetTowerLandCost, consolidatedSale: fleetTowerLandSale } = extractLandCharterFleetTotals(activeProject);
+                  const controlTowerLandCost = fleetTowerLandCost > 0 ? fleetTowerLandCost : rawControlTowerLandCost;
+                  const controlTowerLandSale = fleetTowerLandSale > 0 ? fleetTowerLandSale : rawControlTowerLandSale;
                   const isLandCharterPending = controlTowerLandCost === 0 && controlTowerLandSale === 0;
 
                   const controlTowerMercanciaFob = Number(activeProject?.valor_total_mercancia_usd ?? activeProject?.valorTotalMercanciaUsd ?? 0) || 0;
