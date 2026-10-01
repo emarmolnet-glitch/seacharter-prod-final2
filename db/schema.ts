@@ -392,6 +392,8 @@ export const clientApiUsage = pgTable("client_api_usage", {
 export const forwarderProjects = pgTable("forwarder_projects", {
   id: serial("id").primaryKey(),
   projectRef: varchar("project_ref", { length: 255 }).unique(),
+  projectTitle: varchar("project_title", { length: 255 }),
+  description: text("description"),
   clientName: varchar("client_name", { length: 255 }),
   status: varchar("status", { length: 50 }).default("Borrador"),
   globalMarginPercentage: numeric("global_margin_percentage").default("15"),
