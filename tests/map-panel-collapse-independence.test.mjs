@@ -8,7 +8,7 @@ const nlpWidgetSource = fs.readFileSync("src/components/NLPInputWidget.jsx", "ut
 test("geographic input collapse targets only its own overlay", () => {
   assert.match(pageSource, /\.map-command-shell\.input-collapsed #map-input-overlay/);
   assert.doesNotMatch(pageSource, /\.map-command-shell\.input-collapsed \.map-floating-panel/);
-  assert.match(pageSource, /let isGeoInputOpen = true;/);
+  assert.match(pageSource, /let isGeoInputOpen = false;/);
   assert.match(pageSource, /shell\.classList\.toggle\('input-collapsed', !isGeoInputOpen\)/);
 });
 

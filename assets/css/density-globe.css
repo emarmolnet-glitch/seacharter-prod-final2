@@ -509,7 +509,7 @@
 #view-map #map-container,
 #view-ais .density-globe-stage,
 #view-ais #ais-map {
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 .density-globe-empty {

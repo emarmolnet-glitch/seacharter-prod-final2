@@ -587,6 +587,9 @@ function NLPInputWidget() {
     if (scenario.port_validation?.valid) {
       await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
       await window.handleMasterValidationAndCalculate?.();
+      if (typeof window.setRouteInputPanelOpen === "function") {
+        window.setRouteInputPanelOpen(false);
+      }
     }
     const usesPortCrane = optimizedMethods?.pol.equipment === "port-crane"
       || optimizedMethods?.pod.equipment === "port-crane";

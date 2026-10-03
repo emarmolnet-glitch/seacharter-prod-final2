@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
  * Supports smooth slide animations and directional arrow toggling.
  */
 export function GeographicInput({
-  initialOpen = true,
+  initialOpen = false,
   onToggle,
   onCalculateRoute,
   defaultBallast = '',
