@@ -7,7 +7,7 @@
     const activeVesselFocusTimers = new Map();
     const DEFAULT_KEY = 'main';
     const INITIAL_VIEW = Object.freeze({ lat: 24, lng: -24, altitude: 2.5 });
-    const FOCUS_ALTITUDE = 1.8;
+    const FOCUS_ALTITUDE = 2.0;
     const CAMERA_TRANSITION_MS = 700;
     const ACTIVE_VESSEL_FOCUS_ALTITUDE = 0.72;
     const ACTIVE_VESSEL_TRANSITION_MS = 1200;
@@ -983,7 +983,7 @@
         if (!points.length) return;
         const center = points[Math.floor(points.length / 2)];
         const latSpan = Math.max(...points.map((point) => point.lat)) - Math.min(...points.map((point) => point.lat));
-        const altitude = Math.min(2.4, Math.max(1.1, 1.15 + latSpan / 75));
+        const altitude = Math.min(2.8, Math.max(2.0, 2.2 + latSpan / 60));
         view.globe.pointOfView({ lat: center.lat, lng: center.lng, altitude }, CAMERA_TRANSITION_MS);
     }
 

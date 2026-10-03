@@ -9885,7 +9885,7 @@
         <!-- MÓDULO 1: MAPA Y ESTADO GEOGRÁFICO         -->
         <!-- ========================================== -->
         <div id="view-map" class="view-section active-block absolute inset-0 min-h-[600px] xl:min-h-[800px] overflow-y-auto p-6 scroll-smooth">
-            <div id="map-command-shell" class="map-command-shell relative w-full h-full min-h-[600px] xl:min-h-[800px] overflow-hidden">
+            <div id="map-command-shell" class="map-command-shell input-collapsed is-input-collapsed relative w-full h-full min-h-[600px] xl:min-h-[800px] overflow-hidden">
                 <div id="map-host" class="density-globe-stage absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
                     <div id="map-container" class="density-globe-canvas absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-slate-200 bg-slate-950 overflow-hidden" data-globe-renderer>
                         <div id="map-skeleton" class="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-slate-100" style="background-color: #0f172a; color: #f1f5f9;" role="status" aria-live="polite" aria-label="Iniciando visor cartográfico">
@@ -9903,7 +9903,7 @@
                     </div>
                 </div>
                 <div class="map-control-stack">
-                    <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Ocultar input geográfico" aria-label="Ocultar input geográfico" aria-expanded="true" aria-controls="map-input-overlay">
+                    <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Mostrar input geográfico" aria-label="Mostrar input geográfico" aria-expanded="false" aria-controls="map-input-overlay">
                         <i class="fa-solid fa-sliders"></i>
                     </button>
                     <button id="btn-map-fullscreen" onclick="toggleRouteMapFullscreen()" class="map-icon-button" title="Pantalla completa" aria-label="Pantalla completa">
@@ -9915,20 +9915,20 @@
                     id="btn-show-route-congestion"
                     type="button"
                     onclick="toggleRouteInputPanel(false)"
-                    class="floating-route-trigger hidden items-center justify-center w-8 h-9 bg-slate-900/90 hover:bg-slate-800 text-teal-400 rounded-r-md shadow-lg border-y border-r border-slate-700/80 text-xs font-bold transition-all duration-300 cursor-pointer backdrop-blur-md z-45 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    class="floating-route-trigger inline-flex items-center justify-center w-8 h-9 bg-slate-900/90 hover:bg-slate-800 text-teal-400 rounded-r-md shadow-lg border-y border-r border-slate-700/80 text-xs font-bold transition-all duration-300 cursor-pointer backdrop-blur-md z-45 focus:outline-none focus:ring-2 focus:ring-teal-400"
                     title="Mostrar Ruta y Congestión"
                     aria-label="Mostrar Ruta y Congestión"
                 >
                     <i class="fa-solid fa-chevron-right text-xs transition-transform duration-200 hover:scale-125" aria-hidden="true"></i>
                     <span class="sr-only">Mostrar Ruta y Congestión</span>
                 </button>
-                <div id="map-left-panels-container" class="map-left-panels-container transition-all duration-300 z-50">
-                <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4 transition-transform duration-300 z-50 translate-x-0" aria-label="Input geográfico" aria-hidden="false">
+                <div id="map-left-panels-container" class="map-left-panels-container is-collapsed transition-all duration-300 z-50" aria-hidden="true">
+                <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4 transition-transform duration-300 z-50 -translate-x-[calc(100%-2rem)] is-collapsed" aria-label="Input geográfico" aria-hidden="true">
                     <div>
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="text-sm font-bold uppercase text-[#002060]" data-i18n="map_input_header"><i class="fa-solid fa-map-location-dot mr-2"></i> Input geográfico</h2>
-                            <button id="btn-map-collapse-input" onclick="toggleRouteInputPanel()" class="map-icon-button !w-8 !h-8 !shadow-none cursor-pointer" title="Colapsar Input geográfico" aria-label="Colapsar Input geográfico" aria-expanded="true" aria-controls="map-left-panels-container">
-                                <i class="fa-solid fa-chevron-left text-xs transition-transform duration-300"></i>
+                            <button id="btn-map-collapse-input" onclick="toggleRouteInputPanel()" class="map-icon-button !w-8 !h-8 !shadow-none cursor-pointer" title="Expandir Input geográfico" aria-label="Expandir Input geográfico" aria-expanded="false" aria-controls="map-left-panels-container">
+                                <i class="fa-solid fa-chevron-right text-xs transition-transform duration-300 rotate-180"></i>
                             </button>
                         </div>
                         <p class="text-xs text-slate-600 mt-1">Los puertos, laycan y millas alimentan automáticamente la calculadora y los contratos.</p>
@@ -9963,8 +9963,8 @@
                 </section>
                 </div>
                 <div id="nlp-input-widget-root"></div>
-                <div id="maritime-weather-panel-root"></div>
-                <div id="bottom-metrics-container" data-legacy-id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs transition-all duration-300">
+                <div id="maritime-weather-panel-root" class="hidden opacity-0 pointer-events-none weather-panel-collapsed" aria-hidden="true"></div>
+                <div id="bottom-metrics-container" data-legacy-id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs transition-all duration-300 hidden opacity-0 pointer-events-none" aria-hidden="true">
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POD</span><strong id="sync-pod-label">TBA</strong></div>
@@ -19108,9 +19108,10 @@ function renderPortCongestionShield(congestionData) {
     if (!shieldCard) {
         shieldCard = document.createElement('section');
         shieldCard.id = 'congestion-shield-sidebar-card';
-        shieldCard.className = 'map-floating-panel route-sync-card ecosystem-panel space-y-3 text-xs';
+        const isCollapsed = typeof isGeoInputOpen === 'boolean' ? !isGeoInputOpen : true;
+        shieldCard.className = `map-floating-panel route-sync-card ecosystem-panel space-y-3 text-xs ${isCollapsed ? '-translate-x-[calc(100%-2rem)] is-collapsed' : 'translate-x-0'}`;
         shieldCard.setAttribute('aria-label', 'Predictive Congestion Shield');
-        shieldCard.setAttribute('aria-hidden', 'false');
+        shieldCard.setAttribute('aria-hidden', String(isCollapsed));
         
         const geoInputContainer = document.getElementById('map-input-overlay') || 
                                   document.getElementById('map-port-pol')?.closest('section, form, .route-sync-card, .ecosystem-panel, div') || 
@@ -19287,6 +19288,9 @@ async function runOnDemandMapRouteWorkflow(button) {
         if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
         if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         stopRouteGlobeRotation();
+        if (typeof setRouteInputPanelOpen === 'function') {
+            setRouteInputPanelOpen(false);
+        }
         window.SeaAssistantAlerts?.evaluateCurrentContext?.();
 
         window.updateDataBridgeTransportStatus?.('connected');
@@ -30995,7 +30999,7 @@ function createRouteAnchorElement(type) {
             }, delay);
         }
 
-        let isGeoInputOpen = true;
+        let isGeoInputOpen = false;
 
         function setRouteInputPanelOpen(nextOpen) {
             const shell = document.getElementById('map-command-shell');
