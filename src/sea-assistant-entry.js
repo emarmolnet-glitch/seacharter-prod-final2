@@ -474,6 +474,12 @@ function normalizeDataBridgeAssistantResponse(payload) {
     effectiveAction.payload.projectCargo = projectCargoCandidate;
   }
 
+  if (payload?.accion_ui === "renderizar_auditoria_dss" || payload?.data?.accion_ui === "renderizar_auditoria_dss") {
+    if (typeof window !== "undefined" && typeof window.renderizarAuditoriaDss === "function") {
+      window.renderizarAuditoriaDss(payload?.data || payload);
+    }
+  }
+
   console.log("Texto de respuesta seleccionado:", respuesta || null);
   console.log("Acción normalizada:", effectiveAction);
   console.log("Payload normalizado:", effectiveAction?.payload || actionPayload);
@@ -561,7 +567,8 @@ function findActionableAiJsonObject(responseText) {
       const rawJson = text.slice(start, end + 1);
       try {
         const parsed = JSON.parse(rawJson);
-        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"].includes(parsed?.action)
+        if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL", "renderizar_auditoria_dss"].includes(parsed?.action)
+          || parsed?.accion_ui === "renderizar_auditoria_dss"
           || isDraftEmailAction(parsed)) {
           return { action: parsed, start, end: end + 1 };
         }
@@ -580,7 +587,8 @@ function extractActionableAiResponse(responseText) {
   if (jsonBlock) {
     try {
       const action = JSON.parse(jsonBlock[1]);
-      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL"].includes(action?.action)
+      if (["update_field", "calculate_route", "fill_complete_form", "update_fields", "search_vessel", "LOCATE_VESSEL", "renderizar_auditoria_dss"].includes(action?.action)
+        || action?.accion_ui === "renderizar_auditoria_dss"
         || isDraftEmailAction(action)) {
         return {
           visibleText: originalText.replace(jsonBlock[0], "").trim(),
@@ -2600,6 +2608,13 @@ async function executeActionableAiAction(actionObj) {
 
     if (normalizedActionName === "LOCATE_VESSEL") {
         return executeActionableAiLocateVessel(actionObj);
+    }
+
+    if (actionObj?.accion_ui === "renderizar_auditoria_dss" || normalizedActionName === "RENDERIZAR_AUDITORIA_DSS") {
+        if (typeof window !== "undefined" && typeof window.renderizarAuditoriaDss === "function") {
+            window.renderizarAuditoriaDss(actionObj);
+            return true;
+        }
     }
 
     if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {

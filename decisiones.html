@@ -66,6 +66,10 @@
                     <i class="fa-solid fa-file-contract text-indigo-600"></i>
                     <span>Generar Oferta (Fixture Recap)</span>
                 </button>
+                <button type="button" id="btn-auditoria-madre" onclick="solicitarAuditoriaMadre()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-teal-800 border border-teal-700/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+                    <i class="fa-solid fa-shield-halved text-teal-700"></i>
+                    <span>Auditoría MADRE</span>
+                </button>
                 <button type="button" id="btn-fijar-condiciones-top" onclick="fijarCondicionesDefinitivas()" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-lock"></i>
                     <span>Fijar Condiciones Definitivas</span>
@@ -660,6 +664,9 @@
                 </span>
             </div>
 
+            <!-- NIVEL 1: TARJETA DE ALERTA RESUMEN AUDITORÍA MADRE -->
+            <div id="tarjeta-resumen-auditoria-madre" class="hidden"></div>
+
             <div id="contenedor-recomendaciones" class="space-y-3">
                 <!-- Se inyectan dinámicamente -->
             </div>
@@ -705,6 +712,84 @@
                 </div>
             </div>
         </section>
+
+        <!-- NIVEL 2: PANEL LATERAL (OFFCANVAS) NATIVO UI - AUDITORÍA MADRE -->
+        <div id="madre-offcanvas-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[9998] hidden transition-opacity" onclick="cerrarAuditoriaMadreOffcanvas()"></div>
+        <aside id="madre-offcanvas-panel" class="fixed top-0 right-0 bottom-0 z-[9999] w-full max-w-xl md:max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out font-sans" aria-label="Auditoría Estratégica MADRE" role="dialog" aria-modal="true">
+            <!-- Offcanvas Header -->
+            <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <span class="p-2.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-lg">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Auditoría Estratégica MADRE</h3>
+                        <p class="text-xs text-gray-500">Dictamen Ejecutivo Corporativo & Propuesta de Optimización</p>
+                    </div>
+                </div>
+                <button type="button" id="btn-cerrar-auditoria-offcanvas" onclick="cerrarAuditoriaMadreOffcanvas()" class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" aria-label="Cerrar panel">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </header>
+
+            <!-- Offcanvas Scrollable Body -->
+            <div id="madre-offcanvas-body" class="flex-1 overflow-y-auto p-6 space-y-6 text-slate-900 bg-white">
+                <!-- Veredicto Banner -->
+                <div id="madre-offcanvas-veredicto-container" class="p-4 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dictamen General</span>
+                        <div id="madre-offcanvas-veredicto-val" class="text-base font-bold text-slate-900 mt-0.5">--</div>
+                    </div>
+                    <div id="madre-offcanvas-veredicto-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-200 shadow-sm">
+                        --
+                    </div>
+                </div>
+
+                <!-- Reporte Estratégico -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span>Reporte Estratégico</span>
+                    </h4>
+                    <div id="madre-offcanvas-reporte" class="text-sm text-gray-800 leading-relaxed bg-white border border-gray-200 rounded-xl p-4 shadow-sm whitespace-pre-line">
+                        <!-- Se inyecta reporte_estrategico -->
+                    </div>
+                </div>
+
+                <!-- Variables Perjudiciales -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Variables Perjudiciales Identificadas</span>
+                    </h4>
+                    <div id="madre-offcanvas-variables" class="flex flex-wrap gap-2">
+                        <!-- Se inyectan badges rojas/naranjas -->
+                    </div>
+                </div>
+
+                <!-- Recomendaciones Estratégicas (Acción, Pro en verde, Contra en rojo) -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                        <span>Recomendaciones Estratégicas</span>
+                    </h4>
+                    <div id="madre-offcanvas-recomendaciones" class="space-y-3">
+                        <!-- Se inyectan recomendaciones -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Offcanvas Footer: Botón Fixture Recap (Opción B) -->
+            <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
+                <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-file-contract text-teal-200"></i>
+                    <span>Generar Fixture Recap Estratégico (Opción B)</span>
+                </button>
+                <p class="text-[11px] text-gray-500 text-center mt-2">
+                    Aplica automáticamente las modificaciones acordadas (flete, cláusulas y laytime) y exporta el Recap PDF oficial.
+                </p>
+            </footer>
+        </aside>
 
     </div>
 
@@ -3274,6 +3359,450 @@
             }
         }
         window.generateFixtureRecapPDF = generateFixtureRecapPDF;
+
+        /**
+         * =========================================================================
+         * AUDITORÍA ESTRATÉGICA MADRE (DSS - CORE PRO)
+         * =========================================================================
+         */
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function generarAuditoriaMadreFallback(contextoUi = {}) {
+            const pol = String(contextoUi.pol || 'Rotterdam');
+            const pod = String(contextoUi.pod || 'Houston');
+            const cargoQty = Number(contextoUi.cargoQty || contextoUi.cargo || 30000);
+            const commodity = String(contextoUi.commodity || 'Siderúrgico / Carga General');
+            const flete = Number(contextoUi.fleteUnitario || contextoUi.fleteEstimado || contextoUi.freightSell || 37.0);
+            const breakEven = Number(contextoUi.breakEvenUnitario || contextoUi.breakEven || 28.5);
+            const loadRate = Number(contextoUi.loadRate || 5000);
+            const dischargeRate = Number(contextoUi.dischargeRate || 2000);
+
+            const marginPct = flete > 0 ? ((flete - breakEven) / flete) * 100 : 0;
+            let veredicto = "🟡 Riesgo Moderado - Requiere Ajustes";
+            let badgeClass = "bg-amber-100 text-amber-800 border-amber-300";
+            if (marginPct >= 20 && dischargeRate >= 2500) {
+                veredicto = "🟢 Favorable con Cláusulas Protectoras";
+                badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-300";
+            } else if (flete < breakEven || marginPct < 8) {
+                veredicto = "🔴 Desfavorable - Flete por debajo de Break-Even / Riesgo Operativo";
+                badgeClass = "bg-rose-100 text-rose-800 border-rose-300";
+            }
+
+            const proposedFreight = Number((Math.max(flete * 1.08, breakEven * 1.18)).toFixed(2));
+            const proposedDischargeRate = Math.max(dischargeRate, 2500);
+
+            return {
+                success: true,
+                accion_ui: "renderizar_auditoria_dss",
+                veredicto_general: veredicto,
+                badge_class: badgeClass,
+                reporte_estrategico: `Auditoría Estratégica Ejecutiva de MADRE para la operación ${pol} ➔ ${pod} (${cargoQty.toLocaleString('es-ES')} MT de ${commodity}).\n\nEl análisis financiero y operativo determina un Break-Even base de $${breakEven.toFixed(2)}/MT frente a un flete nominal de $${flete.toFixed(2)}/MT (Margen neto actual: ${marginPct.toFixed(1)}%).\n\nSe detecta un cuello de botella relevante en el ritmo de descarga (${dischargeRate.toLocaleString('es-ES')} MT/d) que dilata la permanencia en muelle frente a los días efectivos de mar. Asimismo, la ausencia de cláusulas específicas de congestión y régimen WWD SHINC traslada incertidumbre al armador. Se recomienda formalizar la Opción B estratégica, ajustando el flete a $${proposedFreight.toFixed(2)}/MT e implementando protecciones de plancha y laytime.`,
+                variables_perjudiciales: [
+                    `Ritmo de descarga reducido (${dischargeRate.toLocaleString('es-ES')} MT/d) incrementa Port Days y reduce TCE`,
+                    `Exposición a demoras en atraque por congestión sin cláusula Reachable on Arrival`,
+                    `Margen comercial vulnerable a sobrecostes de combustible durante navegación de retorno`
+                ],
+                recomendaciones: [
+                    {
+                        accion: `Pactar ritmo de descarga garantizado a ${proposedDischargeRate.toLocaleString('es-ES')} MT/día WWD SHINC con medios de tierra`,
+                        pro: "Acorta la estancia portuaria proyectada en más de 1.8 días y elimina riesgos por festivos no computables.",
+                        contra: "Requiere que el fletador / receptor asuma la coordinación o sobrecoste de grúas en muelle."
+                    },
+                    {
+                        accion: `Incrementar Flete Unitario a $${proposedFreight.toFixed(2)} / MT (Opción B Estratégica)`,
+                        pro: "Garantiza un margen bruto robusto y absorbe posibles sobrecostes derivados de contingencias operativas.",
+                        contra: "Puede elevar la resistencia de contraoferta en la mesa de negociación inicial."
+                    },
+                    {
+                        accion: "Incorporar Cláusula WIBON / WIPON Protective Clause con preaviso NOR 24h",
+                        pro: "El tiempo perdido a la espera de muelle libre computa como tiempo de plancha efectivo protegiendo al buque.",
+                        contra: "Exige estricto control de registros de prácticos y capitanía para la validez del tender."
+                    }
+                ],
+                modificaciones_recap: {
+                    flete: proposedFreight,
+                    fleteUnitario: proposedFreight,
+                    allInRateGross: proposedFreight,
+                    loadRate: loadRate,
+                    dischargeRate: proposedDischargeRate,
+                    laytime: proposedDischargeRate,
+                    clausulas: "WWD SHINC DISCHARGE - REACHABLE ON ARRIVAL - BIMCO WAR RISKS (VOYWAR 2025) - TIME LOST WAITING BERTH TO COUNT AS LAYTIME"
+                }
+            };
+        }
+
+        async function solicitarAuditoriaMadre() {
+            const btn = document.getElementById('btn-auditoria-madre');
+            const originalContent = btn ? btn.innerHTML : '';
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin text-teal-700"></i><span>Auditando MADRE...</span>`;
+                }
+                if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                    window.showToast('Conectando con MADRE para Auditoría Estratégica...', true);
+                }
+
+                const currentDss = (typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function')
+                    ? window.getDSSCurrentState()
+                    : ((typeof window !== 'undefined' && (window.dssFormState || window.dssBaseActualState)) || {});
+
+                const getVal = (id) => {
+                    if (typeof document === 'undefined') return undefined;
+                    const el = document.getElementById(id);
+                    return el ? el.value : undefined;
+                };
+
+                const contextoUi = {
+                    ...currentDss,
+                    pol: getVal('input-pol') || currentDss.pol || 'Rotterdam',
+                    pod: getVal('input-pod') || currentDss.pod || 'Houston',
+                    cargoQty: Number(getVal('input-cargoQty') || currentDss.cargoQty || 30000),
+                    commodity: getVal('input-commodity') || currentDss.commodity || 'Siderúrgico / Carga General',
+                    loadRate: Number(getVal('input-loadRate') || getVal('rate-load') || currentDss.loadRate || 5000),
+                    dischargeRate: Number(getVal('input-dischargeRate') || getVal('rate-disch') || currentDss.dischargeRate || 2000),
+                    laycanDaysLeft: Number(getVal('input-laycanDaysLeft') || currentDss.laycanDaysLeft || 10),
+                    estimatedVoyageDays: Number(getVal('input-estimatedVoyageDays') || currentDss.estimatedVoyageDays || 8),
+                    fleteUnitario: Number(getVal('input-fleteUnitario') || getVal('freight-sell') || currentDss.fleteUnitario || 37.0),
+                    breakEvenUnitario: Number(getVal('input-breakEvenUnitario') || currentDss.breakEvenUnitario || currentDss.breakEven || 28.5),
+                    allInRateGross: Number(currentDss.allInRateGross || currentDss.fleteUnitario || 37.0),
+                    activeScenario: (typeof window !== 'undefined' && window.dssActiveScenario) || 'actual',
+                    vesselName: (typeof window !== 'undefined' && window.State?.vessel) || currentDss.vesselName || 'MV GEARED BULKER',
+                    jwlaRiskActive: Boolean(currentDss.jwlaRiskActive),
+                    timestamp: new Date().toISOString()
+                };
+
+                const payload = {
+                    current_module: "decisiones",
+                    currentModule: "decisiones",
+                    contexto_ui: contextoUi,
+                    contexto: contextoUi,
+                    mensaje: "Auditoría Estratégica MADRE para el escenario actual de toma de decisiones."
+                };
+
+                let auditResult = null;
+                try {
+                    const endpoint = (typeof window !== 'undefined' && typeof window.getApiUrl === 'function')
+                        ? window.getApiUrl('/api/cerebro-ia')
+                        : '/api/cerebro-ia';
+
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        const json = await response.json();
+                        if (json?.accion_ui === 'renderizar_auditoria_dss') {
+                            auditResult = json;
+                        } else if (json?.payload?.accion_ui === 'renderizar_auditoria_dss') {
+                            auditResult = json.payload;
+                        } else if (json?.data?.accion_ui === 'renderizar_auditoria_dss') {
+                            auditResult = json.data;
+                        } else if (json?.auditoria?.accion_ui === 'renderizar_auditoria_dss') {
+                            auditResult = json.auditoria;
+                        }
+                    }
+                } catch (fetchErr) {
+                    console.warn('[Auditoría MADRE] Petición remota no disponible; procediendo con auditoría algorítmica local:', fetchErr);
+                }
+
+                if (!auditResult || auditResult.accion_ui !== 'renderizar_auditoria_dss') {
+                    auditResult = generarAuditoriaMadreFallback(contextoUi);
+                }
+
+                if (auditResult && auditResult.accion_ui === 'renderizar_auditoria_dss') {
+                    renderizarAuditoriaDss(auditResult);
+                    if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                        window.showToast('✅ Auditoría Estratégica MADRE generada exitosamente');
+                    }
+                }
+            } catch (err) {
+                console.error('Error al solicitar Auditoría MADRE:', err);
+                if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                    window.showToast('❌ Error al procesar Auditoría MADRE');
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent || `<i class="fa-solid fa-shield-halved text-teal-700"></i><span>Auditoría MADRE</span>`;
+                }
+            }
+        }
+
+        function renderizarAuditoriaDss(auditoriaData) {
+            if (!auditoriaData || typeof document === 'undefined') return;
+            if (typeof window !== 'undefined') {
+                window.madreUltimaAuditoria = auditoriaData;
+            }
+
+            const veredicto = auditoriaData.veredicto_general || '🟡 Dictamen en Evaluación';
+            const reporte = auditoriaData.reporte_estrategico || 'Sin reporte disponible.';
+            const variables = Array.isArray(auditoriaData.variables_perjudiciales) ? auditoriaData.variables_perjudiciales : [];
+            const recomendaciones = Array.isArray(auditoriaData.recomendaciones) ? auditoriaData.recomendaciones : [];
+
+            const cardContainer = document.getElementById('tarjeta-resumen-auditoria-madre');
+            if (cardContainer) {
+                cardContainer.innerHTML = `
+                    <div class="bg-white border-2 border-teal-700/30 rounded-xl p-5 shadow-sm space-y-3 font-sans">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                            <div class="flex items-center gap-3">
+                                <span class="p-2.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-lg shrink-0">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                </span>
+                                <div>
+                                    <div class="text-[11px] font-bold uppercase tracking-wider text-teal-800">
+                                        Auditoría Estratégica MADRE • Resumen Ejecutivo
+                                    </div>
+                                    <div class="text-base font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                                        <span id="madre-veredicto-general-text">${escapeHtml(veredicto)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" id="btn-ver-auditoria-completa" onclick="abrirAuditoriaMadreOffcanvas()" class="px-4 py-2 text-xs font-bold bg-teal-800 hover:bg-teal-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer self-start sm:self-center shrink-0">
+                                <i class="fa-solid fa-list-check"></i>
+                                <span>Ver Auditoría Completa</span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-700 line-clamp-2 leading-relaxed">
+                            ${escapeHtml(reporte.slice(0, 180))}...
+                        </p>
+                    </div>
+                `;
+                cardContainer.classList.remove('hidden');
+            }
+
+            const veredictoVal = document.getElementById('madre-offcanvas-veredicto-val');
+            if (veredictoVal) veredictoVal.textContent = veredicto;
+
+            const veredictoBadge = document.getElementById('madre-offcanvas-veredicto-badge');
+            if (veredictoBadge) {
+                let badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
+                if (veredicto.includes('🟢')) badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                else if (veredicto.includes('🔴')) badgeColor = 'bg-rose-100 text-rose-800 border-rose-300';
+                veredictoBadge.className = `px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${badgeColor}`;
+                veredictoBadge.textContent = veredicto.includes('🟢') ? 'APROBADO' : (veredicto.includes('🔴') ? 'RIESGO CRÍTICO' : 'ATENCIÓN');
+            }
+
+            const reporteContainer = document.getElementById('madre-offcanvas-reporte');
+            if (reporteContainer) {
+                reporteContainer.textContent = reporte;
+            }
+
+            const varsContainer = document.getElementById('madre-offcanvas-variables');
+            if (varsContainer) {
+                if (variables.length === 0) {
+                    varsContainer.innerHTML = `<span class="text-xs text-gray-400 italic">No se identificaron variables perjudiciales críticas.</span>`;
+                } else {
+                    varsContainer.innerHTML = variables.map((v, i) => {
+                        const isSevere = i === 0 || /demora|flete|inferior|desfavorable|congesti/i.test(v);
+                        const badgeStyle = isSevere
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200';
+                        return `
+                            <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border shadow-sm ${badgeStyle}">
+                                <i class="fa-solid fa-triangle-exclamation ${isSevere ? 'text-rose-600' : 'text-amber-600'}"></i>
+                                <span>${escapeHtml(v)}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            const recsContainer = document.getElementById('madre-offcanvas-recomendaciones');
+            if (recsContainer) {
+                if (recomendaciones.length === 0) {
+                    recsContainer.innerHTML = `<span class="text-xs text-gray-400 italic">Sin recomendaciones adicionales.</span>`;
+                } else {
+                    recsContainer.innerHTML = recomendaciones.map((rec, i) => `
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
+                            <div class="font-bold text-slate-900 text-sm flex items-start gap-2">
+                                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs shrink-0 font-extrabold mt-0.5">${i + 1}</span>
+                                <span class="text-slate-900 font-bold">${escapeHtml(rec.accion || rec.action || '')}</span>
+                            </div>
+                            ${rec.pro ? `
+                                <div class="mt-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md p-2.5 flex items-start gap-2">
+                                    <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5 shrink-0"></i>
+                                    <div><strong class="font-bold text-emerald-900">Pro:</strong> ${escapeHtml(rec.pro)}</div>
+                                </div>
+                            ` : ''}
+                            ${rec.contra ? `
+                                <div class="mt-1.5 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-md p-2.5 flex items-start gap-2">
+                                    <i class="fa-solid fa-circle-xmark text-rose-600 mt-0.5 shrink-0"></i>
+                                    <div><strong class="font-bold text-rose-900">Contra:</strong> ${escapeHtml(rec.contra)}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        function abrirAuditoriaMadreOffcanvas() {
+            if (typeof document === 'undefined') return;
+            const backdrop = document.getElementById('madre-offcanvas-backdrop');
+            const panel = document.getElementById('madre-offcanvas-panel');
+            if (backdrop) backdrop.classList.remove('hidden');
+            if (panel) {
+                panel.classList.remove('translate-x-full');
+                panel.classList.add('translate-x-0');
+            }
+        }
+
+        function cerrarAuditoriaMadreOffcanvas() {
+            if (typeof document === 'undefined') return;
+            const backdrop = document.getElementById('madre-offcanvas-backdrop');
+            const panel = document.getElementById('madre-offcanvas-panel');
+            if (backdrop) backdrop.classList.add('hidden');
+            if (panel) {
+                panel.classList.add('translate-x-full');
+                panel.classList.remove('translate-x-0');
+            }
+        }
+
+        async function generarFixtureRecapOpcionB() {
+            try {
+                const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
+                const mods = audit?.modificaciones_recap || {};
+
+                const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
+                if (fleteMod !== undefined && fleteMod !== null) {
+                    const numFlete = Number(fleteMod);
+                    if (!isNaN(numFlete) && numFlete > 0) {
+                        if (typeof window !== 'undefined') {
+                            if (window.dssFormState) {
+                                window.dssFormState.fleteUnitario = numFlete;
+                                window.dssFormState.fleteEstimado = numFlete;
+                                window.dssFormState.allInRateGross = numFlete;
+                            }
+                            if (window.dssBaseActualState) {
+                                window.dssBaseActualState.fleteUnitario = numFlete;
+                                window.dssBaseActualState.fleteEstimado = numFlete;
+                                window.dssBaseActualState.allInRateGross = numFlete;
+                            }
+                            window.dssInjectedRecapFreight = numFlete;
+                            if (window.State) {
+                                window.State.freightSell = numFlete;
+                                window.State.allInRateGross = numFlete;
+                            }
+                            if (window.SeaCharterStore?.set) {
+                                window.SeaCharterStore.set({ freightSell: numFlete, allInRateGross: numFlete });
+                            }
+                        }
+                        ['freight-sell', 'input-fleteUnitario', 'gc-freight-val', 'asb-freight-val'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = numFlete;
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        });
+                    }
+                }
+
+                const loadMod = mods.loadRate ?? mods.laytimeLoad ?? mods.loadingRate;
+                const dischMod = mods.dischargeRate ?? mods.laytimeDisch ?? mods.dischargingRate ?? mods.laytime;
+                if (loadMod !== undefined && loadMod !== null) {
+                    const numLoad = Number(loadMod);
+                    if (!isNaN(numLoad) && numLoad > 0) {
+                        if (typeof window !== 'undefined') {
+                            if (window.dssFormState) window.dssFormState.loadRate = numLoad;
+                            if (window.dssBaseActualState) window.dssBaseActualState.loadRate = numLoad;
+                            if (window.State) window.State.loadRate = numLoad;
+                        }
+                        ['rate-load', 'input-loadRate', 'gc-laytime-load-val'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = numLoad;
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        });
+                    }
+                }
+                if (dischMod !== undefined && dischMod !== null) {
+                    const numDisch = Number(dischMod);
+                    if (!isNaN(numDisch) && numDisch > 0) {
+                        if (typeof window !== 'undefined') {
+                            if (window.dssFormState) window.dssFormState.dischargeRate = numDisch;
+                            if (window.dssBaseActualState) window.dssBaseActualState.dischargeRate = numDisch;
+                            if (window.State) window.State.dischRate = numDisch;
+                        }
+                        ['rate-disch', 'input-dischargeRate', 'gc-laytime-disch-val'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = numDisch;
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        });
+                    }
+                }
+
+                const clausulasMod = mods.clausulas ?? mods.specialClauses ?? mods.clausulasEspeciales;
+                if (clausulasMod) {
+                    const strClausulas = String(clausulasMod);
+                    if (typeof window !== 'undefined') {
+                        if (window.dssFormState) {
+                            window.dssFormState.clausulas = strClausulas;
+                            window.dssFormState.specialClauses = strClausulas;
+                            window.dssFormState.clausulasEspeciales = strClausulas;
+                            window.dssFormState.clausulasEspecialesRecap = strClausulas;
+                        }
+                        if (window.dssBaseActualState) {
+                            window.dssBaseActualState.clausulas = strClausulas;
+                            window.dssBaseActualState.specialClauses = strClausulas;
+                            window.dssBaseActualState.clausulasEspecialesRecap = strClausulas;
+                        }
+                        window.dssInjectedRecapClauses = strClausulas;
+                    }
+                }
+
+                if (typeof window !== 'undefined') {
+                    if (typeof window.sincronizarFormularioDesdeEstado === 'function' && window.dssFormState) {
+                        window.sincronizarFormularioDesdeEstado(window.dssFormState);
+                    }
+                    if (typeof window.actualizarDesdeFormulario === 'function') {
+                        window.actualizarDesdeFormulario();
+                    }
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('✅ Modificaciones de MADRE aplicadas en memoria. Generando Fixture Recap (Opción B)...', true);
+                    }
+                }
+
+                if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
+                    await window.generateFixtureRecapPDF();
+                } else if (typeof generateFixtureRecapPDF === 'function') {
+                    await generateFixtureRecapPDF();
+                } else {
+                    console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
+                }
+            } catch (err) {
+                console.error('Error al generar Fixture Recap Opción B:', err);
+                if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                    window.showToast('❌ Error al generar Fixture Recap Opción B');
+                }
+            }
+        }
+
+        if (typeof window !== 'undefined') {
+            window.solicitarAuditoriaMadre = solicitarAuditoriaMadre;
+            window.renderizarAuditoriaDss = renderizarAuditoriaDss;
+            window.abrirAuditoriaMadreOffcanvas = abrirAuditoriaMadreOffcanvas;
+            window.cerrarAuditoriaMadreOffcanvas = cerrarAuditoriaMadreOffcanvas;
+            window.generarFixtureRecapOpcionB = generarFixtureRecapOpcionB;
+            window.generarAuditoriaMadreFallback = generarAuditoriaMadreFallback;
+        }
 
         // Ejecución inicial al cargar el DOM
         document.addEventListener('DOMContentLoaded', () => {

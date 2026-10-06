@@ -482,6 +482,12 @@ export default async (req) => {
       imagenData = body?.image; 
     }
 
+    if (body?.current_module === "decisiones" || body?.currentModule === "decisiones" || rawContexto?.current_module === "decisiones") {
+      const { buildDssStrategicAuditResponse } = await import("./cerebro-ia.js");
+      const auditResult = buildDssStrategicAuditResponse(body?.contexto_ui || rawContexto || body);
+      return jsonResponse(200, auditResult);
+    }
+
     if (documentosExtraidos.length > 0) {
       mensaje = (mensaje || "") + `\n\n[DATOS EXTRAÍDOS DE ARCHIVOS ADJUNTOS PARA EL PROYECTO]:\n${documentosExtraidos.join("\n\n")}`;
     }
