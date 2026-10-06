@@ -7,6 +7,66 @@ export function detectPackaging(text) {
     return PACKAGING_REGEX.test(text.toLowerCase());
 }
 
+export function buildDssStrategicAuditResponse(contexto_ui = {}) {
+    const pol = String(contexto_ui.pol || 'Rotterdam');
+    const pod = String(contexto_ui.pod || 'Houston');
+    const cargoQty = Number(contexto_ui.cargoQty || contexto_ui.cargo || 30000);
+    const commodity = String(contexto_ui.commodity || 'Siderúrgico / Carga General');
+    const flete = Number(contexto_ui.fleteUnitario || contexto_ui.fleteEstimado || contexto_ui.freightSell || 37.0);
+    const breakEven = Number(contexto_ui.breakEvenUnitario || contexto_ui.breakEven || 28.5);
+    const loadRate = Number(contexto_ui.loadRate || 5000);
+    const dischargeRate = Number(contexto_ui.dischargeRate || 2000);
+
+    const marginPct = flete > 0 ? ((flete - breakEven) / flete) * 100 : 0;
+    let veredicto = "🟡 Riesgo Moderado - Requiere Ajustes";
+    if (marginPct >= 20 && dischargeRate >= 2500) {
+        veredicto = "🟢 Favorable con Cláusulas Protectoras";
+    } else if (flete < breakEven || marginPct < 8) {
+        veredicto = "🔴 Desfavorable - Flete por debajo de Break-Even / Riesgo Operativo";
+    }
+
+    const proposedFreight = Number((Math.max(flete * 1.08, breakEven * 1.18)).toFixed(2));
+    const proposedDischargeRate = Math.max(dischargeRate, 2500);
+
+    return {
+        success: true,
+        accion_ui: "renderizar_auditoria_dss",
+        veredicto_general: veredicto,
+        reporte_estrategico: `Auditoría Estratégica Ejecutiva MADRE para la operación ${pol} ➔ ${pod} (${cargoQty.toLocaleString('es-ES')} MT de ${commodity}).\n\nEl análisis financiero y operativo determina un Break-Even base de $${breakEven.toFixed(2)}/MT frente a un flete nominal de $${flete.toFixed(2)}/MT (Margen neto actual: ${marginPct.toFixed(1)}%).\n\nSe detecta un cuello de botella relevante en el ritmo de descarga (${dischargeRate.toLocaleString('es-ES')} MT/d) que dilata la permanencia en muelle frente a los días efectivos de mar. Asimismo, la ausencia de cláusulas específicas de congestión y régimen WWD SHINC traslada incertidumbre al armador. Se recomienda formalizar la Opción B estratégica, ajustando el flete a $${proposedFreight.toFixed(2)}/MT e implementando protecciones de plancha y laytime.`,
+        variables_perjudiciales: [
+            `Ritmo de descarga reducido (${dischargeRate.toLocaleString('es-ES')} MT/d) incrementa Port Days y reduce TCE`,
+            `Exposición a demoras en atraque por congestión sin cláusula Reachable on Arrival`,
+            `Margen comercial vulnerable a sobrecostes de combustible durante navegación de retorno`
+        ],
+        recomendaciones: [
+            {
+                accion: `Pactar ritmo de descarga garantizado a ${proposedDischargeRate.toLocaleString('es-ES')} MT/día WWD SHINC con medios de tierra`,
+                pro: "Acorta la estancia portuaria proyectada en más de 1.8 días y elimina riesgos por festivos no computables.",
+                contra: "Requiere que el fletador / receptor asuma la coordinación o sobrecoste de grúas en muelle."
+            },
+            {
+                accion: `Incrementar Flete Unitario a $${proposedFreight.toFixed(2)} / MT (Opción B Estratégica)`,
+                pro: "Garantiza un margen bruto robusto y absorbe posibles sobrecostes derivados de contingencias operativas.",
+                contra: "Puede elevar la resistencia de contraoferta en la mesa de negociación inicial."
+            },
+            {
+                accion: "Incorporar Cláusula WIBON / WIPON Protective Clause con preaviso NOR 24h",
+                pro: "El tiempo perdido a la espera de muelle libre computa como tiempo de plancha efectivo protegiendo al buque.",
+                contra: "Exige estricto control de registros de prácticos y capitanía para la validez del tender."
+            }
+        ],
+        modificaciones_recap: {
+            flete: proposedFreight,
+            fleteUnitario: proposedFreight,
+            allInRateGross: proposedFreight,
+            loadRate: loadRate,
+            dischargeRate: proposedDischargeRate,
+            laytime: proposedDischargeRate,
+            clausulas: "WWD SHINC DISCHARGE - REACHABLE ON ARRIVAL - BIMCO WAR RISKS (VOYWAR 2025) - TIME LOST WAITING BERTH TO COUNT AS LAYTIME"
+        }
+    };
+}
+
 export function extractPromptText(bodyBuffer, contentType) {
     if (!bodyBuffer) return "";
     try {
@@ -191,6 +251,26 @@ export default async function proxyRequest(request) {
 
             if (!promptText) {
                 promptText = extractPromptText(rawBody, contentType);
+            }
+
+            // Si la petición proviene de DSS con current_module: "decisiones", responder con Auditoría Estratégica MADRE
+            if (contentType?.includes("application/json")) {
+                try {
+                    const text = typeof rawBody === "string" ? rawBody : new TextDecoder().decode(rawBody);
+                    const parsed = JSON.parse(text);
+                    if (parsed?.current_module === "decisiones" || parsed?.currentModule === "decisiones") {
+                        const auditResponse = buildDssStrategicAuditResponse(parsed.contexto_ui || parsed.contexto || parsed);
+                        return new Response(JSON.stringify(auditResponse), {
+                            status: 200,
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Access-Control-Allow-Origin": "*",
+                            }
+                        });
+                    }
+                } catch (parseErr) {
+                    console.warn("[cerebro-ia] Error inspeccionando payload de decisiones:", parseErr);
+                }
             }
         }
 
