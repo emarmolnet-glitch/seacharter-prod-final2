@@ -645,6 +645,29 @@ export function useHeaderVisibility(defaultVisible = true) {
 
 import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
 
+export function AppLayout({ children }) {
+  const [currentView, setCurrentView] = useState(() => (typeof window !== 'undefined' ? window.currentView || '' : ''));
+
+  useSeaCharterSync();
+  useUrlImoAutoLookup();
+  usePendingImoSync();
+
+  useEffect(() => {
+    const handleViewChange = (event) => {
+      const nextView = event?.detail?.view || window.currentView || '';
+      setCurrentView(nextView);
+    };
+    window.addEventListener('navigation:view-change', handleViewChange);
+    return () => window.removeEventListener('navigation:view-change', handleViewChange);
+  }, []);
+
+  return currentView === 'FORWARDERS' ? (
+    <ForwarderWorkspace />
+  ) : (
+    children
+  );
+}
+
 export default function App(props) {
   return (
     <HashRouter>

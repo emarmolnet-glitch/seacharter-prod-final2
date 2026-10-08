@@ -26,7 +26,8 @@ const MODULE_LABELS = Object.freeze({
   gencon: "Editor",
   asbatankvoy: "EDITOR ASBATANKVOY",
   auditor: "Auditoría",
-  fcl: "FCL",
+  multimodal: "Cotizador Multimodal",
+  fcl: "Cotizador Multimodal",
   cbam: "CBAM",
 });
 
