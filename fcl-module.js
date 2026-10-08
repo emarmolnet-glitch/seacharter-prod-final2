@@ -32,13 +32,26 @@
         tier2Rate: 'dem-tier2-rate',
         demurrageCost: 'demurrage-cost',
         freightSubtotal: 'freight-subtotal',
-        total: 'fcl-quote-total'
+        netPrice: 'fcl-net-price',
+        markup: 'fcl-markup',
+        breakdownNetPrice: 'breakdown-net-price',
+        breakdownMarkup: 'breakdown-markup',
+        quickQuoteLoader: 'quick-quote-loader',
+        netPriceLoader: 'fcl-net-price-loader',
+        markupLoader: 'fcl-markup-loader',
+        total: 'multimodal-quote-total',
+        legacyTotal: 'fcl-quote-total'
     };
 
     const originExcludedIncoterms = new Set(['FOB', 'CFR', 'CIF']);
 
     function getElement(id) {
-        return document.getElementById(id);
+        if (!id) return null;
+        let el = document.getElementById(id);
+        if (!el && id === ids.total) {
+            el = document.getElementById(ids.legacyTotal);
+        }
+        return el;
     }
 
     function readMoney(id) {
@@ -174,8 +187,36 @@
 
         const output = getElement(ids.total);
 
-        if (output) {
-            output.textContent = formatQuote(total);
+        // Si Data Bridge ha inyectado una cotización estructurada, renderizar estricta y únicamente totalPrice
+        if (window.lastDataBridgeMultimodalQuote) {
+            const dbQuote = window.lastDataBridgeMultimodalQuote;
+            if (output) {
+                output.textContent = formatQuote(dbQuote.totalPrice);
+                output.setAttribute('title', `Precio final de venta: ${formatQuote(dbQuote.totalPrice)} (${dbQuote.currency}) | Neto + Margen`);
+            }
+            const netField = getElement(ids.netPrice);
+            if (netField) netField.value = formatQuote(dbQuote.netPrice);
+            const markupField = getElement(ids.markup);
+            if (markupField) markupField.value = formatQuote(dbQuote.markup);
+            const bNet = getElement(ids.breakdownNetPrice);
+            if (bNet) bNet.textContent = formatQuote(dbQuote.netPrice);
+            const bMarkup = getElement(ids.breakdownMarkup);
+            if (bMarkup) bMarkup.textContent = formatQuote(dbQuote.markup);
+        } else {
+            const netEst = freightTotal;
+            const markupEst = Math.round((netEst * 0.15) * 100) / 100;
+            const totalEst = Math.round((netEst + markupEst + demurrage.total) * 100) / 100;
+            if (output) {
+                output.textContent = formatQuote(totalEst);
+            }
+            const netField = getElement(ids.netPrice);
+            if (netField) netField.value = formatQuote(netEst);
+            const markupField = getElement(ids.markup);
+            if (markupField) markupField.value = formatQuote(markupEst);
+            const bNet = getElement(ids.breakdownNetPrice);
+            if (bNet) bNet.textContent = formatQuote(netEst);
+            const bMarkup = getElement(ids.breakdownMarkup);
+            if (bMarkup) bMarkup.textContent = formatQuote(markupEst);
         }
 
         // Punto de integracion futuro: emitir este estado hacia SeaCharter Data Bridge si se requiere sincronizacion.
@@ -187,6 +228,24 @@
             freightTotal,
             total
         });
+    }
+
+    function setMultimodalLoadingState(isLoading) {
+        if (typeof window.setMultimodalLoadingState === 'function') {
+            return window.setMultimodalLoadingState(isLoading);
+        }
+    }
+
+    function applyDataBridgeMultimodalQuote(data) {
+        if (typeof window.applyDataBridgeMultimodalQuote === 'function') {
+            return window.applyDataBridgeMultimodalQuote(data);
+        }
+    }
+
+    function exportMultimodalClientPdf(options) {
+        if (typeof window.exportMultimodalClientPdf === 'function') {
+            return window.exportMultimodalClientPdf(options);
+        }
     }
 
     function bindFCLModule() {
@@ -203,6 +262,9 @@
 
     window.updateFCLQuote = updateContainerQuote;
     window.updateContainerQuote = updateContainerQuote;
+    if (!window.setMultimodalLoadingState) window.setMultimodalLoadingState = setMultimodalLoadingState;
+    if (!window.applyDataBridgeMultimodalQuote) window.applyDataBridgeMultimodalQuote = applyDataBridgeMultimodalQuote;
+    if (!window.exportMultimodalClientPdf) window.exportMultimodalClientPdf = exportMultimodalClientPdf;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindFCLModule);
