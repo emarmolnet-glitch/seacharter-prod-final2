@@ -55429,6 +55429,92 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return (dwt >= 500 && rawType.includes('cargo'));
         };
 
+        window.filtrarBuquesCompetidores = function(vessels, requestedCargo) {
+            if (!Array.isArray(vessels)) return [];
+            const targetCargo = Number(requestedCargo) > 0 ? Number(requestedCargo) : 0;
+            return vessels.filter(buque => {
+                if (!buque || typeof buque !== 'object') return false;
+
+                // 1. shipType debe estar entre 70 y 79 (Cargo) o ser explícitamente "Cargo" en su mapeo de categoría
+                const rawType = [
+                    buque.shipType, buque.ShipType, buque.ship_type, buque.type, buque.typeCode,
+                    buque.vesselType, buque.vessel_type, buque.category, buque.categoria_buque,
+                    buque.tipo_buque, buque.Tipo, buque.tipo, buque.vesselClass,
+                    buque.MetaData?.shipType, buque.MetaData?.ShipType, buque.MetaData?.type,
+                    buque.MetaData?.vesselType, buque.ShipStaticData?.Type, buque.ShipStaticData?.ShipType
+                ].find(val => val !== undefined && val !== null && String(val).trim() !== '');
+
+                let isCargo = false;
+                if (rawType !== undefined && rawType !== null) {
+                    const matchCode = String(rawType).trim().match(/^(\d{1,3})(?:\D|$)/);
+                    if (matchCode) {
+                        const code = Number(matchCode[1]);
+                        if (Number.isInteger(code)) {
+                            isCargo = (code >= 70 && code <= 79);
+                        }
+                    }
+                    if (!isCargo) {
+                        const typeStr = String(rawType).trim().toLowerCase();
+                        const categoryMapping = typeof window.normalizeRadarVesselTipo === 'function' ? window.normalizeRadarVesselTipo(rawType) : '';
+                        isCargo = String(categoryMapping).toLowerCase() === 'cargo' ||
+                            typeStr === 'cargo' ||
+                            typeStr === 'category:cargo' ||
+                            /\b(cargo|bulk carrier|bulker|dry cargo|general cargo|container|containership|carguero|buque de carga)\b/i.test(typeStr);
+                    }
+                }
+                if (!isCargo) return false;
+
+                // 2. status debe ser "At Anchor" (1), "Moored" (5), o su equivalente en texto, descartando los que estén "Underway using engine"
+                const rawStatus = [
+                    buque.NavigationalStatus, buque.navigationalStatus, buque.status, buque.navigationStatus,
+                    buque.statusLabel, buque.nav_status, buque.navStatus,
+                    buque.MetaData?.NavigationalStatus, buque.MetaData?.navigationalStatus, buque.MetaData?.status,
+                    buque.PositionReport?.NavigationalStatus
+                ].find(val => val !== undefined && val !== null && String(val).trim() !== '');
+
+                let isAnchorOrMoored = false;
+                if (rawStatus !== undefined && rawStatus !== null) {
+                    const statusCode = Number(rawStatus);
+                    if (Number.isFinite(statusCode) && String(rawStatus).trim() !== '') {
+                        if (statusCode === 1 || statusCode === 5) {
+                            isAnchorOrMoored = true;
+                        } else if (statusCode === 0 || statusCode === 8 || statusCode === 4) {
+                            return false; // Underway using engine
+                        }
+                    }
+                    if (!isAnchorOrMoored) {
+                        const text = String(rawStatus).trim().toLowerCase();
+                        if (/\b(under\s*way|underway|navegando|sailing|steaming|en marcha|en ruta|en transito|en tránsito|aproximacion|aproximación)\b/i.test(text)) {
+                            return false;
+                        }
+                        if (/\b(anchor|anchored|at anchor|fondeado|fondeo|en rada|rada|anclado|moored|amarrado|atracado|en puerto|alongside|berth|en muelle|muelle)\b/i.test(text)) {
+                            isAnchorOrMoored = true;
+                        }
+                    }
+                }
+                if (!isAnchorOrMoored) return false;
+
+                // 3. Opcional pero recomendado si está disponible: DWT dentro del margen +/- 40% de la carga solicitada
+                if (targetCargo > 0) {
+                    const rawDwt = [
+                        buque.dwt, buque.DWT, buque.deadweight, buque.capacity,
+                        buque.MetaData?.DWT, buque.MetaData?.dwt,
+                        buque.grossTonnage, buque.gross_tonnage
+                    ].find(val => val !== undefined && val !== null && Number.isFinite(Number(val)) && Number(val) > 0);
+                    const vesselDwt = Number(rawDwt);
+                    if (vesselDwt > 0) {
+                        const minDwt = targetCargo * 0.60;
+                        const maxDwt = targetCargo * 1.40;
+                        if (vesselDwt < minDwt || vesselDwt > maxDwt) {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            });
+        };
+
         window.obtenerNombreBuque = function(buque) {
             const meta = buque && buque.MetaData ? buque.MetaData : {};
             return (buque && (buque.name || buque.ShipName || buque.vesselName || buque.vessel_name)) || meta.ShipName || meta.shipName || 'Sin nombre';
@@ -62910,6 +62996,112 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     supplyFactor = 0.90; 
                 }
 
+                // Filter competitor vessels to establish real market density multiplier
+                const buquesTotales = renderFleet;
+                const requestedCargoQty = Number(
+                    (typeof State !== 'undefined' && (State?.cargo || State?.cargoQuantity || State?.actualCargoIntake)) ||
+                    (typeof document !== 'undefined' && (
+                        parseFloat(document.getElementById('cargo-quantity')?.value) ||
+                        parseFloat(document.getElementById('input-cargoQty')?.value) ||
+                        parseFloat(document.getElementById('input-actualCargoIntake')?.value)
+                    )) ||
+                    (typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('calculator_cargo_qty')) : 0) ||
+                    0
+                );
+
+                const buquesCompetidores = (typeof window.filtrarBuquesCompetidores === 'function')
+                    ? window.filtrarBuquesCompetidores(buquesTotales, requestedCargoQty)
+                    : buquesTotales.filter(vessel => {
+                        if (!vessel || typeof vessel !== 'object') return false;
+                        const rawType = [
+                            vessel.shipType, vessel.ShipType, vessel.ship_type, vessel.type, vessel.typeCode,
+                            vessel.vesselType, vessel.vessel_type, vessel.category, vessel.categoria_buque,
+                            vessel.tipo_buque, vessel.Tipo, vessel.tipo, vessel.vesselClass,
+                            vessel.MetaData?.shipType, vessel.MetaData?.ShipType, vessel.MetaData?.type,
+                            vessel.MetaData?.vesselType, vessel.ShipStaticData?.Type, vessel.ShipStaticData?.ShipType
+                        ].find(val => val !== undefined && val !== null && String(val).trim() !== '');
+
+                        let isCargo = false;
+                        if (rawType !== undefined && rawType !== null) {
+                            const matchCode = String(rawType).trim().match(/^(\d{1,3})(?:\D|$)/);
+                            if (matchCode) {
+                                const code = Number(matchCode[1]);
+                                if (Number.isInteger(code)) {
+                                    isCargo = (code >= 70 && code <= 79);
+                                }
+                            }
+                            if (!isCargo) {
+                                const typeStr = String(rawType).trim().toLowerCase();
+                                const categoryMapping = typeof window.normalizeRadarVesselTipo === 'function' ? window.normalizeRadarVesselTipo(rawType) : '';
+                                isCargo = String(categoryMapping).toLowerCase() === 'cargo' ||
+                                    typeStr === 'cargo' ||
+                                    typeStr === 'category:cargo' ||
+                                    /\b(cargo|bulk carrier|bulker|dry cargo|general cargo|container|containership|carguero|buque de carga)\b/i.test(typeStr);
+                            }
+                        }
+                        if (!isCargo) return false;
+
+                        const rawStatus = [
+                            vessel.NavigationalStatus, vessel.navigationalStatus, vessel.status, vessel.navigationStatus,
+                            vessel.statusLabel, vessel.nav_status, vessel.navStatus,
+                            vessel.MetaData?.NavigationalStatus, vessel.MetaData?.navigationalStatus, vessel.MetaData?.status,
+                            vessel.PositionReport?.NavigationalStatus
+                        ].find(val => val !== undefined && val !== null && String(val).trim() !== '');
+
+                        let isAnchorOrMoored = false;
+                        if (rawStatus !== undefined && rawStatus !== null) {
+                            const statusCode = Number(rawStatus);
+                            if (Number.isFinite(statusCode) && String(rawStatus).trim() !== '') {
+                                if (statusCode === 1 || statusCode === 5) {
+                                    isAnchorOrMoored = true;
+                                } else if (statusCode === 0 || statusCode === 8 || statusCode === 4) {
+                                    return false; // Underway using engine
+                                }
+                            }
+                            if (!isAnchorOrMoored) {
+                                const text = String(rawStatus).trim().toLowerCase();
+                                if (/\b(under\s*way|underway|navegando|sailing|steaming|en marcha|en ruta|en transito|en tránsito|aproximacion|aproximación)\b/i.test(text)) {
+                                    return false;
+                                }
+                                if (/\b(anchor|anchored|at anchor|fondeado|fondeo|en rada|rada|anclado|moored|amarrado|atracado|en puerto|alongside|berth|en muelle|muelle)\b/i.test(text)) {
+                                    isAnchorOrMoored = true;
+                                }
+                            }
+                        }
+                        if (!isAnchorOrMoored) return false;
+
+                        if (requestedCargoQty > 0) {
+                            const rawDwt = [
+                                vessel.dwt, vessel.DWT, vessel.deadweight, vessel.capacity,
+                                vessel.MetaData?.DWT, vessel.MetaData?.dwt,
+                                vessel.grossTonnage, vessel.gross_tonnage
+                            ].find(val => val !== undefined && val !== null && Number.isFinite(Number(val)) && Number(val) > 0);
+                            const vesselDwt = Number(rawDwt);
+                            if (vesselDwt > 0) {
+                                const minDwt = requestedCargoQty * 0.60;
+                                const maxDwt = requestedCargoQty * 1.40;
+                                if (vesselDwt < minDwt || vesselDwt > maxDwt) {
+                                    return false;
+                                }
+                            }
+                        }
+
+                        return true;
+                    });
+
+                window.buquesCompetidores = buquesCompetidores;
+                if (window.GlobalStore) {
+                    window.GlobalStore.buquesCompetidores = buquesCompetidores;
+                }
+
+                const totalDetectedCount = buquesCompetidores.length;
+                const baseline = 15;
+                let coefficient = 1.00 + (baseline - totalDetectedCount) * 0.02;
+                coefficient = Math.max(0.70, Math.min(1.30, coefficient));
+
+                // Density coefficient acts as the authoritative market supply multiplier across all freight bands
+                supplyFactor = coefficient;
+
                 const portRisk = (typeof getPortMultiplier === 'function') ? ((getPortMultiplier(pol) + getPortMultiplier(pod)) / 2) || 1.1 : 1.1;
                 const portMultiplier = (1.0 + (portRisk - 1.1) * 0.10) * (activeVesselProfile.riskCoefficient || 1);
                 const baseMargins = resolveAisMarketBaseMargins();
@@ -62940,12 +63132,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (rateOffMarketEl) rateOffMarketEl.innerText = `$${rateOffMarket.toFixed(2)}`;
                 const pctOffMarketEl = document.getElementById('ais-pct-offmarket');
                 if (pctOffMarketEl) pctOffMarketEl.innerText = `${pctOffMarket >= 0 ? '+' : ''}${pctOffMarket}%`;
-
-                // Recalculate Coeficiente de Oferta and Estado de la Competencia from total market traffic
-                const totalDetectedCount = renderFleet.length;
-                const baseline = 15;
-                let coefficient = 1.00 + (baseline - totalDetectedCount) * 0.02;
-                coefficient = Math.max(0.70, Math.min(1.30, coefficient));
 
                 const supplyCoefficientEl = document.getElementById('ais-supply-coefficient') || document.getElementById('coeficiente-oferta');
                 if (supplyCoefficientEl) {
