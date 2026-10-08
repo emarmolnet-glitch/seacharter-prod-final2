@@ -7433,6 +7433,7 @@
             border-top-color: var(--accent) !important;
         }
 
+        #seacharter-multimodal-module,
         #seacharter-fcl-module {
             --fcl-navy: #082f49;
             --fcl-harbor: #0f766e;
@@ -7447,17 +7448,176 @@
             font-family: "Inter", "Segoe UI", sans-serif;
         }
 
+        #seacharter-multimodal-module *,
         #seacharter-fcl-module * {
             box-sizing: border-box;
         }
 
-        #seacharter-fcl-module .fcl-shell {
+        #seacharter-multimodal-module .fcl-shell,
+        #seacharter-fcl-module .fcl-shell,
+        .multimodal-shell {
             display: grid;
             gap: 16px;
             width: 100%;
             max-width: none;
             margin: 0 auto;
             padding: 0 40px 32px;
+        }
+
+        .multimodal-tab-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            padding: 0.625rem 0.875rem;
+            border-radius: 0.625rem;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: left;
+            user-select: none;
+        }
+
+        .multimodal-tab-btn:hover {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #0f172a;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        }
+
+        .multimodal-tab-btn.is-active {
+            background: #082f49 !important;
+            border-color: #082f49 !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 8px -1px rgba(8, 47, 73, 0.25) !important;
+        }
+
+        .multimodal-tab-btn.is-active .tab-icon-box {
+            background: rgba(255, 255, 255, 0.15) !important;
+            color: #38bdf8 !important;
+        }
+
+        .multimodal-tab-btn.is-active .tab-subtitle {
+            color: #94a3b8 !important;
+        }
+
+        .multimodal-tab-pane.hidden {
+            display: none !important;
+        }
+
+        .multimodal-tab-pane {
+            animation: mmFadeIn 180ms ease-out;
+        }
+
+        @keyframes mmFadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .multimodal-tab-pane .fcl-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.25rem;
+            width: 100%;
+            align-items: start;
+        }
+
+        .multimodal-tab-pane .fcl-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .multimodal-tab-pane .fcl-card-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 0.75rem;
+        }
+
+        .multimodal-tab-pane .fcl-card-heading h3 {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .multimodal-tab-pane .fcl-card-label {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 800;
+            color: #0284c7;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 2px;
+        }
+
+        .multimodal-tab-pane .fcl-fieldset {
+            display: flex;
+            flex-direction: column;
+            gap: 0.875rem;
+        }
+
+        .multimodal-tab-pane .fcl-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .multimodal-tab-pane .fcl-field label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .multimodal-tab-pane .fcl-field input,
+        .multimodal-tab-pane .fcl-field select {
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 0.8125rem;
+            outline: none;
+            transition: border-color 140ms ease, box-shadow 140ms ease;
+        }
+
+        .multimodal-tab-pane .fcl-field input:focus,
+        .multimodal-tab-pane .fcl-field select:focus {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+        }
+
+        .multimodal-tab-pane .summary-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: stretch;
+            margin-top: 1.25rem;
+        }
+
+        .multimodal-tab-pane .fcl-total-value {
+            font-size: 1.75rem;
+            font-weight: 900;
+            color: #0369a1;
+            font-family: monospace;
         }
 
         #seacharter-fcl-module .module-header,
@@ -8531,6 +8691,7 @@
         #view-estimator,
         #view-cbam,
         #view-fcl,
+        #view-multimodal,
         #view-gencon,
         #view-asbatankvoy,
         #view-auditor,
@@ -12442,22 +12603,99 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- MÓDULO 6: CONTENEDORES FCL/LCL AVANZADO    -->
+        <!-- MÓDULO 6: COTIZADOR MULTIMODAL             -->
         <!-- ========================================== -->
-        <div id="view-fcl" class="view-section absolute inset-0 overflow-y-auto py-6 px-0 scroll-smooth bg-[#F8FAFC]">
-            <div id="seacharter-fcl-module">
-                <div class="fcl-shell">
-                    <header class="module-header">
-                        <div>
-                            <span class="fcl-kicker module-breadcrumbs">Definir Ruta -> Calcular Costes -> Resumen FCL</span>
-                            <h2><i class="fa-solid fa-boxes-stacked mr-2"></i>Módulo de Contenedores FCL</h2>
-                            <p>Costes marítimos, gastos locales y demoras alineados con el flujo operativo de SeaCharter Core PRO.</p>
+        <div id="view-multimodal" class="view-section absolute inset-0 overflow-y-auto py-6 px-0 scroll-smooth bg-[#F8FAFC]">
+            <div id="view-fcl" class="hidden" aria-hidden="true"></div>
+            <div id="seacharter-multimodal-module" class="multimodal-shell">
+                <!-- CABECERA PRINCIPAL DEL COTIZADOR MULTIMODAL -->
+                <header class="multimodal-header bg-white border border-slate-200 rounded-xl p-5 mb-2 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-100 text-sky-800">
+                                <i class="fa-solid fa-boxes-packing text-[10px]"></i> Ecosistema Desacoplado
+                            </span>
+                            <span class="text-xs text-slate-400 font-medium">|</span>
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Logística Multimodal Integral</span>
                         </div>
-                        <div class="fcl-header-badge">
-                            <span class="fcl-kicker">Data Bridge</span>
-                            <strong>Standby Sync</strong>
+                        <h2 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                            <i class="fa-solid fa-network-wired text-sky-600"></i>
+                            Cotizador Multimodal
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                            Ecosistema logístico independiente del motor de graneles (Bulk). Cotice FCL, LCL, Aéreo Internacional, Transporte Terrestre en EE. UU. y logística directa para Amazon FBA con aislamiento total de cálculo.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-right">
+                            <span class="block text-[9px] uppercase font-black text-slate-400 tracking-wider">Motor Operativo</span>
+                            <strong class="text-xs font-bold text-emerald-600 flex items-center gap-1.5 justify-end">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Standalone Desacoplado
+                            </strong>
                         </div>
-                    </header>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-right">
+                            <span class="block text-[9px] uppercase font-black text-slate-400 tracking-wider">Moneda Base</span>
+                            <strong class="text-xs font-bold text-slate-800">EUR / USD</strong>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- SISTEMA DE PESTAÑAS INTERNAS (PILLS / TABS) -->
+                <nav class="multimodal-tabs-nav bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 mb-4" role="tablist" aria-label="Modalidades de transporte multimodal">
+                    <button type="button" id="tab-btn-fcl" class="multimodal-tab-btn is-active" data-multimodal-tab="fcl" role="tab" aria-selected="true" aria-controls="mm-tab-fcl" onclick="switchMultimodalTab('fcl')">
+                        <div class="tab-icon-box w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-boxes-stacked text-sm"></i>
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="text-xs font-black uppercase tracking-wide truncate">FCL</div>
+                            <div class="tab-subtitle text-[10px] text-slate-400 truncate">Contenedor Completo</div>
+                        </div>
+                    </button>
+                    <button type="button" id="tab-btn-lcl" class="multimodal-tab-btn" data-multimodal-tab="lcl" role="tab" aria-selected="false" aria-controls="mm-tab-lcl" onclick="switchMultimodalTab('lcl')">
+                        <div class="tab-icon-box w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-cubes-stacked text-sm"></i>
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="text-xs font-black uppercase tracking-wide truncate">LCL</div>
+                            <div class="tab-subtitle text-[10px] text-slate-400 truncate">Grupaje / Fraccionada</div>
+                        </div>
+                    </button>
+                    <button type="button" id="tab-btn-air" class="multimodal-tab-btn" data-multimodal-tab="air" role="tab" aria-selected="false" aria-controls="mm-tab-air" onclick="switchMultimodalTab('air')">
+                        <div class="tab-icon-box w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-plane-departure text-sm"></i>
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="text-xs font-black uppercase tracking-wide truncate">Aéreo</div>
+                            <div class="tab-subtitle text-[10px] text-slate-400 truncate">Air Freight Cargo</div>
+                        </div>
+                    </button>
+                    <button type="button" id="tab-btn-ground" class="multimodal-tab-btn" data-multimodal-tab="ground" role="tab" aria-selected="false" aria-controls="mm-tab-ground" onclick="switchMultimodalTab('ground')">
+                        <div class="tab-icon-box w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-truck-front text-sm"></i>
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="text-xs font-black uppercase tracking-wide truncate">Terrestre EE. UU.</div>
+                            <div class="tab-subtitle text-[10px] text-slate-400 truncate">Camión / FTL / LTL</div>
+                        </div>
+                    </button>
+                    <button type="button" id="tab-btn-amazon" class="multimodal-tab-btn" data-multimodal-tab="amazon" role="tab" aria-selected="false" aria-controls="mm-tab-amazon" onclick="switchMultimodalTab('amazon')">
+                        <div class="tab-icon-box w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                            <i class="fa-brands fa-amazon text-sm"></i>
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="text-xs font-black uppercase tracking-wide truncate">Amazon FBA</div>
+                            <div class="tab-subtitle text-[10px] text-slate-400 truncate">Centros Logísticos</div>
+                        </div>
+                    </button>
+                </nav>
+
+                <!-- ========================================== -->
+                <!-- PESTAÑA 1: FCL (CONTENEDOR COMPLETO)       -->
+                <!-- ========================================== -->
+                <div id="mm-tab-fcl" class="multimodal-tab-pane" role="tabpanel" aria-labelledby="tab-btn-fcl">
+                    <div id="seacharter-fcl-module">
+                        <div class="fcl-shell" style="padding: 0;">
 
                     <div class="fcl-workspace">
                         <div id="fcl-expiry-alert" class="fcl-expiry-alert" role="alert">
@@ -12779,6 +13017,232 @@
                 </div>
             </div>
         </div>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 2: LCL (GRUPAJE / CARGA FRACCIONADA)-->
+        <!-- ========================================== -->
+        <div id="mm-tab-lcl" class="multimodal-tab-pane hidden" role="tabpanel" aria-labelledby="tab-btn-lcl">
+            <div class="fcl-overview-grid">
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">01</span><h3>Ruta Marítima LCL</h3></div>
+                        <i class="fa-solid fa-ship text-sky-600"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="lcl-pol">Puerto de Origen (POL)</label><input id="lcl-pol" type="text" value="Valencia (ESVLC)"></div>
+                        <div class="fcl-field"><label for="lcl-pod">Puerto de Destino (POD)</label><input id="lcl-pod" type="text" value="New York (USNYC)"></div>
+                        <div class="fcl-field"><label for="lcl-incoterm">Incoterm</label>
+                            <select id="lcl-incoterm">
+                                <option value="FOB">FOB - Free on Board</option>
+                                <option value="CIF" selected>CIF - Cost, Insurance & Freight</option>
+                                <option value="EXW">EXW - Ex Works</option>
+                                <option value="DDP">DDP - Delivered Duty Paid</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">02</span><h3>Carga y Medidas LCL (Sin Selector de Equipo)</h3></div>
+                        <i class="fa-solid fa-cubes-stacked text-amber-500"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field">
+                            <label for="lcl-gross-weight">Peso Bruto (KG)</label>
+                            <input id="lcl-gross-weight" type="number" min="1" step="0.5" value="1250" placeholder="Ej: 1250 kg">
+                        </div>
+                        <div class="fcl-field">
+                            <label for="lcl-gross-volume">Volumen (CBM)</label>
+                            <input id="lcl-gross-volume" type="number" min="0.1" step="0.05" value="3.40" placeholder="Ej: 3.40 m³">
+                        </div>
+                        <div class="fcl-field">
+                            <label for="lcl-cargo-type">Naturaleza de Mercancía</label>
+                            <input id="lcl-cargo-type" type="text" value="Carga General Paletizada (Non-IMO)">
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <section class="summary-panel">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="fcl-card-label">Cotización Estimada LCL</span>
+                        <p class="text-xs text-slate-500">Calculado por tonelada / metro cúbico (W/M revenue ton) desacoplado de graneles.</p>
+                    </div>
+                    <output id="lcl-quote-total" class="fcl-total-value">€425.00</output>
+                </div>
+            </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 3: AÉREO (AIR FREIGHT CARGO)       -->
+        <!-- ========================================== -->
+        <div id="mm-tab-air" class="multimodal-tab-pane hidden" role="tabpanel" aria-labelledby="tab-btn-air">
+            <div class="fcl-overview-grid">
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">01</span><h3>Ruta Aérea (Aeropuertos IATA)</h3></div>
+                        <i class="fa-solid fa-plane-departure text-sky-600"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="air-origin">Aeropuerto Origen (IATA)</label><input id="air-origin" type="text" value="MAD - Adolfo Suárez Madrid-Barajas"></div>
+                        <div class="fcl-field"><label for="air-dest">Aeropuerto Destino (IATA)</label><input id="air-dest" type="text" value="JFK - John F. Kennedy Int. New York"></div>
+                        <div class="fcl-field"><label for="air-service-speed">Modalidad de Servicio</label>
+                            <select id="air-service-speed">
+                                <option value="express">Aéreo Express (1-2 días)</option>
+                                <option value="standard" selected>Aéreo Estándar Consolidado (3-5 días)</option>
+                                <option value="economy">Aéreo Economy Diferido (5-7 días)</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">02</span><h3>Carga Aérea y Dimensiones</h3></div>
+                        <i class="fa-solid fa-weight-scale text-indigo-500"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field">
+                            <label for="air-gross-weight">Peso Bruto (KG)</label>
+                            <input id="air-gross-weight" type="number" min="1" step="0.5" value="380" placeholder="Ej: 380 kg">
+                        </div>
+                        <div class="fcl-field">
+                            <label for="air-dimensions-volume">Dimensiones / Volumen (CBM)</label>
+                            <input id="air-dimensions-volume" type="number" min="0.01" step="0.05" value="1.85" placeholder="Ej: 1.85 m³ (Ratio IATA 1:6000)">
+                        </div>
+                        <div class="fcl-field">
+                            <label for="air-stackable">Mercancía Apilable (Stackable)</label>
+                            <select id="air-stackable">
+                                <option value="yes" selected>Sí - Mercancía Apilable</option>
+                                <option value="no">No - No Apilable (Remontable)</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <section class="summary-panel">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="fcl-card-label">Quick Quote Aéreo</span>
+                        <p class="text-xs text-slate-500">Tarifa basada en peso tasable / chargeable weight independiente de fletamentos.</p>
+                    </div>
+                    <output id="air-quote-total" class="fcl-total-value">€1,482.00</output>
+                </div>
+            </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 4: TERRESTRE EE. UU. (CAMIÓN / LTL)-->
+        <!-- ========================================== -->
+        <div id="mm-tab-ground" class="multimodal-tab-pane hidden" role="tabpanel" aria-labelledby="tab-btn-ground">
+            <div class="fcl-overview-grid">
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">01</span><h3>Ruta Terrestre EE. UU. (Inland Trucking)</h3></div>
+                        <i class="fa-solid fa-truck-front text-sky-600"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="ground-pickup-zip">Origen / Zip Code de Recogida</label><input id="ground-pickup-zip" type="text" value="Houston, TX (77002)"></div>
+                        <div class="fcl-field"><label for="ground-delivery-zip">Destino / Zip Code de Entrega</label><input id="ground-delivery-zip" type="text" value="Chicago, IL (60601)"></div>
+                        <div class="fcl-field"><label for="ground-service-type">Tipo de Transporte</label>
+                            <select id="ground-service-type">
+                                <option value="LTL" selected>LTL (Less Than Truckload / Carga Parcial)</option>
+                                <option value="FTL">FTL (Full Truckload / Tráiler Completo 53ft)</option>
+                                <option value="FLATBED">Plataforma / Flatbed Especial</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">02</span><h3>Detalles de Carga Terrestre</h3></div>
+                        <i class="fa-solid fa-dolly text-emerald-600"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="ground-pallets">Número de Pallets</label><input id="ground-pallets" type="number" min="1" value="4"></div>
+                        <div class="fcl-field"><label for="ground-weight-lbs">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="3200" placeholder="LBS"></div>
+                        <div class="fcl-field"><label for="ground-liftgate">Servicio de Plataforma Elevadora (Liftgate)</label>
+                            <select id="ground-liftgate">
+                                <option value="none">No requerida</option>
+                                <option value="pickup">Requerida en recogida</option>
+                                <option value="delivery" selected>Requerida en entrega</option>
+                                <option value="both">Requerida en ambos puntos</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <section class="summary-panel">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="fcl-card-label">Quick Quote Inland EE. UU.</span>
+                        <p class="text-xs text-slate-500">Tarifa terrestre de camión / LTL con recargos de combustible (FSC).</p>
+                    </div>
+                    <output id="ground-quote-total" class="fcl-total-value">$940.00</output>
+                </div>
+            </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 5: AMAZON FBA (CENTROS LOGÍSTICOS)  -->
+        <!-- ========================================== -->
+        <div id="mm-tab-amazon" class="multimodal-tab-pane hidden" role="tabpanel" aria-labelledby="tab-btn-amazon">
+            <div class="fcl-overview-grid">
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">01</span><h3>Ruta y Centro Logístico Amazon FBA</h3></div>
+                        <i class="fa-brands fa-amazon text-amber-500"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="amazon-origin-port">Origen (Fábrica / Puerto de Salida)</label><input id="amazon-origin-port" type="text" value="Shenzhen / Ningbo (China)"></div>
+                        <div class="fcl-field"><label for="amazon-fba-fc-code">Código Fulfillment Center / Zip Code (Destino)</label><input id="amazon-fba-fc-code" type="text" value="ONT8 - Moreno Valley, CA 92555" placeholder="Ej: ONT8, LGB3, CLT2, etc."></div>
+                        <div class="fcl-field"><label for="amazon-delivery-method">Método de Entrega FBA</label>
+                            <select id="amazon-delivery-method">
+                                <option value="SPD">SPD (Small Parcel Delivery - Paquetes Sueltos)</option>
+                                <option value="LTL" selected>LTL Palletizado con Cita CARP</option>
+                                <option value="FTL">FTL Contenedor Directo a Almacén FBA</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="fcl-card">
+                    <div class="fcl-card-heading">
+                        <div><span class="fcl-card-label">02</span><h3>Carga y Cumplimiento Amazon FBA</h3></div>
+                        <i class="fa-solid fa-barcode text-purple-600"></i>
+                    </div>
+                    <div class="fcl-fieldset">
+                        <div class="fcl-field"><label for="amazon-cartons">Número de Cajas / Bultos</label><input id="amazon-cartons" type="number" min="1" value="120"></div>
+                        <div class="fcl-field"><label for="amazon-total-weight">Peso Bruto Total (KG)</label><input id="amazon-total-weight" type="number" min="1" value="1450"></div>
+                        <div class="fcl-field"><label for="amazon-prep-services">Servicios de Preparación FBA</label>
+                            <select id="amazon-prep-services">
+                                <option value="labeled" selected>Etiquetado FNSKU + Palletizado Estándar 48x40</option>
+                                <option value="prep_only">Inspección + Reembalaje</option>
+                                <option value="direct">Entrega Directa Sin Manipulación</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <section class="summary-panel">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="fcl-card-label">Quick Quote Amazon FBA</span>
+                        <p class="text-xs text-slate-500">Solución integral DDP / CARP cita en centro logístico Amazon.</p>
+                    </div>
+                    <output id="amazon-quote-total" class="fcl-total-value">€1,890.00</output>
+                </div>
+            </section>
+        </div>
+
+            </div><!-- fin #seacharter-multimodal-module -->
+        </div><!-- fin #view-multimodal -->
 
         <!-- ========================================== -->
         <!-- MÓDULO 2: EDITOR GENCON 94 COMPLETO        -->
@@ -29730,11 +30194,11 @@ function createRouteAnchorElement(type) {
             { id: 'auditor', label: 'Auditoría' },
         ];
         const OPTIONAL_MODULES = [
-            { id: 'fcl', label: 'FCL', preferenceKey: 'showContainerModules' },
+            { id: 'multimodal', label: 'Cotizador Multimodal', preferenceKey: 'showContainerModules' },
             { id: 'asbatankvoy', label: 'Editor ASBATANKVOY' },
             { id: 'cbam', label: 'CBAM' },
         ];
-        const MODULE_NAVIGATION = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].map(module => module.id);
+        const MODULE_NAVIGATION = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].map(module => module.id).concat(['fcl']);
         let userPreferences = loadUserPreferences();
         let activeNavigationModuleId = 'map';
         let previousContentModuleId = 'map';
@@ -29840,6 +30304,8 @@ function createRouteAnchorElement(type) {
             ais: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
             gencon: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
             auditor: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>',
+            multimodal: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+            fcl: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
             FORWARDERS: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
             marketReport: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
         };
@@ -30013,10 +30479,15 @@ function createRouteAnchorElement(type) {
         }
 
         function updateMobileModuleNavLabel(tabId) {
+            if (tabId === 'fcl') tabId = 'multimodal';
             const currentLabel = document.getElementById('mobile-module-nav-current');
             if (!currentLabel) return;
             if (tabId === 'FORWARDERS' || tabId === 'forwarders') {
                 currentLabel.textContent = '💼 PROYECTOS';
+                return;
+            }
+            if (tabId === 'multimodal') {
+                currentLabel.textContent = 'Cotizador Multimodal';
                 return;
             }
             const currentModule = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].find(moduleConfig => moduleConfig.id === tabId);
@@ -30164,7 +30635,7 @@ function createRouteAnchorElement(type) {
             preferenceItem.innerHTML = `
                 <label class="advanced-preference-toggle" for="show-container-modules-toggle">
                     <input type="checkbox" id="show-container-modules-toggle" ${userPreferences.showContainerModules ? 'checked' : ''}>
-                    <span>Mostrar FCL en barra superior</span>
+                    <span>Mostrar Cotizador Multimodal en barra superior</span>
                 </label>
             `;
             menu.appendChild(preferenceItem);
@@ -30637,9 +31108,13 @@ function createRouteAnchorElement(type) {
         }
 
         function switchTab(tabId) {
+            if (tabId === 'fcl') tabId = 'multimodal';
             let targetView = document.getElementById(`view-${tabId}`);
             if (!targetView && (tabId === 'FORWARDERS' || tabId === 'forwarders')) {
                 targetView = document.getElementById('view-forwarders') || document.getElementById('view-FORWARDERS');
+            }
+            if (!targetView && (tabId === 'multimodal' || tabId === 'fcl')) {
+                targetView = document.getElementById('view-multimodal') || document.getElementById('view-fcl');
             }
             if (!targetView) {
                 console.warn(`[Navigation] Unknown tab ignored: ${tabId}`);
@@ -30710,6 +31185,9 @@ function createRouteAnchorElement(type) {
             }
             if (tabId === 'dossiers') {
                 window.DossierManager?.loadList();
+            }
+            if (tabId === 'multimodal') {
+                window.initSeaCharterMultimodalModule?.();
             }
             return true;
         }
@@ -72065,6 +72543,54 @@ window.actualizarGrabCapacityVisibility = function() {
             window.calcularTotal = updateContainerQuote;
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
             else bind();
+        }());
+
+        // =========================================================================
+        // COTIZADOR MULTIMODAL: LÓGICA DE NAVEGACIÓN Y AISLAMIENTO DE ESTADO
+        // =========================================================================
+        (function initMultimodalModuleEngine() {
+            function switchMultimodalTab(modeKey) {
+                const targetKey = String(modeKey || 'fcl').toLowerCase();
+                const validModes = ['fcl', 'lcl', 'air', 'ground', 'amazon'];
+                const activeKey = validModes.includes(targetKey) ? targetKey : 'fcl';
+
+                // 1. Actualizar estado visual de los botones de pestañas
+                document.querySelectorAll('.multimodal-tab-btn').forEach((btn) => {
+                    const btnTab = btn.getAttribute('data-multimodal-tab');
+                    const isActive = btnTab === activeKey;
+                    btn.classList.toggle('is-active', isActive);
+                    btn.setAttribute('aria-selected', String(isActive));
+                });
+
+                // 2. Intercambiar visibilidad de los paneles .multimodal-tab-pane
+                document.querySelectorAll('.multimodal-tab-pane').forEach((pane) => {
+                    const isTarget = pane.id === `mm-tab-${activeKey}`;
+                    if (isTarget) {
+                        pane.classList.remove('hidden');
+                        pane.removeAttribute('aria-hidden');
+                    } else {
+                        pane.classList.add('hidden');
+                        pane.setAttribute('aria-hidden', 'true');
+                    }
+                });
+
+                if (activeKey === 'fcl' && typeof window.updateContainerQuote === 'function') {
+                    window.updateContainerQuote();
+                }
+            }
+
+            window.switchMultimodalTab = switchMultimodalTab;
+            window.initSeaCharterMultimodalModule = function() {
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active');
+                const initialMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
+                switchMultimodalTab(initialMode);
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => window.initSeaCharterMultimodalModule());
+            } else {
+                window.initSeaCharterMultimodalModule();
+            }
         }());
     </script>
     <script>
