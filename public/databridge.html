@@ -331,6 +331,44 @@
         </div>
     </section>
 
+    <!-- Registro de Operaciones Multimodal (Ledger SaaS) -->
+    <section id="multimodal-ledger-panel" class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4 shrink-0 overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-book-bookmark text-sky-600 text-xs"></i>
+                <span class="text-xs text-slate-800 font-semibold uppercase tracking-wider">Registro de Operaciones Multimodal (Ledger SaaS)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="multimodal-ledger-badge" class="bg-sky-50 text-sky-700 border border-sky-200 text-[10px] px-2 py-0.5 rounded-full font-bold">0 OPERACIONES</span>
+                <button type="button" onclick="refreshMultimodalLedger()" class="text-slate-400 hover:text-sky-600 text-xs transition" title="Actualizar Ledger SaaS">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+        <div id="multimodal-ledger-container" class="max-h-64 overflow-y-auto p-3 bg-slate-50">
+            <div id="empty-multimodal-ledger" class="text-center p-5 text-slate-500">
+                <i class="fa-solid fa-boxes-stacked text-xl mb-2 text-sky-400/60"></i>
+                <p class="font-bold text-sm text-slate-600">Sin operaciones multimodal registradas</p>
+                <p class="text-xs mt-1 text-slate-400">Las cotizaciones sincronizadas desde el Cotizador Multimodal de Core PRO se registrarán aquí.</p>
+            </div>
+            <table id="multimodal-ledger-table" class="hidden w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500 bg-slate-100/70">
+                        <th class="py-2 px-3">Referencia</th>
+                        <th class="py-2 px-3">Modalidad</th>
+                        <th class="py-2 px-3 text-right">Coste API</th>
+                        <th class="py-2 px-3 text-right">Venta Agencia</th>
+                        <th class="py-2 px-3 text-right">Fee Plataforma</th>
+                        <th class="py-2 px-3 text-center">Estado</th>
+                        <th class="py-2 px-3 text-right">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="multimodal-ledger-tbody" class="divide-y divide-slate-200">
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <section id="motor-npl-panel" tabindex="0" class="relative bg-white border border-slate-200 rounded-xl shadow-sm p-4 pr-24 shrink-0">
         <button type="button" id="btn-exit-npl" onclick="closeNPLEngine()" class="npl-exit-button bg-white border border-slate-300 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition duration-150" title="Salir del Motor NPL" aria-label="Salir del Motor NPL">
             <i class="fa-solid fa-xmark"></i>
@@ -1867,7 +1905,9 @@
             const coreBridgeSyncChannel = new BroadcastChannel('core_bridge_sync');
             coreBridgeSyncChannel.addEventListener('message', (event) => {
                 const data = event.data;
-                if (data?.type === 'active_core_pro_session' || data?.reference) {
+                if (data?.type === 'MULTIMODAL_LEDGER_SYNC' && data?.payload) {
+                    addMultimodalLedgerItem(data.payload);
+                } else if (data?.type === 'active_core_pro_session' || data?.reference) {
                     updateActiveCoreProSession(data);
                 } else if (data?.type === 'active_core_pro_session_cleared' || data?.reference === null) {
                     updateActiveCoreProSession(null);
@@ -1877,6 +1917,90 @@
             });
             window.coreBridgeSyncChannel = coreBridgeSyncChannel;
         }
+
+        // ==========================================
+        // REGISTRO DE OPERACIONES MULTIMODAL (LEDGER SAAS)
+        // ==========================================
+        const multimodalLedgerRows = [];
+
+        function renderMultimodalLedger() {
+            const emptyEl = document.getElementById('empty-multimodal-ledger');
+            const tableEl = document.getElementById('multimodal-ledger-table');
+            const tbodyEl = document.getElementById('multimodal-ledger-tbody');
+            const badgeEl = document.getElementById('multimodal-ledger-badge');
+
+            if (!tbodyEl) return;
+
+            if (badgeEl) {
+                badgeEl.textContent = `${multimodalLedgerRows.length} OPERACI${multimodalLedgerRows.length === 1 ? 'ÓN' : 'ONES'}`;
+            }
+
+            if (multimodalLedgerRows.length === 0) {
+                if (emptyEl) emptyEl.classList.remove('hidden');
+                if (tableEl) tableEl.classList.add('hidden');
+                tbodyEl.innerHTML = '';
+                return;
+            }
+
+            if (emptyEl) emptyEl.classList.add('hidden');
+            if (tableEl) tableEl.classList.remove('hidden');
+
+            tbodyEl.innerHTML = multimodalLedgerRows.map((op) => {
+                const coste = Number(op.coste_api || op.costeApi || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const venta = Number(op.venta_agencia || op.ventaAgencia || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fee = Number(op.fee_plataforma || op.feePlataforma || 50).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fecha = op.created_at ? new Date(op.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : getTimestamp();
+
+                const safeRef = String(op.referencia || 'RDM-MM-XXXX').replace(/[<>&"']/g, '');
+                const safeMod = String(op.modalidad || 'FCL').replace(/[<>&"']/g, '');
+                const safeEstado = String(op.estado || 'Cotizado').replace(/[<>&"']/g, '');
+
+                return `
+                    <tr class="hover:bg-sky-50/50 transition">
+                        <td class="py-2 px-3 font-mono font-bold text-sky-800">${safeRef}</td>
+                        <td class="py-2 px-3 font-medium text-slate-700">${safeMod}</td>
+                        <td class="py-2 px-3 text-right font-mono text-slate-600">€${coste}</td>
+                        <td class="py-2 px-3 text-right font-mono font-bold text-slate-900">€${venta}</td>
+                        <td class="py-2 px-3 text-right font-mono font-semibold text-emerald-600">€${fee}</td>
+                        <td class="py-2 px-3 text-center">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                ${safeEstado}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 text-right text-slate-400 font-mono text-[10px]">${fecha}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function addMultimodalLedgerItem(item) {
+            if (!item || !item.referencia) return;
+            const exists = multimodalLedgerRows.some((r) => r.referencia === item.referencia);
+            if (!exists) {
+                multimodalLedgerRows.unshift(item);
+                renderMultimodalLedger();
+                addLog(`[SYNC] ${getTimestamp()} - Nueva operación en Ledger SaaS: ${item.referencia} (${item.modalidad || 'Multimodal'}) - Venta: €${item.venta_agencia} - Fee SaaS: €${item.fee_plataforma || 50}`);
+            }
+        }
+
+        async function refreshMultimodalLedger() {
+            try {
+                const response = await fetch('/api/multimodal/sync');
+                if (response.ok) {
+                    const json = await response.json();
+                    if (json && Array.isArray(json.data)) {
+                        multimodalLedgerRows.length = 0;
+                        json.data.forEach((item) => multimodalLedgerRows.push(item));
+                        renderMultimodalLedger();
+                    }
+                }
+            } catch (err) {
+                console.warn('[Data Bridge] Error al cargar Ledger SaaS:', err);
+            }
+        }
+
+        // Cargar registros del Ledger SaaS al inicio
+        refreshMultimodalLedger();
 
         // Storage Event Listener (instant sync across browser tabs)
         window.addEventListener('storage', (event) => {
@@ -1903,7 +2027,9 @@
         window.addEventListener('message', (event) => {
             const data = event.data;
             if (!data) return;
-            if (data.type === 'active_core_pro_session' || data.type === 'contract-reference:changed' || data.type === 'SEACHARTER_SESSION_UPDATE') {
+            if (data.type === 'MULTIMODAL_LEDGER_SYNC' && data.payload) {
+                addMultimodalLedgerItem(data.payload);
+            } else if (data.type === 'active_core_pro_session' || data.type === 'contract-reference:changed' || data.type === 'SEACHARTER_SESSION_UPDATE') {
                 const ref = extractReferenceFromValue(data.reference || data.payload || data);
                 if (ref) updateActiveCoreProSession({ reference: ref, timestamp: Date.now() });
             } else if (data.type === 'active_core_pro_session_cleared') {

@@ -248,6 +248,12 @@
         }
     }
 
+    async function handleSyncDataBridge() {
+        if (typeof window.handleSyncDataBridge === 'function') {
+            return window.handleSyncDataBridge();
+        }
+    }
+
     function bindFCLModule() {
         const root = getElement(moduleId);
         if (!root) return;
@@ -265,6 +271,7 @@
     if (!window.setMultimodalLoadingState) window.setMultimodalLoadingState = setMultimodalLoadingState;
     if (!window.applyDataBridgeMultimodalQuote) window.applyDataBridgeMultimodalQuote = applyDataBridgeMultimodalQuote;
     if (!window.exportMultimodalClientPdf) window.exportMultimodalClientPdf = exportMultimodalClientPdf;
+    if (!window.handleSyncDataBridge) window.handleSyncDataBridge = handleSyncDataBridge;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindFCLModule);

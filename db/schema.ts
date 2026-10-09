@@ -435,3 +435,16 @@ export const marketContacts = pgTable("Market_Contacts", {
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
+export const multimodalOperations = pgTable("multimodal_operations", {
+  id: serial("id").primaryKey(),
+  referencia: varchar("referencia", { length: 100 }).notNull(),
+  modalidad: varchar("modalidad", { length: 100 }).notNull(),
+  costeApi: numeric("coste_api", { precision: 12, scale: 2 }).notNull(),
+  ventaAgencia: numeric("venta_agencia", { precision: 12, scale: 2 }).notNull(),
+  feePlataforma: numeric("fee_plataforma", { precision: 12, scale: 2 }).default("50.00").notNull(),
+  estado: varchar("estado", { length: 50 }).default("Cotizado").notNull(),
+  metadata: jsonb("metadata").default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
