@@ -37,17 +37,42 @@ export default async (req: Request) => {
     return new Response(null, { status: 204, headers: jsonHeaders });
   }
 
-  // GET: Consultar operaciones multimodal registradas en Ledger SaaS
+  // GET: Consultar operaciones multimodal registradas en Ledger SaaS (soporta filtro por referencia o id)
   if (req.method === "GET") {
     try {
       await ensureApplicationSchema();
       const pool = getPool();
-      const result = await pool.query(
-        `SELECT id, referencia, modalidad, coste_api, venta_agencia, fee_plataforma, estado, metadata, created_at, updated_at
-         FROM multimodal_operations
-         ORDER BY created_at DESC
-         LIMIT 100`
-      );
+      const url = new URL(req.url);
+      const refParam = cleanText(url.searchParams.get("ref") || url.searchParams.get("referencia") || "");
+      const idParam = cleanText(url.searchParams.get("id") || "");
+
+      let result;
+      if (idParam) {
+        result = await pool.query(
+          `SELECT id, referencia, modalidad, coste_api, venta_agencia, fee_plataforma, estado, metadata, created_at, updated_at
+           FROM multimodal_operations
+           WHERE id::text = $1
+           LIMIT 1`,
+          [idParam]
+        );
+      } else if (refParam) {
+        result = await pool.query(
+          `SELECT id, referencia, modalidad, coste_api, venta_agencia, fee_plataforma, estado, metadata, created_at, updated_at
+           FROM multimodal_operations
+           WHERE referencia = $1
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [refParam]
+        );
+      } else {
+        result = await pool.query(
+          `SELECT id, referencia, modalidad, coste_api, venta_agencia, fee_plataforma, estado, metadata, created_at, updated_at
+           FROM multimodal_operations
+           ORDER BY created_at DESC
+           LIMIT 100`
+        );
+      }
+
       return Response.json(
         {
           success: true,
@@ -65,6 +90,54 @@ export default async (req: Request) => {
           details: errorMessage,
           data: [],
         },
+        { status: 500, headers: jsonHeaders }
+      );
+    }
+  }
+
+  // PATCH / PUT: Actualizar estado de operación multimodal (ej. Confirmación de Booking / Cobro)
+  if (req.method === "PATCH" || req.method === "PUT") {
+    let body: Record<string, unknown> = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+
+    const referencia = cleanText(body.referencia || body.reference, 100);
+    const id = cleanText(body.id, 100);
+    const estado = cleanText(body.estado || body.status, 50);
+
+    if (!estado || (!referencia && !id)) {
+      return Response.json(
+        { success: false, error: "Se requiere estado y referencia o id" },
+        { status: 400, headers: jsonHeaders }
+      );
+    }
+
+    try {
+      await ensureApplicationSchema();
+      const pool = getPool();
+      const updateResult = await pool.query(
+        `UPDATE multimodal_operations
+         SET estado = $1, updated_at = NOW()
+         WHERE ($2::text IS NOT NULL AND referencia = $2) OR ($3::text IS NOT NULL AND id::text = $3)
+         RETURNING id, referencia, modalidad, coste_api, venta_agencia, fee_plataforma, estado, metadata, created_at, updated_at`,
+        [estado, referencia || null, id || null]
+      );
+
+      return Response.json(
+        {
+          success: true,
+          updated: (updateResult.rowCount || 0) > 0,
+          data: updateResult.rows[0] || null,
+        },
+        { headers: jsonHeaders }
+      );
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return Response.json(
+        { success: false, error: "Error actualizando estado en Ledger SaaS", details: errorMessage },
         { status: 500, headers: jsonHeaders }
       );
     }
