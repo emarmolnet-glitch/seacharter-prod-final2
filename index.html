@@ -12787,8 +12787,8 @@
                             </div>
                             <div class="fcl-fieldset">
                                 <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-receipt">Place of Receipt</label><input id="fcl-place-receipt" data-fcl-input type="text" list="fcl-port-suggestions" value="Zaragoza ICD"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" value="Valencia" readonly aria-readonly="true"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" value="Jebel Ali" readonly aria-readonly="true"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="Valencia" placeholder="Puerto de Origen (ej: Valencia)"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="Jebel Ali" placeholder="Puerto de Destino (ej: Jebel Ali)"></div>
                                 <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-delivery">Place of Delivery</label><input id="fcl-place-delivery" data-fcl-input type="text" list="fcl-port-suggestions" value="Dubai Logistics City"></div>
                                 <datalist id="fcl-port-suggestions">
                                     <option value="Valencia"></option>
@@ -71963,16 +71963,22 @@ window.actualizarGrabCapacityVisibility = function() {
                 field.value = value;
                 return true;
             }
-            function syncFCLRouteFromCurrentRoute() {
+            function syncFCLRouteFromCurrentRoute(force = false) {
                 const route = getCurrentRouteState();
                 if (!route.origin && !route.destination) return false;
-                const changed = [
-                    setFieldValue('fcl-pol', route.origin),
-                    setFieldValue('fcl-pod', route.destination),
-                    setFieldValue(ids.auditRoute, route.origin || route.destination ? `${route.origin || 'Origen'} -> ${route.destination || 'Destino'}` : '')
-                ].some(Boolean);
-                if (changed) applyRoutePattern();
-                return changed;
+                const changed = [];
+                if (force || !el('fcl-pol')?.value) {
+                    if (route.origin) changed.push(setFieldValue('fcl-pol', route.origin));
+                }
+                if (force || !el('fcl-pod')?.value) {
+                    if (route.destination) changed.push(setFieldValue('fcl-pod', route.destination));
+                }
+                const origin = el('fcl-pol')?.value || route.origin || '';
+                const destination = el('fcl-pod')?.value || route.destination || '';
+                changed.push(setFieldValue(ids.auditRoute, origin || destination ? `${origin || 'Origen'} -> ${destination || 'Destino'}` : ''));
+                const anyChanged = changed.some(Boolean);
+                if (anyChanged) applyRoutePattern();
+                return anyChanged;
             }
             function applyRoutePattern() {
                 const origin = normalizeRoute(el('fcl-pol')?.value);
@@ -71992,7 +71998,7 @@ window.actualizarGrabCapacityVisibility = function() {
                 if (el(ids.proactiveStatus)) {
                     const label = pattern
                         ? `Patrón ${el('fcl-pol')?.value || 'Origen'} -> ${el('fcl-pod')?.value || 'Destino'} aplicado`
-                        : 'Patrón base aplicado en segundo plano';
+                        : `Ruta ${el('fcl-pol')?.value || 'Origen'} -> ${el('fcl-pod')?.value || 'Destino'} activa`;
                     el(ids.proactiveStatus).innerHTML = `<i class="fa-solid fa-circle-check" aria-hidden="true"></i>${label}`;
                 }
             }
@@ -72151,7 +72157,9 @@ window.actualizarGrabCapacityVisibility = function() {
                 return auditIncoterms.includes(value) ? value : '';
             }
             function syncAuditRouteField() {
-                syncFCLRouteFromCurrentRoute();
+                const origin = el('fcl-pol')?.value || '';
+                const destination = el('fcl-pod')?.value || '';
+                setFieldValue(ids.auditRoute, origin || destination ? `${origin || 'Origen'} -> ${destination || 'Destino'}` : '');
             }
             function auditExclusionReason(category, incoterm) {
                 if (!incoterm) return '';
@@ -72632,7 +72640,7 @@ window.actualizarGrabCapacityVisibility = function() {
                 }
             }
             function updateContainerQuote() {
-                syncFCLRouteFromCurrentRoute();
+                syncAuditRouteField();
                 updateMode();
                 updateIncoterm();
                 updateExpiry();

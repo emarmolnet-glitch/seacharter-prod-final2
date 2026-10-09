@@ -15,6 +15,8 @@
         fclCostsPanel: 'fcl-costs-panel',
         lclPanel: 'lcl-panel',
         incoterm: 'fcl-incoterm',
+        pol: 'fcl-pol',
+        pod: 'fcl-pod',
         equipmentQty: 'fcl-equipment-qty',
         bas: 'fcl-bas',
         baf: 'fcl-baf',
@@ -84,6 +86,8 @@
     function getFCLState() {
         // Punto de integracion futuro: mapear aqui tarifas recibidas desde SeaCharter Data Bridge.
         return {
+            pol: getElement(ids.pol)?.value || 'Valencia',
+            pod: getElement(ids.pod)?.value || 'Jebel Ali',
             incoterm: getElement(ids.incoterm)?.value || 'EXW',
             equipmentQty: readEquipmentQty(),
             bas: readMoney(ids.bas),
