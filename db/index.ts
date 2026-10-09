@@ -390,6 +390,24 @@ export async function ensureApplicationSchema() {
       ALTER TABLE "Market_Contacts" ADD COLUMN IF NOT EXISTS phones TEXT[] DEFAULT '{}'::text[];
     END
     $market_contacts_schema$;
+
+    CREATE TABLE IF NOT EXISTS multimodal_operations (
+      id SERIAL PRIMARY KEY,
+      referencia VARCHAR(100) NOT NULL,
+      modalidad VARCHAR(100) NOT NULL,
+      coste_api NUMERIC(12, 2) NOT NULL,
+      venta_agencia NUMERIC(12, 2) NOT NULL,
+      fee_plataforma NUMERIC(12, 2) NOT NULL DEFAULT 50.00,
+      estado VARCHAR(50) NOT NULL DEFAULT 'Cotizado',
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS multimodal_operations_ref_idx
+      ON multimodal_operations (referencia);
+    CREATE INDEX IF NOT EXISTS multimodal_operations_created_at_idx
+      ON multimodal_operations (created_at DESC);
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;

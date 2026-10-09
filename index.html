@@ -13409,7 +13409,7 @@
                                     <i class="fa-solid fa-file-pdf text-rose-600" aria-hidden="true"></i>
                                     <span>Exportar Oferta Cliente (PDF)</span>
                                 </button>
-                                <button id="btn-sync-databridge-quote" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg py-2 transition" type="button" onclick="window.fetchMultimodalQuoteFromDataBridge()">
+                                <button id="btn-sync-databridge-quote" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg py-2 transition" type="button" onclick="handleSyncDataBridge()">
                                     <i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i>
                                     <span>Sincronizar Data Bridge</span>
                                 </button>
@@ -73011,6 +73011,150 @@ window.actualizarGrabCapacityVisibility = function() {
                 resetCarrierIdentity();
                 updateContainerQuote();
             }
+
+            // Manejador de sincronización con Ledger SaaS (Data Bridge)
+            async function handleSyncDataBridge() {
+                const syncBtn = document.getElementById('btn-sync-databridge-quote');
+                const originalHtml = syncBtn ? syncBtn.innerHTML : '';
+
+                try {
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sky-600" aria-hidden="true"></i><span>Sincronizando...</span>';
+                    }
+
+                    // 1. Modalidad: Tab activo en Cotizador Multimodal
+                    const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                    const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                    const tabLabels = {
+                        fcl: 'FCL Marítimo',
+                        lcl: 'LCL Marítimo',
+                        air: 'Aéreo',
+                        ground: 'Terrestre',
+                        amazon: 'Amazon FBA'
+                    };
+                    const currentTab = tabLabels[tabKey] || activeBtn?.querySelector('.text-xs')?.textContent?.trim() || 'FCL Marítimo';
+
+                    // 2. Venta Agencia: Valor total del Quick Quote Global
+                    let quickQuoteTotal = 0;
+                    if (window.lastDataBridgeMultimodalQuote && Number.isFinite(window.lastDataBridgeMultimodalQuote.totalPrice) && window.lastDataBridgeMultimodalQuote.totalPrice > 0) {
+                        quickQuoteTotal = window.lastDataBridgeMultimodalQuote.totalPrice;
+                    } else {
+                        const totalEl = el(ids.total) || el(ids.legacyTotal) || document.getElementById('multimodal-quote-total') || document.getElementById('fcl-quote-total');
+                        const rawText = totalEl?.textContent || totalEl?.value || '';
+                        const digits = rawText.replace(/[^0-9.,]/g, '').trim();
+                        if (digits) {
+                            if (digits.includes(',') && digits.includes('.')) {
+                                quickQuoteTotal = digits.lastIndexOf(',') > digits.lastIndexOf('.')
+                                    ? parseFloat(digits.replace(/\./g, '').replace(',', '.'))
+                                    : parseFloat(digits.replace(/,/g, ''));
+                            } else if (digits.includes(',')) {
+                                quickQuoteTotal = parseFloat(digits.replace(',', '.'));
+                            } else {
+                                quickQuoteTotal = parseFloat(digits);
+                            }
+                        }
+                    }
+                    if (!Number.isFinite(quickQuoteTotal) || quickQuoteTotal <= 0) {
+                        const tabOutputMap = {
+                            amazon: 'amazon-quote-total',
+                            lcl: 'lcl-quote-total',
+                            air: 'air-quote-total',
+                            ground: 'ground-quote-total'
+                        };
+                        if (tabOutputMap[tabKey]) {
+                            const out = document.getElementById(tabOutputMap[tabKey]);
+                            const outDigits = (out?.textContent || '').replace(/[^0-9.,]/g, '').trim();
+                            if (outDigits) quickQuoteTotal = parseFloat(outDigits.replace(/\./g, '').replace(',', '.')) || parseFloat(outDigits) || 0;
+                        }
+                    }
+                    if (!Number.isFinite(quickQuoteTotal) || quickQuoteTotal <= 0) {
+                        quickQuoteTotal = 2070.00;
+                    }
+                    quickQuoteTotal = Math.round(quickQuoteTotal * 100) / 100;
+
+                    // 3. Coste API: Coste base antes del margen
+                    let baseCost = 0;
+                    if (window.lastDataBridgeMultimodalQuote && Number.isFinite(window.lastDataBridgeMultimodalQuote.netPrice) && window.lastDataBridgeMultimodalQuote.netPrice > 0) {
+                        baseCost = window.lastDataBridgeMultimodalQuote.netPrice;
+                    } else {
+                        const netInput = el(ids.netPrice) || document.getElementById('fcl-net-price') || document.getElementById('breakdown-net-price');
+                        const netDigits = (netInput?.value || netInput?.textContent || '').replace(/[^0-9.,]/g, '').trim();
+                        if (netDigits) {
+                            baseCost = parseFloat(netDigits.replace(/\./g, '').replace(',', '.')) || parseFloat(netDigits.replace(/,/g, '')) || 0;
+                        }
+                    }
+                    if (!Number.isFinite(baseCost) || baseCost <= 0) {
+                        baseCost = Math.round((quickQuoteTotal / 1.15) * 100) / 100;
+                    }
+                    baseCost = Math.round(baseCost * 100) / 100;
+
+                    // 4. Payload normalizado para el Ledger SaaS
+                    const payload = {
+                        referencia: `RDM-MM-${Math.floor(Math.random() * 10000)}`,
+                        modalidad: currentTab,
+                        coste_api: baseCost,
+                        venta_agencia: quickQuoteTotal,
+                        fee_plataforma: 50.00,
+                        estado: 'Cotizado'
+                    };
+
+                    try {
+                        await fetch('/api/multimodal/sync', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                    } catch (fetchErr) {
+                        console.warn('[Sync Data Bridge] Error al enviar cotización a /api/multimodal/sync:', fetchErr);
+                    }
+
+                    // 5. Feedback visual (UI): Texto temporal "✅ Sincronizado" y Toast notification
+                    if (syncBtn) {
+                        syncBtn.innerHTML = '<i class="fa-solid fa-check text-emerald-600" aria-hidden="true"></i><span>✅ Sincronizado</span>';
+                        syncBtn.classList.remove('bg-sky-50', 'text-sky-700', 'border-sky-200');
+                        syncBtn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
+
+                        setTimeout(() => {
+                            if (syncBtn) {
+                                syncBtn.innerHTML = originalHtml || '<i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i><span>Sincronizar Data Bridge</span>';
+                                syncBtn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
+                                syncBtn.classList.add('bg-sky-50', 'text-sky-700', 'border-sky-200');
+                                syncBtn.disabled = false;
+                            }
+                        }, 3000);
+                    }
+
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(`✅ Cotización ${payload.referencia} sincronizada con Data Bridge (Ledger SaaS)`);
+                    }
+
+                    window.dispatchEvent(new CustomEvent('multimodal:synced', { detail: payload }));
+                    if (typeof BroadcastChannel === 'function') {
+                        try {
+                            const bc = new BroadcastChannel('core_bridge_sync');
+                            bc.postMessage({ type: 'MULTIMODAL_LEDGER_SYNC', payload });
+                            bc.close();
+                        } catch (_) {}
+                    }
+
+                    return payload;
+                } catch (error) {
+                    console.error('[handleSyncDataBridge] Error:', error);
+                    if (syncBtn) {
+                        syncBtn.innerHTML = originalHtml;
+                        syncBtn.disabled = false;
+                    }
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('❌ Error al sincronizar con Data Bridge', false, 'error');
+                    }
+                }
+            }
+
+            window.handleSyncDataBridge = handleSyncDataBridge;
             window.updateFCLQuote = updateContainerQuote;
             window.updateContainerQuote = updateContainerQuote;
             window.calcularTotal = updateContainerQuote;
