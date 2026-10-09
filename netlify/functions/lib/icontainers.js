@@ -276,10 +276,12 @@ export const extractMainQuote = formatQuoteResponse;
  * @param {string|Object} params.originIso - Port ISO code (e.g. "ESVLC") or port object
  * @param {string|Object} params.destIso - Port ISO code (e.g. "USMIA") or port object
  * @param {Array<Object>|Object} params.containers - Containers array (e.g. [{ containerType: "40HC", quantity: 1 }])
+ * @param {string} [params.weightUnit] - Weight unit ("kg" | "lbs")
+ * @param {string} [params.dimensionUnit] - Dimension unit ("cm" | "in")
  * @param {Object} [options] - Additional request options
  * @returns {Promise<Object>} Cleaned quote object with uuid and primaryRate
  */
-export async function createFclQuote({ originIso, destIso, containers }, options = {}) {
+export async function createFclQuote({ originIso, destIso, containers, weightUnit, dimensionUnit }, options = {}) {
   if (!originIso) throw new Error("FCL quote requires 'originIso'.");
   if (!destIso) throw new Error("FCL quote requires 'destIso'.");
 
@@ -301,6 +303,8 @@ export async function createFclQuote({ originIso, destIso, containers }, options
     origin,
     destination,
     containers: formattedContainers,
+    ...(weightUnit ? { weightUnit } : {}),
+    ...(dimensionUnit ? { dimensionUnit } : {}),
   };
 
   const raw = await apiRequest("/api/v1/quotes/fcl", {
@@ -320,10 +324,12 @@ export async function createFclQuote({ originIso, destIso, containers }, options
  * @param {string|Object} params.originIso - Port ISO code (e.g. "ESVLC") or port object
  * @param {string|Object} params.destIso - Port ISO code (e.g. "USMIA") or port object
  * @param {Array<Object>|Object} params.cargo - Cargo specification (volume, weight, package count, dimensions)
+ * @param {string} [params.weightUnit] - Weight unit ("kg" | "lbs")
+ * @param {string} [params.dimensionUnit] - Dimension unit ("cm" | "in")
  * @param {Object} [options] - Additional request options
  * @returns {Promise<Object>} Cleaned quote object with uuid and primaryRate
  */
-export async function createLclQuote({ originIso, destIso, cargo }, options = {}) {
+export async function createLclQuote({ originIso, destIso, cargo, weightUnit, dimensionUnit }, options = {}) {
   if (!originIso) throw new Error("LCL quote requires 'originIso'.");
   if (!destIso) throw new Error("LCL quote requires 'destIso'.");
 
@@ -339,6 +345,8 @@ export async function createLclQuote({ originIso, destIso, cargo }, options = {}
     origin,
     destination,
     cargo: cargo || {},
+    ...(weightUnit ? { weightUnit } : {}),
+    ...(dimensionUnit ? { dimensionUnit } : {}),
   };
 
   const raw = await apiRequest("/api/v1/quotes/lcl", {
@@ -360,11 +368,13 @@ export async function createLclQuote({ originIso, destIso, cargo }, options = {}
  * @param {Array<Object>|Object} params.cargo - Cargo package details with dimensions, weight and unit
  * @param {string} [params.cargoReadyDate] - Ready date in ISO format YYYY-MM-DD
  * @param {boolean} [params.isKnownShipper=true] - Known shipper indicator (default: true)
+ * @param {string} [params.weightUnit] - Weight unit ("kg" | "lbs")
+ * @param {string} [params.dimensionUnit] - Dimension unit ("cm" | "in")
  * @param {Object} [options] - Additional request options
  * @returns {Promise<Object>} Cleaned quote object with uuid and primaryRate
  */
 export async function createAirQuote(
-  { originIata, destIata, cargo, cargoReadyDate, isKnownShipper = true },
+  { originIata, destIata, cargo, cargoReadyDate, isKnownShipper = true, weightUnit, dimensionUnit },
   options = {}
 ) {
   if (!originIata) throw new Error("Air quote requires 'originIata'.");
@@ -386,6 +396,8 @@ export async function createAirQuote(
     cargo: cargo || {},
     cargoReadyDate: cargoReadyDate || defaultReadyDate,
     isKnownShipper: Boolean(isKnownShipper),
+    ...(weightUnit ? { weightUnit } : {}),
+    ...(dimensionUnit ? { dimensionUnit } : {}),
   };
 
   const raw = await apiRequest("/api/v1/quotes/air", {
@@ -411,10 +423,12 @@ export async function createAirQuote(
  * @param {string|number|Object} params.destZip - US 5-digit zip code
  * @param {Array<Object>|Object} params.cargo - Pallet / package details
  * @param {string} [params.freightClass="70"] - NMFC Freight Class (default: "70")
+ * @param {string} [params.weightUnit] - Weight unit ("kg" | "lbs")
+ * @param {string} [params.dimensionUnit] - Dimension unit ("cm" | "in")
  * @param {Object} [options] - Additional request options
  * @returns {Promise<Object>} Cleaned quote object with uuid and rates
  */
-export async function createLtlQuote({ originZip, destZip, cargo, freightClass = "70" }, options = {}) {
+export async function createLtlQuote({ originZip, destZip, cargo, freightClass = "70", weightUnit, dimensionUnit }, options = {}) {
   if (!originZip) throw new Error("LTL quote requires 'originZip'.");
   if (!destZip) throw new Error("LTL quote requires 'destZip'.");
 
@@ -431,6 +445,8 @@ export async function createLtlQuote({ originZip, destZip, cargo, freightClass =
     destination,
     freightClass: String(freightClass),
     cargo: cargo || {},
+    ...(weightUnit ? { weightUnit } : {}),
+    ...(dimensionUnit ? { dimensionUnit } : {}),
   };
 
   const raw = await apiRequest("/api/v1/quotes/ltl", {
@@ -452,11 +468,13 @@ export async function createLtlQuote({ originZip, destZip, cargo, freightClass =
  * @param {Object} params.shipper - Shipper address and contact info
  * @param {Object} params.consignee - Consignee / Delivery destination details
  * @param {Object|Array} params.packageData - Packages, cartons, SKU, labels and dimensions
+ * @param {string} [params.weightUnit] - Weight unit ("kg" | "lbs")
+ * @param {string} [params.dimensionUnit] - Dimension unit ("cm" | "in")
  * @param {Object} [options] - Additional request options
  * @returns {Promise<Object>} Order confirmation details
  */
 export async function createEcommerceOrder(
-  { serviceType = "LAST_MILE", hubCode, shipper, consignee, packageData },
+  { serviceType = "LAST_MILE", hubCode, shipper, consignee, packageData, weightUnit, dimensionUnit },
   options = {}
 ) {
   const body = {
@@ -465,6 +483,8 @@ export async function createEcommerceOrder(
     shipper: shipper || {},
     consignee: consignee || {},
     packageData: packageData || {},
+    ...(weightUnit ? { weightUnit } : {}),
+    ...(dimensionUnit ? { dimensionUnit } : {}),
   };
 
   const raw = await apiRequest("/api/v1/ecommerce/orders", {
