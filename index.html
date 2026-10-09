@@ -13373,6 +13373,13 @@
                                 <p class="text-xs text-slate-500 leading-snug">
                                     Precio final de venta consolidado para el cliente (Flete Base + Margen Comercial).
                                 </p>
+                                <!-- Chivato de Cobro y Booking / Badge de Estado (Core PRO Quick Quote) -->
+                                <div id="quick-quote-status-wrapper" class="mt-2.5 flex items-center">
+                                    <span id="quick-quote-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 transition-colors" data-status="draft">
+                                        <i id="quick-quote-status-icon" class="fa-regular fa-file-lines text-[10px] text-slate-400"></i>
+                                        <span id="quick-quote-status-text">Borrador</span>
+                                    </span>
+                                </div>
                             </div>
 
                             <!-- Estado de Carga (Loading State) Data Bridge -->
@@ -73153,6 +73160,211 @@ window.actualizarGrabCapacityVisibility = function() {
                 updateContainerQuote();
             }
 
+            // =========================================================================
+            // CHIVATO DE COBRO Y ESTADO DE BOOKING EN QUICK QUOTE (CORE PRO)
+            // =========================================================================
+            const quickQuoteSyncStateByTab = {
+                fcl: { id: null, referencia: null, estado: 'draft' },
+                lcl: { id: null, referencia: null, estado: 'draft' },
+                air: { id: null, referencia: null, estado: 'draft' },
+                ground: { id: null, referencia: null, estado: 'draft' },
+                amazon: { id: null, referencia: null, estado: 'draft' }
+            };
+            let quickQuotePollingInterval = null;
+            let activePollingRef = null;
+            let activePollingId = null;
+
+            function isBookingConfirmedStatus(statusStr) {
+                if (!statusStr) return false;
+                const s = String(statusStr).toLowerCase().trim();
+                return s.includes('booking confirmado') ||
+                       s.includes('pago recibido') ||
+                       s.includes('confirmado') ||
+                       s.includes('pagado') ||
+                       s === 'booking_confirmed' ||
+                       s === 'paid';
+            }
+
+            function renderQuickQuoteStatusBadge(status, customLabel) {
+                const badgeEl = document.getElementById('quick-quote-status-badge');
+                const textEl = document.getElementById('quick-quote-status-text');
+                const iconEl = document.getElementById('quick-quote-status-icon');
+                const syncBtn = document.getElementById('btn-sync-databridge-quote');
+                if (!badgeEl || !textEl || !iconEl) return;
+
+                const normalizedStatus = status === 'confirmed' ? 'confirmed' : (status === 'waiting_payment' ? 'waiting_payment' : 'draft');
+                badgeEl.setAttribute('data-status', normalizedStatus);
+
+                if (normalizedStatus === 'confirmed') {
+                    // Estado: Pago Recibido - Booking Confirmado (Fondo verde suave, texto verde oscuro, icono check ✓)
+                    badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300 shadow-sm transition-all duration-200';
+                    iconEl.className = 'text-emerald-700 font-black text-xs';
+                    iconEl.textContent = '✓';
+                    textEl.textContent = customLabel || 'Pago Recibido - Booking Confirmado';
+
+                    // Bloqueo de Acciones: Deshabilitar botón Sincronizar Data Bridge
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.title = 'Cotización ya pagada y confirmada (Booking Confirmado)';
+                        syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                    }
+                } else if (normalizedStatus === 'waiting_payment') {
+                    // Estado: Enviado - Esperando Pago (Fondo amarillo/naranja claro, texto oscuro)
+                    badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 shadow-sm transition-all duration-200';
+                    iconEl.className = 'fa-regular fa-clock text-[10px] text-amber-800';
+                    iconEl.textContent = '';
+                    textEl.textContent = customLabel || 'Enviado - Esperando Pago';
+
+                    if (syncBtn && !syncBtn.dataset.syncing) {
+                        syncBtn.disabled = false;
+                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        syncBtn.removeAttribute('title');
+                    }
+                } else {
+                    // Estado: Borrador (Indicador gris claro)
+                    badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 transition-all duration-200';
+                    iconEl.className = 'fa-regular fa-file-lines text-[10px] text-slate-400';
+                    iconEl.textContent = '';
+                    textEl.textContent = customLabel || 'Borrador';
+
+                    if (syncBtn && !syncBtn.dataset.syncing) {
+                        syncBtn.disabled = false;
+                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        syncBtn.removeAttribute('title');
+                    }
+                }
+            }
+
+            function stopQuickQuotePolling() {
+                if (quickQuotePollingInterval) {
+                    clearInterval(quickQuotePollingInterval);
+                    quickQuotePollingInterval = null;
+                }
+                activePollingRef = null;
+                activePollingId = null;
+            }
+
+            async function checkQuickQuoteStatusFromBackend(ref, id, tabKey) {
+                if (!ref && !id) return;
+                try {
+                    const queryParam = id ? `id=${encodeURIComponent(id)}` : `ref=${encodeURIComponent(ref)}`;
+                    const response = await fetch(`/api/multimodal/sync?${queryParam}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) return;
+                    const result = await response.json();
+                    if (!result || !result.success) return;
+
+                    let record = null;
+                    if (Array.isArray(result.data)) {
+                        record = result.data.find(r => (ref && r.referencia === ref) || (id && String(r.id) === String(id))) || result.data[0];
+                    } else if (result.data && typeof result.data === 'object') {
+                        record = result.data;
+                    }
+
+                    if (record && record.estado) {
+                        const targetTab = tabKey || 'fcl';
+                        if (isBookingConfirmedStatus(record.estado)) {
+                            if (quickQuoteSyncStateByTab[targetTab]) {
+                                quickQuoteSyncStateByTab[targetTab].estado = 'confirmed';
+                                quickQuoteSyncStateByTab[targetTab].id = record.id || quickQuoteSyncStateByTab[targetTab].id;
+                                quickQuoteSyncStateByTab[targetTab].referencia = record.referencia || quickQuoteSyncStateByTab[targetTab].referencia;
+                            }
+                            renderQuickQuoteStatusBadge('confirmed', 'Pago Recibido - Booking Confirmado');
+                            stopQuickQuotePolling();
+                        } else if (quickQuoteSyncStateByTab[targetTab]?.estado !== 'confirmed') {
+                            if (quickQuoteSyncStateByTab[targetTab]) {
+                                quickQuoteSyncStateByTab[targetTab].estado = 'waiting_payment';
+                            }
+                            renderQuickQuoteStatusBadge('waiting_payment', 'Enviado - Esperando Pago');
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[QuickQuote Status Polling] Error consultando estado en segundo plano:', err);
+                }
+            }
+
+            function startQuickQuotePolling(ref, id, tabKey) {
+                stopQuickQuotePolling();
+                if (!ref && !id) return;
+
+                activePollingRef = ref;
+                activePollingId = id;
+
+                // Consulta periódica en segundo plano cada 15-20 segundos (15s)
+                quickQuotePollingInterval = setInterval(() => {
+                    const currentTab = tabKey || 'fcl';
+                    if (quickQuoteSyncStateByTab[currentTab]?.estado === 'confirmed') {
+                        stopQuickQuotePolling();
+                        return;
+                    }
+                    checkQuickQuoteStatusFromBackend(ref, id, currentTab);
+                }, 15000);
+            }
+
+            function setQuickQuoteSyncState(tabKey, status, details) {
+                const targetTab = tabKey || 'fcl';
+                if (!quickQuoteSyncStateByTab[targetTab]) {
+                    quickQuoteSyncStateByTab[targetTab] = { id: null, referencia: null, estado: 'draft' };
+                }
+                quickQuoteSyncStateByTab[targetTab].estado = status;
+                if (details?.id !== undefined) quickQuoteSyncStateByTab[targetTab].id = details.id;
+                if (details?.referencia !== undefined) quickQuoteSyncStateByTab[targetTab].referencia = details.referencia;
+
+                renderQuickQuoteStatusBadge(status);
+                if (status === 'confirmed') {
+                    stopQuickQuotePolling();
+                }
+            }
+
+            function getQuickQuoteSyncState(tabKey) {
+                const targetTab = tabKey || 'fcl';
+                return quickQuoteSyncStateByTab[targetTab] || { id: null, referencia: null, estado: 'draft' };
+            }
+
+            function refreshQuickQuoteStatusBadgeForActiveTab(tabKey) {
+                const state = getQuickQuoteSyncState(tabKey);
+                renderQuickQuoteStatusBadge(state.estado);
+                if (state.estado === 'waiting_payment' && (state.referencia || state.id)) {
+                    startQuickQuotePolling(state.referencia, state.id, tabKey);
+                } else if (state.estado === 'confirmed') {
+                    stopQuickQuotePolling();
+                }
+            }
+
+            window.addEventListener('beforeunload', stopQuickQuotePolling);
+
+            // Escuchar cambios de estado en tiempo real vía BroadcastChannel o CustomEvent
+            if (typeof BroadcastChannel === 'function') {
+                try {
+                    const statusChannel = new BroadcastChannel('core_bridge_sync');
+                    statusChannel.addEventListener('message', (ev) => {
+                        const msg = ev?.data;
+                        if (msg && (msg.type === 'MULTIMODAL_OPERATION_STATUS' || msg.type === 'BOOKING_CONFIRMED' || msg.type === 'MULTIMODAL_STATUS_UPDATE')) {
+                            const targetRef = msg.payload?.referencia || msg.referencia;
+                            const targetState = msg.payload?.estado || msg.estado || msg.status;
+                            if (isBookingConfirmedStatus(targetState)) {
+                                Object.keys(quickQuoteSyncStateByTab).forEach((k) => {
+                                    if (!targetRef || quickQuoteSyncStateByTab[k].referencia === targetRef) {
+                                        quickQuoteSyncStateByTab[k].estado = 'confirmed';
+                                    }
+                                });
+                                renderQuickQuoteStatusBadge('confirmed', 'Pago Recibido - Booking Confirmado');
+                                stopQuickQuotePolling();
+                            }
+                        }
+                    });
+                } catch (_) {}
+            }
+
+            window.addEventListener('multimodal:status-update', (event) => {
+                const detail = event?.detail || {};
+                if (isBookingConfirmedStatus(detail.estado || detail.status)) {
+                    renderQuickQuoteStatusBadge('confirmed', 'Pago Recibido - Booking Confirmado');
+                    stopQuickQuotePolling();
+                }
+            });
+
             // Manejador de sincronización con Ledger SaaS (Data Bridge)
             async function handleSyncDataBridge() {
                 const syncBtn = document.getElementById('btn-sync-databridge-quote');
@@ -73160,6 +73372,7 @@ window.actualizarGrabCapacityVisibility = function() {
 
                 try {
                     if (syncBtn) {
+                        syncBtn.dataset.syncing = 'true';
                         syncBtn.disabled = true;
                         syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sky-600" aria-hidden="true"></i><span>Sincronizando...</span>';
                     }
@@ -73247,8 +73460,9 @@ window.actualizarGrabCapacityVisibility = function() {
                         dimensionUnit
                     };
 
+                    let syncResponseData = null;
                     try {
-                        await fetch('/api/multimodal/sync', {
+                        const syncResponse = await fetch('/api/multimodal/sync', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -73256,9 +73470,18 @@ window.actualizarGrabCapacityVisibility = function() {
                             },
                             body: JSON.stringify(payload)
                         });
+                        if (syncResponse && syncResponse.ok) {
+                            syncResponseData = await syncResponse.json();
+                        }
                     } catch (fetchErr) {
                         console.warn('[Sync Data Bridge] Error al enviar cotización a /api/multimodal/sync:', fetchErr);
                     }
+
+                    // Actualizar estado local a Enviado - Esperando Pago e iniciar consulta periódica en segundo plano
+                    const syncedRecordId = syncResponseData?.data?.id || null;
+                    const syncedRecordRef = syncResponseData?.data?.referencia || payload.referencia;
+                    setQuickQuoteSyncState(tabKey, 'waiting_payment', { id: syncedRecordId, referencia: syncedRecordRef });
+                    startQuickQuotePolling(syncedRecordRef, syncedRecordId, tabKey);
 
                     // 5. Feedback visual (UI): Texto temporal "✅ Sincronizado" y Toast notification
                     if (syncBtn) {
@@ -73268,10 +73491,18 @@ window.actualizarGrabCapacityVisibility = function() {
 
                         setTimeout(() => {
                             if (syncBtn) {
-                                syncBtn.innerHTML = originalHtml || '<i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i><span>Sincronizar Data Bridge</span>';
-                                syncBtn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
-                                syncBtn.classList.add('bg-sky-50', 'text-sky-700', 'border-sky-200');
-                                syncBtn.disabled = false;
+                                delete syncBtn.dataset.syncing;
+                                const currentTabState = getQuickQuoteSyncState(tabKey);
+                                if (currentTabState.estado === 'confirmed') {
+                                    syncBtn.innerHTML = '<i class="fa-solid fa-lock text-emerald-600" aria-hidden="true"></i><span>Booking Confirmado</span>';
+                                    syncBtn.disabled = true;
+                                    syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                                } else {
+                                    syncBtn.innerHTML = originalHtml || '<i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i><span>Sincronizar Data Bridge</span>';
+                                    syncBtn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
+                                    syncBtn.classList.add('bg-sky-50', 'text-sky-700', 'border-sky-200');
+                                    syncBtn.disabled = false;
+                                }
                             }
                         }, 3000);
                     }
@@ -73293,6 +73524,7 @@ window.actualizarGrabCapacityVisibility = function() {
                 } catch (error) {
                     console.error('[handleSyncDataBridge] Error:', error);
                     if (syncBtn) {
+                        delete syncBtn.dataset.syncing;
                         syncBtn.innerHTML = originalHtml;
                         syncBtn.disabled = false;
                     }
@@ -73301,6 +73533,16 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
                 }
             }
+
+            window.handleSyncDataBridge = handleSyncDataBridge;
+            window.renderQuickQuoteStatusBadge = renderQuickQuoteStatusBadge;
+            window.setQuickQuoteSyncState = setQuickQuoteSyncState;
+            window.getQuickQuoteSyncState = getQuickQuoteSyncState;
+            window.startQuickQuotePolling = startQuickQuotePolling;
+            window.stopQuickQuotePolling = stopQuickQuotePolling;
+            window.checkQuickQuoteStatusFromBackend = checkQuickQuoteStatusFromBackend;
+            window.refreshQuickQuoteStatusBadgeForActiveTab = refreshQuickQuoteStatusBadgeForActiveTab;
+            window.quickQuoteSyncStateByTab = quickQuoteSyncStateByTab;
 
             window.handleSyncDataBridge = handleSyncDataBridge;
             window.updateFCLQuote = updateContainerQuote;
@@ -73569,6 +73811,11 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (markupInput) markupInput.value = formatModeCurrency(markupEst, currency);
                     if (bNet) bNet.textContent = formatModeCurrency(netEst, currency);
                     if (bMarkup) bMarkup.textContent = formatModeCurrency(markupEst, currency);
+                }
+
+                // 4. Actualizar estado del chivato de cobro y booking para la pestaña activa
+                if (typeof window.refreshQuickQuoteStatusBadgeForActiveTab === 'function') {
+                    window.refreshQuickQuoteStatusBadgeForActiveTab(activeKey);
                 }
             }
 
