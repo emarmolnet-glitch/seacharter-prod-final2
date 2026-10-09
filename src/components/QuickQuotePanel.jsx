@@ -32,10 +32,13 @@ export function QuickQuotePanel({
   syncedRef = null,
   onSyncDataBridge = null,
   pollingIntervalMs = 15000,
+  onCalculate = null,
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [syncRecord, setSyncRecord] = useState({ id: syncedId, referencia: syncedRef });
   const [isSyncing, setIsSyncing] = useState(false);
+  // Estado inicial del importe total en 0 (o null) por defecto
+  const [consolidatedTotal, setConsolidatedTotal] = useState(0);
   const activeIntervalRef = useRef(null);
 
   // Sincronizar props externas si cambian
@@ -122,6 +125,19 @@ export function QuickQuotePanel({
     };
   }, [syncRecord.referencia, syncRecord.id, status, pollingIntervalMs]);
 
+  // Manejador del botón Calcular Tarifa (simulando respuesta de API)
+  const handleCalculate = useCallback(() => {
+    if (typeof onCalculate === 'function') {
+      const result = onCalculate();
+      if (typeof result === 'number') {
+        setConsolidatedTotal(result);
+        return;
+      }
+    }
+    const currentRate = Number(totalAmount) > 0 ? Number(totalAmount) : 2501.25;
+    setConsolidatedTotal(currentRate);
+  }, [onCalculate, totalAmount]);
+
   // Manejador del botón Sincronizar Data Bridge
   const handleSyncClick = useCallback(async () => {
     if (status === 'confirmed' || isSyncing) return;
@@ -147,8 +163,10 @@ export function QuickQuotePanel({
     }
   }, [status, isSyncing, onSyncDataBridge]);
 
+  const isZeroOrNull = consolidatedTotal === null || consolidatedTotal === 0 || !consolidatedTotal;
   const currencySymbol = currency === 'EUR' ? '€' : '$';
-  const formattedTotal = Number(totalAmount || 0).toLocaleString('es-ES', {
+  const displayTotal = isZeroOrNull ? 0 : consolidatedTotal;
+  const formattedTotal = Number(displayTotal).toLocaleString('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -212,6 +230,17 @@ export function QuickQuotePanel({
           </div>
         </div>
 
+        {/* Botón Principal Ancho: Calcular Tarifa */}
+        <button
+          id="btn-calculate-tariff"
+          type="button"
+          onClick={handleCalculate}
+          className="w-full bg-blue-600 text-white font-semibold py-2 rounded mb-4 hover:bg-blue-700 transition shadow-sm flex items-center justify-center gap-2"
+        >
+          <i className="fa-solid fa-calculator" aria-hidden="true"></i>
+          <span>Calcular Tarifa</span>
+        </button>
+
         {/* Visualización del Precio Total */}
         <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-1 text-left">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
@@ -243,25 +272,32 @@ export function QuickQuotePanel({
 
           <button
             id="fcl-export-client-pdf-btn"
-            className="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg py-2 transition"
+            disabled={isZeroOrNull}
+            className={`sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${
+              isZeroOrNull
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+            }`}
             type="button"
           >
             <i className="fa-solid fa-file-pdf text-rose-600" aria-hidden="true"></i>
             <span>Exportar Oferta Cliente (PDF)</span>
           </button>
 
-          {/* Botón de Sincronización: Bloqueado si status === 'confirmed' */}
+          {/* Botón de Sincronización: Bloqueado si status === 'confirmed', sincronizando o precio cero */}
           <button
             id="btn-sync-databridge-quote"
-            disabled={status === 'confirmed' || isSyncing}
+            disabled={status === 'confirmed' || isSyncing || isZeroOrNull}
             onClick={handleSyncClick}
             title={
               status === 'confirmed'
                 ? 'Cotización ya pagada y confirmada (Booking Confirmado)'
+                : isZeroOrNull
+                ? 'Calcule la tarifa antes de sincronizar con Data Bridge'
                 : 'Sincronizar cotización con Data Bridge'
             }
             className={`sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${
-              status === 'confirmed'
+              status === 'confirmed' || isZeroOrNull
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
                 : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200'
             }`}
