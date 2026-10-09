@@ -12850,8 +12850,8 @@
                                     <div class="fcl-field"><label for="lcl-volume-cbm">Volumen (CBM)</label><input id="lcl-volume-cbm" data-fcl-input type="number" min="0" step="0.01" value="4.00"></div>
                                     <div class="fcl-field"><label for="lcl-revenue-tons">Factor de Cobro W/M</label><input id="lcl-revenue-tons" class="fcl-calculated" type="text" value="4.00 Revenue Tons" disabled></div>
                                 </div>
-                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-weight">Total Weight (kg)</label><input id="cargo-total-weight" data-fcl-input type="number" min="0" step="1" value="24500" required></div>
-                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-volume">Total Volume (m³)</label><input id="cargo-total-volume" data-fcl-input type="number" min="0" step="0.01" value="58.20" required></div>
+                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-weight" data-unit-type="weight">Total Weight (kg)</label><input id="cargo-total-weight" data-fcl-input type="number" min="0" step="1" value="24500" required></div>
+                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-volume" data-unit-type="volume">Total Volume (m³)</label><input id="cargo-total-volume" data-fcl-input type="number" min="0" step="0.01" value="58.20" required></div>
                                 <div class="fcl-risk-grid fcl-secondary-field" aria-label="Toggles de riesgo">
                                     <label class="fcl-toggle" for="fcl-imo-toggle"><span>¿Mercancía Peligrosa (IMO)?</span><input id="fcl-imo-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
                                     <label class="fcl-toggle" for="fcl-reefer-toggle"><span>¿Mercancía Refrigerada?</span><input id="fcl-reefer-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
@@ -13167,11 +13167,11 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field">
-                            <label for="lcl-gross-weight">Peso Bruto (KG)</label>
+                            <label for="lcl-gross-weight" data-unit-type="weight">Peso Bruto (KG)</label>
                             <input id="lcl-gross-weight" type="number" min="1" step="0.5" value="1250" placeholder="Ej: 1250 kg">
                         </div>
                         <div class="fcl-field">
-                            <label for="lcl-gross-volume">Volumen (CBM)</label>
+                            <label for="lcl-gross-volume" data-unit-type="dimensions">Dimensiones / Volumen (cm / CBM)</label>
                             <input id="lcl-gross-volume" type="number" min="0.1" step="0.05" value="3.40" placeholder="Ej: 3.40 m³">
                         </div>
                         <div class="fcl-field">
@@ -13223,11 +13223,11 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field">
-                            <label for="air-gross-weight">Peso Bruto (KG)</label>
+                            <label for="air-gross-weight" data-unit-type="weight">Peso Bruto (KG)</label>
                             <input id="air-gross-weight" type="number" min="1" step="0.5" value="380" placeholder="Ej: 380 kg">
                         </div>
                         <div class="fcl-field">
-                            <label for="air-dimensions-volume">Dimensiones / Volumen (CBM)</label>
+                            <label for="air-dimensions-volume" data-unit-type="dimensions">Dimensiones / Volumen (cm / CBM)</label>
                             <input id="air-dimensions-volume" type="number" min="0.01" step="0.05" value="1.85" placeholder="Ej: 1.85 m³ (Ratio IATA 1:6000)">
                         </div>
                         <div class="fcl-field">
@@ -13282,7 +13282,7 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="ground-pallets">Número de Pallets</label><input id="ground-pallets" type="number" min="1" value="4"></div>
-                        <div class="fcl-field"><label for="ground-weight-lbs">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="3200" placeholder="LBS"></div>
+                        <div class="fcl-field"><label for="ground-weight-lbs" data-unit-type="weight">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="3200" placeholder="LBS"></div>
                         <div class="fcl-field"><label for="ground-liftgate">Servicio de Plataforma Elevadora (Liftgate)</label>
                             <select id="ground-liftgate">
                                 <option value="none">No requerida</option>
@@ -13336,7 +13336,7 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="amazon-cartons">Número de Cajas / Bultos</label><input id="amazon-cartons" type="number" min="1" value="120"></div>
-                        <div class="fcl-field"><label for="amazon-total-weight">Peso Bruto Total (KG)</label><input id="amazon-total-weight" type="number" min="1" value="1450"></div>
+                        <div class="fcl-field"><label for="amazon-total-weight" data-unit-type="weight">Peso Bruto Total (KG)</label><input id="amazon-total-weight" type="number" min="1" value="1450"></div>
                         <div class="fcl-field"><label for="amazon-prep-services">Servicios de Preparación FBA</label>
                             <select id="amazon-prep-services">
                                 <option value="labeled" selected>Etiquetado FNSKU + Palletizado Estándar 48x40</option>
@@ -71823,7 +71823,33 @@ window.actualizarGrabCapacityVisibility = function() {
 
             const EU_COUNTRIES = ['ES', 'FR', 'DE', 'IT', 'PT', 'NL', 'BE', 'UK', 'GB', 'IE'];
 
-            function detectOriginCurrency(originRaw) {
+            function extractLocationCountryCode(val) {
+                const cleaned = String(val || '').trim().toUpperCase();
+                if (!cleaned) return '';
+                const parenMatch = cleaned.match(/\(([A-Z]{2})[A-Z0-9]*\)/);
+                if (parenMatch) return parenMatch[1];
+                if (/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b|\b\d{5}(-\d{4})?\b|\b(USA|UNITED STATES|EE\.?\s*UU\.?|EEUU)\b/i.test(cleaned)) return 'US';
+                if (/\b(JFK|LAX|ORD|MIA|ATL|DFW|EWR|SFO|SEA|BOS|IAH|ONT8|LGB3|CLT2)\b/i.test(cleaned)) return 'US';
+                const codeMatch = cleaned.match(/^([A-Z]{2})[A-Z0-9]{2,3}\b/);
+                if (codeMatch) return codeMatch[1];
+                if (cleaned.length >= 2) return cleaned.slice(0, 2);
+                return '';
+            }
+
+            function detectOriginCurrency(originRaw, destRaw = '') {
+                const originIso = extractLocationCountryCode(originRaw);
+                const destIso = extractLocationCountryCode(destRaw);
+
+                if (originIso === 'US' || destIso === 'US') {
+                    if ((originIso === 'US' && !EU_COUNTRIES.includes(destIso)) || (destIso === 'US' && !EU_COUNTRIES.includes(originIso))) {
+                        return 'USD';
+                    }
+                }
+
+                if (EU_COUNTRIES.includes(originIso) || EU_COUNTRIES.includes(destIso)) {
+                    return 'EUR';
+                }
+
                 const cleaned = String(originRaw || '').trim().toUpperCase();
                 if (!cleaned || cleaned.length < 2) return 'USD';
                 const prefix = cleaned.slice(0, 2);
@@ -71831,6 +71857,19 @@ window.actualizarGrabCapacityVisibility = function() {
                     return 'EUR';
                 }
                 return 'USD';
+            }
+
+            function getActiveMultimodalDestination() {
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                const destMap = {
+                    fcl: el('fcl-pod')?.value,
+                    lcl: el('lcl-pod')?.value,
+                    air: el('air-dest')?.value,
+                    ground: el('ground-delivery-zip')?.value,
+                    amazon: el('amazon-fba-fc-code')?.value
+                };
+                return destMap[tabKey] || el('fcl-pod')?.value || '';
             }
 
             function getActiveMultimodalOrigin() {
@@ -71846,9 +71885,18 @@ window.actualizarGrabCapacityVisibility = function() {
                 return originMap[tabKey] || el('fcl-pol')?.value || '';
             }
 
+            function detectMultimodalUnitSystem() {
+                const origin = getActiveMultimodalOrigin();
+                const dest = getActiveMultimodalDestination();
+                const originIso = extractLocationCountryCode(origin);
+                const destIso = extractLocationCountryCode(dest);
+                return (originIso === 'US' || destIso === 'US') ? 'IMPERIAL' : 'METRIC';
+            }
+
             function getCurrentMultimodalCurrency() {
                 const origin = getActiveMultimodalOrigin();
-                return detectOriginCurrency(origin);
+                const dest = getActiveMultimodalDestination();
+                return detectOriginCurrency(origin, dest);
             }
 
             function formatCurrency(value, currency) {
@@ -73129,7 +73177,11 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
                     baseCost = Math.round(baseCost * 100) / 100;
 
-                    // 4. Payload normalizado para el Ledger SaaS
+                    // 4. Payload normalizado para el Ledger SaaS y Brutus API
+                    const currentUnitSystem = typeof detectMultimodalUnitSystem === 'function' ? detectMultimodalUnitSystem() : 'METRIC';
+                    const weightUnit = currentUnitSystem === 'IMPERIAL' ? 'lbs' : 'kg';
+                    const dimensionUnit = currentUnitSystem === 'IMPERIAL' ? 'in' : 'cm';
+
                     const payload = {
                         referencia: `RDM-MM-${Math.floor(Math.random() * 10000)}`,
                         modalidad: currentTab,
@@ -73137,7 +73189,9 @@ window.actualizarGrabCapacityVisibility = function() {
                         venta_agencia: quickQuoteTotal,
                         fee_plataforma: 50.00,
                         estado: 'Cotizado',
-                        currency: getCurrentMultimodalCurrency()
+                        currency: getCurrentMultimodalCurrency(),
+                        weightUnit,
+                        dimensionUnit
                     };
 
                     try {
@@ -73260,6 +73314,94 @@ window.actualizarGrabCapacityVisibility = function() {
                 amazon: 'amazon-origin-port'
             };
 
+            const TAB_DEST_INPUT_IDS = {
+                fcl: 'fcl-pod',
+                lcl: 'lcl-pod',
+                air: 'air-dest',
+                ground: 'ground-delivery-zip',
+                amazon: 'amazon-fba-fc-code'
+            };
+
+            function extractLocationCountryCode(val) {
+                const cleaned = String(val || '').trim().toUpperCase();
+                if (!cleaned) return '';
+                const parenMatch = cleaned.match(/\(([A-Z]{2})[A-Z0-9]*\)/);
+                if (parenMatch) return parenMatch[1];
+                if (/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b|\b\d{5}(-\d{4})?\b|\b(USA|UNITED STATES|EE\.?\s*UU\.?|EEUU)\b/i.test(cleaned)) return 'US';
+                if (/\b(JFK|LAX|ORD|MIA|ATL|DFW|EWR|SFO|SEA|BOS|IAH|ONT8|LGB3|CLT2)\b/i.test(cleaned)) return 'US';
+                const codeMatch = cleaned.match(/^([A-Z]{2})[A-Z0-9]{2,3}\b/);
+                if (codeMatch) return codeMatch[1];
+                if (cleaned.length >= 2) return cleaned.slice(0, 2);
+                return '';
+            }
+
+            function detectUnitSystem(origin, destination) {
+                const originIso = extractLocationCountryCode(origin);
+                const destIso = extractLocationCountryCode(destination);
+                if (originIso === 'US' || destIso === 'US') {
+                    return 'IMPERIAL';
+                }
+                return 'METRIC';
+            }
+
+            function updateMultimodalUnitLabels(unitSystem) {
+                const isImperial = unitSystem === 'IMPERIAL';
+                const weightUnit = isImperial ? 'lbs' : 'kg';
+                const dimensionUnit = isImperial ? 'in' : 'cm';
+                const distanceUnit = isImperial ? 'mi' : 'km';
+
+                // FCL total weight
+                const fclWeightLabel = document.querySelector('label[for="cargo-total-weight"]');
+                if (fclWeightLabel) {
+                    fclWeightLabel.textContent = `Total Weight (${weightUnit})`;
+                }
+                const fclWeightInput = document.getElementById('cargo-total-weight');
+                if (fclWeightInput) {
+                    fclWeightInput.setAttribute('placeholder', weightUnit);
+                }
+
+                // LCL gross weight & dimensions
+                const lclWeightLabel = document.querySelector('label[for="lcl-gross-weight"]');
+                if (lclWeightLabel) {
+                    lclWeightLabel.textContent = `Peso (${isImperial ? 'lbs' : 'kg'})`;
+                }
+                const lclVolumeLabel = document.querySelector('label[for="lcl-gross-volume"]');
+                if (lclVolumeLabel) {
+                    lclVolumeLabel.textContent = `Dimensiones (${isImperial ? 'in' : 'cm'})`;
+                }
+
+                // Air gross weight & dimensions
+                const airWeightLabel = document.querySelector('label[for="air-gross-weight"]');
+                if (airWeightLabel) {
+                    airWeightLabel.textContent = `Peso (${isImperial ? 'lbs' : 'kg'})`;
+                }
+                const airVolumeLabel = document.querySelector('label[for="air-dimensions-volume"]');
+                if (airVolumeLabel) {
+                    airVolumeLabel.textContent = `Dimensiones (${isImperial ? 'in' : 'cm'})`;
+                }
+
+                // Ground weight
+                const groundWeightLabel = document.querySelector('label[for="ground-weight-lbs"]');
+                if (groundWeightLabel) {
+                    groundWeightLabel.textContent = `Peso (${isImperial ? 'lbs' : 'kg'})`;
+                }
+                const groundWeightInput = document.getElementById('ground-weight-lbs');
+                if (groundWeightInput) {
+                    groundWeightInput.setAttribute('placeholder', isImperial ? 'LBS' : 'KG');
+                }
+
+                // Amazon total weight
+                const amazonWeightLabel = document.querySelector('label[for="amazon-total-weight"]');
+                if (amazonWeightLabel) {
+                    amazonWeightLabel.textContent = `Peso (${isImperial ? 'lbs' : 'kg'})`;
+                }
+
+                // Distance labels if any exist
+                document.querySelectorAll('[data-unit-type="distance"]').forEach((el) => {
+                    el.textContent = `Distancia (${isImperial ? 'mi' : 'km'})`;
+                });
+            }
+
             function detectOriginCurrency(originRaw) {
                 const cleaned = String(originRaw || '').trim().toUpperCase();
                 if (!cleaned || cleaned.length < 2) return 'USD';
@@ -73272,6 +73414,11 @@ window.actualizarGrabCapacityVisibility = function() {
 
             function getActiveOriginValue(modeKey) {
                 const inputId = TAB_ORIGIN_INPUT_IDS[modeKey] || 'fcl-pol';
+                return document.getElementById(inputId)?.value || '';
+            }
+
+            function getActiveDestValue(modeKey) {
+                const inputId = TAB_DEST_INPUT_IDS[modeKey] || 'fcl-pod';
                 return document.getElementById(inputId)?.value || '';
             }
 
@@ -73289,9 +73436,27 @@ window.actualizarGrabCapacityVisibility = function() {
                     titleEl.textContent = `QUICK QUOTE ${modeLabel}`;
                 }
 
-                // 2. Detección de divisa inteligente según origen
+                // 2. Detección de sistema de unidades dinámico (Origen y Destino)
                 const originVal = getActiveOriginValue(activeKey);
-                const currency = detectOriginCurrency(originVal);
+                const destVal = getActiveDestValue(activeKey);
+                const currentSystem = detectUnitSystem(originVal, destVal);
+                updateMultimodalUnitLabels(currentSystem);
+
+                // 3. Detección de divisa inteligente según origen y destino
+                const originIso = extractLocationCountryCode(originVal);
+                const destIso = extractLocationCountryCode(destVal);
+                let currency = 'USD';
+                if (originIso === 'US' || destIso === 'US') {
+                    if ((originIso === 'US' && !EU_COUNTRIES.includes(destIso)) || (destIso === 'US' && !EU_COUNTRIES.includes(originIso))) {
+                        currency = 'USD';
+                    } else if (EU_COUNTRIES.includes(originIso) || EU_COUNTRIES.includes(destIso)) {
+                        currency = 'EUR';
+                    }
+                } else if (EU_COUNTRIES.includes(originIso) || EU_COUNTRIES.includes(destIso)) {
+                    currency = 'EUR';
+                } else {
+                    currency = detectOriginCurrency(originVal);
+                }
                 const symbol = currency === 'EUR' ? '€' : '$';
 
                 // 3. Monto total del tab activo
@@ -73385,19 +73550,19 @@ window.actualizarGrabCapacityVisibility = function() {
 
             function bindOriginCurrencyListeners() {
                 const originInputs = ['fcl-pol', 'lcl-pol', 'air-origin', 'ground-pickup-zip', 'amazon-origin-port'];
-                originInputs.forEach((id) => {
+                const destInputs = ['fcl-pod', 'lcl-pod', 'air-dest', 'ground-delivery-zip', 'amazon-fba-fc-code'];
+                const allLocationInputs = [...originInputs, ...destInputs];
+
+                allLocationInputs.forEach((id) => {
                     const input = document.getElementById(id);
                     if (input) {
-                        input.addEventListener('input', () => {
+                        const handler = () => {
                             const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
                             const currentMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
                             updateQuickQuoteForTab(currentMode);
-                        });
-                        input.addEventListener('change', () => {
-                            const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
-                            const currentMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
-                            updateQuickQuoteForTab(currentMode);
-                        });
+                        };
+                        input.addEventListener('input', handler);
+                        input.addEventListener('change', handler);
                     }
                 });
             }
@@ -73405,6 +73570,8 @@ window.actualizarGrabCapacityVisibility = function() {
             window.switchMultimodalTab = switchMultimodalTab;
             window.updateQuickQuoteForTab = updateQuickQuoteForTab;
             window.detectOriginCurrency = detectOriginCurrency;
+            window.detectUnitSystem = detectUnitSystem;
+            window.updateMultimodalUnitLabels = updateMultimodalUnitLabels;
             window.EU_COUNTRIES = EU_COUNTRIES;
 
             window.initSeaCharterMultimodalModule = function() {
