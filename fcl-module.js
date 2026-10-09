@@ -86,8 +86,8 @@
     function getFCLState() {
         // Punto de integracion futuro: mapear aqui tarifas recibidas desde SeaCharter Data Bridge.
         return {
-            pol: getElement(ids.pol)?.value || 'Valencia',
-            pod: getElement(ids.pod)?.value || 'Jebel Ali',
+            pol: getElement(ids.pol)?.value || '',
+            pod: getElement(ids.pod)?.value || '',
             incoterm: getElement(ids.incoterm)?.value || 'EXW',
             equipmentQty: readEquipmentQty(),
             bas: readMoney(ids.bas),
@@ -258,6 +258,13 @@
         }
     }
 
+    async function handleCalculateTariff() {
+        if (typeof window.handleCalculateTariff === 'function') {
+            return window.handleCalculateTariff();
+        }
+        updateContainerQuote();
+    }
+
     function bindFCLModule() {
         const root = getElement(moduleId);
         if (!root) return;
@@ -276,6 +283,8 @@
     if (!window.applyDataBridgeMultimodalQuote) window.applyDataBridgeMultimodalQuote = applyDataBridgeMultimodalQuote;
     if (!window.exportMultimodalClientPdf) window.exportMultimodalClientPdf = exportMultimodalClientPdf;
     if (!window.handleSyncDataBridge) window.handleSyncDataBridge = handleSyncDataBridge;
+    if (!window.handleCalculateTariff) window.handleCalculateTariff = handleCalculateTariff;
+    if (!window.handleCalculate) window.handleCalculate = handleCalculateTariff;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindFCLModule);

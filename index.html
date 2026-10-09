@@ -12787,8 +12787,8 @@
                             </div>
                             <div class="fcl-fieldset">
                                 <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-receipt">Place of Receipt</label><input id="fcl-place-receipt" data-fcl-input type="text" list="fcl-port-suggestions" value="Zaragoza ICD"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="Valencia" placeholder="Puerto de Origen (ej: Valencia)"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="Jebel Ali" placeholder="Puerto de Destino (ej: Jebel Ali)"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de origen"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de destino"></div>
                                 <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-delivery">Place of Delivery</label><input id="fcl-place-delivery" data-fcl-input type="text" list="fcl-port-suggestions" value="Dubai Logistics City"></div>
                                 <datalist id="fcl-port-suggestions">
                                     <option value="Valencia"></option>
@@ -12871,8 +12871,8 @@
                                 Ajustes Avanzados de Costes
                         </button>
                         <span id="fcl-proactive-status" class="fcl-proactive-status" aria-live="polite">
-                            <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                            Patrón Valencia -> Jebel Ali aplicado
+                            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                            Ruta pendiente de cálculo
                         </span>
                     </div>
 
@@ -13065,7 +13065,7 @@
                             <div class="fcl-fieldset">
                                 <div class="fcl-audit-controls">
                                     <div class="fcl-field"><label for="carrier-offer-name">Naviera</label><input id="carrier-offer-name" data-fcl-input type="text" value="" placeholder="Cargue una oferta para identificar naviera..." readonly aria-readonly="true" disabled></div>
-                                    <div class="fcl-field"><label for="carrier-maritime-route">Ruta marítima</label><input id="carrier-maritime-route" data-fcl-input type="text" value="Valencia -> Jebel Ali" readonly aria-readonly="true"></div>
+                                    <div class="fcl-field"><label for="carrier-maritime-route">Ruta marítima</label><input id="carrier-maritime-route" data-fcl-input type="text" value="" placeholder="Puerto de origen -> Puerto de destino" readonly aria-readonly="true"></div>
                                     <div class="fcl-field"><label for="carrier-audit-incoterm">Incoterm</label><select id="carrier-audit-incoterm" data-fcl-input><option value="">Seleccionar</option><option value="EXW">EXW</option><option value="FCA">FCA</option><option value="FAS">FAS</option><option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option><option value="CPT">CPT</option><option value="CIP">CIP</option><option value="DAP">DAP</option><option value="DPU">DPU</option><option value="DDP">DDP</option></select></div>
                                     <div class="fcl-field"><label for="carrier-offer-reference">Referencia oferta</label><input id="carrier-offer-reference" data-fcl-input type="text" value="Quote Sheet"></div>
                                     <div class="fcl-field"><label for="carrier-markup-percentage">Markup Ocean Freight (%)</label><input id="carrier-markup-percentage" data-fcl-input type="number" min="0" step="0.01" value="8"></div>
@@ -13397,10 +13397,16 @@
                                 <div class="skeleton-shimmer h-8 w-full bg-slate-100 border border-slate-200 rounded animate-pulse mt-2"></div>
                             </div>
 
+                            <!-- Botón Principal Ancho: Calcular Tarifa -->
+                            <button id="btn-calculate-tariff" type="button" class="w-full bg-blue-600 text-white font-semibold py-2 rounded mb-4 hover:bg-blue-700 transition shadow-sm flex items-center justify-center gap-2" onclick="handleCalculateTariff()">
+                                <i class="fa-solid fa-calculator" aria-hidden="true"></i>
+                                <span>Calcular Tarifa</span>
+                            </button>
+
                             <!-- Visualización del Precio Total -->
                             <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-1 text-left">
                                 <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Venta Consolidado</span>
-                                <output id="multimodal-quote-total" data-alias="fcl-quote-total" class="fcl-total-value text-3xl xl:text-4xl font-black text-slate-800 tracking-tight font-mono" title="Precio final de venta (Total Multimodal)">€0.00</output>
+                                <output id="multimodal-quote-total" data-alias="fcl-quote-total" class="fcl-total-value text-3xl xl:text-4xl font-black text-slate-800 tracking-tight font-mono" title="Precio final de venta: €0.00">€0.00</output>
                                 <!-- Alias de compatibilidad hacia atrás para tests existentes -->
                                 <span id="fcl-quote-total" class="hidden" aria-hidden="true">€0.00</span>
                                 <span class="text-[11px] text-slate-400 font-medium">Impuestos no incluidos · Sujeto a recargos aplicables</span>
@@ -13412,11 +13418,11 @@
                                     <i class="fa-solid fa-layer-group text-slate-500"></i>
                                     <span>Ver Desglose de Costes</span>
                                 </button>
-                                <button id="fcl-export-client-pdf-btn" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg py-2 transition" type="button" onclick="exportMultimodalClientPdf()">
+                                <button id="fcl-export-client-pdf-btn" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg py-2 transition opacity-60 cursor-not-allowed" type="button" onclick="exportMultimodalClientPdf()" disabled>
                                     <i class="fa-solid fa-file-pdf text-rose-600" aria-hidden="true"></i>
                                     <span>Exportar Oferta Cliente (PDF)</span>
                                 </button>
-                                <button id="btn-sync-databridge-quote" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg py-2 transition" type="button" onclick="handleSyncDataBridge()">
+                                <button id="btn-sync-databridge-quote" class="sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg py-2 transition opacity-60 cursor-not-allowed" type="button" onclick="handleSyncDataBridge()" disabled>
                                     <i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i>
                                     <span>Sincronizar Data Bridge</span>
                                 </button>
@@ -72639,6 +72645,55 @@ window.actualizarGrabCapacityVisibility = function() {
                     auditEl('carrier-offer-apply-sale')?.toggleAttribute('disabled', !(window.SeaCharterCarrierOfferAudit?.lines || []).length);
                 }
             }
+
+            let consolidatedTotal = 0;
+            let isTariffCalculated = false;
+
+            function updateCalculateTariffButtonState() {
+                const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
+                const syncBtn = document.getElementById('btn-sync-databridge-quote');
+                const isZeroOrNull = !isTariffCalculated || !consolidatedTotal || consolidatedTotal <= 0;
+
+                if (pdfBtn) {
+                    pdfBtn.disabled = isZeroOrNull;
+                    if (isZeroOrNull) {
+                        pdfBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                    } else {
+                        pdfBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    }
+                }
+
+                if (syncBtn && !syncBtn.dataset.syncing) {
+                    const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                    const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                    const currentState = typeof getQuickQuoteSyncState === 'function' ? getQuickQuoteSyncState(tabKey) : null;
+                    const isConfirmed = currentState?.estado === 'confirmed';
+
+                    if (isConfirmed || isZeroOrNull) {
+                        syncBtn.disabled = true;
+                        syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                    } else {
+                        syncBtn.disabled = false;
+                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        syncBtn.removeAttribute('title');
+                    }
+                }
+            }
+
+            function handleCalculateTariff() {
+                isTariffCalculated = true;
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                const activeKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+
+                if (activeKey === 'fcl') {
+                    updateContainerQuote();
+                } else {
+                    updateQuickQuoteForTab(activeKey);
+                }
+
+                updateCalculateTariffButtonState();
+            }
+
             function updateContainerQuote() {
                 syncAuditRouteField();
                 updateMode();
@@ -72673,6 +72728,28 @@ window.actualizarGrabCapacityVisibility = function() {
                 // Quick Quote y Desglose Operador:
                 // El Quick Quote renderiza estricta y únicamente el totalPrice
                 const currentCurrency = getCurrentMultimodalCurrency();
+
+                if (!isTariffCalculated && !window.lastDataBridgeMultimodalQuote) {
+                    consolidatedTotal = 0;
+                    const zeroTotalFormatted = formatCurrency(0, currentCurrency);
+                    const totalField = el(ids.total) || el(ids.legacyTotal) || document.getElementById('multimodal-quote-total') || document.getElementById('fcl-quote-total');
+                    if (totalField) {
+                        totalField.textContent = zeroTotalFormatted;
+                        totalField.setAttribute('title', `Precio final de venta: ${zeroTotalFormatted} (${currentCurrency}) | Pendiente de cálculo`);
+                        totalField.setAttribute('aria-label', `Precio final de venta: ${zeroTotalFormatted}`);
+                    }
+                    const legacyField = el(ids.legacyTotal) || document.getElementById('fcl-quote-total');
+                    if (legacyField) legacyField.textContent = zeroTotalFormatted;
+
+                    if (el(ids.netPrice)) el(ids.netPrice).value = formatCurrency(0, currentCurrency);
+                    if (el(ids.markup)) el(ids.markup).value = formatCurrency(0, currentCurrency);
+                    if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(0, currentCurrency);
+                    if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(0, currentCurrency);
+
+                    updateCalculateTariffButtonState();
+                    return;
+                }
+
                 if (window.lastDataBridgeMultimodalQuote) {
                     const dbQuote = window.lastDataBridgeMultimodalQuote;
                     const dbTotalFormatted = formatCurrency(dbQuote.totalPrice, dbQuote.currency);
@@ -72686,6 +72763,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (el(ids.markup)) el(ids.markup).value = formatCurrency(dbQuote.markup, dbQuote.currency);
                     if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(dbQuote.netPrice, dbQuote.currency);
                     if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(dbQuote.markup, dbQuote.currency);
+                    consolidatedTotal = dbQuote.totalPrice;
+                    updateCalculateTariffButtonState();
                 } else {
                     const netEstUsd = Math.round((freight + surcharges + locals) * 100) / 100;
                     const markupEstUsd = Math.round((netEstUsd * 0.15) * 100) / 100;
@@ -72710,6 +72789,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (el(ids.markup)) el(ids.markup).value = formatCurrency(activeMarkup, currentCurrency);
                     if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(activeNet, currentCurrency);
                     if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(activeMarkup, currentCurrency);
+                    consolidatedTotal = activeTotal;
+                    updateCalculateTariffButtonState();
                 }
 
                 window.SeaCharterContainerQuote = Object.freeze({
@@ -72851,6 +72932,9 @@ window.actualizarGrabCapacityVisibility = function() {
                 if (bMarkup) bMarkup.textContent = formatCurrency(markup, currency);
 
                 setMultimodalLoadingState(false);
+                isTariffCalculated = true;
+                consolidatedTotal = totalPrice;
+                updateCalculateTariffButtonState();
 
                 window.dispatchEvent(new CustomEvent('multimodal:quote-applied', {
                     detail: { netPrice, markup, totalPrice, currency, mode }
@@ -72863,8 +72947,8 @@ window.actualizarGrabCapacityVisibility = function() {
             async function fetchMultimodalQuoteFromDataBridge(params = {}) {
                 setMultimodalLoadingState(true);
                 try {
-                    const pol = params.pol || el('fcl-pol')?.value || 'Valencia';
-                    const pod = params.pod || el('fcl-pod')?.value || 'Jebel Ali';
+                    const pol = params.pol || el('fcl-pol')?.value || '';
+                    const pod = params.pod || el('fcl-pod')?.value || '';
                     const mode = params.mode || el(ids.mode)?.value || 'FCL';
                     const incoterm = params.incoterm || el(ids.incoterm)?.value || 'CIF';
 
@@ -72928,8 +73012,8 @@ window.actualizarGrabCapacityVisibility = function() {
                 const activeTabLabel = tabModalLabels[tabKey] || TAB_MODE_LABELS[tabKey] || 'FCL';
 
                 // 2. Origen y Destino dinámicos según pestaña activa
-                const activePol = getActiveMultimodalOrigin?.() || getActiveOriginValue?.(tabKey) || el(TAB_ORIGIN_INPUT_IDS[tabKey] || 'fcl-pol')?.value || 'Valencia';
-                const activePod = getActiveMultimodalDestination?.() || getActiveDestValue?.(tabKey) || el(TAB_DEST_INPUT_IDS[tabKey] || 'fcl-pod')?.value || 'Jebel Ali';
+                const activePol = getActiveMultimodalOrigin?.() || getActiveOriginValue?.(tabKey) || el(TAB_ORIGIN_INPUT_IDS[tabKey] || 'fcl-pol')?.value || '';
+                const activePod = getActiveMultimodalDestination?.() || getActiveDestValue?.(tabKey) || el(TAB_DEST_INPUT_IDS[tabKey] || 'fcl-pod')?.value || '';
 
                 // 3. Incoterm dinámico según pestaña
                 let tabIncoterm = 'CIF';
@@ -73224,9 +73308,14 @@ window.actualizarGrabCapacityVisibility = function() {
                     textEl.textContent = customLabel || 'Enviado - Esperando Pago';
 
                     if (syncBtn && !syncBtn.dataset.syncing) {
-                        syncBtn.disabled = false;
-                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-                        syncBtn.removeAttribute('title');
+                        const isZeroOrNull = !isTariffCalculated || !consolidatedTotal || consolidatedTotal <= 0;
+                        syncBtn.disabled = isZeroOrNull;
+                        if (isZeroOrNull) {
+                            syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                        } else {
+                            syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                            syncBtn.removeAttribute('title');
+                        }
                     }
                 } else {
                     // Estado: Borrador (Indicador gris claro)
@@ -73236,9 +73325,14 @@ window.actualizarGrabCapacityVisibility = function() {
                     textEl.textContent = customLabel || 'Borrador';
 
                     if (syncBtn && !syncBtn.dataset.syncing) {
-                        syncBtn.disabled = false;
-                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-                        syncBtn.removeAttribute('title');
+                        const isZeroOrNull = !isTariffCalculated || !consolidatedTotal || consolidatedTotal <= 0;
+                        syncBtn.disabled = isZeroOrNull;
+                        if (isZeroOrNull) {
+                            syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                        } else {
+                            syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                            syncBtn.removeAttribute('title');
+                        }
                     }
                 }
             }
@@ -73562,6 +73656,9 @@ window.actualizarGrabCapacityVisibility = function() {
             window.setMultimodalQuoteFromDataBridge = applyDataBridgeMultimodalQuote;
             window.fetchMultimodalQuoteFromDataBridge = fetchMultimodalQuoteFromDataBridge;
             window.exportMultimodalClientPdf = exportMultimodalClientPdf;
+            window.handleCalculateTariff = handleCalculateTariff;
+            window.handleCalculate = handleCalculateTariff;
+            window.updateCalculateTariffButtonState = updateCalculateTariffButtonState;
 
             // Escuchadores de eventos para integración asíncrona con Data Bridge
             window.addEventListener('DATABRIDGE_MULTIMODAL_QUOTE', (event) => {
@@ -73794,9 +73891,9 @@ window.actualizarGrabCapacityVisibility = function() {
                         tabAmount = fallbackTotals[activeKey] || 1000.00;
                     }
 
-                    const formattedTabTotal = formatModeCurrency(tabAmount, currency);
+                    const formattedTabTotal = isTariffCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
                     if (tabOutput) {
-                        tabOutput.textContent = formattedTabTotal;
+                        tabOutput.textContent = isTariffCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
                     }
                     if (totalField) {
                         totalField.textContent = formattedTabTotal;
@@ -73808,8 +73905,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
 
                     // Actualizar desglose simulado
-                    const netEst = Math.round((tabAmount / 1.15) * 100) / 100;
-                    const markupEst = Math.round((tabAmount - netEst) * 100) / 100;
+                    const netEst = isTariffCalculated ? Math.round((tabAmount / 1.15) * 100) / 100 : 0;
+                    const markupEst = isTariffCalculated ? Math.round((tabAmount - netEst) * 100) / 100 : 0;
                     const netInput = document.getElementById('fcl-net-price');
                     const markupInput = document.getElementById('fcl-markup');
                     const bNet = document.getElementById('breakdown-net-price');
@@ -73819,6 +73916,9 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (markupInput) markupInput.value = formatModeCurrency(markupEst, currency);
                     if (bNet) bNet.textContent = formatModeCurrency(netEst, currency);
                     if (bMarkup) bMarkup.textContent = formatModeCurrency(markupEst, currency);
+
+                    consolidatedTotal = isTariffCalculated ? tabAmount : 0;
+                    updateCalculateTariffButtonState();
                 }
 
                 // 4. Actualizar estado del chivato de cobro y booking para la pestaña activa
