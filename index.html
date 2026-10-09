@@ -72571,7 +72571,8 @@ window.actualizarGrabCapacityVisibility = function() {
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(11);
                 doc.text(isClientMode ? 'FLETE TOTAL MULTIMODAL' : 'TOTAL VENTA', 119, tableEnd + 15);
-                doc.text(formatCurrency(payload.totalSellAmount, 'EUR'), 192, tableEnd + 15, { align: 'right' });
+                const totalCurrency = payload.currency === 'EUR' ? 'EUR' : 'USD';
+                doc.text(formatCurrency(payload.totalSellAmount, totalCurrency), 192, tableEnd + 15, { align: 'right' });
 
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(10);
@@ -72899,23 +72900,75 @@ window.actualizarGrabCapacityVisibility = function() {
                 const lastQuote = window.lastDataBridgeMultimodalQuote || {};
                 const containerQuote = window.SeaCharterContainerQuote || {};
 
-                let totalPrice = Number(customOptions.totalPrice ?? lastQuote.totalPrice);
+                // 1. Detección reactiva de pestaña activa y etiquetas
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                const tabModalLabels = {
+                    fcl: 'FCL',
+                    lcl: 'LCL',
+                    air: 'Aéreo',
+                    ground: 'LTL Terrestre',
+                    amazon: 'Amazon FBA'
+                };
+                const activeTabLabel = tabModalLabels[tabKey] || TAB_MODE_LABELS[tabKey] || 'FCL';
+
+                // 2. Origen y Destino dinámicos según pestaña activa
+                const activePol = getActiveMultimodalOrigin?.() || getActiveOriginValue?.(tabKey) || el(TAB_ORIGIN_INPUT_IDS[tabKey] || 'fcl-pol')?.value || 'Valencia';
+                const activePod = getActiveMultimodalDestination?.() || getActiveDestValue?.(tabKey) || el(TAB_DEST_INPUT_IDS[tabKey] || 'fcl-pod')?.value || 'Jebel Ali';
+
+                // 3. Incoterm dinámico según pestaña
+                let tabIncoterm = 'CIF';
+                if (tabKey === 'fcl') {
+                    tabIncoterm = el('fcl-incoterm')?.value || 'CIF';
+                } else if (tabKey === 'lcl') {
+                    tabIncoterm = el('lcl-incoterm')?.value || 'CIF';
+                } else if (tabKey === 'air') {
+                    tabIncoterm = el('air-service-speed')?.value?.toUpperCase() || 'CPT';
+                } else if (tabKey === 'ground') {
+                    tabIncoterm = el('ground-service-type')?.value || 'LTL';
+                } else if (tabKey === 'amazon') {
+                    tabIncoterm = el('amazon-delivery-method')?.value || 'DDP';
+                }
+
+                // 4. Moneda y Total reactivos del panel Quick Quote
+                const currentCurrency = getCurrentMultimodalCurrency?.() || (detectOriginCurrency ? detectOriginCurrency(activePol, activePod) : 'USD');
+                const currency = String(customOptions.currency || currentCurrency || lastQuote.currency || containerQuote.baseCurrency || 'USD').toUpperCase();
+
+                let totalPrice = Number(customOptions.totalPrice);
                 if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
-                    totalPrice = Number(containerQuote.totalBase ?? containerQuote.total);
+                    // Leer del elemento visual renderizado en Quick Quote actualmente
+                    const quickQuoteOut = document.getElementById('multimodal-quote-total') || el(ids.total) || el(ids.legacyTotal);
+                    const rawText = quickQuoteOut?.textContent || quickQuoteOut?.value || '';
+                    const digits = rawText.replace(/[^0-9.,]/g, '').trim();
+                    if (digits) {
+                        if (digits.includes(',') && digits.includes('.')) {
+                            totalPrice = digits.lastIndexOf(',') > digits.lastIndexOf('.')
+                                ? parseFloat(digits.replace(/\./g, '').replace(',', '.'))
+                                : parseFloat(digits.replace(/,/g, ''));
+                        } else if (digits.includes(',')) {
+                            totalPrice = parseFloat(digits.replace(',', '.'));
+                        } else {
+                            totalPrice = parseFloat(digits);
+                        }
+                    }
                 }
                 if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
-                    const rawText = el(ids.total)?.textContent || '';
-                    const digits = rawText.replace(/[^0-9.,]/g, '').replace(/\./g, '').replace(',', '.');
-                    totalPrice = Number.parseFloat(digits) || 2070.00;
+                    if (Number.isFinite(lastQuote.totalPrice) && lastQuote.totalPrice > 0) {
+                        totalPrice = Number(lastQuote.totalPrice);
+                    } else {
+                        totalPrice = Number(containerQuote.totalBase ?? containerQuote.total);
+                    }
+                }
+                if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+                    totalPrice = 2070.00;
                 }
                 totalPrice = Math.round(totalPrice * 100) / 100;
 
-                const currency = String(customOptions.currency || lastQuote.currency || containerQuote.baseCurrency || 'EUR').toUpperCase();
                 const quoteId = String(customOptions.quoteId || `RDM-MM-${Date.now()}`).trim();
-                const mode = String(customOptions.mode || lastQuote.mode || containerQuote.mode || el(ids.mode)?.value || 'FCL').trim();
-                const pol = String(customOptions.pol || containerQuote.route?.pol || el('fcl-pol')?.value || 'Valencia').trim();
-                const pod = String(customOptions.pod || containerQuote.route?.pod || el('fcl-pod')?.value || 'Jebel Ali').trim();
-                const incoterm = String(customOptions.incoterm || containerQuote.incoterm || el(ids.incoterm)?.value || 'CIF').trim();
+                const mode = String(customOptions.mode || activeTabLabel).trim();
+                const pol = String(customOptions.pol || activePol).trim();
+                const pod = String(customOptions.pod || activePod).trim();
+                const incoterm = String(customOptions.incoterm || tabIncoterm).trim();
                 const customerName = String(customOptions.customerName || 'Cliente Confidencial').trim();
 
                 const payload = {
