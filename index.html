@@ -13147,8 +13147,8 @@
                         <i class="fa-solid fa-ship text-sky-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="lcl-pol">Puerto de Origen (POL)</label><input id="lcl-pol" type="text" value="Valencia (ESVLC)"></div>
-                        <div class="fcl-field"><label for="lcl-pod">Puerto de Destino (POD)</label><input id="lcl-pod" type="text" value="New York (USNYC)"></div>
+                        <div class="fcl-field"><label for="lcl-pol">Puerto de Origen (POL)</label><input id="lcl-pol" type="text" value="" placeholder="Puerto de origen (POL)"></div>
+                        <div class="fcl-field"><label for="lcl-pod">Puerto de Destino (POD)</label><input id="lcl-pod" type="text" value="" placeholder="Puerto de destino (POD)"></div>
                         <div class="fcl-field"><label for="lcl-incoterm">Incoterm</label>
                             <select id="lcl-incoterm">
                                 <option value="FOB">FOB - Free on Board</option>
@@ -13168,15 +13168,15 @@
                     <div class="fcl-fieldset">
                         <div class="fcl-field">
                             <label for="lcl-gross-weight" data-unit-type="weight">Peso Bruto (KG)</label>
-                            <input id="lcl-gross-weight" type="number" min="1" step="0.5" value="1250" placeholder="Ej: 1250 kg">
+                            <input id="lcl-gross-weight" type="number" min="1" step="0.5" value="" placeholder="Peso en KG">
                         </div>
                         <div class="fcl-field">
                             <label for="lcl-gross-volume" data-unit-type="dimensions">Dimensiones / Volumen (cm / CBM)</label>
-                            <input id="lcl-gross-volume" type="number" min="0.1" step="0.05" value="3.40" placeholder="Ej: 3.40 m³">
+                            <input id="lcl-gross-volume" type="number" min="0.1" step="0.05" value="" placeholder="Dimensiones / CBM (m³)">
                         </div>
                         <div class="fcl-field">
                             <label for="lcl-cargo-type">Naturaleza de Mercancía</label>
-                            <input id="lcl-cargo-type" type="text" value="Carga General Paletizada (Non-IMO)">
+                            <input id="lcl-cargo-type" type="text" value="" placeholder="Naturaleza de mercancía (ej: Carga General Paletizada)">
                         </div>
                     </div>
                 </article>
@@ -13188,7 +13188,7 @@
                         <span class="fcl-card-label">Cotización Estimada LCL</span>
                         <p class="text-xs text-slate-500">Calculado por tonelada / metro cúbico (W/M revenue ton) desacoplado de graneles.</p>
                     </div>
-                    <output id="lcl-quote-total" class="fcl-total-value">€425.00</output>
+                    <output id="lcl-quote-total" class="fcl-total-value">€0.00</output>
                 </div>
             </section>
         </div>
@@ -13204,8 +13204,8 @@
                         <i class="fa-solid fa-plane-departure text-sky-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="air-origin">Aeropuerto Origen (IATA)</label><input id="air-origin" type="text" value="MAD - Adolfo Suárez Madrid-Barajas"></div>
-                        <div class="fcl-field"><label for="air-dest">Aeropuerto Destino (IATA)</label><input id="air-dest" type="text" value="JFK - John F. Kennedy Int. New York"></div>
+                        <div class="fcl-field"><label for="air-origin">Aeropuerto Origen (IATA)</label><input id="air-origin" type="text" value="" placeholder="Aeropuerto de origen (IATA)"></div>
+                        <div class="fcl-field"><label for="air-dest">Aeropuerto Destino (IATA)</label><input id="air-dest" type="text" value="" placeholder="Aeropuerto de destino (IATA)"></div>
                         <div class="fcl-field"><label for="air-service-speed">Modalidad de Servicio</label>
                             <select id="air-service-speed">
                                 <option value="express">Aéreo Express (1-2 días)</option>
@@ -13224,11 +13224,11 @@
                     <div class="fcl-fieldset">
                         <div class="fcl-field">
                             <label for="air-gross-weight" data-unit-type="weight">Peso Bruto (KG)</label>
-                            <input id="air-gross-weight" type="number" min="1" step="0.5" value="380" placeholder="Ej: 380 kg">
+                            <input id="air-gross-weight" type="number" min="1" step="0.5" value="" placeholder="Peso en KG">
                         </div>
                         <div class="fcl-field">
                             <label for="air-dimensions-volume" data-unit-type="dimensions">Dimensiones / Volumen (cm / CBM)</label>
-                            <input id="air-dimensions-volume" type="number" min="0.01" step="0.05" value="1.85" placeholder="Ej: 1.85 m³ (Ratio IATA 1:6000)">
+                            <input id="air-dimensions-volume" type="number" min="0.01" step="0.05" value="" placeholder="Dimensiones / CBM (m³)">
                         </div>
                         <div class="fcl-field">
                             <label for="air-stackable">Mercancía Apilable (Stackable)</label>
@@ -13247,7 +13247,7 @@
                         <span class="fcl-card-label">Quick Quote Aéreo</span>
                         <p class="text-xs text-slate-500">Tarifa basada en peso tasable / chargeable weight independiente de fletamentos.</p>
                     </div>
-                    <output id="air-quote-total" class="fcl-total-value">€1,482.00</output>
+                    <output id="air-quote-total" class="fcl-total-value">€0.00</output>
                 </div>
             </section>
         </div>
@@ -13263,8 +13263,8 @@
                         <i class="fa-solid fa-truck-front text-sky-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="ground-pickup-zip">Origen / Zip Code de Recogida</label><input id="ground-pickup-zip" type="text" value="Houston, TX (77002)"></div>
-                        <div class="fcl-field"><label for="ground-delivery-zip">Destino / Zip Code de Entrega</label><input id="ground-delivery-zip" type="text" value="Chicago, IL (60601)"></div>
+                        <div class="fcl-field"><label for="ground-pickup-zip">Origen / Zip Code de Recogida</label><input id="ground-pickup-zip" type="text" value="" placeholder="Origen / Zip Code de recogida"></div>
+                        <div class="fcl-field"><label for="ground-delivery-zip">Destino / Zip Code de Entrega</label><input id="ground-delivery-zip" type="text" value="" placeholder="Destino / Zip Code de entrega"></div>
                         <div class="fcl-field"><label for="ground-service-type">Tipo de Transporte</label>
                             <select id="ground-service-type">
                                 <option value="LTL" selected>LTL (Less Than Truckload / Carga Parcial)</option>
@@ -13281,8 +13281,8 @@
                         <i class="fa-solid fa-dolly text-emerald-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="ground-pallets">Número de Pallets</label><input id="ground-pallets" type="number" min="1" value="4"></div>
-                        <div class="fcl-field"><label for="ground-weight-lbs" data-unit-type="weight">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="3200" placeholder="LBS"></div>
+                        <div class="fcl-field"><label for="ground-pallets">Número de Pallets</label><input id="ground-pallets" type="number" min="1" value="" placeholder="Cantidad de pallets"></div>
+                        <div class="fcl-field"><label for="ground-weight-lbs" data-unit-type="weight">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="" placeholder="Peso en LBS / KG"></div>
                         <div class="fcl-field"><label for="ground-liftgate">Servicio de Plataforma Elevadora (Liftgate)</label>
                             <select id="ground-liftgate">
                                 <option value="none">No requerida</option>
@@ -13301,7 +13301,7 @@
                         <span class="fcl-card-label">Quick Quote Inland EE. UU.</span>
                         <p class="text-xs text-slate-500">Tarifa terrestre de camión / LTL con recargos de combustible (FSC).</p>
                     </div>
-                    <output id="ground-quote-total" class="fcl-total-value">$940.00</output>
+                    <output id="ground-quote-total" class="fcl-total-value">$0.00</output>
                 </div>
             </section>
         </div>
@@ -13317,8 +13317,8 @@
                         <i class="fa-brands fa-amazon text-amber-500"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="amazon-origin-port">Origen (Fábrica / Puerto de Salida)</label><input id="amazon-origin-port" type="text" value="Shenzhen / Ningbo (China)"></div>
-                        <div class="fcl-field"><label for="amazon-fba-fc-code">Código Fulfillment Center / Zip Code (Destino)</label><input id="amazon-fba-fc-code" type="text" value="ONT8 - Moreno Valley, CA 92555" placeholder="Ej: ONT8, LGB3, CLT2, etc."></div>
+                        <div class="fcl-field"><label for="amazon-origin-port">Origen (Fábrica / Puerto de Salida)</label><input id="amazon-origin-port" type="text" value="" placeholder="Origen (Fábrica / Puerto de salida)"></div>
+                        <div class="fcl-field"><label for="amazon-fba-fc-code">Código Fulfillment Center / Zip Code (Destino)</label><input id="amazon-fba-fc-code" type="text" value="" placeholder="Ej: ONT8, LGB3, CLT2, etc."></div>
                         <div class="fcl-field"><label for="amazon-delivery-method">Método de Entrega FBA</label>
                             <select id="amazon-delivery-method">
                                 <option value="SPD">SPD (Small Parcel Delivery - Paquetes Sueltos)</option>
@@ -13335,8 +13335,8 @@
                         <i class="fa-solid fa-barcode text-purple-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="amazon-cartons">Número de Cajas / Bultos</label><input id="amazon-cartons" type="number" min="1" value="120"></div>
-                        <div class="fcl-field"><label for="amazon-total-weight" data-unit-type="weight">Peso Bruto Total (KG)</label><input id="amazon-total-weight" type="number" min="1" value="1450"></div>
+                        <div class="fcl-field"><label for="amazon-cartons">Número de Cajas / Bultos</label><input id="amazon-cartons" type="number" min="1" value="" placeholder="Número de cajas / bultos"></div>
+                        <div class="fcl-field"><label for="amazon-total-weight" data-unit-type="weight">Peso Bruto Total (KG)</label><input id="amazon-total-weight" type="number" min="1" value="" placeholder="Peso bruto total en KG"></div>
                         <div class="fcl-field"><label for="amazon-prep-services">Servicios de Preparación FBA</label>
                             <select id="amazon-prep-services">
                                 <option value="labeled" selected>Etiquetado FNSKU + Palletizado Estándar 48x40</option>
@@ -13354,7 +13354,7 @@
                         <span class="fcl-card-label">Quick Quote Amazon FBA</span>
                         <p class="text-xs text-slate-500">Solución integral DDP / CARP cita en centro logístico Amazon.</p>
                     </div>
-                    <output id="amazon-quote-total" class="fcl-total-value">€1,890.00</output>
+                    <output id="amazon-quote-total" class="fcl-total-value">€0.00</output>
                 </div>
             </section>
         </div>
@@ -72648,6 +72648,12 @@ window.actualizarGrabCapacityVisibility = function() {
 
             let consolidatedTotal = 0;
             let isTariffCalculated = false;
+            window.isTariffCalculated = false;
+            window.calculatedMultimodalTabs = window.calculatedMultimodalTabs || new Set();
+            window.setIsTariffCalculated = function(val) {
+                isTariffCalculated = Boolean(val);
+                window.isTariffCalculated = Boolean(val);
+            };
 
             function updateCalculateTariffButtonState() {
                 const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
@@ -72682,8 +72688,12 @@ window.actualizarGrabCapacityVisibility = function() {
 
             function handleCalculateTariff() {
                 isTariffCalculated = true;
+                window.isTariffCalculated = true;
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
                 const activeKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                if (window.calculatedMultimodalTabs) {
+                    window.calculatedMultimodalTabs.add(activeKey);
+                }
 
                 if (activeKey === 'fcl') {
                     updateContainerQuote();
@@ -72933,6 +72943,8 @@ window.actualizarGrabCapacityVisibility = function() {
 
                 setMultimodalLoadingState(false);
                 isTariffCalculated = true;
+                if (window.setIsTariffCalculated) window.setIsTariffCalculated(true);
+                if (window.calculatedMultimodalTabs) window.calculatedMultimodalTabs.add(String(mode || 'fcl').toLowerCase());
                 consolidatedTotal = totalPrice;
                 updateCalculateTariffButtonState();
 
@@ -73870,30 +73882,54 @@ window.actualizarGrabCapacityVisibility = function() {
                 } else {
                     const tabOutputId = TAB_TOTAL_OUTPUT_IDS[activeKey];
                     const tabOutput = document.getElementById(tabOutputId);
+                    const isTabCalculated = window.calculatedMultimodalTabs ? window.calculatedMultimodalTabs.has(activeKey) : false;
                     let tabAmount = 0;
-                    if (tabOutput) {
-                        const rawText = tabOutput.textContent || tabOutput.value || '';
-                        const digits = rawText.replace(/[^0-9.,]/g, '').trim();
-                        if (digits) {
-                            if (digits.includes(',') && digits.includes('.')) {
-                                tabAmount = digits.lastIndexOf(',') > digits.lastIndexOf('.')
-                                    ? parseFloat(digits.replace(/\./g, '').replace(',', '.'))
-                                    : parseFloat(digits.replace(/,/g, ''));
-                            } else if (digits.includes(',')) {
-                                tabAmount = parseFloat(digits.replace(',', '.'));
+
+                    if (isTabCalculated) {
+                        if (activeKey === 'lcl') {
+                            const w = parseFloat(document.getElementById('lcl-gross-weight')?.value) || 0;
+                            const v = parseFloat(document.getElementById('lcl-gross-volume')?.value) || 0;
+                            if (w > 0 || v > 0) {
+                                const factor = Math.max(w / 1000, v, 1);
+                                tabAmount = Math.round((factor * 95 + 140) * 100) / 100;
                             } else {
-                                tabAmount = parseFloat(digits);
+                                tabAmount = 425.00;
                             }
+                        } else if (activeKey === 'air') {
+                            const w = parseFloat(document.getElementById('air-gross-weight')?.value) || 0;
+                            const v = parseFloat(document.getElementById('air-dimensions-volume')?.value) || 0;
+                            if (w > 0 || v > 0) {
+                                const chargeable = Math.max(w, v * 167, 1);
+                                tabAmount = Math.round((chargeable * 3.8 + 200) * 100) / 100;
+                            } else {
+                                tabAmount = 1482.00;
+                            }
+                        } else if (activeKey === 'ground') {
+                            const p = parseFloat(document.getElementById('ground-pallets')?.value) || 0;
+                            const w = parseFloat(document.getElementById('ground-weight-lbs')?.value) || 0;
+                            if (p > 0 || w > 0) {
+                                tabAmount = Math.round((Math.max(1, p) * 175 + (w > 0 ? w * 0.12 : 200)) * 100) / 100;
+                            } else {
+                                tabAmount = 940.00;
+                            }
+                        } else if (activeKey === 'amazon') {
+                            const c = parseFloat(document.getElementById('amazon-cartons')?.value) || 0;
+                            const w = parseFloat(document.getElementById('amazon-total-weight')?.value) || 0;
+                            if (c > 0 || w > 0) {
+                                tabAmount = Math.round((Math.max(c * 12, w * 1.15, 600) + 350) * 100) / 100;
+                            } else {
+                                tabAmount = 1890.00;
+                            }
+                        } else {
+                            tabAmount = 1000.00;
                         }
-                    }
-                    if (!Number.isFinite(tabAmount) || tabAmount <= 0) {
-                        const fallbackTotals = { lcl: 425.00, air: 1482.00, ground: 940.00, amazon: 1890.00 };
-                        tabAmount = fallbackTotals[activeKey] || 1000.00;
+                    } else {
+                        tabAmount = 0;
                     }
 
-                    const formattedTabTotal = isTariffCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
+                    const formattedTabTotal = isTabCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
                     if (tabOutput) {
-                        tabOutput.textContent = isTariffCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
+                        tabOutput.textContent = isTabCalculated ? formatModeCurrency(tabAmount, currency) : formatModeCurrency(0, currency);
                     }
                     if (totalField) {
                         totalField.textContent = formattedTabTotal;
@@ -73905,8 +73941,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
 
                     // Actualizar desglose simulado
-                    const netEst = isTariffCalculated ? Math.round((tabAmount / 1.15) * 100) / 100 : 0;
-                    const markupEst = isTariffCalculated ? Math.round((tabAmount - netEst) * 100) / 100 : 0;
+                    const netEst = isTabCalculated ? Math.round((tabAmount / 1.15) * 100) / 100 : 0;
+                    const markupEst = isTabCalculated ? Math.round((tabAmount - netEst) * 100) / 100 : 0;
                     const netInput = document.getElementById('fcl-net-price');
                     const markupInput = document.getElementById('fcl-markup');
                     const bNet = document.getElementById('breakdown-net-price');
@@ -73917,7 +73953,10 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (bNet) bNet.textContent = formatModeCurrency(netEst, currency);
                     if (bMarkup) bMarkup.textContent = formatModeCurrency(markupEst, currency);
 
-                    consolidatedTotal = isTariffCalculated ? tabAmount : 0;
+                    consolidatedTotal = isTabCalculated ? tabAmount : 0;
+                    if (typeof window.setIsTariffCalculated === 'function') {
+                        window.setIsTariffCalculated(isTabCalculated);
+                    }
                     updateCalculateTariffButtonState();
                 }
 
@@ -73952,7 +73991,13 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
                 });
 
-                // 3. Actualizar panel Quick Quote dinámico
+                // 3. Sincronizar estado de cálculo
+                const isCalculated = window.calculatedMultimodalTabs ? window.calculatedMultimodalTabs.has(activeKey) : false;
+                if (typeof window.setIsTariffCalculated === 'function') {
+                    window.setIsTariffCalculated(isCalculated);
+                }
+
+                // 4. Actualizar panel Quick Quote dinámico
                 updateQuickQuoteForTab(activeKey);
             }
 
