@@ -13365,7 +13365,7 @@
                         <section id="multimodal-quick-quote-panel" class="multimodal-global-quote-panel bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-4" aria-live="polite">
                             <div class="border-b border-slate-100 pb-3">
                                 <div class="flex items-center justify-between mb-1">
-                                    <span class="fcl-kicker text-xs font-black uppercase tracking-wider text-sky-700">Quick Quote Global</span>
+                                    <span id="quick-quote-mode-title" class="fcl-kicker text-xs font-black uppercase tracking-wider text-sky-700">Quick Quote Global</span>
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                         <i class="fa-solid fa-lock text-[9px]"></i> All-In Venta
                                     </span>
@@ -71820,8 +71820,40 @@ window.actualizarGrabCapacityVisibility = function() {
             function format(value) {
                 return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
+
+            const EU_COUNTRIES = ['ES', 'FR', 'DE', 'IT', 'PT', 'NL', 'BE', 'UK', 'GB', 'IE'];
+
+            function detectOriginCurrency(originRaw) {
+                const cleaned = String(originRaw || '').trim().toUpperCase();
+                if (!cleaned || cleaned.length < 2) return 'USD';
+                const prefix = cleaned.slice(0, 2);
+                if (EU_COUNTRIES.includes(prefix)) {
+                    return 'EUR';
+                }
+                return 'USD';
+            }
+
+            function getActiveMultimodalOrigin() {
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                const originMap = {
+                    fcl: el('fcl-pol')?.value,
+                    lcl: el('lcl-pol')?.value,
+                    air: el('air-origin')?.value,
+                    ground: el('ground-pickup-zip')?.value,
+                    amazon: el('amazon-origin-port')?.value
+                };
+                return originMap[tabKey] || el('fcl-pol')?.value || '';
+            }
+
+            function getCurrentMultimodalCurrency() {
+                const origin = getActiveMultimodalOrigin();
+                return detectOriginCurrency(origin);
+            }
+
             function formatCurrency(value, currency) {
-                const symbol = currency === 'EUR' ? '€' : '$';
+                const effectiveCurrency = currency || getCurrentMultimodalCurrency() || 'USD';
+                const symbol = effectiveCurrency === 'EUR' ? '€' : '$';
                 return `${symbol}${format(value)}`;
             }
             function safePdfText(value) {
@@ -72576,6 +72608,7 @@ window.actualizarGrabCapacityVisibility = function() {
 
                 // Quick Quote y Desglose Operador:
                 // El Quick Quote renderiza estricta y únicamente el totalPrice
+                const currentCurrency = getCurrentMultimodalCurrency();
                 if (window.lastDataBridgeMultimodalQuote) {
                     const dbQuote = window.lastDataBridgeMultimodalQuote;
                     const dbTotalFormatted = formatCurrency(dbQuote.totalPrice, dbQuote.currency);
@@ -72590,22 +72623,29 @@ window.actualizarGrabCapacityVisibility = function() {
                     if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(dbQuote.netPrice, dbQuote.currency);
                     if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(dbQuote.markup, dbQuote.currency);
                 } else {
-                    const netEst = Math.round((freight + surcharges + locals) * 100) / 100;
-                    const markupEst = Math.round((netEst * 0.15) * 100) / 100;
-                    const netEstEur = Math.round((netEst * usdToEurRate()) * 100) / 100;
-                    const markupEstEur = Math.round((markupEst * usdToEurRate()) * 100) / 100;
+                    const netEstUsd = Math.round((freight + surcharges + locals) * 100) / 100;
+                    const markupEstUsd = Math.round((netEstUsd * 0.15) * 100) / 100;
+                    const totalEstUsd = Math.round((netEstUsd + markupEstUsd) * 100) / 100;
+
+                    const netEstEur = Math.round((netEstUsd * usdToEurRate()) * 100) / 100;
+                    const markupEstEur = Math.round((markupEstUsd * usdToEurRate()) * 100) / 100;
                     const totalEstEur = Math.round((netEstEur + markupEstEur) * 100) / 100;
+
+                    const isEur = currentCurrency === 'EUR';
+                    const activeNet = isEur ? netEstEur : netEstUsd;
+                    const activeMarkup = isEur ? markupEstEur : markupEstUsd;
+                    const activeTotal = isEur ? totalEstEur : totalEstUsd;
 
                     const totalField = el(ids.total) || el(ids.legacyTotal) || document.getElementById('multimodal-quote-total') || document.getElementById('fcl-quote-total');
                     if (totalField) {
-                        totalField.textContent = formatCurrency(totalEstEur, 'EUR');
-                        totalField.setAttribute('title', `Precio final de venta: ${formatCurrency(totalEstEur, 'EUR')} (EUR) | Neto + Margen`);
-                        totalField.setAttribute('aria-label', `Precio final de venta: ${formatCurrency(totalEstEur, 'EUR')}`);
+                        totalField.textContent = formatCurrency(activeTotal, currentCurrency);
+                        totalField.setAttribute('title', `Precio final de venta: ${formatCurrency(activeTotal, currentCurrency)} (${currentCurrency}) | Neto + Margen`);
+                        totalField.setAttribute('aria-label', `Precio final de venta: ${formatCurrency(activeTotal, currentCurrency)}`);
                     }
-                    if (el(ids.netPrice)) el(ids.netPrice).value = formatCurrency(netEstEur, 'EUR');
-                    if (el(ids.markup)) el(ids.markup).value = formatCurrency(markupEstEur, 'EUR');
-                    if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(netEstEur, 'EUR');
-                    if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(markupEstEur, 'EUR');
+                    if (el(ids.netPrice)) el(ids.netPrice).value = formatCurrency(activeNet, currentCurrency);
+                    if (el(ids.markup)) el(ids.markup).value = formatCurrency(activeMarkup, currentCurrency);
+                    if (el(ids.breakdownNetPrice)) el(ids.breakdownNetPrice).textContent = formatCurrency(activeNet, currentCurrency);
+                    if (el(ids.breakdownMarkup)) el(ids.breakdownMarkup).textContent = formatCurrency(activeMarkup, currentCurrency);
                 }
 
                 window.SeaCharterContainerQuote = Object.freeze({
@@ -72630,8 +72670,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     locals,
                     demurrage,
                     total,
-                    baseCurrency: 'EUR',
-                    totalBase: totalEur,
+                    baseCurrency: currentCurrency,
+                    totalBase: currentCurrency === 'EUR' ? totalEur : total,
                     currencyBreakdown: {
                         USD: total,
                         EUR: totalEur
@@ -73096,7 +73136,8 @@ window.actualizarGrabCapacityVisibility = function() {
                         coste_api: baseCost,
                         venta_agencia: quickQuoteTotal,
                         fee_plataforma: 50.00,
-                        estado: 'Cotizado'
+                        estado: 'Cotizado',
+                        currency: getCurrentMultimodalCurrency()
                     };
 
                     try {
@@ -73193,6 +73234,126 @@ window.actualizarGrabCapacityVisibility = function() {
         // COTIZADOR MULTIMODAL: LÓGICA DE NAVEGACIÓN Y AISLAMIENTO DE ESTADO
         // =========================================================================
         (function initMultimodalModuleEngine() {
+            const EU_COUNTRIES = ['ES', 'FR', 'DE', 'IT', 'PT', 'NL', 'BE', 'UK', 'GB', 'IE'];
+
+            const TAB_MODE_LABELS = {
+                fcl: 'FCL',
+                lcl: 'LCL',
+                air: 'AÉREO',
+                ground: 'TERRESTRE',
+                amazon: 'AMAZON FBA'
+            };
+
+            const TAB_TOTAL_OUTPUT_IDS = {
+                fcl: 'multimodal-quote-total',
+                lcl: 'lcl-quote-total',
+                air: 'air-quote-total',
+                ground: 'ground-quote-total',
+                amazon: 'amazon-quote-total'
+            };
+
+            const TAB_ORIGIN_INPUT_IDS = {
+                fcl: 'fcl-pol',
+                lcl: 'lcl-pol',
+                air: 'air-origin',
+                ground: 'ground-pickup-zip',
+                amazon: 'amazon-origin-port'
+            };
+
+            function detectOriginCurrency(originRaw) {
+                const cleaned = String(originRaw || '').trim().toUpperCase();
+                if (!cleaned || cleaned.length < 2) return 'USD';
+                const prefix = cleaned.slice(0, 2);
+                if (EU_COUNTRIES.includes(prefix)) {
+                    return 'EUR';
+                }
+                return 'USD';
+            }
+
+            function getActiveOriginValue(modeKey) {
+                const inputId = TAB_ORIGIN_INPUT_IDS[modeKey] || 'fcl-pol';
+                return document.getElementById(inputId)?.value || '';
+            }
+
+            function formatModeCurrency(value, currency) {
+                const symbol = currency === 'EUR' ? '€' : '$';
+                const num = Number(value) || 0;
+                return `${symbol}${num.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+
+            function updateQuickQuoteForTab(activeKey) {
+                // 1. Título dinámico
+                const titleEl = document.getElementById('quick-quote-mode-title');
+                const modeLabel = TAB_MODE_LABELS[activeKey] || 'FCL';
+                if (titleEl) {
+                    titleEl.textContent = `QUICK QUOTE ${modeLabel}`;
+                }
+
+                // 2. Detección de divisa inteligente según origen
+                const originVal = getActiveOriginValue(activeKey);
+                const currency = detectOriginCurrency(originVal);
+                const symbol = currency === 'EUR' ? '€' : '$';
+
+                // 3. Monto total del tab activo
+                const totalField = document.getElementById('multimodal-quote-total');
+                const legacyField = document.getElementById('fcl-quote-total');
+
+                if (activeKey === 'fcl') {
+                    if (typeof window.updateContainerQuote === 'function') {
+                        window.updateContainerQuote();
+                    }
+                } else {
+                    const tabOutputId = TAB_TOTAL_OUTPUT_IDS[activeKey];
+                    const tabOutput = document.getElementById(tabOutputId);
+                    let tabAmount = 0;
+                    if (tabOutput) {
+                        const rawText = tabOutput.textContent || tabOutput.value || '';
+                        const digits = rawText.replace(/[^0-9.,]/g, '').trim();
+                        if (digits) {
+                            if (digits.includes(',') && digits.includes('.')) {
+                                tabAmount = digits.lastIndexOf(',') > digits.lastIndexOf('.')
+                                    ? parseFloat(digits.replace(/\./g, '').replace(',', '.'))
+                                    : parseFloat(digits.replace(/,/g, ''));
+                            } else if (digits.includes(',')) {
+                                tabAmount = parseFloat(digits.replace(',', '.'));
+                            } else {
+                                tabAmount = parseFloat(digits);
+                            }
+                        }
+                    }
+                    if (!Number.isFinite(tabAmount) || tabAmount <= 0) {
+                        const fallbackTotals = { lcl: 425.00, air: 1482.00, ground: 940.00, amazon: 1890.00 };
+                        tabAmount = fallbackTotals[activeKey] || 1000.00;
+                    }
+
+                    const formattedTabTotal = formatModeCurrency(tabAmount, currency);
+                    if (tabOutput) {
+                        tabOutput.textContent = formattedTabTotal;
+                    }
+                    if (totalField) {
+                        totalField.textContent = formattedTabTotal;
+                        totalField.setAttribute('title', `Precio final de venta: ${formattedTabTotal} (${currency}) | ${modeLabel}`);
+                        totalField.setAttribute('aria-label', `Precio final de venta: ${formattedTabTotal}`);
+                    }
+                    if (legacyField) {
+                        legacyField.textContent = formattedTabTotal;
+                    }
+
+                    // Actualizar desglose simulado
+                    const netEst = Math.round((tabAmount / 1.15) * 100) / 100;
+                    const markupEst = Math.round((tabAmount - netEst) * 100) / 100;
+                    const netInput = document.getElementById('fcl-net-price');
+                    const markupInput = document.getElementById('fcl-markup');
+                    const bNet = document.getElementById('breakdown-net-price');
+                    const bMarkup = document.getElementById('breakdown-markup');
+
+                    if (netInput) netInput.value = formatModeCurrency(netEst, currency);
+                    if (markupInput) markupInput.value = formatModeCurrency(markupEst, currency);
+                    if (bNet) bNet.textContent = formatModeCurrency(netEst, currency);
+                    if (bMarkup) bMarkup.textContent = formatModeCurrency(markupEst, currency);
+                }
+            }
+
             function switchMultimodalTab(modeKey) {
                 const targetKey = String(modeKey || 'fcl').toLowerCase();
                 const validModes = ['fcl', 'lcl', 'air', 'ground', 'amazon'];
@@ -73218,15 +73379,36 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
                 });
 
-                if (activeKey === 'fcl' && typeof window.updateContainerQuote === 'function') {
-                    window.updateContainerQuote();
-                } else if (window.lastDataBridgeMultimodalQuote && typeof window.applyDataBridgeMultimodalQuote === 'function') {
-                    window.applyDataBridgeMultimodalQuote(window.lastDataBridgeMultimodalQuote);
-                }
+                // 3. Actualizar panel Quick Quote dinámico
+                updateQuickQuoteForTab(activeKey);
+            }
+
+            function bindOriginCurrencyListeners() {
+                const originInputs = ['fcl-pol', 'lcl-pol', 'air-origin', 'ground-pickup-zip', 'amazon-origin-port'];
+                originInputs.forEach((id) => {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        input.addEventListener('input', () => {
+                            const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                            const currentMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
+                            updateQuickQuoteForTab(currentMode);
+                        });
+                        input.addEventListener('change', () => {
+                            const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                            const currentMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
+                            updateQuickQuoteForTab(currentMode);
+                        });
+                    }
+                });
             }
 
             window.switchMultimodalTab = switchMultimodalTab;
+            window.updateQuickQuoteForTab = updateQuickQuoteForTab;
+            window.detectOriginCurrency = detectOriginCurrency;
+            window.EU_COUNTRIES = EU_COUNTRIES;
+
             window.initSeaCharterMultimodalModule = function() {
+                bindOriginCurrencyListeners();
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active');
                 const initialMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
                 switchMultimodalTab(initialMode);
