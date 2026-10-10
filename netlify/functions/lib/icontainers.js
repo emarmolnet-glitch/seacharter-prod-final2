@@ -247,6 +247,7 @@ export function formatQuoteResponse(rawResponse) {
       oceanFreight: rawRate.oceanFreight ?? rawRate.baseFreight ?? null,
       airFreight: rawRate.airFreight ?? null,
       breakdown: rawRate.breakdown || rawRate.charges || rawRate.items || [],
+      billingItems: rawRate.billingItems || rawRate.charges || rawRate.breakdown || rawRate.items || [],
       surcharges: rawRate.surcharges || [],
       serviceType: rawRate.serviceType || rawRate.mode || null,
       raw: rawRate,
@@ -263,6 +264,152 @@ export function formatQuoteResponse(rawResponse) {
 }
 
 export const extractMainQuote = formatQuoteResponse;
+
+/**
+ * Categorizes and groups billingItems from Brutus API into logical transport blocks:
+ * 1. Gastos en Origen: "Pickup" and "PortOriginCharges"
+ * 2. Flete Principal (Air Freight): "Freight"
+ * 3. Gastos en Destino: "PortDestinationCharges" and "Delivery"
+ * 4. (Opcional) Otros: "Others" and "AdditionalService"
+ * 
+ * @param {Array<Object>} billingItems
+ * @returns {Object} Grouped billing items with blocks and total sum
+ */
+export function groupBillingItems(billingItems) {
+  const originItems = [];
+  const freightItems = [];
+  const destinationItems = [];
+  const otherItems = [];
+
+  if (Array.isArray(billingItems)) {
+    for (const item of billingItems) {
+      if (!item) continue;
+      const sItem = String(item.serviceItem || item.service_item || item.type || "").trim();
+
+      if (sItem === "Pickup" || sItem === "PortOriginCharges") {
+        originItems.push(item);
+      } else if (sItem === "Freight") {
+        freightItems.push(item);
+      } else if (sItem === "PortDestinationCharges" || sItem === "Delivery") {
+        destinationItems.push(item);
+      } else if (sItem === "Others" || sItem === "AdditionalService") {
+        otherItems.push(item);
+      } else {
+        const lower = sItem.toLowerCase();
+        if (lower === "pickup" || lower === "portorigincharges" || lower.includes("origin")) {
+          originItems.push(item);
+        } else if (lower === "freight" || lower.includes("airfreight") || lower === "air freight") {
+          freightItems.push(item);
+        } else if (lower === "portdestinationcharges" || lower === "delivery" || lower.includes("destination")) {
+          destinationItems.push(item);
+        } else {
+          otherItems.push(item);
+        }
+      }
+    }
+  }
+
+  originItems.title = "Gastos en Origen";
+  originItems.items = originItems;
+
+  freightItems.title = "Flete Principal (Air Freight)";
+  freightItems.items = freightItems;
+
+  destinationItems.title = "Gastos en Destino";
+  destinationItems.items = destinationItems;
+
+  otherItems.title = "Otros";
+  otherItems.items = otherItems;
+
+  const blocks = [
+    { id: "origin", key: "origin", title: "Gastos en Origen", items: originItems },
+    { id: "freight", key: "freight", title: "Flete Principal (Air Freight)", items: freightItems },
+    { id: "destination", key: "destination", title: "Gastos en Destino", items: destinationItems },
+  ];
+
+  if (otherItems.length > 0) {
+    blocks.push({ id: "others", key: "others", title: "Otros", items: otherItems });
+  }
+
+  return {
+    origin: originItems,
+    freight: freightItems,
+    destination: destinationItems,
+    others: otherItems,
+    airFreight: freightItems,
+    originCharges: originItems,
+    destinationCharges: destinationItems,
+    "Gastos en Origen": originItems,
+    "Flete Principal (Air Freight)": freightItems,
+    "Gastos en Destino": destinationItems,
+    "Otros": otherItems,
+    blocks,
+    groups: blocks,
+  };
+}
+
+/**
+ * Generates dynamic fallback billingItems (mock) for UI demonstrations
+ * when the API returns no items.
+ * Proportions based on total T:
+ * - "Pickup": T * 0.15
+ * - "PortOriginCharges": T * 0.05
+ * - "Freight": T * 0.65
+ * - "PortDestinationCharges": T * 0.15
+ * 
+ * @param {number} totalAmount
+ * @param {string} currency
+ * @returns {Array<Object>}
+ */
+export function generateFallbackBillingItems(totalAmount, currency = "USD") {
+  const T = Number(totalAmount) > 0 ? Number(totalAmount) : 0;
+  if (T <= 0) return [];
+
+  const curr = String(currency || "USD").toUpperCase();
+  const pickupTotal = Math.round(T * 0.15 * 100) / 100;
+  const originChargesTotal = Math.round(T * 0.05 * 100) / 100;
+  const freightTotal = Math.round(T * 0.65 * 100) / 100;
+  const destinationChargesTotal = Math.round((T - pickupTotal - originChargesTotal - freightTotal) * 100) / 100;
+
+  return [
+    {
+      id: "fallback-pickup",
+      name: "Recogida en Origen (Pickup)",
+      serviceItem: "Pickup",
+      price: {
+        total: pickupTotal,
+        currency: curr,
+      },
+    },
+    {
+      id: "fallback-port-origin-charges",
+      name: "Tasas de Terminal Origen (Port Origin Charges)",
+      serviceItem: "PortOriginCharges",
+      price: {
+        total: originChargesTotal,
+        currency: curr,
+      },
+    },
+    {
+      id: "fallback-freight",
+      name: "Flete Aéreo Principal (Freight)",
+      serviceItem: "Freight",
+      price: {
+        total: freightTotal,
+        currency: curr,
+      },
+    },
+    {
+      id: "fallback-port-destination-charges",
+      name: "Gastos de Terminal Destino (Port Destination Charges)",
+      serviceItem: "PortDestinationCharges",
+      price: {
+        total: destinationChargesTotal,
+        currency: curr,
+      },
+    },
+  ];
+}
 
 // =============================================================================
 // 3. MÓDULO DE COTIZACIONES MARÍTIMAS Y AÉREAS (QUOTES)
@@ -519,6 +666,8 @@ const iContainersService = {
   createEcommerceOrder,
   formatQuoteResponse,
   extractMainQuote,
+  groupBillingItems,
+  generateFallbackBillingItems,
 };
 
 export default iContainersService;
