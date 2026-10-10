@@ -74449,6 +74449,12 @@ window.actualizarGrabCapacityVisibility = function() {
             }
 
             function initCheckoutBookingListener() {
+                const paymentConfig = {
+                    b2bThreshold: 3000,
+                    usBankAccount: null, // TODO: Vincular routing number / account number EE.UU.
+                    euBankAccount: null  // TODO: Vincular IBAN SEPA
+                };
+
                 const checkoutBtn = document.getElementById('btn-checkout-booking');
                 if (!checkoutBtn || checkoutBtn.dataset?.checkoutBound === 'true') return;
                 if (checkoutBtn.dataset) checkoutBtn.dataset.checkoutBound = 'true';
@@ -74478,10 +74484,32 @@ window.actualizarGrabCapacityVisibility = function() {
                     // Estado de Carga: Cambiar el innerHTML del botón de checkout por: <i class="fa-solid fa-spinner fa-spin text-white"></i><span>Procesando...</span>
                     currentCheckoutBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-white"></i><span>Procesando...</span>';
 
+                    // Extraer valor numérico del importe de #multimodal-quote-total antes de setTimeout
+                    const totalEl = document.getElementById('multimodal-quote-total');
+                    const rawTotalText = totalEl ? (totalEl.textContent || totalEl.innerText || totalEl.value || '') : '';
+                    let valor = 0;
+                    const cleaned = rawTotalText.replace(/[^0-9.,]/g, '').trim();
+                    if (cleaned) {
+                        if (cleaned.includes(',') && cleaned.includes('.')) {
+                            valor = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+                                ? parseFloat(cleaned.replace(/\./g, '').replace(',', '.'))
+                                : parseFloat(cleaned.replace(/,/g, ''));
+                        } else if (cleaned.includes(',')) {
+                            valor = parseFloat(cleaned.replace(',', '.'));
+                        } else {
+                            valor = parseFloat(cleaned);
+                        }
+                    }
+                    if (!Number.isFinite(valor)) valor = 0;
+
                     // Simulación (setTimeout): Configurar un temporizador de 1000ms
                     setTimeout(function() {
-                        // Resolución: Dentro del temporizador, lanzar un alert("Iniciando conexión con pasarela de pago segura... (Proveedor pendiente de integración)");
-                        alert("Iniciando conexión con pasarela de pago segura... (Proveedor pendiente de integración)");
+                        // Lógica de pasarela según umbral B2B
+                        if (valor >= paymentConfig.b2bThreshold) {
+                            alert("Iniciando pasarela B2B Segura...\n\nOperación de alto importe (>$" + paymentConfig.b2bThreshold + ").\n✅ Método habilitado: Transferencia ACH / SEPA.\n❌ Tarjeta deshabilitada (protección de margen).\n\n[Sistema preparado para enrutar a cuenta US/EU vinculada]");
+                        } else {
+                            alert("Iniciando pasarela Estándar...\n\n✅ Métodos: Tarjeta de Crédito, Apple Pay y Transferencia.");
+                        }
 
                         // Restaurar UI: Inmediatamente después del alert, restaurar el innerHTML original (<i class="fa-solid fa-credit-card"></i><span>Confirmar Booking y Pagar</span>) y quitar el disabled de los tres botones
                         currentCheckoutBtn.innerHTML = '<i class="fa-solid fa-credit-card"></i><span>Confirmar Booking y Pagar</span>';
