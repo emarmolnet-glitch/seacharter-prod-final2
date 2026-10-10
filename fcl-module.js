@@ -254,6 +254,15 @@
         }
     }
 
+    function generarPDF(options) {
+        if (typeof window.generarPDF === 'function') {
+            return window.generarPDF(options);
+        }
+        if (typeof window.exportMultimodalClientPdf === 'function') {
+            return window.exportMultimodalClientPdf(options);
+        }
+    }
+
     async function handleSyncDataBridge() {
         if (typeof window.handleSyncDataBridge === 'function') {
             return window.handleSyncDataBridge();
@@ -284,6 +293,7 @@
     if (!window.setMultimodalLoadingState) window.setMultimodalLoadingState = setMultimodalLoadingState;
     if (!window.applyDataBridgeMultimodalQuote) window.applyDataBridgeMultimodalQuote = applyDataBridgeMultimodalQuote;
     if (!window.exportMultimodalClientPdf) window.exportMultimodalClientPdf = exportMultimodalClientPdf;
+    if (!window.generarPDF) window.generarPDF = generarPDF;
     if (!window.handleSyncDataBridge) window.handleSyncDataBridge = handleSyncDataBridge;
     if (!window.handleCalculateTariff) window.handleCalculateTariff = handleCalculateTariff;
     if (!window.handleCalculate) window.handleCalculate = handleCalculateTariff;
