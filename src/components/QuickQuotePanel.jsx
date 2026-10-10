@@ -531,4 +531,265 @@ export function QuickQuotePanel({
     ...(groupedBreakdown.others?.length > 0 ? [{ id: 'others', title: 'Otros', items: groupedBreakdown.others }] : []),
   ];
 
-  const isZeroOrNull
+  const isZeroOrNull = consolidatedTotal === null || consolidatedTotal === 0 || !consolidatedTotal;
+  const currencySymbol = currency === 'EUR' ? '€' : '$';
+  const displayTotal = isZeroOrNull ? 0 : consolidatedTotal;
+  const formattedTotal = Number(displayTotal).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <div className="lg:col-span-4 xl:col-span-3 sticky top-4 z-30">
+      <section
+        id="multimodal-quick-quote-panel"
+        className="multimodal-global-quote-panel bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-4"
+        aria-live="polite"
+      >
+        {/* Cabecera con Título Dinámico y Subtítulo */}
+        <div className="border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span
+              id="quick-quote-mode-title"
+              className="fcl-kicker text-xs font-black uppercase tracking-wider text-sky-700"
+            >
+              QUICK QUOTE {modeLabel}
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+              <i className="fa-solid fa-lock text-[9px]"></i> All-In Venta
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 leading-snug">
+            Precio final de venta consolidado para el cliente (Flete Base + Margen Comercial).
+          </p>
+
+          {/* Chivato de Cobro y Booking / Badge de Estado */}
+          <div id="quick-quote-status-wrapper" className="mt-2.5 flex items-center">
+            {status === 'confirmed' ? (
+              <span
+                id="quick-quote-status-badge"
+                data-status="confirmed"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300 shadow-sm transition-all duration-200"
+              >
+                <span id="quick-quote-status-icon" className="text-emerald-700 font-black text-xs">
+                  ✓
+                </span>
+                <span id="quick-quote-status-text">Pago Recibido - Booking Confirmado</span>
+              </span>
+            ) : status === 'waiting_payment' ? (
+              <span
+                id="quick-quote-status-badge"
+                data-status="waiting_payment"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 shadow-sm transition-all duration-200"
+              >
+                <i id="quick-quote-status-icon" className="fa-regular fa-clock text-[10px] text-amber-800"></i>
+                <span id="quick-quote-status-text">Enviado - Esperando Pago</span>
+              </span>
+            ) : (
+              <span
+                id="quick-quote-status-badge"
+                data-status="draft"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 transition-all duration-200"
+              >
+                <i id="quick-quote-status-icon" className="fa-regular fa-file-lines text-[10px] text-slate-400"></i>
+                <span id="quick-quote-status-text">Borrador</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Botón Principal Ancho: Calcular Tarifa */}
+        <button
+          id="btn-calculate-tariff"
+          type="button"
+          onClick={handleCalculate}
+          className="w-full bg-blue-600 text-white font-semibold py-2 rounded mb-4 hover:bg-blue-700 transition shadow-sm flex items-center justify-center gap-2"
+        >
+          <i className="fa-solid fa-calculator" aria-hidden="true"></i>
+          <span>Calcular Tarifa</span>
+        </button>
+
+        {/* Visualización del Precio Total */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-1 text-left">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            Total Venta Consolidado
+          </span>
+          <output
+            id="multimodal-quote-total"
+            className="fcl-total-value text-3xl xl:text-4xl font-black text-slate-800 tracking-tight font-mono"
+            title={`Precio final de venta: ${currencySymbol}${formattedTotal}`}
+          >
+            {currencySymbol}
+            {formattedTotal}
+          </output>
+          <span className="text-[11px] text-slate-400 font-medium">
+            Impuestos no incluidos · Sujeto a recargos aplicables
+          </span>
+        </div>
+
+        {/* Acciones del Panel */}
+        <div className="flex flex-col gap-2 w-full pt-1">
+          <button
+            id="fcl-breakdown-toggle"
+            data-testid="fcl-breakdown-toggle"
+            type="button"
+            disabled={!hasValidBillingItems}
+            onClick={handleToggleBreakdown}
+            className="text-xs text-slate-500 hover:text-slate-700 underline py-1 text-center w-full mb-2 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+            aria-expanded={isBreakdownVisible}
+          >
+            <span>{isBreakdownVisible ? 'Ocultar Desglose' : 'Ver Desglose'}</span>
+          </button>
+
+          <button
+            id="btn-checkout-booking"
+            type="button"
+            disabled={consolidatedTotal === 0 || consolidatedTotal === null || isCheckingOut}
+            onClick={handleCheckout}
+            className="w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2.5 transition shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
+          >
+            {isCheckingOut ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin text-white"></i>
+                <span>Procesando...</span>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-credit-card"></i>
+                <span>Confirmar Booking y Pagar</span>
+              </>
+            )}
+          </button>
+
+          <button
+            id="fcl-export-client-pdf-btn"
+            disabled={isZeroOrNull}
+            onClick={handleExport}
+            className="w-full flex items-center justify-center gap-2 text-xs rounded-lg py-2 transition shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i className="fa-solid fa-file-pdf text-red-500"></i>
+            <span>Exportar Oferta Cliente (PDF)</span>
+          </button>
+
+          <button
+            id="btn-sync-databridge-quote"
+            onClick={handleSyncClick}
+            disabled={status === 'confirmed' || isSyncing || isZeroOrNull}
+            className={`w-full flex items-center justify-center gap-2 text-xs rounded-lg py-2 transition shadow-sm ${
+              status === 'confirmed'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
+                : isZeroOrNull
+                ? 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer'
+            }`}
+          >
+            <i className={`fa-solid ${isSyncing ? 'fa-spinner fa-spin' : status === 'confirmed' ? 'fa-check-circle' : 'fa-cloud-arrow-up'} ${status === 'confirmed' ? 'text-emerald-500' : 'text-sky-500'}`}></i>
+            <span>{isSyncing ? 'Sincronizando...' : status === 'confirmed' ? 'Guardado en Data Bridge' : 'Sincronizar Data Bridge'}</span>
+          </button>
+        </div>
+
+        {/* Modal / Panel Expansible de Desglose de Costes (Brutus API) */}
+        {isBreakdownVisible && (
+          <div
+            id="quick-quote-breakdown-panel"
+            data-testid="quick-quote-breakdown-panel"
+            className="mt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-3 shadow-sm text-xs transition-all"
+            aria-label="Desglose detallado de costes"
+          >
+            {/* Cabecera del Desglose */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <i className="fa-solid fa-layer-group text-sky-600"></i>
+                Desglose de Costes (Brutus API)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowBreakdown(false)}
+                className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition"
+                title="Cerrar desglose"
+                aria-label="Cerrar desglose"
+              >
+                <i className="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+
+            {/* Bloques de Categorías */}
+            <div className="flex flex-col gap-2.5">
+              {groupedBlocks.map((group) => {
+                if (!group.items || group.items.length === 0) return null;
+                return (
+                  <div
+                    key={group.id}
+                    data-testid={`breakdown-group-${group.id}`}
+                    className="flex flex-col gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200/90 shadow-xs"
+                  >
+                    {/* Título de Grupo */}
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-0.5">
+                      <span className="font-bold text-slate-700 text-[11px] flex items-center gap-1.5">
+                        {group.id === 'origin' && <i className="fa-solid fa-plane-departure text-sky-500 text-[10px]"></i>}
+                        {group.id === 'freight' && <i className="fa-solid fa-plane text-indigo-500 text-[10px]"></i>}
+                        {group.id === 'destination' && <i className="fa-solid fa-plane-arrival text-emerald-500 text-[10px]"></i>}
+                        {group.id === 'others' && <i className="fa-solid fa-ellipsis text-amber-500 text-[10px]"></i>}
+                        {group.title}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium font-mono">
+                        {group.items.length} {group.items.length === 1 ? 'concepto' : 'conceptos'}
+                      </span>
+                    </div>
+
+                    {/* Lista de Ítems */}
+                    <div className="flex flex-col gap-1">
+                      {group.items.map((item, idx) => {
+                        const itemName = item.name || item.description || item.concept || `Cargo ${idx + 1}`;
+                        const formattedPrice = formatItemPrice(item.price, currency);
+
+                        return (
+                          <div
+                            key={item.id || `${group.id}-${idx}`}
+                            data-testid="breakdown-item-row"
+                            className="flex items-center justify-between gap-2 py-0.5"
+                          >
+                            <span className="text-left text-slate-600 truncate text-[11px]" title={itemName}>
+                              {itemName}
+                            </span>
+                            <span className="text-right font-mono font-bold text-slate-800 text-[11px] shrink-0">
+                              {formattedPrice}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Fila Final: Total General consolidado */}
+            <div
+              id="breakdown-total-row"
+              data-testid="breakdown-total-row"
+              className="flex items-center justify-between border-t-2 border-slate-300 pt-2.5 mt-0.5 bg-white p-2.5 rounded-lg border border-slate-200"
+            >
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] uppercase font-black tracking-wider text-slate-400">
+                  Total General
+                </span>
+                <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">
+                  Total Venta Consolidado
+                </span>
+              </div>
+              <div className="text-right">
+                <output
+                  id="breakdown-total-output"
+                  data-testid="breakdown-total-output"
+                  className="text-base font-black font-mono text-slate-900 tracking-tight"
+                >
+                  {currencySymbol}{formattedTotal}
+                </output>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+export default QuickQuotePanel;

@@ -72723,6 +72723,7 @@ window.actualizarGrabCapacityVisibility = function() {
             window.isGroundFtlMode = isGroundFtlMode;
 
             function updateCalculateTariffButtonState() {
+                const checkoutBtn = document.getElementById('btn-checkout-booking');
                 const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
                 const syncBtn = document.getElementById('btn-sync-databridge-quote');
                 const calcBtn = document.getElementById('btn-calculate-tariff');
@@ -72744,11 +72745,23 @@ window.actualizarGrabCapacityVisibility = function() {
                     }
                 }
 
+                if (checkoutBtn) {
+                    if (isZeroOrNull) {
+                        checkoutBtn.setAttribute('disabled', 'disabled');
+                        checkoutBtn.disabled = true;
+                    } else {
+                        checkoutBtn.removeAttribute('disabled');
+                        checkoutBtn.disabled = false;
+                    }
+                }
+
                 if (pdfBtn) {
                     pdfBtn.disabled = isZeroOrNull;
                     if (isZeroOrNull) {
+                        pdfBtn.setAttribute('disabled', 'disabled');
                         pdfBtn.classList.add('opacity-60', 'cursor-not-allowed');
                     } else {
+                        pdfBtn.removeAttribute('disabled');
                         pdfBtn.classList.remove('opacity-60', 'cursor-not-allowed');
                     }
                 }
@@ -72758,9 +72771,11 @@ window.actualizarGrabCapacityVisibility = function() {
                     const isConfirmed = currentState?.estado === 'confirmed';
 
                     if (isConfirmed || isZeroOrNull) {
+                        syncBtn.setAttribute('disabled', 'disabled');
                         syncBtn.disabled = true;
                         syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
                     } else {
+                        syncBtn.removeAttribute('disabled');
                         syncBtn.disabled = false;
                         syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
                         syncBtn.removeAttribute('title');
@@ -74014,6 +74029,54 @@ window.actualizarGrabCapacityVisibility = function() {
                 if (typeof window.refreshQuickQuoteStatusBadgeForActiveTab === 'function') {
                     window.refreshQuickQuoteStatusBadgeForActiveTab(activeKey);
                 }
+
+                // 5. Habilitación Dinámica (Quitar el candado / Bloquear si es 0):
+                const checkoutBtn = document.getElementById('btn-checkout-booking');
+                const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
+                const syncBtn = document.getElementById('btn-sync-databridge-quote');
+
+                let calculatedValue = 0;
+                if (typeof consolidatedTotal === 'number' && !Number.isNaN(consolidatedTotal)) {
+                    calculatedValue = consolidatedTotal;
+                }
+                if (calculatedValue === 0 && totalField) {
+                    const parsed = parseFloat(String(totalField.textContent || totalField.innerText || '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+                    if (!Number.isNaN(parsed)) {
+                        calculatedValue = parsed;
+                    }
+                }
+
+                if (calculatedValue > 0) {
+                    if (checkoutBtn) {
+                        checkoutBtn.removeAttribute('disabled');
+                        checkoutBtn.disabled = false;
+                    }
+                    if (pdfBtn) {
+                        pdfBtn.removeAttribute('disabled');
+                        pdfBtn.disabled = false;
+                        pdfBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    }
+                    if (syncBtn) {
+                        syncBtn.removeAttribute('disabled');
+                        syncBtn.disabled = false;
+                        syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    }
+                } else {
+                    if (checkoutBtn) {
+                        checkoutBtn.setAttribute('disabled', 'disabled');
+                        checkoutBtn.disabled = true;
+                    }
+                    if (pdfBtn) {
+                        pdfBtn.setAttribute('disabled', 'disabled');
+                        pdfBtn.disabled = true;
+                        pdfBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                    }
+                    if (syncBtn) {
+                        syncBtn.setAttribute('disabled', 'disabled');
+                        syncBtn.disabled = true;
+                        syncBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                    }
+                }
             }
 
             function switchMultimodalTab(modeKey) {
@@ -74351,6 +74414,58 @@ window.actualizarGrabCapacityVisibility = function() {
                 calculateNmfcClass();
             }
 
+            function initCheckoutBookingListener() {
+                const checkoutBtn = document.getElementById('btn-checkout-booking');
+                if (!checkoutBtn || checkoutBtn.dataset?.checkoutBound === 'true') return;
+                if (checkoutBtn.dataset) checkoutBtn.dataset.checkoutBound = 'true';
+
+                checkoutBtn.addEventListener('click', function(e) {
+                    if (e && typeof e.preventDefault === 'function') {
+                        e.preventDefault();
+                    }
+
+                    const currentCheckoutBtn = document.getElementById('btn-checkout-booking') || checkoutBtn;
+                    const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
+                    const syncBtn = document.getElementById('btn-sync-databridge-quote');
+
+                    // Bloquear UI: Añadir disabled = true al propio botón de checkout, al de PDF y al de Data Bridge para evitar dobles clics
+                    currentCheckoutBtn.disabled = true;
+                    currentCheckoutBtn.setAttribute('disabled', 'disabled');
+
+                    if (pdfBtn) {
+                        pdfBtn.disabled = true;
+                        pdfBtn.setAttribute('disabled', 'disabled');
+                    }
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.setAttribute('disabled', 'disabled');
+                    }
+
+                    // Estado de Carga: Cambiar el innerHTML del botón de checkout por: <i class="fa-solid fa-spinner fa-spin text-white"></i><span>Procesando...</span>
+                    currentCheckoutBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-white"></i><span>Procesando...</span>';
+
+                    // Simulación (setTimeout): Configurar un temporizador de 1000ms
+                    setTimeout(function() {
+                        // Resolución: Dentro del temporizador, lanzar un alert("Iniciando conexión con pasarela de pago segura... (Proveedor pendiente de integración)");
+                        alert("Iniciando conexión con pasarela de pago segura... (Proveedor pendiente de integración)");
+
+                        // Restaurar UI: Inmediatamente después del alert, restaurar el innerHTML original (<i class="fa-solid fa-credit-card"></i><span>Confirmar Booking y Pagar</span>) y quitar el disabled de los tres botones
+                        currentCheckoutBtn.innerHTML = '<i class="fa-solid fa-credit-card"></i><span>Confirmar Booking y Pagar</span>';
+                        currentCheckoutBtn.removeAttribute('disabled');
+                        currentCheckoutBtn.disabled = false;
+
+                        if (pdfBtn) {
+                            pdfBtn.removeAttribute('disabled');
+                            pdfBtn.disabled = false;
+                        }
+                        if (syncBtn) {
+                            syncBtn.removeAttribute('disabled');
+                            syncBtn.disabled = false;
+                        }
+                    }, 1000);
+                });
+            }
+
             window.generateFallbackBillingItems = generateFallbackBillingItems;
             window.groupBillingItems = groupBillingItems;
             window.groupAirBillingItems = groupBillingItems;
@@ -74364,18 +74479,58 @@ window.actualizarGrabCapacityVisibility = function() {
             window.updateGroundTransportView = updateGroundTransportView;
             window.mapPcfToNmfcClass = mapPcfToNmfcClass;
             window.calculateNmfcClass = calculateNmfcClass;
+            window.initCheckoutBookingListener = initCheckoutBookingListener;
 
             window.initSeaCharterMultimodalModule = function() {
                 bindOriginCurrencyListeners();
                 bindGroundTransportListeners();
+                initCheckoutBookingListener();
+
+                // VIGILANTE DE PRECIO: Desbloqueo dinámico de botones de acción
+                const totalOutputElement = document.getElementById('multimodal-quote-total');
+                if (totalOutputElement) {
+                    const priceObserver = new MutationObserver(function(mutations) {
+                        let calculatedValue = 0;
+                        const textValue = totalOutputElement.textContent || totalOutputElement.innerText || '';
+                        const parsed = parseFloat(textValue.replace(/[^0-9.,]/g, '').replace(',', '.'));
+                        
+                        if (!Number.isNaN(parsed)) {
+                            calculatedValue = parsed;
+                        }
+
+                        const checkoutBtn = document.getElementById('btn-checkout-booking');
+                        const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
+                        const syncBtn = document.getElementById('btn-sync-databridge-quote');
+
+                        if (calculatedValue > 0) {
+                            // Desbloquear
+                            if (checkoutBtn) { checkoutBtn.removeAttribute('disabled'); checkoutBtn.disabled = false; }
+                            if (pdfBtn) { pdfBtn.removeAttribute('disabled'); pdfBtn.disabled = false; pdfBtn.classList.remove('opacity-60', 'cursor-not-allowed'); }
+                            if (syncBtn) { syncBtn.removeAttribute('disabled'); syncBtn.disabled = false; syncBtn.classList.remove('opacity-60', 'cursor-not-allowed'); }
+                        } else {
+                            // Bloquear
+                            if (checkoutBtn) { checkoutBtn.setAttribute('disabled', 'disabled'); checkoutBtn.disabled = true; }
+                            if (pdfBtn) { pdfBtn.setAttribute('disabled', 'disabled'); pdfBtn.disabled = true; pdfBtn.classList.add('opacity-60', 'cursor-not-allowed'); }
+                            if (syncBtn) { syncBtn.setAttribute('disabled', 'disabled'); syncBtn.disabled = true; syncBtn.classList.add('opacity-60', 'cursor-not-allowed'); }
+                        }
+                    });
+                    
+                    // Observar cambios en el texto interno del precio
+                    priceObserver.observe(totalOutputElement, { childList: true, characterData: true, subtree: true });
+                }
+
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active');
                 const initialMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
                 switchMultimodalTab(initialMode);
             };
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', () => window.initSeaCharterMultimodalModule());
+                document.addEventListener('DOMContentLoaded', () => {
+                    initCheckoutBookingListener();
+                    window.initSeaCharterMultimodalModule();
+                });
             } else {
+                initCheckoutBookingListener();
                 window.initSeaCharterMultimodalModule();
             }
         }());
