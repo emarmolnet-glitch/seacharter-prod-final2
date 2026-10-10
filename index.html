@@ -13465,6 +13465,25 @@
                                 <span class="text-[11px] text-slate-400 font-medium">Impuestos no incluidos · Sujeto a recargos aplicables</span>
                             </div>
 
+                            <!-- Resumen del Proveedor Seleccionado Marketplace (iContainers) -->
+                            <div id="active-provider-summary" class="hidden bg-sky-50 border border-sky-200/80 rounded-xl p-3 flex flex-col gap-2 text-left transition-all">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] font-black uppercase tracking-wider text-sky-800 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-ship text-sky-600"></i> Marketplace Neutral
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-sky-700 border border-sky-200">
+                                        Tarifa Activa
+                                    </span>
+                                </div>
+                                <div id="active-provider-name" class="text-xs font-semibold text-slate-800">
+                                    Proveedor seleccionado (Mejor Tarifa): -
+                                </div>
+                                <button id="btn-view-alternatives" type="button" disabled class="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2 px-3 rounded-lg bg-white hover:bg-sky-100 text-sky-800 border border-sky-300 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer" onclick="openMarketplaceAlternativesModal()">
+                                    <i class="fa-solid fa-list-check text-sky-600"></i>
+                                    <span>Ver alternativas de cotización</span>
+                                </button>
+                            </div>
+
                             <!-- Acciones del Panel -->
                             <div class="flex flex-col gap-2 w-full pt-1">
                                 <button id="fcl-breakdown-toggle" class="sc-button w-full flex items-center justify-center gap-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg py-2 transition" type="button" aria-expanded="false">
@@ -13489,6 +13508,44 @@
                 </div><!-- fin Grid 2 Columnas -->
 
             </div><!-- fin #seacharter-multimodal-module -->
+
+            <!-- Modal de Alternativas de Cotización Marketplace (iContainers) -->
+            <div id="modal-alternatives-marketplace" class="fixed inset-0 z-[10000] hidden flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="modal-alternatives-title" aria-hidden="true">
+                <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                    <!-- Modal Header -->
+                    <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-400/30">
+                                <i class="fa-solid fa-layer-group text-sm"></i>
+                            </div>
+                            <div>
+                                <h3 id="modal-alternatives-title" class="text-base font-bold text-white leading-tight">Alternativas de Cotización Marketplace</h3>
+                                <p class="text-xs text-slate-400">Comparativa neutral de tarifas y tiempos de tránsito de proveedores verificados</p>
+                            </div>
+                        </div>
+                        <button type="button" id="modal-alternatives-close" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer" onclick="closeMarketplaceAlternativesModal()" aria-label="Cerrar modal">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+
+                    <!-- Modal Body: Resultados dinámicos -->
+                    <div class="p-6 overflow-y-auto flex-1 space-y-3 bg-slate-50/50">
+                        <div id="modal-alternatives-results" class="grid grid-cols-1 gap-3">
+                            <!-- Generado dinámicamente con template strings -->
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="px-6 py-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-emerald-600"></i> Precios de venta finales con margen comercial aplicado
+                        </span>
+                        <button type="button" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition cursor-pointer" onclick="closeMarketplaceAlternativesModal()">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div><!-- fin #view-multimodal -->
 
         <!-- ========================================== -->
@@ -71799,6 +71856,9 @@ window.actualizarGrabCapacityVisibility = function() {
         refreshCBAMCalculations();
     </script>
     <script>
+        const COMERCIAL_MARGIN = 1.15; // Añade un 15% de markup sobre el coste neto de la API
+        window.COMERCIAL_MARGIN = COMERCIAL_MARGIN;
+
         // SeaCharter Containers Advanced - SC JS vanilla.
         // Punto de integracion Data Bridge: hidratar estos campos con tarifas maestras antes de llamar a window.updateContainerQuote().
         (function initSeaCharterAdvancedContainers() {
@@ -72801,6 +72861,235 @@ window.actualizarGrabCapacityVisibility = function() {
                 }
             }
 
+            // 2. Función Mock de la API (Consumo Dinámico):
+            async function fetchMarketplaceRates(mode, origin, destination) {
+                // Simulación de retraso de red
+                await new Promise((resolve) => setTimeout(resolve, 150));
+
+                const normalizedMode = String(mode || '').toLowerCase().trim();
+                let rates = [];
+
+                if (normalizedMode.includes('air') || normalizedMode.includes('aér') || normalizedMode.includes('aer')) {
+                    rates = [
+                        { providerName: 'American Airlines', transitTime: '2-4 días', netCost: 950 },
+                        { providerName: 'Air Canada', transitTime: '3-5 días', netCost: 1100 },
+                        { providerName: 'Lufthansa Cargo', transitTime: '2-3 días', netCost: 1250 }
+                    ];
+                } else if (normalizedMode.includes('ground') || normalizedMode.includes('ltl') || normalizedMode.includes('camion') || normalizedMode.includes('terrestre')) {
+                    rates = [
+                        { providerName: 'ACT', transitTime: '3-5 días', netCost: 450 },
+                        { providerName: 'Southeastern Freight Lines', transitTime: '2-4 días', netCost: 520 },
+                        { providerName: 'SAIA', transitTime: '4-6 días', netCost: 610 }
+                    ];
+                } else {
+                    // fcl / lcl y modal marítimo general
+                    rates = [
+                        { providerName: 'ZIM', transitTime: '18-22 días', netCost: 1200 },
+                        { providerName: 'Hapag-Lloyd', transitTime: '20-25 días', netCost: 1350 },
+                        { providerName: 'MSC', transitTime: '22-26 días', netCost: 1420 },
+                        { providerName: 'Maersk', transitTime: '19-24 días', netCost: 1500 }
+                    ];
+                }
+
+                // TODO: Reemplazar este mock con una llamada fetch() real al endpoint de iContainers
+                return rates;
+            }
+            window.fetchMarketplaceRates = fetchMarketplaceRates;
+
+            let currentMarketplaceRates = [];
+            window.currentMarketplaceRates = currentMarketplaceRates;
+
+            // 3. Seguridad y Procesamiento (Sell Rate) & 4. Inyección en el Panel Principal:
+            async function calculateAndApplyMarketplace(mode, origin, destination) {
+                try {
+                    const rawRates = await fetchMarketplaceRates(mode, origin, destination);
+
+                    // 3. Seguridad y Procesamiento (Sell Rate):
+                    // Antes de inyectar datos en la interfaz, debes iterar sobre el array devuelto por la API y calcular el precio de venta final para cada proveedor: const sellPrice = item.netCost * COMERCIAL_MARGIN;
+                    // REGLA DE ORO: Está estrictamente prohibido que la propiedad netCost quede expuesta en atributos de datos (data-*) o dentro de las etiquetas HTML del DOM.
+                    const processedRates = rawRates.map((item) => {
+                        const sellPrice = item.netCost * COMERCIAL_MARGIN;
+                        return {
+                            providerName: item.providerName,
+                            transitTime: item.transitTime,
+                            sellPrice: Math.round(sellPrice * 100) / 100
+                        };
+                    }).sort((a, b) => a.sellPrice - b.sellPrice);
+
+                    currentMarketplaceRates = processedRates;
+                    window.currentMarketplaceRates = processedRates;
+
+                    // 4. Inyección en el Panel Principal (Quick Quote):
+                    // Cuando el usuario calcule la tarifa:
+                    // Toma el primer elemento del array procesado (el más barato).
+                    const cheapest = processedRates[0];
+                    if (cheapest) {
+                        window.selectedMarketplaceProvider = cheapest;
+
+                        // Muestra el bloque #active-provider-summary y habilita el botón #btn-view-alternatives.
+                        const summaryBlock = document.getElementById('active-provider-summary');
+                        if (summaryBlock) {
+                            summaryBlock.classList.remove('hidden');
+                            summaryBlock.style.display = 'flex';
+                        }
+
+                        const btnAlternatives = document.getElementById('btn-view-alternatives');
+                        if (btnAlternatives) {
+                            btnAlternatives.removeAttribute('disabled');
+                            btnAlternatives.disabled = false;
+                        }
+
+                        // Inyecta el nombre en #active-provider-name utilizando una etiqueta neutral como "Proveedor seleccionado (Mejor Tarifa)". NO uses la palabra "Recomendado".
+                        const nameEl = document.getElementById('active-provider-name');
+                        if (nameEl) {
+                            nameEl.textContent = `Proveedor seleccionado (Mejor Tarifa): ${cheapest.providerName}`;
+                        }
+
+                        // Actualiza el #multimodal-quote-total con el sellPrice correspondiente.
+                        const currentCurrency = (typeof getCurrentMultimodalCurrency === 'function' ? getCurrentMultimodalCurrency() : 'EUR') || 'EUR';
+                        const formattedTotal = (typeof formatCurrency === 'function' ? formatCurrency(cheapest.sellPrice, currentCurrency) : `€${cheapest.sellPrice.toFixed(2)}`);
+
+                        const totalOutput = document.getElementById('multimodal-quote-total');
+                        if (totalOutput) {
+                            totalOutput.textContent = formattedTotal;
+                            totalOutput.setAttribute('title', `Precio final de venta: ${formattedTotal} (${currentCurrency}) | ${cheapest.providerName}`);
+                            totalOutput.setAttribute('aria-label', `Precio final de venta: ${formattedTotal}`);
+                        }
+                        const legacyTotal = document.getElementById('fcl-quote-total');
+                        if (legacyTotal) {
+                            legacyTotal.textContent = formattedTotal;
+                        }
+
+                        consolidatedTotal = cheapest.sellPrice;
+                        window.consolidatedTotal = cheapest.sellPrice;
+
+                        const checkoutBtn = document.getElementById('btn-checkout-booking');
+                        if (checkoutBtn) {
+                            checkoutBtn.removeAttribute('disabled');
+                            checkoutBtn.disabled = false;
+                        }
+                        const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
+                        if (pdfBtn) {
+                            pdfBtn.removeAttribute('disabled');
+                            pdfBtn.disabled = false;
+                            pdfBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        }
+                        const syncBtn = document.getElementById('btn-sync-databridge-quote');
+                        if (syncBtn) {
+                            syncBtn.removeAttribute('disabled');
+                            syncBtn.disabled = false;
+                            syncBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        }
+                    }
+
+                    return processedRates;
+                } catch (err) {
+                    console.error('Error al calcular tarifas marketplace:', err);
+                    return [];
+                }
+            }
+            window.calculateAndApplyMarketplace = calculateAndApplyMarketplace;
+
+            // 5. Modal de Alternativas (#modal-alternatives-marketplace):
+            function openMarketplaceAlternativesModal() {
+                const modal = document.getElementById('modal-alternatives-marketplace');
+                if (!modal) return;
+
+                const resultsContainer = document.getElementById('modal-alternatives-results') || modal.querySelector('#modal-alternatives-results');
+                if (resultsContainer) {
+                    // Vacía el contenido previo del contenedor de resultados del modal.
+                    resultsContainer.innerHTML = '';
+
+                    const rates = window.currentMarketplaceRates || currentMarketplaceRates || [];
+                    const currentCurrency = (typeof getCurrentMultimodalCurrency === 'function' ? getCurrentMultimodalCurrency() : 'EUR') || 'EUR';
+
+                    // Genera el HTML dinámicamente usando template strings e iterando sobre el array procesado.
+                    // Crea una tarjeta para cada proveedor mostrando: Nombre, Tiempo de tránsito y el sellPrice.
+                    // Cada tarjeta debe tener un botón de "Seleccionar".
+                    const cardsHtml = rates.map((item, index) => {
+                        const formattedSell = typeof formatCurrency === 'function'
+                            ? formatCurrency(item.sellPrice, currentCurrency)
+                            : `€${item.sellPrice.toFixed(2)}`;
+                        return `
+                            <div class="marketplace-provider-card bg-white border border-slate-200 hover:border-sky-500 rounded-xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between gap-3">
+                                <div class="flex items-start justify-between">
+                                    <div>
+                                        <h4 class="text-base font-bold text-slate-800">${item.providerName}</h4>
+                                        <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                            <i class="fa-regular fa-clock text-slate-400"></i>
+                                            <span>Tiempo de tránsito: <strong class="text-slate-700">${item.transitTime}</strong></span>
+                                        </p>
+                                    </div>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Tarifa Verificada
+                                    </span>
+                                </div>
+                                <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                                    <div>
+                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Precio de Venta</span>
+                                        <div class="text-xl font-black font-mono text-slate-800">${formattedSell}</div>
+                                    </div>
+                                    <button type="button" class="btn-select-provider px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow-sm cursor-pointer" onclick="selectMarketplaceProvider(${index})">
+                                        Seleccionar
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    resultsContainer.innerHTML = cardsHtml;
+                }
+
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                modal.style.display = 'flex';
+            }
+            window.openMarketplaceAlternativesModal = openMarketplaceAlternativesModal;
+
+            function closeMarketplaceAlternativesModal() {
+                const modal = document.getElementById('modal-alternatives-marketplace');
+                if (!modal) return;
+                modal.classList.add('hidden');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.style.display = 'none';
+            }
+            window.closeMarketplaceAlternativesModal = closeMarketplaceAlternativesModal;
+
+            function selectMarketplaceProvider(index) {
+                const rates = window.currentMarketplaceRates || currentMarketplaceRates || [];
+                const item = rates[index];
+                if (!item) return;
+
+                window.selectedMarketplaceProvider = item;
+
+                // Actualizar el #active-provider-name con etiqueta neutral
+                const nameEl = document.getElementById('active-provider-name');
+                if (nameEl) {
+                    nameEl.textContent = `Proveedor seleccionado (Mejor Tarifa): ${item.providerName}`;
+                }
+
+                // Actualizar #multimodal-quote-total con el sellPrice correspondiente
+                const currentCurrency = (typeof getCurrentMultimodalCurrency === 'function' ? getCurrentMultimodalCurrency() : 'EUR') || 'EUR';
+                const formattedPrice = (typeof formatCurrency === 'function' ? formatCurrency(item.sellPrice, currentCurrency) : `€${item.sellPrice.toFixed(2)}`);
+                const totalEl = document.getElementById('multimodal-quote-total');
+                if (totalEl) {
+                    totalEl.textContent = formattedPrice;
+                    totalEl.setAttribute('title', `Precio final de venta: ${formattedPrice} (${currentCurrency}) | ${item.providerName}`);
+                    totalEl.setAttribute('aria-label', `Precio final de venta: ${formattedPrice}`);
+                }
+                const legacyEl = document.getElementById('fcl-quote-total');
+                if (legacyEl) {
+                    legacyEl.textContent = formattedPrice;
+                }
+
+                consolidatedTotal = item.sellPrice;
+                window.consolidatedTotal = item.sellPrice;
+
+                // Cerrar el modal
+                closeMarketplaceAlternativesModal();
+            }
+            window.selectMarketplaceProvider = selectMarketplaceProvider;
+
             function handleCalculateTariff() {
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
                 const activeKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
@@ -72822,6 +73111,10 @@ window.actualizarGrabCapacityVisibility = function() {
                 }
 
                 updateCalculateTariffButtonState();
+
+                const origin = (typeof getActiveMultimodalOrigin === 'function' ? getActiveMultimodalOrigin() : '');
+                const dest = (typeof getActiveMultimodalDestination === 'function' ? getActiveMultimodalDestination() : '');
+                return calculateAndApplyMarketplace(activeKey, origin, dest);
             }
 
             function updateContainerQuote() {
@@ -74542,11 +74835,35 @@ window.actualizarGrabCapacityVisibility = function() {
             window.mapPcfToNmfcClass = mapPcfToNmfcClass;
             window.calculateNmfcClass = calculateNmfcClass;
             window.initCheckoutBookingListener = initCheckoutBookingListener;
+            window.fetchMarketplaceRates = fetchMarketplaceRates;
+            window.calculateAndApplyMarketplace = calculateAndApplyMarketplace;
+            window.openMarketplaceAlternativesModal = openMarketplaceAlternativesModal;
+            window.closeMarketplaceAlternativesModal = closeMarketplaceAlternativesModal;
+            window.selectMarketplaceProvider = selectMarketplaceProvider;
 
             window.initSeaCharterMultimodalModule = function() {
                 bindOriginCurrencyListeners();
                 bindGroundTransportListeners();
                 initCheckoutBookingListener();
+
+                // Listeners del Marketplace de Proveedores
+                const btnAlternatives = document.getElementById('btn-view-alternatives');
+                if (btnAlternatives) {
+                    btnAlternatives.addEventListener('click', openMarketplaceAlternativesModal);
+                }
+                const btnCloseAlt = document.getElementById('modal-alternatives-close');
+                if (btnCloseAlt) {
+                    btnCloseAlt.addEventListener('click', closeMarketplaceAlternativesModal);
+                }
+                const modalAlt = document.getElementById('modal-alternatives-marketplace');
+                if (modalAlt) {
+                    modalAlt.addEventListener('click', function(e) {
+                        if (e.target === modalAlt) closeMarketplaceAlternativesModal();
+                    });
+                }
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') closeMarketplaceAlternativesModal();
+                });
 
                 // VIGILANTE DE PRECIO: Desbloqueo dinámico de botones de acción
                 const totalOutputElement = document.getElementById('multimodal-quote-total');
