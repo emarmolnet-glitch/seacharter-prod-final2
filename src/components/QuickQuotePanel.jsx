@@ -254,6 +254,16 @@ export function QuickQuotePanel({
   const [localBillingItems, setLocalBillingItems] = useState(() =>
     resolveBillingItems(billingItems, quoteData, totalAmount, currency, isQuoteFailed)
   );
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const handleCheckout = useCallback(() => {
+    setIsCheckingOut(true);
+    setTimeout(() => {
+      alert("Iniciando conexión con pasarela de pago segura... (Proveedor de pagos pendiente de integración)");
+      setIsCheckingOut(false);
+    }, 1000);
+  }, []);
+
   const activeIntervalRef = useRef(null);
 
   // Sincronizar props externas si cambian
@@ -475,36 +485,36 @@ export function QuickQuotePanel({
   }, [status, isSyncing, onSyncDataBridge]);
 
   // Manejador del botón Exportar Oferta Cliente (PDF)
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (customQuoteData = null) => {
     const isZero = consolidatedTotal === null || consolidatedTotal === 0 || !consolidatedTotal;
     if (isZero) return;
 
     try {
       if (typeof onExportPdf === 'function') {
-        await onExportPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        await onExportPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel, quoteData: customQuoteData || quoteData });
         return;
       }
       if (typeof onExport === 'function') {
-        await onExport({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        await onExport({ totalPrice: consolidatedTotal, currency, mode: modeLabel, quoteData: customQuoteData || quoteData });
         return;
       }
       if (typeof generarPDF === 'function') {
-        await generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        await generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel, quoteData: customQuoteData || quoteData });
         return;
       }
       if (typeof window !== 'undefined' && typeof window.exportMultimodalClientPdf === 'function') {
-        window.exportMultimodalClientPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        window.exportMultimodalClientPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel, quoteData: customQuoteData || quoteData });
         return;
       }
       if (typeof window !== 'undefined' && typeof window.generarPDF === 'function') {
-        window.generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        window.generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel, quoteData: customQuoteData || quoteData });
         return;
       }
       console.warn('[QuickQuotePanel] No hay función de exportación a PDF configurada.');
     } catch (err) {
       console.error('[QuickQuotePanel] Error al exportar oferta PDF:', err);
     }
-  }, [consolidatedTotal, currency, modeLabel, onExportPdf, onExport, generarPDF]);
+  }, [consolidatedTotal, currency, modeLabel, onExportPdf, onExport, generarPDF, quoteData]);
 
   const handleToggleBreakdown = () => {
     if (hasValidBillingItems) setShowBreakdown(prev => !prev);
@@ -619,63 +629,56 @@ export function QuickQuotePanel({
             type="button"
             disabled={!hasValidBillingItems}
             onClick={handleToggleBreakdown}
-            className={`sc-button w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${!hasValidBillingItems ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 cursor-pointer'}`}
+            className="text-xs text-slate-500 hover:text-slate-700 underline py-1 text-center w-full mb-2 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
             aria-expanded={isBreakdownVisible}
           >
-            <i className={`fa-solid ${isBreakdownVisible ? 'fa-chevron-up' : 'fa-layer-group'} ${!hasValidBillingItems ? 'text-slate-400' : 'text-slate-500'}`}></i>
             <span>{isBreakdownVisible ? 'Ocultar Desglose' : 'Ver Desglose'}</span>
+          </button>
+
+          <button
+            id="btn-checkout-booking"
+            type="button"
+            disabled={consolidatedTotal === 0 || consolidatedTotal === null || isCheckingOut}
+            onClick={handleCheckout}
+            className="w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2.5 transition shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
+          >
+            {isCheckingOut ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin text-white"></i>
+                <span>Procesando...</span>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-credit-card"></i>
+                <span>Confirmar Booking y Pagar</span>
+              </>
+            )}
           </button>
 
           <button
             id="fcl-export-client-pdf-btn"
             disabled={isZeroOrNull}
             onClick={handleExport}
-            className={`sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${
-              isZeroOrNull
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-            }`}
-            type="button"
+            className="w-full flex items-center justify-center gap-2 text-xs rounded-lg py-2 transition shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <i className="fa-solid fa-file-pdf text-rose-600" aria-hidden="true"></i>
+            <i className="fa-solid fa-file-pdf text-red-500"></i>
             <span>Exportar Oferta Cliente (PDF)</span>
           </button>
 
-          {/* Botón de Sincronización: Bloqueado si status === 'confirmed', sincronizando o precio cero */}
           <button
             id="btn-sync-databridge-quote"
-            disabled={status === 'confirmed' || isSyncing || isZeroOrNull}
             onClick={handleSyncClick}
-            title={
+            disabled={status === 'confirmed' || isSyncing || isZeroOrNull}
+            className={`w-full flex items-center justify-center gap-2 text-xs rounded-lg py-2 transition shadow-sm ${
               status === 'confirmed'
-                ? 'Cotización ya pagada y confirmada (Booking Confirmado)'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
                 : isZeroOrNull
-                ? 'Calcule la tarifa antes de sincronizar con Data Bridge'
-                : 'Sincronizar cotización con Data Bridge'
-            }
-            className={`sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${
-              status === 'confirmed' || isZeroOrNull
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200'
+                ? 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer'
             }`}
-            type="button"
           >
-            {isSyncing ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin text-sky-600" aria-hidden="true"></i>
-                <span>Sincronizando...</span>
-              </>
-            ) : status === 'confirmed' ? (
-              <>
-                <i className="fa-solid fa-lock text-emerald-600" aria-hidden="true"></i>
-                <span>Booking Confirmado</span>
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i>
-                <span>Sincronizar Data Bridge</span>
-              </>
-            )}
+            <i className={`fa-solid ${isSyncing ? 'fa-spinner fa-spin' : status === 'confirmed' ? 'fa-check-circle' : 'fa-cloud-arrow-up'} ${status === 'confirmed' ? 'text-emerald-500' : 'text-sky-500'}`}></i>
+            <span>{isSyncing ? 'Sincronizando...' : status === 'confirmed' ? 'Guardado en Data Bridge' : 'Sincronizar Data Bridge'}</span>
           </button>
         </div>
 
