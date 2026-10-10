@@ -72597,7 +72597,25 @@ window.actualizarGrabCapacityVisibility = function() {
                 doc.text('Datos de ruta', 14, 42);
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(10);
-                doc.text(`Ruta marítima: ${safePdfText(payload.maritimeRoute || `${payload.portOfLoading} -> ${payload.portOfDischarge}`)}`, 14, 50);
+                let routeTitle = payload.routeTitle;
+                if (!routeTitle) {
+                    const rawMode = String(payload.mode || '').trim().toLowerCase();
+                    let activeTabKey = '';
+                    if (typeof document !== 'undefined') {
+                        const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                        activeTabKey = String(activeBtn?.getAttribute('data-multimodal-tab') || '').trim().toLowerCase();
+                    }
+                    if (/air|a[eé]reo/i.test(rawMode) || activeTabKey === 'air') {
+                        routeTitle = 'Ruta Aérea';
+                    } else if (/ground|terrestre|ltl/i.test(rawMode) || activeTabKey === 'ground') {
+                        routeTitle = 'Ruta Terrestre';
+                    } else if (/fcl|lcl|mar[ií]tim/i.test(rawMode) || activeTabKey === 'fcl' || activeTabKey === 'lcl') {
+                        routeTitle = 'Ruta Marítima';
+                    } else {
+                        routeTitle = 'Ruta Marítima';
+                    }
+                }
+                doc.text(`${routeTitle}: ${safePdfText(payload.maritimeRoute || `${payload.portOfLoading} -> ${payload.portOfDischarge}`)}`, 14, 50);
                 doc.text(`Naviera base: ${safePdfText(payload.carrierName)}`, 14, 57);
                 doc.text(`Ruta: ${safePdfText(payload.portOfLoading)} -> ${safePdfText(payload.portOfDischarge)}`, 14, 64);
                 doc.text(`Modo / Incoterm: ${safePdfText(payload.mode)} / ${safePdfText(payload.incoterm || 'No seleccionado')}`, 14, 71);
@@ -73184,11 +73202,26 @@ window.actualizarGrabCapacityVisibility = function() {
                 const incoterm = String(customOptions.incoterm || tabIncoterm).trim();
                 const customerName = String(customOptions.customerName || 'Cliente Confidencial').trim();
 
+                let routeTitle = customOptions.routeTitle;
+                if (!routeTitle) {
+                    const lowerMode = mode.toLowerCase();
+                    if (/air|a[eé]reo/i.test(lowerMode) || tabKey === 'air') {
+                        routeTitle = 'Ruta Aérea';
+                    } else if (/ground|terrestre|ltl/i.test(lowerMode) || tabKey === 'ground') {
+                        routeTitle = 'Ruta Terrestre';
+                    } else if (/fcl|lcl|mar[ií]tim/i.test(lowerMode) || tabKey === 'fcl' || tabKey === 'lcl') {
+                        routeTitle = 'Ruta Marítima';
+                    } else {
+                        routeTitle = 'Ruta Marítima';
+                    }
+                }
+
                 const payload = {
                     isClientQuote: true,
                     isConsolidatedClient: true,
                     quoteId,
                     customerName,
+                    routeTitle,
                     maritimeRoute: `${pol} -> ${pod}`,
                     carrierName: 'Rodahmar Multimodal Network',
                     portOfLoading: pol,
@@ -73733,6 +73766,7 @@ window.actualizarGrabCapacityVisibility = function() {
             window.setMultimodalQuoteFromDataBridge = applyDataBridgeMultimodalQuote;
             window.fetchMultimodalQuoteFromDataBridge = fetchMultimodalQuoteFromDataBridge;
             window.exportMultimodalClientPdf = exportMultimodalClientPdf;
+            window.generarPDF = exportMultimodalClientPdf;
             window.handleCalculateTariff = handleCalculateTariff;
             window.handleCalculate = handleCalculateTariff;
             window.updateCalculateTariffButtonState = updateCalculateTariffButtonState;
