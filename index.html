@@ -7601,12 +7601,12 @@
         }
 
         .multimodal-tab-pane .summary-panel {
+            display: none !important;
             background: #ffffff;
             border: 1px solid #e2e8f0;
             border-radius: 0.75rem;
             padding: 1.25rem;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            display: flex;
             flex-direction: column;
             gap: 1rem;
             align-items: stretch;
@@ -12787,11 +12787,15 @@
                                 <div class="fcl-fieldset">
                                     <div class="fcl-field fcl-search-field">
                                         <label for="fcl-pol">Puerto de Origen (POL)</label>
-                                        <input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de origen (POL)">
+                                        <input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de origen">
+                                    </div>
+                                    <div class="mt-3">
+                                      <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Recogida (CRD)</label>
+                                      <input type="date" id="crd-date-fcl" class="w-full text-xs border border-slate-200 rounded p-2 text-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" required>
                                     </div>
                                     <div class="fcl-field fcl-search-field">
                                         <label for="fcl-pod">Puerto de Destino (POD)</label>
-                                        <input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de destino (POD)">
+                                        <input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de destino">
                                     </div>
                                     <div class="fcl-field">
                                         <label for="fcl-incoterm">Incoterm</label>
@@ -13133,6 +13137,10 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="lcl-pol">Puerto de Origen (POL)</label><input id="lcl-pol" type="text" value="" placeholder="Puerto de origen (POL)"></div>
+                        <div class="mt-3">
+                          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Recogida (CRD)</label>
+                          <input type="date" id="crd-date-lcl" class="w-full text-xs border border-slate-200 rounded p-2 text-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                        </div>
                         <div class="fcl-field"><label for="lcl-pod">Puerto de Destino (POD)</label><input id="lcl-pod" type="text" value="" placeholder="Puerto de destino (POD)"></div>
                         <div class="fcl-field"><label for="lcl-incoterm">Incoterm</label>
                             <select id="lcl-incoterm">
@@ -13167,7 +13175,7 @@
                 </article>
             </div>
 
-            <section class="summary-panel">
+            <section class="summary-panel" style="display: none !important;">
                 <div class="flex items-center justify-between">
                     <div>
                         <span class="fcl-card-label">Cotización Estimada LCL</span>
@@ -13190,6 +13198,10 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="air-origin">Aeropuerto Origen (IATA)</label><input id="air-origin" type="text" value="" placeholder="Aeropuerto de origen (IATA)"></div>
+                        <div class="mt-3">
+                          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Recogida (CRD)</label>
+                          <input type="date" id="crd-date-air" class="w-full text-xs border border-slate-200 rounded p-2 text-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                        </div>
                         <div class="fcl-field"><label for="air-dest">Aeropuerto Destino (IATA)</label><input id="air-dest" type="text" value="" placeholder="Aeropuerto de destino (IATA)"></div>
                         <div class="fcl-field"><label for="air-service-speed">Modalidad de Servicio</label>
                             <select id="air-service-speed">
@@ -13226,7 +13238,7 @@
                 </article>
             </div>
 
-            <section class="summary-panel">
+            <section class="summary-panel" style="display: none !important;">
                 <div class="flex items-center justify-between">
                     <div>
                         <span class="fcl-card-label">Quick Quote Aéreo</span>
@@ -13249,6 +13261,10 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="ground-pickup-zip">Origen / Zip Code de Recogida</label><input id="ground-pickup-zip" type="text" value="" placeholder="Origen / Zip Code de recogida"></div>
+                        <div class="mt-3">
+                          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Recogida (CRD)</label>
+                          <input type="date" id="crd-date-ground" class="w-full text-xs border border-slate-200 rounded p-2 text-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                        </div>
                         <div class="fcl-field"><label for="ground-delivery-zip">Destino / Zip Code de Entrega</label><input id="ground-delivery-zip" type="text" value="" placeholder="Destino / Zip Code de entrega"></div>
                         <div class="fcl-field"><label for="ground-service-type">Tipo de Transporte</label>
                             <select id="ground-service-type">
@@ -13348,7 +13364,7 @@
                 </article>
             </div>
 
-            <section class="summary-panel">
+            <section class="summary-panel" style="display: none !important;">
                 <div class="flex items-center justify-between">
                     <div>
                         <span class="fcl-card-label">Quick Quote Inland EE. UU.</span>
@@ -13371,6 +13387,10 @@
                     </div>
                     <div class="fcl-fieldset">
                         <div class="fcl-field"><label for="amazon-origin-port">Origen (Fábrica / Puerto de Salida)</label><input id="amazon-origin-port" type="text" value="" placeholder="Origen (Fábrica / Puerto de salida)"></div>
+                        <div class="mt-3">
+                          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Recogida (CRD)</label>
+                          <input type="date" id="crd-date-amazon" class="w-full text-xs border border-slate-200 rounded p-2 text-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" required>
+                        </div>
                         <div class="fcl-field"><label for="amazon-fba-fc-code">Código Fulfillment Center / Zip Code (Destino)</label><input id="amazon-fba-fc-code" type="text" value="" placeholder="Ej: ONT8, LGB3, CLT2, etc."></div>
                         <div class="fcl-field"><label for="amazon-delivery-method">Método de Entrega FBA</label>
                             <select id="amazon-delivery-method">
@@ -13401,7 +13421,7 @@
                 </article>
             </div>
 
-            <section class="summary-panel">
+            <section class="summary-panel" style="display: none !important;">
                 <div class="flex items-center justify-between">
                     <div>
                         <span class="fcl-card-label">Quick Quote Amazon FBA</span>
@@ -13477,6 +13497,9 @@
                                 </div>
                                 <div id="active-provider-name" class="text-xs font-semibold text-slate-800">
                                     Proveedor seleccionado (Mejor Tarifa): -
+                                </div>
+                                <div id="active-provider-transit" class="text-[11px] text-slate-600 font-medium">
+                                    Salida estimada: -
                                 </div>
                                 <button id="btn-view-alternatives" type="button" disabled class="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2 px-3 rounded-lg bg-white hover:bg-sky-100 text-sky-800 border border-sky-300 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer" onclick="openMarketplaceAlternativesModal()">
                                     <i class="fa-solid fa-list-check text-sky-600"></i>
@@ -72871,23 +72894,23 @@ window.actualizarGrabCapacityVisibility = function() {
 
                 if (normalizedMode.includes('air') || normalizedMode.includes('aér') || normalizedMode.includes('aer')) {
                     rates = [
-                        { providerName: 'American Airlines', transitTime: '2-4 días', netCost: 950 },
-                        { providerName: 'Air Canada', transitTime: '3-5 días', netCost: 1100 },
-                        { providerName: 'Lufthansa Cargo', transitTime: '2-3 días', netCost: 1250 }
+                        { providerName: 'American Airlines', transitTime: '2-4 días', departureDate: '28 Oct 2026', netCost: 950 },
+                        { providerName: 'Air Canada', transitTime: '3-5 días', departureDate: '30 Oct 2026', netCost: 1100 },
+                        { providerName: 'Lufthansa Cargo', transitTime: '2-3 días', departureDate: '02 Nov 2026', netCost: 1250 }
                     ];
                 } else if (normalizedMode.includes('ground') || normalizedMode.includes('ltl') || normalizedMode.includes('camion') || normalizedMode.includes('terrestre')) {
                     rates = [
-                        { providerName: 'ACT', transitTime: '3-5 días', netCost: 450 },
-                        { providerName: 'Southeastern Freight Lines', transitTime: '2-4 días', netCost: 520 },
-                        { providerName: 'SAIA', transitTime: '4-6 días', netCost: 610 }
+                        { providerName: 'ACT', transitTime: '3-5 días', departureDate: '26 Oct 2026', netCost: 450 },
+                        { providerName: 'Southeastern Freight Lines', transitTime: '2-4 días', departureDate: '27 Oct 2026', netCost: 520 },
+                        { providerName: 'SAIA', transitTime: '4-6 días', departureDate: '29 Oct 2026', netCost: 610 }
                     ];
                 } else {
                     // fcl / lcl y modal marítimo general
                     rates = [
-                        { providerName: 'ZIM', transitTime: '18-22 días', netCost: 1200 },
-                        { providerName: 'Hapag-Lloyd', transitTime: '20-25 días', netCost: 1350 },
-                        { providerName: 'MSC', transitTime: '22-26 días', netCost: 1420 },
-                        { providerName: 'Maersk', transitTime: '19-24 días', netCost: 1500 }
+                        { providerName: 'ZIM', transitTime: '18-22 días', departureDate: '28 Oct 2026', netCost: 1200 },
+                        { providerName: 'Hapag-Lloyd', transitTime: '20-25 días', departureDate: '04 Nov 2026', netCost: 1350 },
+                        { providerName: 'MSC', transitTime: '22-26 días', departureDate: '08 Nov 2026', netCost: 1420 },
+                        { providerName: 'Maersk', transitTime: '19-24 días', departureDate: '15 Nov 2026', netCost: 1500 }
                     ];
                 }
 
@@ -72907,22 +72930,28 @@ window.actualizarGrabCapacityVisibility = function() {
                     // 3. Seguridad y Procesamiento (Sell Rate):
                     // Antes de inyectar datos en la interfaz, debes iterar sobre el array devuelto por la API y calcular el precio de venta final para cada proveedor: const sellPrice = item.netCost * COMERCIAL_MARGIN;
                     // REGLA DE ORO: Está estrictamente prohibido que la propiedad netCost quede expuesta en atributos de datos (data-*) o dentro de las etiquetas HTML del DOM.
-                    const processedRates = rawRates.map((item) => {
+                    const arrayProveedores = rawRates.map((item) => {
                         const sellPrice = item.netCost * COMERCIAL_MARGIN;
                         return {
                             providerName: item.providerName,
                             transitTime: item.transitTime,
+                            departureDate: item.departureDate || '28 Oct 2026',
                             sellPrice: Math.round(sellPrice * 100) / 100
                         };
-                    }).sort((a, b) => a.sellPrice - b.sellPrice);
+                    });
 
-                    currentMarketplaceRates = processedRates;
-                    window.currentMarketplaceRates = processedRates;
+                    // 2. Ordenación Matemática Obligatoria (El Más Barato):
+                    // En la lógica que procesa la respuesta de la API, después de calcular el sellPrice (Net Cost * 1.15), aplica estrictamente esta línea:
+                    arrayProveedores.sort((a, b) => a.sellPrice - b.sellPrice);
 
-                    // 4. Inyección en el Panel Principal (Quick Quote):
-                    // Cuando el usuario calcule la tarifa:
-                    // Toma el primer elemento del array procesado (el más barato).
-                    const cheapest = processedRates[0];
+                    const processedRates = arrayProveedores;
+                    currentMarketplaceRates = arrayProveedores;
+                    window.currentMarketplaceRates = arrayProveedores;
+
+                    // 3. Única Fuente de Verdad:
+                    // Una vez que arrayProveedores está ordenado matemáticamente, coge el índice [0] (que será irremediablemente el más barato).
+                    // Actualiza el texto de #multimodal-quote-total y los datos del panel #active-provider-summary ÚNICAMENTE con este objeto [0].
+                    const cheapest = arrayProveedores[0];
                     if (cheapest) {
                         window.selectedMarketplaceProvider = cheapest;
 
@@ -72943,6 +72972,14 @@ window.actualizarGrabCapacityVisibility = function() {
                         const nameEl = document.getElementById('active-provider-name');
                         if (nameEl) {
                             nameEl.textContent = `Proveedor seleccionado (Mejor Tarifa): ${cheapest.providerName}`;
+                        }
+
+                        // Reflejo Condicional de Fechas en el Panel de Resumen Global (#active-provider-summary)
+                        const transitEl = document.getElementById('active-provider-transit');
+                        if (transitEl) {
+                            const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                            const currentMode = (activeBtn?.getAttribute('data-multimodal-tab') || mode || 'fcl').toLowerCase();
+                            transitEl.innerHTML = renderMarketplaceDatesHtml(currentMode, cheapest);
                         }
 
                         // Actualiza el #multimodal-quote-total con el sellPrice correspondiente.
@@ -72990,6 +73027,31 @@ window.actualizarGrabCapacityVisibility = function() {
             }
             window.calculateAndApplyMarketplace = calculateAndApplyMarketplace;
 
+            // 2b. Lógica Condicional Centralizada de Fechas (Programadas vs Bajo Demanda):
+            function renderMarketplaceDatesHtml(mode, item) {
+                const currentMode = String(mode || 'fcl').toLowerCase().trim();
+                const crdInput = document.getElementById('crd-date-' + currentMode);
+                const selectedCrd = (crdInput && crdInput.value) ? crdInput.value : (document.getElementById('crd-date-' + currentMode)?.value || 'No especificada');
+                const isScheduled = (currentMode === 'fcl' || currentMode === 'lcl' || currentMode === 'air');
+                const departureDate = item?.departureDate || '28 Oct 2026';
+
+                if (isScheduled) {
+                    return `
+                        <div class="flex flex-col gap-0.5 text-[11px] text-slate-600">
+                            <span><strong class="text-slate-700">Recogida (CRD):</strong> ${selectedCrd}</span>
+                            <span><strong class="text-slate-700">Salida del proveedor:</strong> ${departureDate}</span>
+                        </div>
+                    `.trim();
+                } else {
+                    return `
+                        <div class="flex flex-col gap-0.5 text-[11px] text-slate-600">
+                            <span><strong class="text-slate-700">Fecha de recogida acordada:</strong> ${selectedCrd}</span>
+                        </div>
+                    `.trim();
+                }
+            }
+            window.renderMarketplaceDatesHtml = renderMarketplaceDatesHtml;
+
             // 5. Modal de Alternativas (#modal-alternatives-marketplace):
             function openMarketplaceAlternativesModal() {
                 const modal = document.getElementById('modal-alternatives-marketplace');
@@ -73003,6 +73065,9 @@ window.actualizarGrabCapacityVisibility = function() {
                     const rates = window.currentMarketplaceRates || currentMarketplaceRates || [];
                     const currentCurrency = (typeof getCurrentMultimodalCurrency === 'function' ? getCurrentMultimodalCurrency() : 'EUR') || 'EUR';
 
+                    const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                    const currentMode = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+
                     // Genera el HTML dinámicamente usando template strings e iterando sobre el array procesado.
                     // Crea una tarjeta para cada proveedor mostrando: Nombre, Tiempo de tránsito y el sellPrice.
                     // Cada tarjeta debe tener un botón de "Seleccionar".
@@ -73010,6 +73075,8 @@ window.actualizarGrabCapacityVisibility = function() {
                         const formattedSell = typeof formatCurrency === 'function'
                             ? formatCurrency(item.sellPrice, currentCurrency)
                             : `€${item.sellPrice.toFixed(2)}`;
+                        const datesHtml = renderMarketplaceDatesHtml(currentMode, item);
+
                         return `
                             <div class="marketplace-provider-card bg-white border border-slate-200 hover:border-sky-500 rounded-xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between gap-3">
                                 <div class="flex items-start justify-between">
@@ -73019,6 +73086,9 @@ window.actualizarGrabCapacityVisibility = function() {
                                             <i class="fa-regular fa-clock text-slate-400"></i>
                                             <span>Tiempo de tránsito: <strong class="text-slate-700">${item.transitTime}</strong></span>
                                         </p>
+                                        <div class="mt-2 pt-2 border-t border-slate-100">
+                                            ${datesHtml}
+                                        </div>
                                     </div>
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                         Tarifa Verificada
@@ -73068,6 +73138,14 @@ window.actualizarGrabCapacityVisibility = function() {
                     nameEl.textContent = `Proveedor seleccionado (Mejor Tarifa): ${item.providerName}`;
                 }
 
+                // Reflejo Condicional de Fechas en el Panel de Resumen Global (#active-provider-summary)
+                const transitEl = document.getElementById('active-provider-transit');
+                if (transitEl) {
+                    const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                    const currentMode = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                    transitEl.innerHTML = renderMarketplaceDatesHtml(currentMode, item);
+                }
+
                 // Actualizar #multimodal-quote-total con el sellPrice correspondiente
                 const currentCurrency = (typeof getCurrentMultimodalCurrency === 'function' ? getCurrentMultimodalCurrency() : 'EUR') || 'EUR';
                 const formattedPrice = (typeof formatCurrency === 'function' ? formatCurrency(item.sellPrice, currentCurrency) : `€${item.sellPrice.toFixed(2)}`);
@@ -73104,6 +73182,8 @@ window.actualizarGrabCapacityVisibility = function() {
                     window.calculatedMultimodalTabs.add(activeKey);
                 }
 
+                // Desactivar cálculo estático antiguo en #multimodal-quote-total:
+                // El precio total consolidado depende exclusivamente de la respuesta de fetchMarketplaceRates.
                 if (activeKey === 'fcl') {
                     updateContainerQuote();
                 } else {
@@ -74842,6 +74922,10 @@ window.actualizarGrabCapacityVisibility = function() {
             window.selectMarketplaceProvider = selectMarketplaceProvider;
 
             window.initSeaCharterMultimodalModule = function() {
+                // Validación de Fecha de Recogida (CRD): establecer min a la fecha de hoy
+                const today = new Date().toISOString().split('T')[0];
+                document.querySelectorAll('input[type="date"][id^="crd-date-"]').forEach(input => input.min = today);
+
                 bindOriginCurrencyListeners();
                 bindGroundTransportListeners();
                 initCheckoutBookingListener();
