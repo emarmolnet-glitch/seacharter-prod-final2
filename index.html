@@ -13281,9 +13281,77 @@
                         <i class="fa-solid fa-dolly text-emerald-600"></i>
                     </div>
                     <div class="fcl-fieldset">
-                        <div class="fcl-field"><label for="ground-pallets">Número de Pallets</label><input id="ground-pallets" type="number" min="1" value="" placeholder="Cantidad de pallets"></div>
-                        <div class="fcl-field"><label for="ground-weight-lbs" data-unit-type="weight">Peso Total (LBS / KG)</label><input id="ground-weight-lbs" type="number" min="1" value="" placeholder="Peso en LBS / KG"></div>
-                        <div class="fcl-field"><label for="ground-liftgate">Servicio de Plataforma Elevadora (Liftgate)</label>
+                        <!-- Banner Condicional FTL (Camión Completo / Equipos Especiales) -->
+                        <div id="ground-ftl-banner" class="hidden p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 shadow-sm" role="alert">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-circle-exclamation text-amber-600 text-lg mt-0.5 shrink-0" aria-hidden="true"></i>
+                                <p class="text-xs leading-relaxed font-medium">
+                                    Para cotizaciones spot de camión completo (FTL) o equipos especiales, por favor diríjase al motor algorítmico de Land Charter Core PRO.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Campos LTL (Pallets, Peso, Dimensiones, NMFC) -->
+                        <div id="ground-ltl-fields" class="flex flex-col gap-3.5">
+                            <div class="fcl-field" id="ground-pallets-field">
+                                <label for="ground-pallets">Número de Pallets</label>
+                                <input id="ground-pallets" type="number" min="1" value="" placeholder="Cantidad de pallets">
+                            </div>
+                            <div class="fcl-field" id="ground-weight-field">
+                                <div class="flex items-center justify-between">
+                                    <label for="ground-weight-lbs" data-unit-type="weight">Peso Total (LBS / KG)</label>
+                                    <div class="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+                                        <label for="ground-weight-unit" class="text-[10px] text-slate-400">Unidad:</label>
+                                        <select id="ground-weight-unit" class="text-xs py-0.5 px-2 border border-slate-300 rounded bg-white text-slate-700 font-bold focus:ring-1 focus:ring-sky-500 outline-none cursor-pointer">
+                                            <option value="KG" selected>KG</option>
+                                            <option value="LB">LB</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <input id="ground-weight-lbs" type="number" min="1" value="" placeholder="Peso en LBS / KG">
+                            </div>
+
+                            <!-- Inputs de Dimensiones LTL: Largo, Ancho y Alto -->
+                            <div class="fcl-field" id="ground-dimensions-field">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <label class="text-xs font-bold text-slate-700">Dimensiones de la Carga</label>
+                                    <div class="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+                                        <label for="ground-dim-unit" class="text-[10px] text-slate-400">Unidad:</label>
+                                        <select id="ground-dim-unit" class="text-xs py-0.5 px-2 border border-slate-300 rounded bg-white text-slate-700 font-bold focus:ring-1 focus:ring-sky-500 outline-none cursor-pointer">
+                                            <option value="CM" selected>CM</option>
+                                            <option value="IN">IN</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label for="ground-length" class="text-[11px] font-semibold text-slate-600 block mb-0.5">Largo</label>
+                                        <input id="ground-length" type="number" min="0.01" step="any" value="" placeholder="Largo" class="w-full text-xs py-1.5 px-2 border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-sky-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label for="ground-width" class="text-[11px] font-semibold text-slate-600 block mb-0.5">Ancho</label>
+                                        <input id="ground-width" type="number" min="0.01" step="any" value="" placeholder="Ancho" class="w-full text-xs py-1.5 px-2 border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-sky-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label for="ground-height" class="text-[11px] font-semibold text-slate-600 block mb-0.5">Alto</label>
+                                        <input id="ground-height" type="number" min="0.01" step="any" value="" placeholder="Alto" class="w-full text-xs py-1.5 px-2 border border-slate-300 rounded bg-white text-slate-800 focus:ring-1 focus:ring-sky-500 outline-none">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Mapeo de Clase NMFC y Output Visual Destacado -->
+                            <div class="fcl-field" id="ground-nmfc-field">
+                                <div id="ground-nmfc-badge" class="p-3 rounded-lg border border-sky-200 bg-sky-50 flex items-center justify-between text-xs font-bold text-slate-800 shadow-sm transition-colors">
+                                    <span id="ground-nmfc-output" class="font-bold text-slate-700">Clase de Flete Sugerida (NMFC): <strong id="ground-nmfc-class" class="text-sky-700 font-black">--</strong></span>
+                                    <span id="ground-nmfc-pcf" class="hidden text-[10px] font-mono px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-bold border border-sky-300">
+                                        <span id="ground-nmfc-density-val">0.00</span> PCF
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fcl-field" id="ground-liftgate-field">
+                            <label for="ground-liftgate">Servicio de Plataforma Elevadora (Liftgate)</label>
                             <select id="ground-liftgate">
                                 <option value="none">No requerida</option>
                                 <option value="pickup">Requerida en recogida</option>
@@ -72655,10 +72723,36 @@ window.actualizarGrabCapacityVisibility = function() {
                 window.isTariffCalculated = Boolean(val);
             };
 
+            function isGroundFtlMode() {
+                const serviceSelect = document.getElementById('ground-service-type');
+                if (!serviceSelect) return false;
+                const val = String(serviceSelect.value || '').toUpperCase();
+                const text = String(serviceSelect.options[serviceSelect.selectedIndex]?.text || '').toUpperCase();
+                return !val.includes('LTL') && !text.includes('LTL');
+            }
+            window.isGroundFtlMode = isGroundFtlMode;
+
             function updateCalculateTariffButtonState() {
                 const pdfBtn = document.getElementById('fcl-export-client-pdf-btn');
                 const syncBtn = document.getElementById('btn-sync-databridge-quote');
+                const calcBtn = document.getElementById('btn-calculate-tariff');
                 const isZeroOrNull = !isTariffCalculated || !consolidatedTotal || consolidatedTotal <= 0;
+
+                const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
+                const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+                const isFtl = tabKey === 'ground' && isGroundFtlMode();
+
+                if (calcBtn) {
+                    if (isFtl) {
+                        calcBtn.disabled = true;
+                        calcBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                        calcBtn.setAttribute('title', 'Para FTL diríjase al motor algorítmico de Land Charter Core PRO');
+                    } else {
+                        calcBtn.disabled = false;
+                        calcBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                        calcBtn.removeAttribute('title');
+                    }
+                }
 
                 if (pdfBtn) {
                     pdfBtn.disabled = isZeroOrNull;
@@ -72670,8 +72764,6 @@ window.actualizarGrabCapacityVisibility = function() {
                 }
 
                 if (syncBtn && !syncBtn.dataset.syncing) {
-                    const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
-                    const tabKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
                     const currentState = typeof getQuickQuoteSyncState === 'function' ? getQuickQuoteSyncState(tabKey) : null;
                     const isConfirmed = currentState?.estado === 'confirmed';
 
@@ -72687,10 +72779,15 @@ window.actualizarGrabCapacityVisibility = function() {
             }
 
             function handleCalculateTariff() {
-                isTariffCalculated = true;
-                window.isTariffCalculated = true;
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active') || document.querySelector('[data-multimodal-tab].is-active');
                 const activeKey = (activeBtn?.getAttribute('data-multimodal-tab') || 'fcl').toLowerCase();
+
+                if (activeKey === 'ground' && isGroundFtlMode()) {
+                    return;
+                }
+
+                isTariffCalculated = true;
+                window.isTariffCalculated = true;
                 if (window.calculatedMultimodalTabs) {
                     window.calculatedMultimodalTabs.add(activeKey);
                 }
@@ -73997,8 +74094,16 @@ window.actualizarGrabCapacityVisibility = function() {
                     window.setIsTariffCalculated(isCalculated);
                 }
 
-                // 4. Actualizar panel Quick Quote dinámico
+                // 4. Si la pestaña es terrestre, sincronizar vista FTL / LTL
+                if (activeKey === 'ground' && typeof updateGroundTransportView === 'function') {
+                    updateGroundTransportView();
+                }
+
+                // 5. Actualizar panel Quick Quote dinámico
                 updateQuickQuoteForTab(activeKey);
+                if (typeof updateCalculateTariffButtonState === 'function') {
+                    updateCalculateTariffButtonState();
+                }
             }
 
             function bindOriginCurrencyListeners() {
@@ -74143,6 +74248,156 @@ window.actualizarGrabCapacityVisibility = function() {
                 ];
             }
 
+            function mapPcfToNmfcClass(pcf) {
+                if (!Number.isFinite(pcf) || pcf < 0) return '--';
+                if (pcf < 1) return '500';
+                if (pcf < 2) return '400';
+                if (pcf < 3) return '300';
+                if (pcf < 4) return '250';
+                if (pcf < 5) return '200';
+                if (pcf < 6) return '175';
+                if (pcf < 7) return '150';
+                if (pcf < 8) return '125';
+                if (pcf < 9) return '110';
+                if (pcf < 10.5) return '100';
+                if (pcf < 12) return '92.5';
+                if (pcf < 13.5) return '85';
+                if (pcf < 15) return '77.5';
+                if (pcf < 22.5) return '70';
+                if (pcf < 30) return '65';
+                if (pcf < 35) return '60';
+                if (pcf < 50) return '55';
+                return '50';
+            }
+
+            function calculateNmfcClass() {
+                const weightInput = document.getElementById('ground-weight-lbs');
+                const lengthInput = document.getElementById('ground-length');
+                const widthInput = document.getElementById('ground-width');
+                const heightInput = document.getElementById('ground-height');
+                const weightUnitSelect = document.getElementById('ground-weight-unit');
+                const dimUnitSelect = document.getElementById('ground-dim-unit');
+                const classSpan = document.getElementById('ground-nmfc-class');
+                const densityValSpan = document.getElementById('ground-nmfc-density-val');
+                const pcfBadge = document.getElementById('ground-nmfc-pcf');
+                const badge = document.getElementById('ground-nmfc-badge');
+
+                const rawWeight = parseFloat(weightInput?.value);
+                const rawLength = parseFloat(lengthInput?.value);
+                const rawWidth = parseFloat(widthInput?.value);
+                const rawHeight = parseFloat(heightInput?.value);
+
+                // Escucha los cambios en Peso, Largo, Ancho y Alto. Si todos tienen valor mayor a 0, ejecuta este cálculo
+                if (
+                    Number.isFinite(rawWeight) && rawWeight > 0 &&
+                    Number.isFinite(rawLength) && rawLength > 0 &&
+                    Number.isFinite(rawWidth) && rawWidth > 0 &&
+                    Number.isFinite(rawHeight) && rawHeight > 0
+                ) {
+                    const weightUnit = String(weightUnitSelect?.value || 'KG').toUpperCase();
+                    const dimUnit = String(dimUnitSelect?.value || 'CM').toUpperCase();
+
+                    // Paso A: Convierte el peso a Libras (1 KG = 2.20462 LBS) y las medidas a Pulgadas (1 CM = 0.393701 IN) si el usuario usó sistema métrico.
+                    const weightLbs = weightUnit === 'KG' ? rawWeight * 2.20462 : rawWeight;
+                    const lengthIn = dimUnit === 'CM' ? rawLength * 0.393701 : rawLength;
+                    const widthIn = dimUnit === 'CM' ? rawWidth * 0.393701 : rawWidth;
+                    const heightIn = dimUnit === 'CM' ? rawHeight * 0.393701 : rawHeight;
+
+                    // Paso B: Calcula el volumen en pies cúbicos (Volumen = (Largo_in * Ancho_in * Alto_in) / 1728).
+                    const volumeCuFt = (lengthIn * widthIn * heightIn) / 1728;
+
+                    // Paso C: Calcula la Densidad PCF (Densidad = Peso_lbs / Volumen).
+                    if (volumeCuFt > 0) {
+                        const pcf = weightLbs / volumeCuFt;
+                        const nmfcClass = mapPcfToNmfcClass(pcf);
+
+                        if (classSpan) {
+                            classSpan.textContent = nmfcClass;
+                        }
+                        if (densityValSpan) {
+                            densityValSpan.textContent = pcf.toFixed(2);
+                        }
+                        if (pcfBadge) {
+                            pcfBadge.classList.remove('hidden');
+                        }
+                        if (badge) {
+                            badge.setAttribute('data-nmfc-class', nmfcClass);
+                            badge.setAttribute('data-pcf', pcf.toFixed(2));
+                        }
+                        return { weightLbs, volumeCuFt, pcf, nmfcClass };
+                    }
+                }
+
+                if (classSpan) {
+                    classSpan.textContent = '--';
+                }
+                if (densityValSpan) {
+                    densityValSpan.textContent = '0.00';
+                }
+                if (pcfBadge) {
+                    pcfBadge.classList.add('hidden');
+                }
+                if (badge) {
+                    badge.removeAttribute('data-nmfc-class');
+                    badge.removeAttribute('data-pcf');
+                }
+                return null;
+            }
+
+            function updateGroundTransportView() {
+                const isFtl = typeof isGroundFtlMode === 'function' ? isGroundFtlMode() : false;
+                const ftlBanner = document.getElementById('ground-ftl-banner');
+                const ltlFields = document.getElementById('ground-ltl-fields');
+
+                if (ftlBanner) {
+                    if (isFtl) {
+                        ftlBanner.classList.remove('hidden');
+                    } else {
+                        ftlBanner.classList.add('hidden');
+                    }
+                }
+
+                if (ltlFields) {
+                    if (isFtl) {
+                        ltlFields.classList.add('hidden');
+                    } else {
+                        ltlFields.classList.remove('hidden');
+                    }
+                }
+
+                if (typeof updateCalculateTariffButtonState === 'function') {
+                    updateCalculateTariffButtonState();
+                }
+            }
+
+            function bindGroundTransportListeners() {
+                const serviceSelect = document.getElementById('ground-service-type');
+                if (serviceSelect) {
+                    serviceSelect.addEventListener('change', updateGroundTransportView);
+                    serviceSelect.addEventListener('input', updateGroundTransportView);
+                }
+
+                const nmfcInputs = [
+                    'ground-weight-lbs',
+                    'ground-length',
+                    'ground-width',
+                    'ground-height',
+                    'ground-weight-unit',
+                    'ground-dim-unit'
+                ];
+
+                nmfcInputs.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('input', calculateNmfcClass);
+                        el.addEventListener('change', calculateNmfcClass);
+                    }
+                });
+
+                updateGroundTransportView();
+                calculateNmfcClass();
+            }
+
             window.generateFallbackBillingItems = generateFallbackBillingItems;
             window.groupBillingItems = groupBillingItems;
             window.groupAirBillingItems = groupBillingItems;
@@ -74152,9 +74407,14 @@ window.actualizarGrabCapacityVisibility = function() {
             window.detectUnitSystem = detectUnitSystem;
             window.updateMultimodalUnitLabels = updateMultimodalUnitLabels;
             window.EU_COUNTRIES = EU_COUNTRIES;
+            window.isGroundFtlMode = isGroundFtlMode;
+            window.updateGroundTransportView = updateGroundTransportView;
+            window.mapPcfToNmfcClass = mapPcfToNmfcClass;
+            window.calculateNmfcClass = calculateNmfcClass;
 
             window.initSeaCharterMultimodalModule = function() {
                 bindOriginCurrencyListeners();
+                bindGroundTransportListeners();
                 const activeBtn = document.querySelector('.multimodal-tab-btn.is-active');
                 const initialMode = activeBtn?.getAttribute('data-multimodal-tab') || 'fcl';
                 switchMultimodalTab(initialMode);
