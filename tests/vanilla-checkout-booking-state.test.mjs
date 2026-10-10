@@ -88,11 +88,40 @@ test('3. Event listener de checkout con secuencia exacta', () => {
     'Simulación con setTimeout de 1000ms'
   );
 
-  // Alert con texto exacto
+  // Configuración de pagos con umbral B2B y cuentas preparadas
   assert.match(
     indexHtml,
-    /alert\(["']Iniciando conexión con pasarela de pago segura\.\.\. \(Proveedor pendiente de integración\)["']\)/,
-    'Alert con el texto exacto requerido'
+    /b2bThreshold:\s*3000/,
+    'Debe definir b2bThreshold en 3000'
+  );
+  assert.match(
+    indexHtml,
+    /usBankAccount:\s*null/,
+    'Debe incluir usBankAccount en paymentConfig'
+  );
+  assert.match(
+    indexHtml,
+    /euBankAccount:\s*null/,
+    'Debe incluir euBankAccount en paymentConfig'
+  );
+
+  // Extracción de valor numérico antes de setTimeout
+  assert.match(
+    indexHtml,
+    /document\.getElementById\(['"]multimodal-quote-total['"]\)/,
+    'Debe extraer elemento #multimodal-quote-total para obtener el importe'
+  );
+
+  // Alert B2B y Estándar
+  assert.match(
+    indexHtml,
+    /Iniciando pasarela B2B Segura\.\.\./,
+    'Alert para pasarela B2B Segura si valor >= paymentConfig.b2bThreshold'
+  );
+  assert.match(
+    indexHtml,
+    /Iniciando pasarela Estándar\.\.\./,
+    'Alert para pasarela Estándar si valor < paymentConfig.b2bThreshold'
   );
 
   // Restaurar UI: innerHTML original y quitar disabled de los 3 botones
@@ -188,12 +217,86 @@ test('5. Simulación de ejecución en tiempo de ejecución (click en #btn-checko
     // Wait 1100ms for simulation to resolve
     await new Promise((resolve) => setTimeout(resolve, 1100));
 
-    // After timeout: alert was called and UI is restored
-    assert.strictEqual(alertMessage, "Iniciando conexión con pasarela de pago segura... (Proveedor pendiente de integración)");
+    // After timeout: alert was called and UI is restored (standard gateway for < 3000)
+    assert.match(alertMessage, /Iniciando pasarela Estándar/);
+    assert.match(alertMessage, /Tarjeta de Crédito, Apple Pay y Transferencia/);
     assert.strictEqual(mockCheckoutBtn.disabled, false, 'Checkout button must be re-enabled');
     assert.strictEqual(mockPdfBtn.disabled, false, 'PDF button must be re-enabled');
     assert.strictEqual(mockSyncBtn.disabled, false, 'Sync button must be re-enabled');
     assert.match(mockCheckoutBtn.innerHTML, /fa-credit-card.*Confirmar Booking y Pagar/, 'Checkout button restored to original innerHTML');
+  } finally {
+    global.alert = originalAlert;
+    global.document = originalDoc;
+    global.window = originalWindow;
+  }
+});
+
+test('5b. Pasarela B2B para importes >= paymentConfig.b2bThreshold (3000)', async () => {
+  const mockCheckoutBtn = {
+    disabled: false,
+    dataset: {},
+    attributes: {},
+    innerHTML: '<i class="fa-solid fa-credit-card"></i><span>Confirmar Booking y Pagar</span>',
+    setAttribute(k, v) { this.attributes[k] = v; },
+    removeAttribute(k) { delete this.attributes[k]; },
+    listeners: {},
+    addEventListener(evt, fn) { this.listeners[evt] = fn; },
+    click() { if (this.listeners['click']) this.listeners['click']({ preventDefault() {} }); }
+  };
+  const mockPdfBtn = {
+    disabled: false,
+    attributes: {},
+    setAttribute(k, v) { this.attributes[k] = v; },
+    removeAttribute(k) { delete this.attributes[k]; }
+  };
+  const mockSyncBtn = {
+    disabled: false,
+    attributes: {},
+    setAttribute(k, v) { this.attributes[k] = v; },
+    removeAttribute(k) { delete this.attributes[k]; }
+  };
+  const mockTotalEl = {
+    textContent: '€4,250.00'
+  };
+
+  const elements = {
+    'btn-checkout-booking': mockCheckoutBtn,
+    'fcl-export-client-pdf-btn': mockPdfBtn,
+    'btn-sync-databridge-quote': mockSyncBtn,
+    'multimodal-quote-total': mockTotalEl
+  };
+
+  const codeMatch = indexHtml.match(/function\s+initCheckoutBookingListener\(\)\s*\{([\s\S]*?)\n\s*\}\n\s*window\.generateFallbackBillingItems/);
+  assert.ok(codeMatch, 'Debe encontrarse initCheckoutBookingListener');
+
+  let alertMessage = null;
+  const originalAlert = global.alert;
+  const originalDoc = global.document;
+  const originalWindow = global.window;
+
+  global.window = {};
+  global.alert = (msg) => { alertMessage = msg; };
+  global.document = {
+    getElementById: (id) => elements[id] || null
+  };
+
+  try {
+    const fn = new Function('document', 'setTimeout', 'alert', 'window', codeMatch[0] + '; return initCheckoutBookingListener;');
+    const initListener = fn(global.document, setTimeout, global.alert, global.window);
+    initListener();
+
+    // Trigger click with total 4,250 >= 3000
+    mockCheckoutBtn.click();
+
+    // Wait 1100ms for simulation to resolve
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    // After timeout: B2B alert was called
+    assert.match(alertMessage, /Iniciando pasarela B2B Segura\.\.\./);
+    assert.match(alertMessage, /Operación de alto importe \(>\$3000\)/);
+    assert.match(alertMessage, /Método habilitado: Transferencia ACH \/ SEPA/);
+    assert.match(alertMessage, /Tarjeta deshabilitada \(protección de margen\)/);
+    assert.match(alertMessage, /Sistema preparado para enrutar a cuenta US\/EU vinculada/);
   } finally {
     global.alert = originalAlert;
     global.document = originalDoc;
