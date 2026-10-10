@@ -7620,6 +7620,28 @@
             font-family: monospace;
         }
 
+        .multimodal-tab-pane .fcl-advanced-details {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            margin-top: 1.25rem;
+            width: 100%;
+        }
+
+        .multimodal-tab-pane .fcl-advanced-details summary {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .multimodal-tab-pane .fcl-advanced-details summary::-webkit-details-marker {
+            display: none;
+        }
+
         #seacharter-fcl-module .module-header,
         #seacharter-fcl-module .fcl-header {
             display: flex;
@@ -12750,391 +12772,354 @@
                 <!-- PESTAÑA 1: FCL (CONTENEDOR COMPLETO)       -->
                 <!-- ========================================== -->
                 <div id="mm-tab-fcl" class="multimodal-tab-pane" role="tabpanel" aria-labelledby="tab-btn-fcl">
-                    <div id="seacharter-fcl-module">
-                        <div class="fcl-shell" style="padding: 0;">
-
-                    <div class="fcl-workspace">
-                        <div id="fcl-expiry-alert" class="fcl-expiry-alert" role="alert">
+                    <div id="seacharter-fcl-module" class="space-y-4">
+                        <div id="fcl-expiry-alert" class="fcl-expiry-alert hidden" role="alert">
                             COTIZACIÓN EXPIRADA - Tarifas no garantizadas
                         </div>
 
-                        <div class="fcl-smart-defaults" id="fcl-smart-defaults" aria-live="polite">
-                            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-                            Valores inteligentes aplicados desde operaciones frecuentes: CIF, 20DV, 14 días libres.
+                        <div class="fcl-overview-grid">
+                            <!-- Tarjeta 01 (Izquierda): Inputs de Ruta (Origen, Destino) e Incoterm -->
+                            <article class="fcl-card">
+                                <div class="fcl-card-heading">
+                                    <div><span class="fcl-card-label">01</span><h3>Ruta Marítima FCL</h3></div>
+                                    <i class="fa-solid fa-ship text-sky-600"></i>
+                                </div>
+                                <div class="fcl-fieldset">
+                                    <div class="fcl-field fcl-search-field">
+                                        <label for="fcl-pol">Puerto de Origen (POL)</label>
+                                        <input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de origen (POL)">
+                                    </div>
+                                    <div class="fcl-field fcl-search-field">
+                                        <label for="fcl-pod">Puerto de Destino (POD)</label>
+                                        <input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de destino (POD)">
+                                    </div>
+                                    <div class="fcl-field">
+                                        <label for="fcl-incoterm">Incoterm</label>
+                                        <select id="fcl-incoterm" data-fcl-input>
+                                            <option value="EXW">EXW - Ex Works</option>
+                                            <option value="FCA">FCA - Free Carrier</option>
+                                            <option value="FAS">FAS - Free Alongside Ship</option>
+                                            <option value="FOB">FOB - Free on Board</option>
+                                            <option value="CFR">CFR - Cost and Freight</option>
+                                            <option value="CIF" selected>CIF - Cost, Insurance &amp; Freight</option>
+                                            <option value="CPT">CPT - Carriage Paid To</option>
+                                            <option value="CIP">CIP - Carriage and Insurance Paid To</option>
+                                            <option value="DAP">DAP - Delivered at Place</option>
+                                            <option value="DPU">DPU - Delivered at Place Unloaded</option>
+                                            <option value="DDP">DDP - Delivered Duty Paid</option>
+                                        </select>
+                                    </div>
+                                    <datalist id="fcl-port-suggestions">
+                                        <option value="Valencia"></option>
+                                        <option value="Barcelona"></option>
+                                        <option value="Algeciras"></option>
+                                        <option value="Rotterdam"></option>
+                                        <option value="Jebel Ali"></option>
+                                        <option value="Singapore"></option>
+                                        <option value="Shanghai"></option>
+                                        <option value="Zaragoza ICD"></option>
+                                        <option value="Dubai Logistics City"></option>
+                                    </datalist>
+                                    <datalist id="fcl-route-suggestions">
+                                        <option value="Valencia -> Jebel Ali"></option>
+                                        <option value="Barcelona -> Singapore"></option>
+                                        <option value="Algeciras -> Shanghai"></option>
+                                        <option value="Rotterdam -> Jebel Ali"></option>
+                                    </datalist>
+                                </div>
+                            </article>
+
+                            <!-- Tarjeta 02 (Derecha): Selector de tipo de Equipo/Contenedor y cantidad -->
+                            <article class="fcl-card">
+                                <div class="fcl-card-heading">
+                                    <div><span class="fcl-card-label">02</span><h3>Equipo y Cantidad FCL</h3></div>
+                                    <i class="fa-solid fa-boxes-stacked text-amber-500"></i>
+                                </div>
+                                <div class="fcl-fieldset">
+                                    <div id="fcl-panel" class="fcl-fieldset">
+                                        <div id="fcl-equipment-rows" class="fcl-equipment-stack" aria-live="polite"></div>
+                                        <button id="fcl-add-equipment" class="fcl-add-equipment sc-button secondary w-full py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition" type="button">+ Añadir otro equipo</button>
+                                    </div>
+                                    <input type="hidden" id="fcl-cargo-mode" value="FCL" data-fcl-input>
+                                </div>
+                            </article>
                         </div>
 
-                        <nav class="fcl-stepper" aria-label="Pasos de cotización">
-                            <button class="fcl-step-tab is-active" type="button" data-fcl-step-target="1" aria-current="step">
-                                <span class="fcl-step-number">1</span>
-                                <span><span class="fcl-step-title">Ruta</span><span class="fcl-step-hint">Origen y destino</span></span>
-                            </button>
-                            <button class="fcl-step-tab" type="button" data-fcl-step-target="2">
-                                <span class="fcl-step-number">2</span>
-                                <span><span class="fcl-step-title">Equipo</span><span class="fcl-step-hint">Tipo de contenedor y cantidad</span></span>
-                            </button>
-                            <button class="fcl-step-tab" type="button" data-fcl-step-target="3">
-                                <span class="fcl-step-number">3</span>
-                                <span><span class="fcl-step-title">Total</span><span class="fcl-step-hint">Resumen final</span></span>
-                            </button>
-                        </nav>
+                        <!-- Ajustes Avanzados: Acordeón Nativo (<details> y <summary>) debajo de las tarjetas -->
+                        <details id="fcl-advanced-details" class="fcl-advanced-details group bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                            <summary class="cursor-pointer font-bold text-sm text-slate-700 flex items-center justify-between select-none list-none">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-sliders text-sky-600"></i>
+                                    <span>Ajustes Avanzados (Días libres de Demoras, BAF/ETS y Auditoría Naviera IA)</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-down text-slate-400 group-open:rotate-180 transition-transform"></i>
+                            </summary>
 
-                    <section class="fcl-wizard-step is-active" data-fcl-step="1" aria-label="Paso 1 Ruta y Carga">
-                    <div class="fcl-overview-grid">
-                        <article class="fcl-card sc-card fcl-config-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">01</span><h3>Configuración</h3></div>
-                                <i class="fa-solid fa-route" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-fieldset">
-                                <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-receipt">Place of Receipt</label><input id="fcl-place-receipt" data-fcl-input type="text" list="fcl-port-suggestions" value="Zaragoza ICD"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de origen"></div>
-                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" list="fcl-port-suggestions" value="" placeholder="Puerto de destino"></div>
-                                <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-delivery">Place of Delivery</label><input id="fcl-place-delivery" data-fcl-input type="text" list="fcl-port-suggestions" value="Dubai Logistics City"></div>
-                                <datalist id="fcl-port-suggestions">
-                                    <option value="Valencia"></option>
-                                    <option value="Barcelona"></option>
-                                    <option value="Algeciras"></option>
-                                    <option value="Rotterdam"></option>
-                                    <option value="Jebel Ali"></option>
-                                    <option value="Singapore"></option>
-                                    <option value="Shanghai"></option>
-                                    <option value="Zaragoza ICD"></option>
-                                    <option value="Dubai Logistics City"></option>
-                                </datalist>
-                                <datalist id="fcl-route-suggestions">
-                                    <option value="Valencia -> Jebel Ali"></option>
-                                    <option value="Barcelona -> Singapore"></option>
-                                    <option value="Algeciras -> Shanghai"></option>
-                                    <option value="Rotterdam -> Jebel Ali"></option>
-                                </datalist>
-                                <div class="fcl-field fcl-secondary-field"><label for="fcl-valid-from">Valid From</label><input id="fcl-valid-from" data-fcl-input type="date"></div>
-                                <div class="fcl-field fcl-secondary-field"><label for="fcl-valid-to">Valid To</label><input id="fcl-valid-to" data-fcl-input type="date"></div>
-                            </div>
-                        </article>
+                            <div class="mt-4 pt-4 border-t border-slate-100 space-y-6">
+                                <!-- Bloque 1: Días Libres y Demoras -->
+                                <article class="fcl-card sc-card fcl-demurrage-card">
+                                    <div class="fcl-card-heading sc-card-header">
+                                        <div><span class="fcl-card-label">03</span><h3>Días Libres y Demoras</h3></div>
+                                        <i class="fa-solid fa-clock text-amber-600" aria-hidden="true"></i>
+                                    </div>
+                                    <div class="fcl-fieldset">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            <div class="fcl-field"><label for="dem-free-days">Días Libres Concedidos</label><input id="dem-free-days" data-fcl-input type="number" min="0" step="1" value="14"></div>
+                                            <div class="fcl-field"><label for="dem-used-days">Días Reales Utilizados</label><input id="dem-used-days" data-fcl-input type="number" min="0" step="1" value="10"></div>
+                                            <div class="fcl-field"><label for="dem-tier1-rate">Tarifa Tramo 1 ($/día)</label><input id="dem-tier1-rate" data-fcl-input type="number" min="0" step="0.01" value="50"></div>
+                                            <div class="fcl-field"><label for="dem-tier1-limit">Límite Días Tramo 1</label><input id="dem-tier1-limit" data-fcl-input type="number" min="0" step="1" value="7"></div>
+                                            <div class="fcl-field"><label for="dem-tier2-rate">Tarifa Tramo 2 ($/día)</label><input id="dem-tier2-rate" data-fcl-input type="number" min="0" step="0.01" value="100"></div>
+                                            <div class="fcl-field"><label for="demurrage-cost">Penalización Calculada</label><input id="demurrage-cost" class="fcl-calculated fcl-demurrage-output" type="text" value="0.00" disabled></div>
+                                        </div>
+                                    </div>
+                                </article>
 
-                        <article class="fcl-card sc-card fcl-equipment-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">02</span><h3>Carga y Equipo</h3></div>
-                                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-fieldset">
-                                <div class="fcl-field fcl-secondary-field">
-                                    <label for="fcl-cargo-mode">Modalidad</label>
-                                    <select id="fcl-cargo-mode" data-fcl-input>
-                                        <option value="FCL">FCL</option>
-                                        <option value="LCL">LCL</option>
-                                    </select>
-                                </div>
-                                <div class="fcl-field fcl-secondary-field">
-                                    <label for="fcl-incoterm">Incoterm</label>
-                                    <select id="fcl-incoterm" data-fcl-input>
-                                        <option value="EXW">EXW</option>
-                                        <option value="FCA">FCA</option>
-                                        <option value="FAS">FAS</option>
-                                        <option value="FOB">FOB</option>
-                                        <option value="CFR">CFR</option>
-                                        <option value="CIF">CIF</option>
-                                        <option value="CPT">CPT</option>
-                                        <option value="CIP">CIP</option>
-                                        <option value="DAP">DAP</option>
-                                        <option value="DPU">DPU</option>
-                                        <option value="DDP">DDP</option>
-                                    </select>
-                                </div>
-                                <div id="fcl-panel" class="fcl-fieldset">
-                                    <div id="fcl-equipment-rows" class="fcl-equipment-stack" aria-live="polite"></div>
-                                    <button id="fcl-add-equipment" class="fcl-add-equipment sc-button secondary" type="button">+ Añadir otro equipo</button>
-                                </div>
-                                <div id="lcl-panel" class="fcl-fieldset is-hidden">
-                                    <div class="fcl-field"><label for="lcl-weight-tons">Peso (Toneladas)</label><input id="lcl-weight-tons" data-fcl-input type="number" min="0" step="0.01" value="2.50"></div>
-                                    <div class="fcl-field"><label for="lcl-volume-cbm">Volumen (CBM)</label><input id="lcl-volume-cbm" data-fcl-input type="number" min="0" step="0.01" value="4.00"></div>
-                                    <div class="fcl-field"><label for="lcl-revenue-tons">Factor de Cobro W/M</label><input id="lcl-revenue-tons" class="fcl-calculated" type="text" value="4.00 Revenue Tons" disabled></div>
-                                </div>
-                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-weight" data-unit-type="weight">Total Weight (kg)</label><input id="cargo-total-weight" data-fcl-input type="number" min="0" step="1" value="24500" required></div>
-                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-volume" data-unit-type="volume">Total Volume (m³)</label><input id="cargo-total-volume" data-fcl-input type="number" min="0" step="0.01" value="58.20" required></div>
-                                <div class="fcl-risk-grid fcl-secondary-field" aria-label="Toggles de riesgo">
-                                    <label class="fcl-toggle" for="fcl-imo-toggle"><span>¿Mercancía Peligrosa (IMO)?</span><input id="fcl-imo-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
-                                    <label class="fcl-toggle" for="fcl-reefer-toggle"><span>¿Mercancía Refrigerada?</span><input id="fcl-reefer-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
-                                </div>
-                            </div>
-                        </article>
-                    </div>
-                    <div class="fcl-step-actions">
-                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev disabled>Anterior</button>
-                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-next>Siguiente: detalles técnicos</button>
-                    </div>
-                    </section>
+                                <!-- Bloque 2: Costes y Recargos (BAF / ETS) y Gastos Locales -->
+                                <article id="fcl-cost-details" class="fcl-card sc-card fcl-costs-card">
+                                    <div class="fcl-card-heading sc-card-header">
+                                        <div><span class="fcl-card-label">04</span><h3>Costes y Recargos (BAF / ETS)</h3></div>
+                                        <i class="fa-solid fa-water text-sky-600" aria-hidden="true"></i>
+                                    </div>
+                                    <div class="fcl-fieldset">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                            <div class="fcl-field"><label for="fcl-bas">Flete Básico</label><input id="fcl-bas" data-fcl-input type="number" min="0" step="0.01" value="1800"></div>
+                                            <div class="fcl-field fcl-technical-field" data-surcharge>
+                                                <label for="fcl-baf">BAF</label>
+                                                <div class="fcl-field-row"><input id="fcl-baf" data-fcl-input type="number" min="0" step="0.01" value="120"><label class="fcl-floating-control"><input id="fcl-baf-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                                <span class="fcl-floating-status">Variable/Floating</span>
+                                            </div>
+                                            <div class="fcl-field fcl-technical-field" data-surcharge>
+                                                <label for="fcl-emissions">Emisiones / ETS</label>
+                                                <div class="fcl-field-row"><input id="fcl-emissions" data-fcl-input type="number" min="0" step="0.01" value="45"><label class="fcl-floating-control"><input id="fcl-emissions-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                                <span class="fcl-floating-status">Variable/Floating</span>
+                                            </div>
+                                            <div class="fcl-field fcl-technical-field" data-surcharge>
+                                                <label for="fcl-congestion">Congestión</label>
+                                                <div class="fcl-field-row"><input id="fcl-congestion" data-fcl-input type="number" min="0" step="0.01" value="0"><label class="fcl-floating-control"><input id="fcl-congestion-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                                <span class="fcl-floating-status">Variable/Floating</span>
+                                            </div>
+                                        </div>
+                                        <div id="fcl-imo-surcharge-row" class="fcl-field fcl-technical-field is-hidden" data-surcharge>
+                                            <label for="fcl-imo-surcharge">Recargo IMO automático</label>
+                                            <div class="fcl-field-row"><input id="fcl-imo-surcharge" data-fcl-input type="number" min="0" step="0.01" value="175"><label class="fcl-floating-control"><input id="fcl-imo-floating" data-fcl-input type="checkbox">Flotante</label></div>
+                                            <span class="fcl-floating-status">Variable/Floating</span>
+                                        </div>
 
-                    <div class="fcl-quote-actions">
-                        <button id="fcl-cost-details-toggle" class="sc-button secondary" type="button" aria-expanded="false">
-                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                                Ajustes Avanzados de Costes
-                        </button>
-                        <span id="fcl-proactive-status" class="fcl-proactive-status" aria-live="polite">
-                            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-                            Ruta pendiente de cálculo
-                        </span>
-                    </div>
+                                        <!-- Desglose Interno para el Operador (Sincronizado Data Bridge) -->
+                                        <div class="fcl-field border-t border-slate-200/80 pt-3 mt-1" id="container-field-net-price">
+                                            <div class="flex items-center justify-between gap-1 mb-1">
+                                                <label for="fcl-net-price" class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i>
+                                                    Flete Base (Proveedor API)
+                                                </label>
+                                                <span class="databridge-sync-badge inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                                                    <i class="fa-solid fa-bolt text-[9px] text-sky-600"></i> Sincronizado Data Bridge
+                                                </span>
+                                            </div>
+                                            <div class="relative">
+                                                <input id="fcl-net-price" class="fcl-calculated font-mono font-bold bg-slate-50 text-slate-800 border border-slate-200 rounded px-2.5 py-1.5 w-full text-sm cursor-not-allowed" type="text" readonly aria-readonly="true" value="€0.00">
+                                                <div id="fcl-net-price-loader" class="field-skeleton-loader hidden absolute inset-0 bg-slate-100/90 rounded flex items-center gap-2 px-2.5">
+                                                    <span class="w-3.5 h-3.5 rounded-full border-2 border-sky-600 border-t-transparent animate-spin shrink-0"></span>
+                                                    <span class="text-xs text-slate-500 font-medium">Sincronizando flete base...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="fcl-field" id="container-field-markup">
+                                            <div class="flex items-center justify-between gap-1 mb-1">
+                                                <label for="fcl-markup" class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-chart-line text-emerald-600" aria-hidden="true"></i>
+                                                    Margen Comercial (Agencia)
+                                                </label>
+                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    Margen Calculado
+                                                </span>
+                                            </div>
+                                            <div class="relative">
+                                                <input id="fcl-markup" class="fcl-calculated font-mono font-bold bg-emerald-50/40 text-emerald-900 border border-emerald-200 rounded px-2.5 py-1.5 w-full text-sm cursor-not-allowed" type="text" readonly aria-readonly="true" value="€0.00">
+                                                <div id="fcl-markup-loader" class="field-skeleton-loader hidden absolute inset-0 bg-slate-100/90 rounded flex items-center gap-2 px-2.5">
+                                                    <span class="w-3.5 h-3.5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin shrink-0"></span>
+                                                    <span class="text-xs text-slate-500 font-medium">Calculando margen...</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                    <section id="fcl-cost-details" class="fcl-wizard-step fcl-cost-details" data-fcl-step="2" aria-label="Detalles de costes">
-                    <div class="fcl-overview-grid">
-                        <article class="fcl-card sc-card fcl-costs-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">04</span><h3>Costes</h3></div>
-                                <i class="fa-solid fa-water" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-fieldset">
-                                <div class="fcl-field"><label for="fcl-bas">Flete Básico</label><input id="fcl-bas" data-fcl-input type="number" min="0" step="0.01" value="1800"></div>
-                                <div class="fcl-field fcl-technical-field" data-surcharge>
-                                    <label for="fcl-baf">BAF</label>
-                                    <div class="fcl-field-row"><input id="fcl-baf" data-fcl-input type="number" min="0" step="0.01" value="120"><label class="fcl-floating-control"><input id="fcl-baf-floating" data-fcl-input type="checkbox">Floating</label></div>
-                                    <span class="fcl-floating-status">Variable/Floating</span>
-                                </div>
-                                <div class="fcl-field fcl-technical-field" data-surcharge>
-                                    <label for="fcl-emissions">Emisiones</label>
-                                    <div class="fcl-field-row"><input id="fcl-emissions" data-fcl-input type="number" min="0" step="0.01" value="45"><label class="fcl-floating-control"><input id="fcl-emissions-floating" data-fcl-input type="checkbox">Floating</label></div>
-                                    <span class="fcl-floating-status">Variable/Floating</span>
-                                </div>
-                                <div class="fcl-field fcl-technical-field" data-surcharge>
-                                    <label for="fcl-congestion">Congestión</label>
-                                    <div class="fcl-field-row"><input id="fcl-congestion" data-fcl-input type="number" min="0" step="0.01" value="0"><label class="fcl-floating-control"><input id="fcl-congestion-floating" data-fcl-input type="checkbox">Floating</label></div>
-                                    <span class="fcl-floating-status">Variable/Floating</span>
-                                </div>
-                                <div id="fcl-imo-surcharge-row" class="fcl-field fcl-technical-field is-hidden" data-surcharge>
-                                    <label for="fcl-imo-surcharge">Recargo IMO automático</label>
-                                    <div class="fcl-field-row"><input id="fcl-imo-surcharge" data-fcl-input type="number" min="0" step="0.01" value="175"><label class="fcl-floating-control"><input id="fcl-imo-floating" data-fcl-input type="checkbox">Flotante</label></div>
-                                    <span class="fcl-floating-status">Variable/Floating</span>
-                                </div>
-                                <!-- Desglose Interno para el Operador (Sincronizado Data Bridge) -->
-                                <div class="fcl-field border-t border-slate-200/80 pt-3 mt-1" id="container-field-net-price">
-                                    <div class="flex items-center justify-between gap-1 mb-1">
-                                        <label for="fcl-net-price" class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                            <i class="fa-solid fa-cloud-arrow-down text-sky-600" aria-hidden="true"></i>
-                                            Flete Base (Proveedor API)
+                                        <!-- Gastos Locales -->
+                                        <div class="border-t border-slate-200/80 pt-3 mt-1" id="fcl-advanced-costs">
+                                            <h4 class="text-xs font-bold text-slate-700 mb-2">Gastos Locales y Aduaneros</h4>
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div class="fcl-field" data-origin-cost>
+                                                    <label for="fcl-origin-thc">THC Origen</label>
+                                                    <input id="fcl-origin-thc" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="185">
+                                                </div>
+                                                <div class="fcl-field" data-origin-cost>
+                                                    <label for="fcl-origin-customs">Aduanas Origen</label>
+                                                    <input id="fcl-origin-customs" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="65">
+                                                </div>
+                                                <div class="fcl-field">
+                                                    <label for="fcl-destination-thc">THC Destino</label>
+                                                    <input id="fcl-destination-thc" data-fcl-input type="number" min="0" step="0.01" value="210">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Parámetros Secundarios -->
+                                        <div class="border-t border-slate-200/80 pt-3 mt-1">
+                                            <h4 class="text-xs font-bold text-slate-700 mb-2">Parámetros Operativos Secundarios</h4>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                <div class="fcl-field fcl-search-field"><label for="fcl-place-receipt">Place of Receipt</label><input id="fcl-place-receipt" data-fcl-input type="text" list="fcl-port-suggestions" value="Zaragoza ICD"></div>
+                                                <div class="fcl-field fcl-search-field"><label for="fcl-place-delivery">Place of Delivery</label><input id="fcl-place-delivery" data-fcl-input type="text" list="fcl-port-suggestions" value="Dubai Logistics City"></div>
+                                                <div class="fcl-field"><label for="fcl-valid-from">Valid From</label><input id="fcl-valid-from" data-fcl-input type="date"></div>
+                                                <div class="fcl-field"><label for="fcl-valid-to">Valid To</label><input id="fcl-valid-to" data-fcl-input type="date"></div>
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                                <div class="fcl-field"><label for="cargo-total-weight" data-unit-type="weight">Total Weight (kg)</label><input id="cargo-total-weight" data-fcl-input type="number" min="0" step="1" value="24500"></div>
+                                                <div class="fcl-field"><label for="cargo-total-volume" data-unit-type="volume">Total Volume (m³)</label><input id="cargo-total-volume" data-fcl-input type="number" min="0" step="0.01" value="58.20"></div>
+                                            </div>
+                                            <div class="flex flex-wrap gap-4 mt-3">
+                                                <label class="fcl-toggle flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer" for="fcl-imo-toggle">
+                                                    <input id="fcl-imo-toggle" data-fcl-input type="checkbox" class="rounded text-sky-600 focus:ring-sky-500">
+                                                    <span>¿Carga Peligrosa (IMO)?</span>
+                                                </label>
+                                                <label class="fcl-toggle flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer" for="fcl-reefer-toggle">
+                                                    <input id="fcl-reefer-toggle" data-fcl-input type="checkbox" class="rounded text-sky-600 focus:ring-sky-500">
+                                                    <span>¿Carga Refrigerada (Reefer)?</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
+
+                                <!-- Bloque 3: Desglose de Cotización FCL -->
+                                <article id="fcl-breakdown-panel" class="fcl-card sc-card fcl-summary-card">
+                                    <div class="fcl-card-heading sc-card-header">
+                                        <div><span class="fcl-card-label">05</span><h3>Desglose de Cotización FCL</h3></div>
+                                        <i class="fa-solid fa-file-invoice-dollar text-slate-600" aria-hidden="true"></i>
+                                    </div>
+                                    <div class="fcl-fieldset">
+                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div class="fcl-field"><label>Subtotal Flete</label><output id="freight-subtotal" class="fcl-mini-output font-mono font-bold text-slate-800">0.00</output></div>
+                                            <div class="fcl-field"><label>Recargos</label><output id="surcharge-subtotal" class="fcl-mini-output font-mono font-bold text-slate-800">0.00</output></div>
+                                            <div class="fcl-field"><label>Gastos Locales</label><output id="local-subtotal" class="fcl-mini-output font-mono font-bold text-slate-800">0.00</output></div>
+                                        </div>
+                                        <div class="fcl-field border-t border-slate-200/80 pt-2" id="breakdown-field-net-price">
+                                            <label class="flex items-center justify-between text-xs">
+                                                <span class="font-bold text-slate-700 flex items-center gap-1">
+                                                    <i class="fa-solid fa-cloud-arrow-down text-sky-600"></i> Flete Base (Proveedor API)
+                                                </span>
+                                                <span class="databridge-sync-badge inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                                                    <i class="fa-solid fa-bolt text-[9px] text-sky-600"></i> Sincronizado Data Bridge
+                                                </span>
+                                            </label>
+                                            <div class="relative">
+                                                <output id="breakdown-net-price" class="fcl-mini-output font-mono font-bold text-slate-800">€0.00</output>
+                                                <div id="breakdown-net-loader" class="field-skeleton-loader hidden absolute inset-0 bg-white/90 rounded flex items-center gap-2">
+                                                    <span class="w-3 h-3 rounded-full border-2 border-sky-600 border-t-transparent animate-spin shrink-0"></span>
+                                                    <span class="text-xs text-slate-500 font-medium">Sincronizando...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="fcl-field" id="breakdown-field-markup">
+                                            <label class="flex items-center justify-between text-xs">
+                                                <span class="font-bold text-slate-700 flex items-center gap-1">
+                                                    <i class="fa-solid fa-chart-line text-emerald-600"></i> Margen Comercial (Agencia)
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    Margen Calculado
+                                                </span>
+                                            </label>
+                                            <div class="relative">
+                                                <output id="breakdown-markup" class="fcl-mini-output font-mono font-bold text-emerald-700">€0.00</output>
+                                                <div id="breakdown-markup-loader" class="field-skeleton-loader hidden absolute inset-0 bg-white/90 rounded flex items-center gap-2">
+                                                    <span class="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin shrink-0"></span>
+                                                    <span class="text-xs text-slate-500 font-medium">Calculando...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="fcl-market-action">
+                                            <button id="marketdata-update-button" class="fcl-market-button sc-button py-2 px-3 text-xs font-semibold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition" type="button">
+                                                <i class="fa-solid fa-arrows-rotate mr-1" aria-hidden="true"></i>
+                                                Actualizar Índices de Mercado
+                                            </button>
+                                            <span id="marketdata-update-status" class="fcl-market-status text-xs text-slate-500 ml-2" aria-live="polite"></span>
+                                        </div>
+                                    </div>
+                                </article>
+
+                                <!-- Bloque 4: Módulo de Auditoría Naviera IA -->
+                                <article class="fcl-card sc-card fcl-audit-card">
+                                    <div class="fcl-card-heading sc-card-header">
+                                        <div><span class="fcl-card-label">06</span><h3>Auditoría IA de Oferta Naviera</h3></div>
+                                        <i class="fa-solid fa-file-shield text-indigo-600" aria-hidden="true"></i>
+                                    </div>
+                                    <div class="fcl-fieldset">
+                                        <div class="fcl-audit-controls grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            <div class="fcl-field"><label for="carrier-offer-name">Naviera</label><input id="carrier-offer-name" data-fcl-input type="text" value="" placeholder="Cargue una oferta para identificar naviera..." readonly aria-readonly="true" disabled></div>
+                                            <div class="fcl-field"><label for="carrier-maritime-route">Ruta marítima</label><input id="carrier-maritime-route" data-fcl-input type="text" value="" placeholder="Puerto de origen -> Puerto de destino" readonly aria-readonly="true"></div>
+                                            <div class="fcl-field"><label for="carrier-audit-incoterm">Incoterm</label><select id="carrier-audit-incoterm" data-fcl-input><option value="">Seleccionar</option><option value="EXW">EXW</option><option value="FCA">FCA</option><option value="FAS">FAS</option><option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option><option value="CPT">CPT</option><option value="CIP">CIP</option><option value="DAP">DAP</option><option value="DPU">DPU</option><option value="DDP">DDP</option></select></div>
+                                            <div class="fcl-field"><label for="carrier-offer-reference">Referencia oferta</label><input id="carrier-offer-reference" data-fcl-input type="text" value="Quote Sheet"></div>
+                                            <div class="fcl-field"><label for="carrier-markup-percentage">Markup Ocean Freight (%)</label><input id="carrier-markup-percentage" data-fcl-input type="number" min="0" step="0.01" value="8"></div>
+                                            <div class="fcl-field"><label for="carrier-markup-fixed">Markup FOB/Local fijo</label><input id="carrier-markup-fixed" data-fcl-input type="number" min="0" step="0.01" value="75"></div>
+                                        </div>
+                                        <label class="fcl-file-drop block border-2 border-dashed border-slate-300 hover:border-sky-500 rounded-xl p-4 text-center cursor-pointer transition bg-slate-50/50 hover:bg-sky-50/30" for="carrier-offer-file">
+                                            <span>
+                                                <strong class="block text-sm text-slate-700">Cargar oferta, documento o imagen</strong>
+                                                <small id="carrier-offer-file-name" class="text-xs text-slate-500">PDF, DOCX, XLSX, CSV, TXT o imagen</small>
+                                            </span>
+                                            <input id="carrier-offer-file" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,image/*" hidden>
                                         </label>
-                                        <span class="databridge-sync-badge inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
-                                            <i class="fa-solid fa-bolt text-[9px] text-sky-600"></i> Sincronizado Data Bridge
-                                        </span>
-                                    </div>
-                                    <div class="relative">
-                                        <input id="fcl-net-price" class="fcl-calculated font-mono font-bold bg-slate-50 text-slate-800 border border-slate-200 rounded px-2.5 py-1.5 w-full text-sm cursor-not-allowed" type="text" readonly aria-readonly="true" value="€0.00">
-                                        <div id="fcl-net-price-loader" class="field-skeleton-loader hidden absolute inset-0 bg-slate-100/90 rounded flex items-center gap-2 px-2.5">
-                                            <span class="w-3.5 h-3.5 rounded-full border-2 border-sky-600 border-t-transparent animate-spin shrink-0"></span>
-                                            <span class="text-xs text-slate-500 font-medium">Sincronizando flete base...</span>
+                                        <div class="fcl-audit-actions flex flex-wrap gap-2">
+                                            <button id="carrier-offer-parse" class="sc-button px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white hover:bg-sky-700 transition" type="button" disabled>
+                                                <i class="fa-solid fa-wand-magic-sparkles mr-1" aria-hidden="true"></i>
+                                                Extraer costes con IA
+                                            </button>
+                                            <button id="carrier-offer-save" class="sc-button secondary px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition" type="button" disabled>
+                                                <i class="fa-solid fa-database mr-1" aria-hidden="true"></i>
+                                                Guardar en Base de Datos
+                                            </button>
+                                            <button id="carrier-offer-apply-sale" class="sc-button px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition" type="button" disabled>
+                                                <i class="fa-solid fa-file-pdf mr-1" aria-hidden="true"></i>
+                                                Aplicar Venta y Generar PDF
+                                            </button>
+                                            <span id="carrier-offer-status" class="fcl-audit-status text-xs text-slate-500 self-center" aria-live="polite">Sin documento cargado.</span>
+                                        </div>
+                                        <div class="fcl-audit-table-wrap overflow-x-auto">
+                                            <table class="fcl-audit-table w-full text-xs text-left border border-slate-200 rounded-lg">
+                                                <thead class="bg-slate-100 text-slate-700 uppercase font-semibold">
+                                                    <tr>
+                                                        <th class="p-2 border-b">Concepto</th>
+                                                        <th class="p-2 border-b">Coste Naviera</th>
+                                                        <th class="p-2 border-b">Moneda</th>
+                                                        <th class="p-2 border-b">Contenedor</th>
+                                                        <th class="p-2 border-b">Nivel de carga</th>
+                                                        <th class="p-2 border-b">Tipo margen</th>
+                                                        <th class="p-2 border-b">Incoterm</th>
+                                                        <th class="p-2 border-b">Precio Venta Propuesto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="carrier-offer-lines">
+                                                    <tr><td colspan="8" class="p-3 text-center text-slate-400">Carga una oferta para comparar coste de naviera contra precio de venta propuesto.</td></tr>
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="fcl-field" id="container-field-markup">
-                                    <div class="flex items-center justify-between gap-1 mb-1">
-                                        <label for="fcl-markup" class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                            <i class="fa-solid fa-chart-line text-emerald-600" aria-hidden="true"></i>
-                                            Margen Comercial (Agencia)
-                                        </label>
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                            Margen Calculado
-                                        </span>
-                                    </div>
-                                    <div class="relative">
-                                        <input id="fcl-markup" class="fcl-calculated font-mono font-bold bg-emerald-50/40 text-emerald-900 border border-emerald-200 rounded px-2.5 py-1.5 w-full text-sm cursor-not-allowed" type="text" readonly aria-readonly="true" value="€0.00">
-                                        <div id="fcl-markup-loader" class="field-skeleton-loader hidden absolute inset-0 bg-slate-100/90 rounded flex items-center gap-2 px-2.5">
-                                            <span class="w-3.5 h-3.5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin shrink-0"></span>
-                                            <span class="text-xs text-slate-500 font-medium">Calculando margen...</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </article>
-                        <article class="fcl-card sc-card fcl-expenses-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">05</span><h3>Gastos</h3></div>
-                                <i class="fa-solid fa-receipt" aria-hidden="true"></i>
-                            </div>
-                            <button id="fcl-advanced-toggle" class="sc-button secondary fcl-advanced-toggle" type="button" aria-expanded="false">
-                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-                                Ajustes Avanzados de Costes
-                            </button>
-                            <div id="fcl-advanced-costs" class="fcl-fieldset fcl-advanced-costs">
-                                <div class="fcl-accordion is-open" data-fcl-accordion>
-                                    <button class="fcl-accordion-toggle" type="button" aria-expanded="true">
-                                        <span><strong>Gastos Locales</strong><span>THC, aduanas y cargos destino solo si se expanden</span></span>
-                                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                                    </button>
-                                    <div class="fcl-accordion-panel fcl-fieldset">
-                                        <div class="fcl-field" data-origin-cost>
-                                            <label for="fcl-origin-thc">THC Origen</label>
-                                            <input id="fcl-origin-thc" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="185">
-                                            <span class="fcl-disabled-note">Bloqueado por Incoterm: el origen no aplica al comprador.</span>
-                                        </div>
-                                        <div class="fcl-field" data-origin-cost>
-                                            <label for="fcl-origin-customs">Aduanas Origen</label>
-                                            <input id="fcl-origin-customs" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="65">
-                                            <span class="fcl-disabled-note">Bloqueado por Incoterm: gasto de origen excluido.</span>
-                                        </div>
-                                        <div class="fcl-field"><label for="fcl-destination-thc">THC Destino</label><input id="fcl-destination-thc" data-fcl-input type="number" min="0" step="0.01" value="210"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </article>
-                        <article class="fcl-card sc-card fcl-demurrage-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">03</span><h3>Demoras</h3></div>
-                                <i class="fa-solid fa-clock" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-accordion" data-fcl-accordion>
-                                <button class="fcl-accordion-toggle" type="button" aria-expanded="false">
-                                    <span><strong>Demoras</strong><span>Tramos de penalización disponibles bajo demanda</span></span>
-                                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                                </button>
-                                <div class="fcl-accordion-panel fcl-fieldset">
-                                    <div class="fcl-field"><label for="dem-free-days">Días Libres Concedidos</label><input id="dem-free-days" data-fcl-input type="number" min="0" step="1" value="14"></div>
-                                    <div class="fcl-field"><label for="dem-used-days">Días Reales Utilizados</label><input id="dem-used-days" data-fcl-input type="number" min="0" step="1" value="10"></div>
-                                    <div class="fcl-field"><label for="dem-tier1-rate">Tarifa Tramo 1 ($/día)</label><input id="dem-tier1-rate" data-fcl-input type="number" min="0" step="0.01" value="50"></div>
-                                    <div class="fcl-field"><label for="dem-tier1-limit">Límite Días Tramo 1</label><input id="dem-tier1-limit" data-fcl-input type="number" min="0" step="1" value="7"></div>
-                                    <div class="fcl-field"><label for="dem-tier2-rate">Tarifa Tramo 2 ($/día)</label><input id="dem-tier2-rate" data-fcl-input type="number" min="0" step="0.01" value="100"></div>
-                                    <div class="fcl-field"><label for="demurrage-cost">Penalización Calculada</label><input id="demurrage-cost" class="fcl-calculated fcl-demurrage-output" type="text" value="0.00" disabled></div>
-                                </div>
-                            </div>
-                        </article>
-                    </div>
-                    <div class="fcl-step-actions">
-                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev>Anterior</button>
-                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-next>Siguiente: resumen</button>
-                    </div>
-                    </section>
+                                </article>
 
-                    <section id="fcl-breakdown-panel" class="fcl-wizard-step fcl-breakdown-panel" data-fcl-step="3" aria-label="Desglose de la cotización">
-                    <div class="fcl-overview-grid">
-                        <article class="fcl-card sc-card fcl-summary-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">06</span><h3>Total Dinámico</h3></div>
-                                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-fieldset">
-                                <div class="fcl-field"><label>Subtotal Flete</label><output id="freight-subtotal" class="fcl-mini-output">0.00</output></div>
-                                <div class="fcl-field"><label>Recargos</label><output id="surcharge-subtotal" class="fcl-mini-output">0.00</output></div>
-                                <div class="fcl-field"><label>Gastos Locales</label><output id="local-subtotal" class="fcl-mini-output">0.00</output></div>
-                                <div class="fcl-field border-t border-slate-200/80 pt-2" id="breakdown-field-net-price">
-                                    <label class="flex items-center justify-between text-xs">
-                                        <span class="font-bold text-slate-700 flex items-center gap-1">
-                                            <i class="fa-solid fa-cloud-arrow-down text-sky-600"></i> Flete Base (Proveedor API)
-                                        </span>
-                                        <span class="databridge-sync-badge inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
-                                            <i class="fa-solid fa-bolt text-[9px] text-sky-600"></i> Sincronizado Data Bridge
-                                        </span>
-                                    </label>
-                                    <div class="relative">
-                                        <output id="breakdown-net-price" class="fcl-mini-output font-mono font-bold text-slate-800">€0.00</output>
-                                        <div id="breakdown-net-loader" class="field-skeleton-loader hidden absolute inset-0 bg-white/90 rounded flex items-center gap-2">
-                                            <span class="w-3 h-3 rounded-full border-2 border-sky-600 border-t-transparent animate-spin shrink-0"></span>
-                                            <span class="text-xs text-slate-500 font-medium">Sincronizando...</span>
+                                <!-- Modal de ventas -->
+                                <div id="carrier-sales-modal" class="fcl-sales-modal fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="carrier-sales-modal-title" aria-hidden="true">
+                                    <div class="fcl-sales-dialog bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+                                        <h4 id="carrier-sales-modal-title" class="text-base font-bold text-slate-800">Confirmar venta aplicada</h4>
+                                        <p class="text-xs text-slate-500">Se generará una oferta PDF para cliente sin mostrar costes de naviera.</p>
+                                        <div id="carrier-sales-modal-total" class="fcl-sales-total text-2xl font-black font-mono text-emerald-600">€0.00</div>
+                                        <div class="fcl-audit-actions flex justify-end gap-2 pt-2">
+                                            <button id="carrier-sales-cancel" class="sc-button secondary px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50" type="button">Cancelar</button>
+                                            <button id="carrier-sales-confirm" class="sc-button px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700" type="button">Confirmar y descargar</button>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="fcl-field" id="breakdown-field-markup">
-                                    <label class="flex items-center justify-between text-xs">
-                                        <span class="font-bold text-slate-700 flex items-center gap-1">
-                                            <i class="fa-solid fa-chart-line text-emerald-600"></i> Margen Comercial (Agencia)
-                                        </span>
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                            Margen Calculado
-                                        </span>
-                                    </label>
-                                    <div class="relative">
-                                        <output id="breakdown-markup" class="fcl-mini-output font-mono font-bold text-emerald-700">€0.00</output>
-                                        <div id="breakdown-markup-loader" class="field-skeleton-loader hidden absolute inset-0 bg-white/90 rounded flex items-center gap-2">
-                                            <span class="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin shrink-0"></span>
-                                            <span class="text-xs text-slate-500 font-medium">Calculando...</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="fcl-market-action">
-                                    <button id="marketdata-update-button" class="fcl-market-button sc-button" type="button">
-                                        <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                                        Actualizar Índices de Mercado
-                                    </button>
-                                    <span id="marketdata-update-status" class="fcl-market-status" aria-live="polite"></span>
-                                </div>
-                                <p class="fcl-mode-copy">El gran total se consolida en EUR. Los conceptos en USD se mantienen auditables en el tooltip y el desglose.</p>
                             </div>
-                        </article>
-                        <article class="fcl-card sc-card fcl-audit-card">
-                            <div class="fcl-card-heading sc-card-header">
-                                <div><span class="fcl-card-label">07</span><h3>Auditoría IA de Oferta Naviera</h3></div>
-                                <i class="fa-solid fa-file-shield" aria-hidden="true"></i>
-                            </div>
-                            <div class="fcl-fieldset">
-                                <div class="fcl-audit-controls">
-                                    <div class="fcl-field"><label for="carrier-offer-name">Naviera</label><input id="carrier-offer-name" data-fcl-input type="text" value="" placeholder="Cargue una oferta para identificar naviera..." readonly aria-readonly="true" disabled></div>
-                                    <div class="fcl-field"><label for="carrier-maritime-route">Ruta marítima</label><input id="carrier-maritime-route" data-fcl-input type="text" value="" placeholder="Puerto de origen -> Puerto de destino" readonly aria-readonly="true"></div>
-                                    <div class="fcl-field"><label for="carrier-audit-incoterm">Incoterm</label><select id="carrier-audit-incoterm" data-fcl-input><option value="">Seleccionar</option><option value="EXW">EXW</option><option value="FCA">FCA</option><option value="FAS">FAS</option><option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option><option value="CPT">CPT</option><option value="CIP">CIP</option><option value="DAP">DAP</option><option value="DPU">DPU</option><option value="DDP">DDP</option></select></div>
-                                    <div class="fcl-field"><label for="carrier-offer-reference">Referencia oferta</label><input id="carrier-offer-reference" data-fcl-input type="text" value="Quote Sheet"></div>
-                                    <div class="fcl-field"><label for="carrier-markup-percentage">Markup Ocean Freight (%)</label><input id="carrier-markup-percentage" data-fcl-input type="number" min="0" step="0.01" value="8"></div>
-                                    <div class="fcl-field"><label for="carrier-markup-fixed">Markup FOB/Local fijo</label><input id="carrier-markup-fixed" data-fcl-input type="number" min="0" step="0.01" value="75"></div>
-                                </div>
-                                <label class="fcl-file-drop" for="carrier-offer-file">
-                                    <span>
-                                        <strong>Cargar oferta, documento o imagen</strong>
-                                        <small id="carrier-offer-file-name">PDF, DOCX, XLSX, CSV, TXT o imagen</small>
-                                    </span>
-                                    <input id="carrier-offer-file" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,image/*" hidden>
-                                </label>
-                                <div class="fcl-audit-actions">
-                                    <button id="carrier-offer-parse" class="sc-button" type="button" disabled>
-                                        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-                                        Extraer costes con IA
-                                    </button>
-                                    <button id="carrier-offer-save" class="sc-button secondary" type="button" disabled>
-                                        <i class="fa-solid fa-database" aria-hidden="true"></i>
-                                        Guardar en Base de Datos
-                                    </button>
-                                    <button id="carrier-offer-apply-sale" class="sc-button" type="button" disabled>
-                                        <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
-                                        Aplicar Venta y Generar PDF
-                                    </button>
-                                    <span id="carrier-offer-status" class="fcl-audit-status" aria-live="polite">Sin documento cargado.</span>
-                                </div>
-                                <div class="fcl-audit-table-wrap">
-                                    <table class="fcl-audit-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Concepto</th>
-                                                <th>Coste Naviera</th>
-                                                <th>Moneda</th>
-                                                <th>Contenedor</th>
-                                                <th>Nivel de carga</th>
-                                                <th>Tipo margen</th>
-                                                <th>Incoterm</th>
-                                                <th>Precio Venta Propuesto</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="carrier-offer-lines">
-                                            <tr><td colspan="8">Carga una oferta para comparar coste de naviera contra precio de venta propuesto.</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </article>
-                    </div>
-                    <div id="carrier-sales-modal" class="fcl-sales-modal" role="dialog" aria-modal="true" aria-labelledby="carrier-sales-modal-title" aria-hidden="true">
-                        <div class="fcl-sales-dialog">
-                            <h4 id="carrier-sales-modal-title">Confirmar venta aplicada</h4>
-                            <p>Se generará una oferta PDF para cliente sin mostrar costes de naviera.</p>
-                            <div id="carrier-sales-modal-total" class="fcl-sales-total">€0.00</div>
-                            <div class="fcl-audit-actions">
-                                <button id="carrier-sales-confirm" class="sc-button" type="button">Confirmar y descargar</button>
-                                <button id="carrier-sales-cancel" class="sc-button secondary" type="button">Cancelar</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="fcl-step-actions">
-                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev>Anterior</button>
-                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-step-target="1">Nueva revisión</button>
-                    </div>
-                    </section>
+                        </details>
                     </div>
                 </div>
-            </div>
-        </div>
 
         <!-- ========================================== -->
         <!-- PESTAÑA 2: LCL (GRUPAJE / CARGA FRACCIONADA)-->
@@ -72082,27 +72067,28 @@ window.actualizarGrabCapacityVisibility = function() {
             }
             function equipmentTemplate(index) {
                 return `
-                    <div class="fcl-equipment-row" data-equipment-row>
+                    <div class="fcl-equipment-row grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg relative" data-equipment-row>
                         <div class="fcl-field">
-                            <label>Tipo</label>
-                            <select data-fcl-input data-equipment-type>
-                                <option value="20DV" ${index === 0 ? 'selected' : ''}>20DV</option>
-                                <option value="40DV">40DV</option>
-                                <option value="40HC">40HC</option>
-                                <option value="45HC">45HC</option>
-                                <option value="20RF">20RF</option>
-                                <option value="40HREF">40HREF</option>
+                            <label class="text-xs font-bold text-slate-700">Tipo de Contenedor</label>
+                            <select data-fcl-input data-equipment-type class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <option value="20DV" ${index === 0 ? 'selected' : ''}>20' Dry Standard (20DV)</option>
+                                <option value="40DV">40' Dry Standard (40DV)</option>
+                                <option value="40HC">40' High Cube (40HC)</option>
+                                <option value="45HC">45' High Cube (45HC)</option>
+                                <option value="20RF">20' Reefer (20RF)</option>
+                                <option value="40HREF">40' High Cube Reefer (40HREF)</option>
                             </select>
                         </div>
                         <div class="fcl-field">
-                            <label>Cantidad</label>
-                            <input data-fcl-input data-equipment-qty type="number" min="1" step="1" value="1">
+                            <label class="text-xs font-bold text-slate-700">Cantidad</label>
+                            <div class="flex items-center gap-2">
+                                <input data-fcl-input data-equipment-qty ${index === 0 ? 'id="fcl-equipment-qty"' : ''} type="number" min="1" step="1" value="1" class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono font-bold">
+                                <button class="fcl-row-remove text-slate-400 hover:text-rose-600 disabled:opacity-20 p-2 text-sm transition" type="button" aria-label="Eliminar equipo" title="Eliminar fila" ${index === 0 ? 'disabled' : ''}>
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="fcl-field fcl-equipment-rate-field">
-                            <label>Flete Básico</label>
-                            <input data-fcl-input data-equipment-rate type="number" min="0" step="0.01" value="${index === 0 ? '1800' : '0'}">
-                        </div>
-                        <button class="fcl-row-remove sc-button secondary" type="button" aria-label="Eliminar equipo">x</button>
+                        <input type="hidden" data-fcl-input data-equipment-rate value="${index === 0 ? '1800' : '1800'}">
                     </div>`;
             }
             function bindDynamicInputs(scope) {
@@ -73225,43 +73211,15 @@ window.actualizarGrabCapacityVisibility = function() {
                 return doc;
             }
             function setWizardStep(nextStep) {
-                const root = el(rootId);
-                if (!root) return;
+                // UI unificada con grid plano CSS idéntico a LCL sin wizard por pasos
                 const step = Math.min(3, Math.max(1, Number.parseInt(nextStep, 10) || 1));
-                if (step === 2) {
-                    el(ids.costDetails)?.classList.add('is-open');
+                if (step >= 2) {
+                    const details = document.getElementById('fcl-advanced-details');
+                    if (details) details.open = true;
                 }
-                if (step === 3) {
-                    el(ids.breakdownPanel)?.classList.add('is-open');
-                }
-                root.querySelectorAll('[data-fcl-step]').forEach((panel) => {
-                    panel.classList.toggle('is-active', panel.dataset.fclStep === String(step));
-                });
-                root.querySelectorAll('[data-fcl-step-target]').forEach((button) => {
-                    const isActive = button.dataset.fclStepTarget === String(step);
-                    button.classList.toggle('is-active', isActive);
-                    if (button.classList.contains('fcl-step-tab')) {
-                        if (isActive) button.setAttribute('aria-current', 'step');
-                        else button.removeAttribute('aria-current');
-                    }
-                });
             }
             function bindWizard(root) {
-                root.querySelectorAll('[data-fcl-step-target]').forEach((button) => {
-                    button.addEventListener('click', () => setWizardStep(button.dataset.fclStepTarget));
-                });
-                root.querySelectorAll('[data-fcl-next]').forEach((button) => {
-                    button.addEventListener('click', () => {
-                        const active = root.querySelector('[data-fcl-step].is-active');
-                        setWizardStep((Number.parseInt(active?.dataset.fclStep || '1', 10) || 1) + 1);
-                    });
-                });
-                root.querySelectorAll('[data-fcl-prev]').forEach((button) => {
-                    button.addEventListener('click', () => {
-                        const active = root.querySelector('[data-fcl-step].is-active');
-                        setWizardStep((Number.parseInt(active?.dataset.fclStep || '1', 10) || 1) - 1);
-                    });
-                });
+                // Deprecado: UI unificada con grid plano idéntico a LCL sin wizard por pasos
             }
             function bindAccordions(root) {
                 root.querySelectorAll('[data-fcl-accordion]').forEach((accordion) => {
@@ -73278,29 +73236,22 @@ window.actualizarGrabCapacityVisibility = function() {
                 const costDetails = el(ids.costDetails);
                 const advancedCosts = el(ids.advancedCosts);
                 const breakdown = el(ids.breakdownPanel);
+                const details = document.getElementById('fcl-advanced-details');
                 el(ids.costDetailsToggle)?.addEventListener('click', () => {
-                    const open = !root?.classList.contains('show-advanced');
-                    costDetails?.classList.toggle('is-open', open);
-                    advancedCosts?.classList.toggle('is-open', open);
-                    root?.classList.toggle('show-advanced', open);
-                    if (open) setWizardStep(2);
-                    el(ids.costDetailsToggle).setAttribute('aria-expanded', String(open));
-                    el(ids.costDetailsToggle).innerHTML = open
-                        ? '<i class="fa-solid fa-minus" aria-hidden="true"></i> Ocultar Ajustes Avanzados de Costes'
-                        : '<i class="fa-solid fa-sliders" aria-hidden="true"></i> Ajustes Avanzados de Costes';
+                    if (details) details.open = !details.open;
                 });
                 el(ids.advancedToggle)?.addEventListener('click', () => {
-                    const open = !advancedCosts?.classList.contains('is-open');
-                    advancedCosts?.classList.toggle('is-open', open);
-                    root?.classList.toggle('show-advanced', open);
-                    el(ids.advancedToggle).setAttribute('aria-expanded', String(open));
+                    if (details) details.open = !details.open;
                 });
                 el(ids.breakdownToggle)?.addEventListener('click', () => {
+                    if (details) details.open = true;
                     const open = !breakdown?.classList.contains('is-open');
                     breakdown?.classList.toggle('is-open', open);
-                    if (open) setWizardStep(3);
                     el(ids.breakdownToggle).setAttribute('aria-expanded', String(open));
                     el(ids.breakdownToggle).textContent = open ? 'Ocultar Desglose' : 'Ver Desglose';
+                    if (open && breakdown) {
+                        breakdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
                 });
             }
             function bind() {
@@ -73310,7 +73261,6 @@ window.actualizarGrabCapacityVisibility = function() {
                 if (el(ids.equipmentRows) && !el(ids.equipmentRows).querySelector('[data-equipment-row]')) addEquipmentRow();
                 applySmartValues();
                 bindDynamicInputs(root);
-                bindWizard(root);
                 bindAccordions(root);
                 bindProgressiveDisclosure();
                 ['fcl-pol', 'fcl-pod'].forEach((routeFieldId) => {
@@ -73360,7 +73310,6 @@ window.actualizarGrabCapacityVisibility = function() {
                     document.getElementById(routeFieldId)?.addEventListener('change', updateContainerQuote);
                 });
                 syncFCLRouteFromCurrentRoute();
-                setWizardStep(1);
                 resetCarrierIdentity();
                 updateContainerQuote();
             }

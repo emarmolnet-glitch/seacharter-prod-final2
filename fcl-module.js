@@ -72,7 +72,9 @@
     }
 
     function readEquipmentQty() {
-        const value = Number.parseInt(getElement(ids.equipmentQty)?.value, 10);
+        const directEl = getElement(ids.equipmentQty);
+        const dynamicEl = document.querySelector('[data-equipment-qty]');
+        const value = Number.parseInt((directEl || dynamicEl)?.value, 10);
         return Number.isFinite(value) && value >= 1 ? value : 1;
     }
 
