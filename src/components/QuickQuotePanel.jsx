@@ -241,6 +241,9 @@ export function QuickQuotePanel({
   isQuoteFailed = false,
   showBreakdown: controlledShowBreakdown = null,
   onToggleBreakdown = null,
+  onExportPdf = null,
+  onExport = null,
+  generarPDF = null,
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [syncRecord, setSyncRecord] = useState({ id: syncedId, referencia: syncedRef });
@@ -471,6 +474,38 @@ export function QuickQuotePanel({
     }
   }, [status, isSyncing, onSyncDataBridge]);
 
+  // Manejador del botón Exportar Oferta Cliente (PDF)
+  const handleExport = useCallback(async () => {
+    const isZero = consolidatedTotal === null || consolidatedTotal === 0 || !consolidatedTotal;
+    if (isZero) return;
+
+    try {
+      if (typeof onExportPdf === 'function') {
+        await onExportPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        return;
+      }
+      if (typeof onExport === 'function') {
+        await onExport({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        return;
+      }
+      if (typeof generarPDF === 'function') {
+        await generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.exportMultimodalClientPdf === 'function') {
+        window.exportMultimodalClientPdf({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.generarPDF === 'function') {
+        window.generarPDF({ totalPrice: consolidatedTotal, currency, mode: modeLabel });
+        return;
+      }
+      console.warn('[QuickQuotePanel] No hay función de exportación a PDF configurada.');
+    } catch (err) {
+      console.error('[QuickQuotePanel] Error al exportar oferta PDF:', err);
+    }
+  }, [consolidatedTotal, currency, modeLabel, onExportPdf, onExport, generarPDF]);
+
   const handleToggleBreakdown = () => {
     if (hasValidBillingItems) setShowBreakdown(prev => !prev);
   };
@@ -594,6 +629,7 @@ export function QuickQuotePanel({
           <button
             id="fcl-export-client-pdf-btn"
             disabled={isZeroOrNull}
+            onClick={handleExport}
             className={`sc-button secondary w-full flex items-center justify-center gap-2 text-xs font-bold rounded-lg py-2 transition ${
               isZeroOrNull
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
