@@ -407,6 +407,56 @@
   background: #fff7f6;
 }
 
+/* --- RESCUE CALL TO ACTION (TWIN VESSEL / DATA BRIDGE) --- */
+.sca-message--rescue .sca-bubble {
+  border-left: 4px solid #f59e0b !important;
+  border-top: 1px solid #fde68a !important;
+  border-right: 1px solid #fde68a !important;
+  border-bottom: 1px solid #fde68a !important;
+  background: linear-gradient(180deg, #fffdf5 0%, #ffffff 100%) !important;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.14) !important;
+}
+
+.sca-message--rescue .sca-markdown strong {
+  color: #78350f !important;
+  font-weight: 800;
+}
+
+.sca-markdown em {
+  font-style: italic;
+  color: #0f766e;
+}
+
+.sca-cta-databridge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid #0284c7;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none !important;
+}
+
+.sca-cta-databridge-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.35);
+}
+
+.sca-cta-databridge-btn:active {
+  transform: translateY(0);
+}
+
 .sca-markdown > :first-child {
   margin-top: 0;
 }
