@@ -116,23 +116,226 @@ function setSelectedModel(model) {
   setActiveAgent(model);
 }
 
+function isTwinVesselRescueText(text) {
+  if (typeof text !== "string") return false;
+  return (
+    text.includes("Alerta de Radar: Sin disponibilidad") ||
+    text.includes("BARCO GEMELO") ||
+    text.includes("Buque Gemelo") ||
+    text.includes("Solución de Cotización (Buque Gemelo)")
+  );
+}
+
+export function buildVesselRescueMessage(context = {}) {
+  const ctx = context && typeof context === "object" ? context : {};
+  const state = typeof window !== "undefined" ? (window.State || {}) : {};
+  const pol = String(ctx.pol || ctx.polName || state.pol || "").trim();
+  const pod = String(ctx.pod || ctx.podName || state.pod || "").trim();
+  const tonnage = Number(ctx.tonnage || ctx.cargo_qty || ctx.cargoQty || state.cargoQty || state.tonnage || 0);
+  const laydays = String(ctx.laydayStart || ctx.laydays || ctx.laycanStart || state.laydaysDate || state.laydays || "").trim();
+  const cancelling = String(ctx.cancelling || ctx.laycanEnd || state.cancellingDate || state.cancelling || "").trim();
+
+  let zoneText = "las zonas de POL y POD";
+  if (pol && pod) {
+    zoneText = `las zonas de POL (${pol}) y POD (${pod})`;
+  } else if (pol) {
+    zoneText = `la zona de POL (${pol}) y POD`;
+  } else if (pod) {
+    zoneText = `las zonas de POL y POD (${pod})`;
+  }
+
+  let laycanText = "tu *laycan*";
+  if (laydays && cancelling && laydays !== cancelling) {
+    laycanText = `tu *laycan* (${laydays} - ${cancelling})`;
+  } else if (laydays) {
+    laycanText = `tu *laycan* (${laydays})`;
+  }
+
+  let proformaText = "la proforma";
+  if (Number.isFinite(tonnage) && tonnage > 0) {
+    proformaText = `la proforma (${tonnage.toLocaleString("es-ES")} MT)`;
+  }
+
+  return `
+⚠️ **Alerta de Radar: Sin disponibilidad en zona**
+No hemos encontrado un barco operando en ${zoneText} que se ajuste a las fechas de ${laycanText}.
+
+⚡ **Solución de Cotización (Buque Gemelo):**
+Para que no paralices ${proformaText} y puedas cotizar a tu cliente con total precisión, te recomendamos utilizar un **BARCO GEMELO**.
+
+💡 **Acción requerida:**
+Abre el módulo **Data Bridge** en el panel lateral. La sesión se sincronizará automáticamente. Pídele a MADRE que localice el barco idóneo en la base de datos, revisa sus fotos verificadas y haz clic en "Calcular en Core PRO" para inyectar su IMO aquí.
+`.trim();
+}
+
+export function isNoVesselsError(error) {
+  if (!error) return false;
+  if (typeof error === "object") {
+    if (error.code === "NO_VESSELS_AVAILABLE" || error.type === "NO_VESSELS" || error.status === "empty") return true;
+    if (error.noVessels === true || error.vesselsAvailable === false || error.hasAvailableVessels === false) return true;
+    const msg = String(error.message || error.error || error.detail || "").toLowerCase();
+    return (
+      msg.includes("sin disponibilidad") ||
+      msg.includes("no hemos encontrado") ||
+      msg.includes("no hay buques") ||
+      msg.includes("sin barcos") ||
+      msg.includes("no viable vessels") ||
+      msg.includes("no vessels available") ||
+      msg.includes("vessel_validation_empty") ||
+      msg.includes("vessel validation failed")
+    );
+  }
+  if (typeof error === "string") {
+    const s = error.toLowerCase();
+    return (
+      s.includes("sin disponibilidad") ||
+      s.includes("no hemos encontrado") ||
+      s.includes("no hay buques") ||
+      s.includes("no viable vessels") ||
+      s.includes("no vessels available")
+    );
+  }
+  return false;
+}
+
+export async function evaluateVesselAvailability(context = {}) {
+  const action = context.action || {};
+  const actionResult = context.actionResult || {};
+  const response = context.response || {};
+  const p = action.payload || actionResult.payload || {};
+
+  if (typeof window !== "undefined" && typeof window.checkVesselAvailabilityInZone === "function") {
+    try {
+      const customResult = await window.checkVesselAvailabilityInZone(context);
+      if (customResult !== undefined) {
+        if (customResult === false || customResult === null || (Array.isArray(customResult) && customResult.length === 0)) {
+          return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+        }
+        if (typeof customResult === "object" && customResult.hasViableVessels === false) {
+          return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+        }
+        if (typeof customResult === "object" && customResult.hasViableVessels === true) {
+          return { hasViableVessels: true, vesselsCount: customResult.vesselsCount || 1, status: "available" };
+        }
+      }
+    } catch (err) {
+      console.warn("[AsistenteCore] Error en checkVesselAvailabilityInZone:", err);
+    }
+  }
+
+  if (
+    actionResult.hasAvailableVessels === false ||
+    actionResult.vesselsAvailable === false ||
+    response.hasAvailableVessels === false ||
+    response.vesselsAvailable === false ||
+    actionResult.noViableVessels === true ||
+    response.noViableVessels === true
+  ) {
+    return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+  }
+
+  const directList = actionResult.vessels ?? actionResult.pairedMatches ?? actionResult.candidates ??
+    response.vessels ?? response.availableVessels ?? response.pairedMatches ?? p.vessels ?? null;
+
+  if (directList !== null) {
+    if (!Array.isArray(directList) || directList.length === 0) {
+      return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+    }
+    const viable = directList.filter((cand) => {
+      if (cand?.laycanCompliant === false) return false;
+      if (cand?.vesselOpenness?.laycanCompliant === false) return false;
+      if (cand?.compatibilityScore !== undefined && cand.compatibilityScore <= 0) return false;
+      return true;
+    });
+    if (viable.length === 0) {
+      return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+    }
+    return { hasViableVessels: true, vesselsCount: viable.length, status: "available" };
+  }
+
+  if (typeof window !== "undefined" && window.CompatibilityModule) {
+    const compCache = window.CompatibilityModule.cache;
+    if (compCache && Array.isArray(compCache.pairedMatches)) {
+      if (compCache.hasLiveCompatibleVessels === false || compCache.pairedMatches.length === 0) {
+        return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+      }
+      const laycanCount = compCache.opennessSummary?.laycanCompliantCount;
+      if (typeof laycanCount === "number" && laycanCount === 0) {
+        return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+      }
+      if (compCache.topMatch) {
+        return { hasViableVessels: true, vesselsCount: compCache.pairedMatches.length, status: "available" };
+      }
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const liveFleet = (typeof window.getDensityReactiveVessels === "function" ? window.getDensityReactiveVessels() : null)
+      || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
+      || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
+
+    if (Array.isArray(liveFleet)) {
+      if (liveFleet.length === 0 && (p.pol || window.State?.pol)) {
+        return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+      }
+      if (liveFleet.length > 0) {
+        const pol = String(p.pol || window.State?.pol || "").toLowerCase();
+        const pod = String(p.pod || window.State?.pod || "").toLowerCase();
+        if (pol || pod) {
+          const matchingZoneAndLaycan = liveFleet.filter((v) => {
+            const dest = String(v.destination || v.destino || "").toLowerCase();
+            const zoneHit = (pol && dest.includes(pol)) || (pod && dest.includes(pod));
+            const laycanHit = v.laycanCompliant === true || v.commercialTransit?.etaWithinLaycan === true || v.vesselOpenness?.laycanCompliant === true;
+            return zoneHit && laycanHit;
+          });
+          if (matchingZoneAndLaycan.length === 0 && liveFleet.every(v => v.laycanCompliant === false || !v.destination)) {
+            return { hasViableVessels: false, vesselsCount: 0, status: "empty" };
+          }
+        }
+      }
+    }
+  }
+
+  return { hasViableVessels: true, vesselsCount: 1, status: "default" };
+}
+
+let activeAgregarMensajeAsistente = null;
+
+export function agregarMensajeAsistente(mensaje, options = {}) {
+  if (typeof activeAgregarMensajeAsistente === "function") {
+    return activeAgregarMensajeAsistente(mensaje, options);
+  }
+  if (typeof window !== "undefined" && typeof window.__internalAgregarMensajeAsistente === "function") {
+    return window.__internalAgregarMensajeAsistente(mensaje, options);
+  }
+  if (typeof setActiveAgent === "function") {
+    setActiveAgent("core");
+  }
+  return createMessage("assistant", mensaje, { aiType: "local", isRescue: true, ...options });
+}
+
 if (typeof window !== 'undefined') {
   window.setActiveAgent = setActiveAgent;
   window.setSelectedModel = setSelectedModel;
   window.updateAiUI = updateAiUI;
+  window.buildVesselRescueMessage = buildVesselRescueMessage;
+  window.evaluateVesselAvailability = evaluateVesselAvailability;
+  window.isNoVesselsError = isNoVesselsError;
+  window.agregarMensajeAsistente = agregarMensajeAsistente;
 }
 
 function createMessage(role, text, options = {}) {
+  const isRescue = Boolean(options.isRescue || isTwinVesselRescueText(text));
   const message = document.createElement("article");
-  message.className = `sca-message sca-message--${role}${options.error ? " sca-message--error" : ""}`;
+  message.className = `sca-message sca-message--${role}${options.error && !isRescue ? " sca-message--error" : ""}${isRescue ? " sca-message--rescue" : ""}`;
   message.dataset.role = role;
   message.dataset.messageText = String(text || "");
 
   let chivatoHTML = '';
-  if (role === "assistant" && !options.error) {
-    if (options.aiType === 'cerebro') {
+  if (role === "assistant" && (!options.error || isRescue)) {
+    if (options.aiType === 'cerebro' && !isRescue) {
       chivatoHTML = `<div style="font-size: 10px; font-weight: 600; color: #6366f1; margin-bottom: 4px; padding-left: 4px;">🧠 Cerebro.ia (Data Bridge)</div>`;
-    } else if (options.aiType === 'local') {
+    } else if (options.aiType === 'local' || isRescue) {
       chivatoHTML = `<div style="font-size: 10px; font-weight: 600; color: #10b981; margin-bottom: 4px; padding-left: 4px;">🤖 Asistente Core</div>`;
     }
   }
@@ -145,7 +348,7 @@ function createMessage(role, text, options = {}) {
 
   const bubble = document.createElement("div");
   bubble.className = "sca-bubble p-3 rounded-xl break-words text-[13px]";
-  if (role === "assistant" && !options.error) {
+  if ((role === "assistant" && !options.error) || (role === "assistant" && isRescue)) {
     bubble.classList.add("sca-markdown");
     bubble.innerHTML = DOMPurify.sanitize(marked.parse(text, {
       async: false,
@@ -156,6 +359,27 @@ function createMessage(role, text, options = {}) {
       link.target = "_blank";
       link.rel = "noopener noreferrer";
     });
+
+    if (isRescue) {
+      const ctaBtn = document.createElement("button");
+      ctaBtn.type = "button";
+      ctaBtn.className = "sca-cta-databridge-btn";
+      ctaBtn.innerHTML = `<span>🌉</span> <span>Abrir Data Bridge</span>`;
+      ctaBtn.setAttribute("aria-label", "Abrir módulo Data Bridge en el panel lateral");
+      ctaBtn.addEventListener("click", () => {
+        if (typeof window !== "undefined") {
+          const directBtn = document.getElementById("btn-toggle-databridge") || document.getElementById("btn-open-databridge-direct");
+          if (directBtn) {
+            directBtn.click();
+          } else if (typeof window.openDataBridge === "function") {
+            window.openDataBridge();
+          } else {
+            window.dispatchEvent(new CustomEvent("seacharter:open-databridge"));
+          }
+        }
+      });
+      bubble.appendChild(ctaBtn);
+    }
   } else {
     bubble.textContent = text;
   }
@@ -322,7 +546,7 @@ function sanitizePayloadForAI(payload = {}) {
         content: sanitizeAiText(entry?.content, AI_HISTORY_MESSAGE_MAX_CHARS),
       }))
       .filter((entry) => entry.content),
-    uiLanguage: payload.uiLanguage || getUILanguage(),
+    uiLanguage: payload.uiLanguage || (typeof getUILanguage === "function" ? getUILanguage() : "es-ES"),
   };
 }
 
@@ -1986,6 +2210,38 @@ const fileInput = root.querySelector("#sca-file-input");
     return message;
   };
 
+  const agregarMensajeAsistenteMounted = (mensaje, options = {}) => {
+    setActiveAgent("core");
+    setOpen(true);
+    const assistantOptions = {
+      meta: formatTime(),
+      aiType: "local",
+      isRescue: true,
+      ...options,
+    };
+    const messageEl = createAndSpeakAssistantMessage(mensaje, assistantOptions);
+    scrollToLatest();
+    return messageEl;
+  };
+
+  activeAgregarMensajeAsistente = agregarMensajeAsistenteMounted;
+  if (typeof window !== "undefined") {
+    window.__internalAgregarMensajeAsistente = agregarMensajeAsistenteMounted;
+    window.agregarMensajeAsistente = agregarMensajeAsistenteMounted;
+
+    window.addEventListener("seacharter:radar-no-vessels", (event) => {
+      const detail = event?.detail || {};
+      const msg = buildVesselRescueMessage(detail);
+      agregarMensajeAsistenteMounted(msg);
+    });
+
+    window.addEventListener("seacharter:vessel-validation-empty", (event) => {
+      const detail = event?.detail || {};
+      const msg = buildVesselRescueMessage(detail);
+      agregarMensajeAsistenteMounted(msg);
+    });
+  }
+
   syncSpeechToggle();
 
   const scrollToLatest = () => {
@@ -2330,6 +2586,24 @@ const fileInput = root.querySelector("#sca-file-input");
       );
       console.groupEnd();
 
+      const isNoVesselsResult = isNoVesselsError(actionResult) || isNoVesselsError(actionableResponse.visibleText) || (actionResult?.vesselsAvailable === false);
+      if (isNoVesselsResult) {
+        setActiveAgent("core");
+        const rescueMsg = buildVesselRescueMessage({
+          pol: action?.payload?.pol || response?.pol,
+          pod: action?.payload?.pod || response?.pod,
+          tonnage: action?.payload?.tonnage || response?.tonnage,
+          laydayStart: action?.payload?.laydayStart,
+          cancelling: action?.payload?.cancelling,
+        });
+        replaceWithAssistantMessage(
+          thinkingMessage,
+          rescueMsg,
+          { meta: formatTime(), error: false, aiType: "local", isRescue: true },
+        );
+        return;
+      }
+
       const actionName = action?.action || action?.intent || action?.type || action?.name || response?.action;
       const isUpdateFields = String(actionName || "").toLowerCase() === "update_fields";
       const isCalculatorUpdate = isUpdateFields || ["calculate_route", "fill_complete_form", "update_field"].includes(String(actionName || "").toLowerCase());
@@ -2337,15 +2611,37 @@ const fileInput = root.querySelector("#sca-file-input");
 
       if (wasCerebro && isSuccessfulCalculation) {
         setActiveAgent("core");
-        const transitionMessage = "✅ Los cálculos de Cerebro se han volcado en pantalla. Ya estoy al mando. ¿Quieres que ajustemos márgenes, servicios adicionales o generemos el reporte?";
-        createAndSpeakAssistantMessage(transitionMessage, {
-          meta: formatTime(),
-          aiType: "local",
-        });
+        const availability = await evaluateVesselAvailability({ action, actionResult, response });
+        if (availability.hasViableVessels === false || availability.vesselsCount === 0 || availability.status === "empty" || availability.status === "null") {
+          const rescueMsg = buildVesselRescueMessage({
+            pol: action?.payload?.pol || response?.pol,
+            pod: action?.payload?.pod || response?.pod,
+            tonnage: action?.payload?.tonnage || response?.tonnage,
+            laydayStart: action?.payload?.laydayStart,
+            cancelling: action?.payload?.cancelling,
+          });
+          agregarMensajeAsistente(rescueMsg);
+        } else {
+          const transitionMessage = "✅ Los cálculos de Cerebro se han volcado en pantalla. Ya estoy al mando. ¿Quieres que ajustemos márgenes, servicios adicionales o generemos el reporte?";
+          createAndSpeakAssistantMessage(transitionMessage, {
+            meta: formatTime(),
+            aiType: "local",
+          });
+        }
       }
     } catch (error) {
       console.error("❌ [Cerebro.ia/Chat] Error procesando la respuesta del asistente", error);
       console.groupEnd();
+      if (isNoVesselsError(error)) {
+        setActiveAgent("core");
+        const rescueMsg = buildVesselRescueMessage(collectChatContext());
+        replaceWithAssistantMessage(thinkingMessage, rescueMsg, {
+          meta: formatTime(),
+          aiType: "local",
+          isRescue: true,
+        });
+        return;
+      }
       const errorText = error?.name === "AbortError"
         ? (stoppedByUser ? "Respuesta detenida." : "La solicitud tardó demasiado. Inténtalo de nuevo.")
         : (error?.message || "No se pudo consultar al asistente en este momento.");
@@ -2634,3 +2930,17 @@ async function executeActionableAiAction(actionObj) {
 }
 
 window.executeActionableAiAction = executeActionableAiAction;
+
+export const AsistenteCore = {
+  agregarMensajeAsistente,
+  buildVesselRescueMessage,
+  evaluateVesselAvailability,
+  isNoVesselsError,
+  setActiveAgent,
+  updateAiUI,
+};
+
+if (typeof window !== "undefined") {
+  window.AsistenteCore = AsistenteCore;
+}
+
