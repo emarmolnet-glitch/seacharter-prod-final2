@@ -27,3 +27,26 @@ test('startup controller releases the interface after WebGL or a safe timeout', 
   assert.match(controllerSource, /document\.body\.dataset\.appReady = 'true'/);
   assert.match(controllerSource, /seacharter:app-ready/);
 });
+
+test('splash screen displays dual visual identity: Sub-Brand above and Master Brand below', () => {
+  const splashMatch = indexSource.match(/<div id="global-splash-screen"[\s\S]*?<\/div>\s*<\/div>\s*<!-- NAVBAR TOP -->/);
+  assert.ok(splashMatch, 'Splash screen element found in index.html');
+  const splashHtml = splashMatch[0];
+
+  // Sub-Brand: SeaCharter Core PRO above
+  assert.match(splashHtml, /<!-- Sub-Brand: SeaCharter Core PRO -->/);
+  assert.match(splashHtml, /<div style="font-size: 24px; font-weight: 800; color: #0E3A5D; letter-spacing: -0.02em;">SeaCharter<\/div>/);
+  assert.match(splashHtml, /<div style="font-size: 17px; font-weight: 700; color: #2898B8; letter-spacing: -0.01em; margin-top: 2px;">Core PRO<\/div>/);
+
+  // Central block intact
+  assert.match(splashHtml, /<p class="global-splash__title">SeaCharter Core PRO - Iniciando motor\.\.\.<\/p>/);
+  assert.match(splashHtml, /<div class="global-splash__progress" aria-hidden="true"><\/div>/);
+
+  // Master Brand: CHARTER CORE PRO below progress bar
+  assert.match(splashHtml, /CHARTER/);
+  assert.match(splashHtml, /<span style="color: #19A5D8;">CORE<\/span>\s*<span style="color: #0E3A5D;">PRO<\/span>/);
+  assert.match(splashHtml, /linearGradient id="mGrad"/);
+
+  // Anchor icon replaced
+  assert.doesNotMatch(splashHtml, /M12 3v12m-4-8h8M5 12l7 4 7-4-1.5 6H6.5L5 12Z/);
+});
