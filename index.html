@@ -9603,17 +9603,43 @@
 
     <div id="global-splash-screen" class="fixed inset-0 z-50 bg-slate-900" role="status" aria-live="polite" aria-label="SeaCharter Core PRO iniciando">
         <div class="global-splash__content">
-            <div class="global-splash__mark" aria-hidden="true">
-                <span class="global-splash__ring"></span>
-                <span class="global-splash__logo">
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M12 3v12m-4-8h8M5 12l7 4 7-4-1.5 6H6.5L5 12Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </span>
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
+              <!-- Sub-Brand: SeaCharter Core PRO -->
+              <svg width="84" height="84" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 6px 16px rgba(14, 58, 93, 0.15));">
+                <circle cx="60" cy="60" r="56" fill="#0E3A5D"/>
+                <path d="M 4 74 C 20 74, 28 60, 38 44 C 46 31, 58 26, 69 30 C 76 33, 81 40, 79 48 C 76 42, 70 39, 64 41 C 57 43, 54 52, 57 60 C 61 70, 74 75, 89 73 C 99 72, 108 67, 116 61 L 116 67 C 107 74, 96 79, 84 80 C 66 81, 51 73, 48 59 C 46 49, 50 39, 58 36 C 51 36, 44 42, 37 53 C 28 67, 18 79, 4 80 Z" fill="#FFFFFF"/>
+              </svg>
+              <div style="margin-top: 10px; text-align: center; font-family: 'Inter', system-ui, sans-serif; line-height: 1.12;">
+                <div style="font-size: 24px; font-weight: 800; color: #0E3A5D; letter-spacing: -0.02em;">SeaCharter</div>
+                <div style="font-size: 17px; font-weight: 700; color: #2898B8; letter-spacing: -0.01em; margin-top: 2px;">Core PRO</div>
+              </div>
             </div>
             <p class="global-splash__title">SeaCharter Core PRO - Iniciando motor...</p>
             <p id="global-splash-status" class="global-splash__status">Preparando cartografía WebGL</p>
             <div class="global-splash__progress" aria-hidden="true"></div>
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(14, 58, 93, 0.12); display: flex; align-items: center; justify-content: center; gap: 12px;">
+              <svg width="42" height="42" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="mGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#0B3556"/>
+                    <stop offset="100%" stop-color="#3AAFA9"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="60" cy="60" r="54" stroke="url(#mGrad)" stroke-width="6" fill="#F8FAFC"/>
+                <path d="M 12 50 C 35 22, 85 22, 108 50 M 22 25 C 45 45, 75 45, 98 25 M 38 8 C 28 45, 45 72, 65 85 M 82 8 C 92 45, 75 72, 55 85" stroke="#2898B8" stroke-width="3" fill="none"/>
+                <circle cx="35" cy="36" r="6" fill="#1D84B5"/>
+                <circle cx="76" cy="28" r="5.5" fill="#2CB5E8"/>
+                <circle cx="56" cy="52" r="4.5" fill="#0B3556"/>
+                <path d="M 48 106 C 58 84, 72 68, 92 58 L 104 66 C 88 78, 76 92, 68 111 Z" fill="#134E5E"/>
+                <path d="M 8 64 C 18 66, 26 52, 40 50 C 52 48, 60 56, 55 66 C 50 60, 42 60, 40 67 C 38 76, 52 86, 72 82 C 86 79, 98 70, 108 60 C 98 92, 68 114, 36 108 C 16 104, 8 84, 8 64 Z" fill="#0B3556"/>
+              </svg>
+              <div style="font-family: 'Inter', system-ui, sans-serif; line-height: 1.05; text-align: left;">
+                <div style="font-size: 16px; font-weight: 800; color: #0E3A5D; letter-spacing: 0.01em;">CHARTER</div>
+                <div style="font-size: 16px; font-weight: 800; letter-spacing: 0.01em; margin-top: 2px;">
+                  <span style="color: #19A5D8;">CORE</span> <span style="color: #0E3A5D;">PRO</span>
+                </div>
+              </div>
+            </div>
         </div>
     </div>
 
