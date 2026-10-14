@@ -42,10 +42,11 @@ test('splash screen displays dual visual identity: Sub-Brand above and Master Br
   assert.match(splashHtml, /<p class="global-splash__title">SeaCharter Core PRO - Iniciando motor\.\.\.<\/p>/);
   assert.match(splashHtml, /<div class="global-splash__progress" aria-hidden="true"><\/div>/);
 
-  // Master Brand: CHARTER CORE PRO below progress bar
-  assert.match(splashHtml, /CHARTER/);
-  assert.match(splashHtml, /<span style="color: #19A5D8;">CORE<\/span>\s*<span style="color: #0E3A5D;">PRO<\/span>/);
-  assert.match(splashHtml, /linearGradient id="mGrad"/);
+  // Master Brand: CHARTER CORE PRO below progress bar (unified circular logo and typography)
+  assert.match(splashHtml, /<!-- Nuevo icono circular de la Master Brand unificada -->/);
+  assert.match(splashHtml, /<img src="\/assets\/master-brand-unified\.png" alt="Charter Core PRO"/);
+  assert.match(splashHtml, /CHARTER<br\/><span style="color: #2898B8;">CORE PRO<\/span>/);
+  assert.doesNotMatch(splashHtml, /linearGradient id="mGrad"/);
 
   // Anchor icon replaced
   assert.doesNotMatch(splashHtml, /M12 3v12m-4-8h8M5 12l7 4 7-4-1.5 6H6.5L5 12Z/);
