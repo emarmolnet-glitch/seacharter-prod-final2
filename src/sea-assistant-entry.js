@@ -966,33 +966,49 @@ async function executeActionableAiUpdateFields(actionObj) {
         if (!p || typeof p !== 'object' || Object.keys(p).length === 0) return false;
 
         // --- ESCUDO FRONTEND: AUTO-BUSCADOR DE BUQUE VÍA IA ---
-        const imoDetectado = p.imo || p.imo_number || p.imoNumber;
+        const imoDetectado = p.imo || p.imo_number || p.imoNumber || p.selectedVessel?.imo || p.selectedVessel?.imo_number || p.vessel?.imo || p.vessel?.imo_number;
 
         if (imoDetectado) {
-            const imoInput = document.getElementById('vessel-identity-imo'); 
+            const cleanImo = String(imoDetectado).trim();
+            const imoInput = document.getElementById('vessel-identity-imo') ||
+                             document.getElementById('imo') ||
+                             (typeof document.querySelector === 'function' ? (document.querySelector('input[name="imo"]') || document.querySelector('input[name="imo_number"]') || document.querySelector('input[name="vessel_imo"]')) : null); 
             
             if (imoInput) {
                 // 1. Escribimos el número en la casilla
-                imoInput.value = imoDetectado;
+                imoInput.value = cleanImo;
                 
-                // 2. Avisamos a Vanilla JS de que el valor ha cambiado (dispara el oninput)
+                // 2. Avisar al sistema (y a React/Vue si aplica) de que el texto ha cambiado
                 imoInput.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                // 3. Creamos un evento de teclado idéntico a pulsar la tecla Enter
-                const enterEvent = new KeyboardEvent('keydown', {
+                imoInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // 3. Simular la pulsación de la tecla Enter para que el buscador arranque
+                imoInput.dispatchEvent(new KeyboardEvent('keydown', {
                     key: 'Enter',
                     code: 'Enter',
                     keyCode: 13,
                     which: 13,
-                    bubbles: true,
-                    cancelable: true
-                });
-                
-                // 4. Disparamos el Enter virtual con un ligero retraso
-                setTimeout(() => {
-                    imoInput.dispatchEvent(enterEvent);
-                    console.log("🤖 IA: Disparando Enter automático para buscar el buque IMO:", imoDetectado);
-                }, 400); 
+                    bubbles: true
+                }));
+                imoInput.dispatchEvent(new Event('blur', { bubbles: true }));
+
+                // 4. Alternativa/Complemento: Si hay un botón de búsqueda específico junto al input del IMO, simula el clic directamente:
+                const searchBtn = document.getElementById('btn-vessel-specs-real-2') ||
+                                  document.getElementById('header-vessel-search-btn') ||
+                                  document.getElementById('btn-ais-vessel-search');
+                if (searchBtn && typeof searchBtn.click === 'function') {
+                    searchBtn.click();
+                }
+            }
+
+            // Opción A (Recomendada): Disparo directo de la función interna de búsqueda de SeaCharter
+            if (typeof window !== 'undefined' && typeof window.handleManualVesselUpdate === 'function') {
+                window.handleManualVesselUpdate('imo', cleanImo);
+            }
+            const fetchFn = (typeof window !== 'undefined' && (window.fetchVesselByImo || window.fetchVesselSpecs)) ||
+                            (typeof fetchVesselByImo === 'function' ? fetchVesselByImo : null);
+            if (typeof fetchFn === 'function' && /^\d{7}$/.test(cleanImo)) {
+                void fetchFn(cleanImo);
             }
         }
         // --------------------------------------------------------
