@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import VisualStowagePlan, { resolveVesselProfile, MemoizedVisualStowagePlan } from './VisualStowagePlan.jsx';
 import { buildVoyageStowagePlan } from '../voyage-stowage-builder.mjs';
+import { getStipulatedClauses } from '../dry-bulk-clause-matrix.mjs';
 
 export { buildVoyageStowagePlan };
 
@@ -70,6 +71,26 @@ export default function VoyageExecutiveReportModal({
       cargo: cargoTons,
     });
   }, [data, resolvedVesselType, shipProfile, vesselClass, dwt, cargoTons]);
+
+  // Determinar rol comercial activo y categoría de carga para la matriz de cláusulas
+  const activeRole = data.commercialRole ||
+                     data.commercial_role ||
+                     data.role ||
+                     (typeof window !== 'undefined' && typeof window.getGlobalViewMode === 'function' ? window.getGlobalViewMode() : 'owner');
+
+  const cargoIdentifier = data.bulk_category ||
+                          data.bulkCategory ||
+                          data.cargo_product ||
+                          data.cargoProduct ||
+                          data.cargo_type ||
+                          data.cargoType ||
+                          data.commodity ||
+                          (typeof document !== 'undefined' ? (document.getElementById('cargo-product')?.value || document.getElementById('cargo-type')?.value) : '') ||
+                          cargoType;
+
+  const stipulatedClausesData = useMemo(() => {
+    return getStipulatedClauses(cargoIdentifier, activeRole);
+  }, [cargoIdentifier, activeRole]);
 
   // Manejo de impresión reactivo sin setTimeout mágicos
   const handlePrint = (clientMode) => {
@@ -399,6 +420,23 @@ export default function VoyageExecutiveReportModal({
                 <p><strong>Puerto de Descarga (POD):</strong> {pod} · Infraestructura de grúas y calado operativo verificado.</p>
               </div>
             </details>
+          </section>
+
+          {/* 5. MATRIZ BIDIRECCIONAL DE CLÁUSULAS (DRY BULK CLAUSE MATRIX) */}
+          <section id="executive-stipulated-clauses" className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-2 mb-3 border-b border-slate-200 pb-2">
+              <span className="w-1.5 h-3.5 bg-blue-900 rounded-xs inline-block"></span>
+              <h4 id="executive-clauses-title" className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                {stipulatedClausesData.title}
+              </h4>
+            </div>
+            <ul id="executive-clauses-list" className="list-disc pl-5 space-y-2 text-xs text-slate-700 leading-relaxed">
+              {stipulatedClausesData.clauses.map((clause, idx) => (
+                <li key={idx} className="pl-1">
+                  {clause}
+                </li>
+              ))}
+            </ul>
           </section>
 
         </div>
