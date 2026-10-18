@@ -979,6 +979,7 @@
     <script type="module" src="./src/forwarder-workspace-entry.jsx"></script>
     <script type="module" src="./src/provider-tariff-sidebar-entry.jsx"></script>
     <script type="module" src="./src/voyage-executive-report-entry.jsx"></script>
+    <script type="module" src="./src/dry-bulk-clause-matrix.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -15824,6 +15825,19 @@
                     <p style="font-size: 7.5pt; font-weight: 700; margin: 0; color: #334155;">Por el Fletador / For and on behalf of the Charterers</p>
                     <p style="font-size: 6.5pt; color: #64748b; margin: 2px 0 0 0;">Firma Autorizada y Sello / Authorized Signature & Stamp</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- CLÁUSULAS COMERCIALES Y OPERATIVAS ESTIPULADAS (DRY BULK CLAUSE MATRIX) -->
+        <div id="print-stipulated-clauses-section" style="margin-top: 25px; border-top: 1px solid #cbd5e1; padding-top: 14px; break-inside: avoid; page-break-inside: avoid;">
+            <h2 id="print-clauses-heading" style="font-size: 10.5pt; font-weight: 700; color: #0f172a; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <span style="background-color: #1e3a8a; color: white; display: inline-block; width: 6px; height: 14px; border-radius: 1px;"></span>
+                <span id="print-clauses-title">STIPULATED COMMERCIAL & OPERATIONAL CLAUSES (OWNERS' TERMS)</span>
+            </h2>
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 14px 8px 14px;">
+                <ul id="print-clauses-list" style="margin: 0; padding-left: 20px; font-size: 8pt; color: #334155; line-height: 1.5; list-style-type: disc;">
+                    <!-- Se inyecta dinámicamente según categoría de carga y rol comercial -->
+                </ul>
             </div>
         </div>
     </div>
@@ -52324,6 +52338,67 @@ Example:
             const printDetailedEl = document.getElementById('print-detailed-analysis-content');
             if (printDetailedEl) {
                 printDetailedEl.innerHTML = detailedHTML;
+            }
+
+            // Inyección de Matriz Bidireccional de Cláusulas (Dry Bulk Clause Matrix)
+            try {
+                const activeCargo = datosCotizacion?.cargo_product ||
+                                    datosCotizacion?.cargoProduct ||
+                                    datosCotizacion?.cargo_type ||
+                                    datosCotizacion?.cargoType ||
+                                    datosCotizacion?.bulk_category ||
+                                    datosCotizacion?.bulkCategory ||
+                                    datosCotizacion?.mercancia ||
+                                    State.cargoProduct ||
+                                    State.cargoTypeManual ||
+                                    State.cargoType ||
+                                    getVal('cargo-product') ||
+                                    getVal('cargo-type') ||
+                                    'Cemento a granel';
+
+                const activeRole = datosCotizacion?.commercialRole ||
+                                   datosCotizacion?.commercial_role ||
+                                   datosCotizacion?.role ||
+                                   State.commercialRole ||
+                                   State.role ||
+                                   (typeof window.getGlobalViewMode === 'function' ? window.getGlobalViewMode() : 'owner');
+
+                const matrixFn = (typeof window !== 'undefined' && typeof window.getStipulatedClauses === 'function')
+                    ? window.getStipulatedClauses
+                    : null;
+
+                let clauseInfo = matrixFn ? matrixFn(activeCargo, activeRole) : null;
+                if (!clauseInfo) {
+                    const normRole = String(activeRole || '').toLowerCase();
+                    const isCharterer = normRole.includes('charterer') || normRole.includes('fletador') || normRole === 'chr';
+                    clauseInfo = {
+                        title: isCharterer
+                            ? "STIPULATED COMMERCIAL & OPERATIONAL CLAUSES (CHARTERERS' TERMS)"
+                            : "STIPULATED COMMERCIAL & OPERATIONAL CLAUSES (OWNERS' TERMS)",
+                        clauses: isCharterer ? [
+                            "Prior to NOR, holds must be presented completely clean, dry, free of loose rust scale, and fully swept (Grain Clean standard), subject to independent surveyor's approval.",
+                            "Vessel's cranes/derricks to be fully operational at all times. Any time lost due to vessel's gear breakdown to be deducted from laytime.",
+                            "Owners guarantee all hatch covers are fully watertight. Any cargo damage due to water ingress to be fully for Owners' account."
+                        ] : [
+                            "Charterers' stevedores to be considered as Owners' servants but Charterers remain fully responsible for any Stevedore Damage (including grab damage to tank top, ladders, and bulkheads).",
+                            "Loading and discharging operations to be performed using Charterers' grabs. Any time lost due to grab malfunction to count as laytime.",
+                            "All dust pollution fines, washing, and cleaning costs of holds after discharge to be strictly for Charterers' account. Washing time to count as laytime."
+                        ]
+                    };
+                }
+
+                const printTitleEl = document.getElementById('print-clauses-title');
+                if (printTitleEl) {
+                    printTitleEl.innerText = clauseInfo.title;
+                }
+                const printListEl = document.getElementById('print-clauses-list');
+                if (printListEl) {
+                    printListEl.innerHTML = clauseInfo.clauses
+                        .map(clause => `<li style="margin-bottom: 6px; padding-left: 2px;">${clause}</li>`)
+                        .join('');
+                }
+            } catch (errClauses) {
+                console.warn('Error rendering stipulated clauses in print view:', errClauses);
             }
         }
 
