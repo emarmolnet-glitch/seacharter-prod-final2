@@ -981,6 +981,7 @@
     <script type="module" src="./src/voyage-executive-report-entry.jsx"></script>
     <script type="module" src="./src/dry-bulk-clause-matrix.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
+    <script type="module" src="./src/madre-drawer-entry.jsx"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -9701,18 +9702,29 @@
 
         <!-- DERECHA: BOTONES DE ACCIÓN (FAQ, OWN/CHR, COLAPSAR) -->
         <div class="header-actions-right hidden md:flex items-center gap-1.5 shrink-0">
-            <!-- Disparador MADRE -->
+          <!-- Disparador MADRE -->
           <button
+            id="madre-topbar-button"
             type="button"
+            class="madre-topbar-btn relative flex items-center justify-center w-10 h-10 rounded-full p-0 bg-transparent border-0 cursor-pointer focus:outline-none mr-2"
+            style="background: transparent; border: none; padding: 0;"
+            aria-label="Abrir panel MADRE"
+            title="MADRE"
             onclick="if(window.toggleMadreDrawer) window.toggleMadreDrawer(); else window.dispatchEvent(new CustomEvent('madre:toggle'));"
-            id="btn-madre-trigger"
-            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold mr-2"
-            style="background-color: #0f172a; color: #5eead4; border: 1px solid rgba(45,212,191,0.4);"
-            title="Abrir Asistente Estratégico MADRE"
-            aria-label="Abrir asistente MADRE"
           >
-            <img src="/MADRE.png" alt="MADRE" class="w-5 h-5 rounded-full object-cover animate-pulse shadow-[0_0_8px_rgba(45,212,191,0.8)]" style="width: 20px; height: 20px; border-radius: 50%;" />
-            <span style="color: #5eead4;">MADRE</span>
+            <div
+              id="madre-topbar-glow"
+              class="madre-topbar-glow absolute inset-0 rounded-full animate-pulse bg-cyan-500 blur-md pointer-events-none opacity-80"
+              style="display: none;"
+              aria-hidden="true"
+            ></div>
+            <img
+              id="madre-topbar-img"
+              src="/MADRE.png"
+              alt="MADRE"
+              class="madre-topbar-img w-10 h-10 rounded-full relative z-10 object-contain transition-all duration-300 grayscale opacity-70 scale-100 hover:grayscale-0 hover:opacity-100 hover:scale-110"
+            />
+            <span class="sr-only">MADRE</span>
           </button>
             <!-- Botón FAQ / Manual -->
             <button
