@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
-import { GlobalMadreDrawer } from './components/GlobalMadreDrawer.jsx';
+import GlobalMadreDrawer from './components/GlobalMadreDrawer';
 import { getApiUrl } from './utils/apiConfig.js';
 
 /**
@@ -674,6 +674,7 @@ export default function App(props) {
   return (
     <HashRouter>
       <ProjectProvider>
+        <GlobalMadreDrawer />
         <AppLayout {...props} />
       </ProjectProvider>
     </HashRouter>
@@ -784,7 +785,7 @@ export function TopNav() {
           </button>
         </div>
       </header>
-      <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
+      <GlobalMadreDrawer />
     </>
   );
 }

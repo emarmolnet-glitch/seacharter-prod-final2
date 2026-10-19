@@ -257,48 +257,58 @@ test('6. UI/UX: Cero modo oscuro, fondo blanco puro (bg-white), texto gris corpo
   assert.doesNotMatch(decisionSupportModuleSource, /id="madre-offcanvas-panel"[^>]*bg-black/);
 });
 
-test('7. GlobalMadreDrawer: Estilos inline forzados en Header y Botones de Acción (bypass legacy CSS)', () => {
-  // Comprobar header con inline styles
+test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
+  // Comprobar aside con fondo oscuro
   assert.match(
     globalMadreDrawerSource,
-    /<header className="madre-header flex items-center justify-between px-4 py-3 shrink-0" style=\{\{ backgroundColor: '#0f172a', color: '#ffffff', borderBottom: '1px solid #1e293b' \}\}>/,
-    'Header de GlobalMadreDrawer debe forzar fondo oscuro #0f172a, texto blanco y borde #1e293b'
+    /<aside[^>]*style=\{\{ backgroundColor: '#0f172a' \}\}/,
+    'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a'
   );
 
   // Comprobar título MADRE forzado a blanco
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-base tracking-wide" style=\{\{ color: '#ffffff' \}\}>MADRE<\/span>/,
-    'Título MADRE debe tener style={{ color: "#ffffff" }}'
+    /<span className="font-bold text-base text-white">MADRE<\/span>/,
+    'Título MADRE debe tener text-white'
   );
 
-  // Contenedor de botones de acción con texto forzado a blanco
+  // Comprobar badge Cerebro Central
   assert.match(
     globalMadreDrawerSource,
-    /<div className="flex items-center gap-3 ml-auto shrink-0" style=\{\{ color: '#ffffff' \}\}>/,
-    'Contenedor de botones debe tener style={{ color: "#ffffff" }}'
+    /Cerebro Central/,
+    'Header debe contener badge Cerebro Central'
   );
 
-  // Botones Mute, Reset, Close con fondo transparente y color blanco
-  const muteMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-mute"[^>]*>[\s\S]*?<\/button>/);
-  assert.ok(muteMatch, 'Botón Mute debe existir');
-  assert.match(muteMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
-
-  const resetMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-reset"[^>]*>[\s\S]*?<\/button>/);
-  assert.ok(resetMatch, 'Botón Reset debe existir');
-  assert.match(resetMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
-
-  const closeMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-close"[^>]*>[\s\S]*?<\/button>/);
-  assert.ok(closeMatch, 'Botón Close debe existir');
-  assert.match(closeMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
+  // Botones Mute, Reset, Close
+  assert.match(
+    globalMadreDrawerSource,
+    /<button onClick=\{handleMuteToggle\} className="text-xs px-2 py-1 text-white">\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    'Botón Mute debe existir'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button onClick=\{handleReset\} className="text-xs px-2 py-1 text-white">🔄<\/button>/,
+    'Botón Reset debe existir'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button onClick=\{handleClose\} className="text-xs px-2 py-1 text-white">✕<\/button>/,
+    'Botón Close debe existir'
+  );
 });
 
 test('8. GlobalMadreDrawer: Lógica completa de API madre-chat, auto-scroll y loading indicator', () => {
-  // Fetch a https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat
+  // Endpoint https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat
   assert.match(
     globalMadreDrawerSource,
-    /fetch\(\s*['"]https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app\/api\/madre-chat['"]/,
-    'Debe invocar el endpoint completo de https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat'
+    /export const MADRE_API_ENDPOINT = "https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app\/api\/madre-chat"/,
+    'Debe definir MADRE_API_ENDPOINT apuntando al endpoint de madre-chat'
+  );
+
+  assert.match(
+    globalMadreDrawerSource,
+    /fetch\(MADRE_API_ENDPOINT/,
+    'Debe invocar el endpoint madre-chat'
   );
 
   // handleSubmit
