@@ -9,8 +9,7 @@ function mountMadreDrawer() {
     container.id = 'global-madre-drawer-root';
     document.body.appendChild(container);
   }
-  const root = createRoot(container);
-  root.render(<GlobalMadreDrawer />);
+  createRoot(container).render(<GlobalMadreDrawer />);
 }
 
 if (document.readyState === 'loading') {

@@ -29,6 +29,9 @@ export function GlobalMadreDrawer({
 
   useEffect(() => {
     setInternalIsOpen(isOpen);
+    if (!isOpen && typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
   }, [isOpen]);
 
   const isMuted = controlledIsMuted !== undefined ? controlledIsMuted : internalIsMuted;
@@ -75,6 +78,9 @@ export function GlobalMadreDrawer({
       window.removeEventListener('madre:toggle', handleToggle);
       window.removeEventListener('madre:open', handleOpen);
       window.removeEventListener('madre:close', handleCloseEvent);
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -101,6 +107,7 @@ export function GlobalMadreDrawer({
       window.speechSynthesis.cancel();
     }
   };
+  const toggleMute = handleMuteToggle;
 
   const handleReset = () => {
     if (typeof onReset === 'function') {
@@ -225,17 +232,20 @@ export function GlobalMadreDrawer({
   if (!internalIsOpen) return null;
 
   return (
-    <aside className="fixed top-0 left-0 bottom-0 z-[9999] w-full max-w-md bg-slate-900 text-slate-100 shadow-2xl flex flex-col font-sans" style={{ backgroundColor: '#0f172a' }}>
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+    <aside
+      className="fixed top-0 left-0 bottom-0 z-[9999] w-full max-w-md bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"
+      style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+    >
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
         <div className="flex items-center gap-2">
-          <img src="/MADRE.png" alt="MADRE" className="w-5 h-5 rounded-full" />
+          <img src="/MADRE.png" alt="MADRE" className="w-5 h-5 rounded-full object-cover shadow-[0_0_8px_rgba(45,212,191,0.6)]" style={{ width: '20px', height: '20px' }} />
           <span className="font-bold text-base text-white">MADRE</span>
           <span className="text-[9px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">Cerebro Central</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleMuteToggle} className="text-xs px-2 py-1 text-white">{isMuted ? '🔇' : '🔊'}</button>
-          <button onClick={handleReset} className="text-xs px-2 py-1 text-white">🔄</button>
-          <button onClick={handleClose} className="text-xs px-2 py-1 text-white">✕</button>
+        <div className="flex items-center gap-1.5 shrink-0 text-white text-xs">
+          <button type="button" onClick={toggleMute} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title="Cerrar panel">✕</button>
         </div>
       </header>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">

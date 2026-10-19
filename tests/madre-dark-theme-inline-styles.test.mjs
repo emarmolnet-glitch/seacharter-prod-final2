@@ -6,10 +6,15 @@ const globalMadreDrawerSource = readFileSync(new URL('../src/components/GlobalMa
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 
 test('1. GlobalMadreDrawer Header contains approved dark styling and Cerebro Central badge', () => {
-  // Check aside element with dark styling
+  // Check aside element with dark styling and left-side slide positioning
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{ backgroundColor: '#0f172a' \}\}/,
+    /<aside[^>]*className="[^"]*fixed top-0 left-0 bottom-0[^"]*"/,
+    'Aside must be positioned on the left side'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'#0f172a'/,
     'Aside must force dark background #0f172a'
   );
 
@@ -32,19 +37,19 @@ test('2. GlobalMadreDrawer Action Buttons have audio mute, reset, and close hand
   // Check Close, Mute, and Reset buttons
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleMuteToggle\} className="text-xs px-2 py-1 text-white">\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    /<button[^>]*onClick=\{(?:toggleMute|handleMuteToggle)\}[^>]*>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
     'Mute button must exist'
   );
 
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleReset\} className="text-xs px-2 py-1 text-white">🔄<\/button>/,
+    /<button[^>]*onClick=\{handleReset\}[^>]*>🔄<\/button>/,
     'Reset button must exist'
   );
 
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleClose\} className="text-xs px-2 py-1 text-white">✕<\/button>/,
+    /<button[^>]*onClick=\{handleClose\}[^>]*>✕<\/button>/,
     'Close button must exist'
   );
 });
@@ -175,5 +180,46 @@ test('7. madre-drawer-entry.jsx exists, mounts GlobalMadreDrawer, and is linked 
     indexHtmlSource,
     /<script\s+type="module"\s+src="\.\/src\/madre-drawer-entry\.jsx"><\/script>/,
     'index.html must import ./src/madre-drawer-entry.jsx'
+  );
+});
+
+test('8. Final Polish: MADRE Drawer left-side slide positioning and clean header action buttons', () => {
+  // Left-side slide positioning classes and styling
+  assert.match(
+    globalMadreDrawerSource,
+    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-full max-w-md bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"/,
+    'Aside must have left-side slide positioning with border-r and transition'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /style=\{\{ backgroundColor: '#0f172a', color: '#ffffff' \}\}/,
+    'Aside must have dark backgroundColor and white color'
+  );
+
+  // Clean uncrowded header and buttons
+  assert.match(
+    globalMadreDrawerSource,
+    /className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0"/,
+    'Header must have shrink-0 to prevent button crowding'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /className="flex items-center gap-1\.5 shrink-0 text-white text-xs"/,
+    'Header button container must have shrink-0 and clean gap'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button type="button" onClick=\{toggleMute\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    'Mute button must use toggleMute and clean styling'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button type="button" onClick=\{handleReset\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title="Reiniciar conversación">🔄<\/button>/,
+    'Reset button must have clean styling and title'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button type="button" onClick=\{handleClose\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title="Cerrar panel">✕<\/button>/,
+    'Close button must have clean styling and title'
   );
 });
