@@ -9701,6 +9701,19 @@
 
         <!-- DERECHA: BOTONES DE ACCIÓN (FAQ, OWN/CHR, COLAPSAR) -->
         <div class="header-actions-right hidden md:flex items-center gap-1.5 shrink-0">
+            <!-- Disparador MADRE -->
+          <button
+            type="button"
+            onclick="if(window.toggleMadreDrawer) window.toggleMadreDrawer(); else window.dispatchEvent(new CustomEvent('madre:toggle'));"
+            id="btn-madre-trigger"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold mr-2"
+            style="background-color: #0f172a; color: #5eead4; border: 1px solid rgba(45,212,191,0.4);"
+            title="Abrir Asistente Estratégico MADRE"
+            aria-label="Abrir asistente MADRE"
+          >
+            <img src="/MADRE.png" alt="MADRE" class="w-5 h-5 rounded-full object-cover animate-pulse shadow-[0_0_8px_rgba(45,212,191,0.8)]" style="width: 20px; height: 20px; border-radius: 50%;" />
+            <span style="color: #5eead4;">MADRE</span>
+          </button>
             <!-- Botón FAQ / Manual -->
             <button
                 id="btn-open-faq-modal"
