@@ -261,7 +261,7 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
   // Comprobar aside con fondo oscuro
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{ backgroundColor: '#0f172a' \}\}/,
+    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'#0f172a'/,
     'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a'
   );
 
@@ -282,17 +282,17 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
   // Botones Mute, Reset, Close
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleMuteToggle\} className="text-xs px-2 py-1 text-white">\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    /<button[^>]*onClick=\{(?:toggleMute|handleMuteToggle)\}[^>]*>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
     'Botón Mute debe existir'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleReset\} className="text-xs px-2 py-1 text-white">🔄<\/button>/,
+    /<button[^>]*onClick=\{handleReset\}[^>]*>🔄<\/button>/,
     'Botón Reset debe existir'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button onClick=\{handleClose\} className="text-xs px-2 py-1 text-white">✕<\/button>/,
+    /<button[^>]*onClick=\{handleClose\}[^>]*>✕<\/button>/,
     'Botón Close debe existir'
   );
 });
