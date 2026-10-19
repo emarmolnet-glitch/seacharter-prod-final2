@@ -7,6 +7,8 @@ const decisionesHtml = readFileSync(new URL('../decisiones.html', import.meta.ur
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const cerebroIaSource = readFileSync(new URL('../netlify/functions/cerebro-ia.js', import.meta.url), 'utf8');
 const chatAssistantSource = readFileSync(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
+const globalMadreDrawerSource = readFileSync(new URL('../src/components/GlobalMadreDrawer.jsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 
 function createFakeDoc() {
   const elements = new Map();
@@ -254,3 +256,84 @@ test('6. UI/UX: Cero modo oscuro, fondo blanco puro (bg-white), texto gris corpo
   assert.doesNotMatch(decisionSupportModuleSource, /id="madre-offcanvas-panel"[^>]*bg-slate-900/);
   assert.doesNotMatch(decisionSupportModuleSource, /id="madre-offcanvas-panel"[^>]*bg-black/);
 });
+
+test('7. GlobalMadreDrawer: Estilos inline forzados en Header y Botones de Acción (bypass legacy CSS)', () => {
+  // Comprobar header con inline styles
+  assert.match(
+    globalMadreDrawerSource,
+    /<header className="madre-header flex items-center justify-between px-4 py-3 shrink-0" style=\{\{ backgroundColor: '#0f172a', color: '#ffffff', borderBottom: '1px solid #1e293b' \}\}>/,
+    'Header de GlobalMadreDrawer debe forzar fondo oscuro #0f172a, texto blanco y borde #1e293b'
+  );
+
+  // Comprobar título MADRE forzado a blanco
+  assert.match(
+    globalMadreDrawerSource,
+    /<span className="font-bold text-base tracking-wide" style=\{\{ color: '#ffffff' \}\}>MADRE<\/span>/,
+    'Título MADRE debe tener style={{ color: "#ffffff" }}'
+  );
+
+  // Contenedor de botones de acción con texto forzado a blanco
+  assert.match(
+    globalMadreDrawerSource,
+    /<div className="flex items-center gap-3 ml-auto shrink-0" style=\{\{ color: '#ffffff' \}\}>/,
+    'Contenedor de botones debe tener style={{ color: "#ffffff" }}'
+  );
+
+  // Botones Mute, Reset, Close con fondo transparente y color blanco
+  const muteMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-mute"[^>]*>[\s\S]*?<\/button>/);
+  assert.ok(muteMatch, 'Botón Mute debe existir');
+  assert.match(muteMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
+
+  const resetMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-reset"[^>]*>[\s\S]*?<\/button>/);
+  assert.ok(resetMatch, 'Botón Reset debe existir');
+  assert.match(resetMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
+
+  const closeMatch = globalMadreDrawerSource.match(/<button[^>]*id="btn-madre-close"[^>]*>[\s\S]*?<\/button>/);
+  assert.ok(closeMatch, 'Botón Close debe existir');
+  assert.match(closeMatch[0], /style=\{\{ color: '#ffffff', backgroundColor: 'transparent' \}\}/);
+});
+
+test('8. GlobalMadreDrawer: Lógica completa de API madre-chat, auto-scroll y loading indicator', () => {
+  // Fetch a https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat
+  assert.match(
+    globalMadreDrawerSource,
+    /fetch\(\s*['"]https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app\/api\/madre-chat['"]/,
+    'Debe invocar el endpoint completo de https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat'
+  );
+
+  // handleSubmit
+  assert.match(globalMadreDrawerSource, /const handleSubmit = async/);
+
+  // Loading indicator
+  assert.match(globalMadreDrawerSource, /isLoading/);
+
+  // Auto-scroll
+  assert.match(globalMadreDrawerSource, /messagesEndRef\.current(?:\?)?\.scrollIntoView/);
+});
+
+test('9. TopNav (App.jsx): Botón disparador con dimensionamiento estricto e imagen MADRE.png', () => {
+  // Botón con clases e inline styles exactos
+  assert.match(
+    appSource,
+    /<button[\s\S]*?id="btn-madre-trigger"[\s\S]*?className="inline-flex items-center gap-2 px-3 py-1\.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold"[\s\S]*?style=\{\{ backgroundColor: '#0f172a', color: '#5eead4', border: '1px solid rgba\(45,212,191,0\.4\)' \}\}/,
+    'Botón btn-madre-trigger debe coincidir con estilos solicitados'
+  );
+
+  // Comprobar atributos de accesibilidad y título
+  assert.match(appSource, /title="Abrir Asistente Estratégico MADRE"/);
+  assert.match(appSource, /aria-label="Abrir asistente MADRE"/);
+
+  // Imagen con dimensionamiento explícito y animación
+  assert.match(
+    appSource,
+    /<img src="\/MADRE\.png" alt="MADRE" className="w-5 h-5 rounded-full object-cover animate-pulse shadow-\[0_0_8px_rgba\(45,212,191,0\.8\)\]" style=\{\{ width: '20px', height: '20px', borderRadius: '50%' \}\} \/>/,
+    'Imagen MADRE.png debe tener clases e inline styles para evitar colapso visual'
+  );
+
+  // Texto con color teal
+  assert.match(
+    appSource,
+    /<span style=\{\{ color: '#5eead4' \}\}>MADRE<\/span>/
+  );
+});
+
