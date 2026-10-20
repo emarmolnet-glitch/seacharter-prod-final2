@@ -265,11 +265,11 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
     'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a'
   );
 
-  // Comprobar título MADRE forzado a blanco
+  // Comprobar título MADRE
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-base text-white">MADRE<\/span>/,
-    'Título MADRE debe tener text-white'
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
+    'Título MADRE debe existir'
   );
 
   // Comprobar badge Cerebro Central

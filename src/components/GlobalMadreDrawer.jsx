@@ -253,19 +253,22 @@ export function GlobalMadreDrawer({
 
   return (
     <aside
-      className="fixed top-0 left-0 bottom-0 z-[9999] w-full max-w-md bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"
+      className="fixed top-0 left-0 bottom-0 z-[9999] w-[420px] max-w-lg bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"
       style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
     >
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
-        <div className="flex items-center gap-2">
-          <img src="/MADRE.png" alt="MADRE" className="w-5 h-5 rounded-full object-cover shadow-[0_0_8px_rgba(45,212,191,0.6)]" style={{ width: '20px', height: '20px' }} />
-          <span className="font-bold text-base text-white">MADRE</span>
-          <span className="text-[9px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">Cerebro Central</span>
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white">
+        {/* Left side: Logo and Title */}
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0" />
+          <span className="font-bold text-sm tracking-wide truncate text-slate-800">MADRE</span>
+          <span className="text-[10px] font-mono bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded border border-teal-200 shrink-0">Cerebro Central</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 text-white text-xs">
-          <button type="button" onClick={toggleMute} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="px-2 py-1 rounded hover:bg-slate-800/80 transition-colors" title="Cerrar panel">✕</button>
+
+        {/* Right side: Action Buttons (Mute, Reset, Close) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button" onClick={toggleMute} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title="Cerrar panel">✕</button>
         </div>
       </header>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
