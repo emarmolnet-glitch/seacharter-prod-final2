@@ -298,10 +298,10 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
 });
 
 test('8. GlobalMadreDrawer: Lógica completa de API madre-chat, auto-scroll y loading indicator', () => {
-  // Endpoint https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat
+  // Endpoint central Data Bridge o local madre-chat
   assert.match(
     globalMadreDrawerSource,
-    /export const MADRE_API_ENDPOINT = "https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app\/api\/madre-chat"/,
+    /export const MADRE_API_ENDPOINT = "https:\/\/(?:calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions|neon-seachartercorepro-4ce09d\.netlify\.app\/api)\/madre-chat"/,
     'Debe definir MADRE_API_ENDPOINT apuntando al endpoint de madre-chat'
   );
 

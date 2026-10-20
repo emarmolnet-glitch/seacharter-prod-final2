@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export const MADRE_API_ENDPOINT = "https://neon-seachartercorepro-4ce09d.netlify.app/api/madre-chat";
+/**
+ * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
+ */
+export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
 
 export function GlobalMadreDrawer({
   isOpen = false,
@@ -175,27 +178,44 @@ export function GlobalMadreDrawer({
     setInputValue('');
     setIsLoading(true);
 
+    const queryText = trimmed;
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectRef = urlParams.get('ref') || window.location.hash.match(/ref=([^&]+)/)?.[1] || "RDM/2026-TBN";
+
+    // Clean the history to satisfy Gemini API requirements
+    let cleanHistory = messages
+      .filter(m => m.text && !m.isError && !m.text.includes("Indica error provocado"))
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' : 'model', // CRITICAL: Gemini requires 'model'
+        content: m.text
+      }));
+
+    // Strictly ensure the history array always starts with a 'user' turn
+    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
+      cleanHistory.shift();
+    }
+
+    const payload = {
+      mensajeUsuario: queryText,
+      message: queryText,
+      prompt: queryText,
+      history: cleanHistory,
+      context: {
+        origin: "SeaCharter Core PRO",
+        projectRef: projectRef,
+        userName: "Esteban" // Injected for Data Bridge personalization parity
+      }
+    };
+
     try {
+      // Clean, single-payload dispatch to MADRE API endpoint
       const response = await fetch(MADRE_API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          message: trimmed,
-          prompt: trimmed,
-          history: messages
-            .filter((m) => m.text && !m.isError)
-            .map((m) => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
-              content: m.text,
-            }))
-            .filter((msg, index) => index > 0 || msg.role === 'user'),
-          context: {
-            origin: "SeaCharter Core PRO",
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Error en MADRE API');

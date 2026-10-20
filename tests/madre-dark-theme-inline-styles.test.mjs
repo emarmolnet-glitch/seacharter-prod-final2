@@ -58,7 +58,7 @@ test('3. GlobalMadreDrawer contains full API fetch logic, chat UI, loading indic
   // Check endpoint constant
   assert.match(
     globalMadreDrawerSource,
-    /export const MADRE_API_ENDPOINT = "https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app\/api\/madre-chat"/,
+    /export const MADRE_API_ENDPOINT = "https:\/\/(?:calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions|neon-seachartercorepro-4ce09d\.netlify\.app\/api)\/madre-chat"/,
     'Must define MADRE_API_ENDPOINT'
   );
 
