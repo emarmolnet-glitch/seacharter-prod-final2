@@ -18,11 +18,11 @@ test('1. GlobalMadreDrawer Header contains approved dark styling and Cerebro Cen
     'Aside must force dark background #0f172a'
   );
 
-  // Check title span with white color
+  // Check title span
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-base text-white">MADRE<\/span>/,
-    'Title span MADRE must have text-white'
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
+    'Title span MADRE must exist'
   );
 
   // Check Cerebro Central badge
@@ -187,7 +187,7 @@ test('8. Final Polish: MADRE Drawer left-side slide positioning and clean header
   // Left-side slide positioning classes and styling
   assert.match(
     globalMadreDrawerSource,
-    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-full max-w-md bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"/,
+    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-\[420px\] max-w-lg bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"/,
     'Aside must have left-side slide positioning with border-r and transition'
   );
   assert.match(
@@ -199,27 +199,68 @@ test('8. Final Polish: MADRE Drawer left-side slide positioning and clean header
   // Clean uncrowded header and buttons
   assert.match(
     globalMadreDrawerSource,
-    /className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0"/,
+    /className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white"/,
     'Header must have shrink-0 to prevent button crowding'
   );
   assert.match(
     globalMadreDrawerSource,
-    /className="flex items-center gap-1\.5 shrink-0 text-white text-xs"/,
+    /className="flex items-center gap-2 shrink-0"/,
     'Header button container must have shrink-0 and clean gap'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{toggleMute\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    /<button type="button" onClick=\{toggleMute\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
     'Mute button must use toggleMute and clean styling'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleReset\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title="Reiniciar conversación">🔄<\/button>/,
+    /<button type="button" onClick=\{handleReset\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title="Reiniciar conversación">🔄<\/button>/,
     'Reset button must have clean styling and title'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleClose\} className="px-2 py-1 rounded hover:bg-slate-800\/80 transition-colors" title="Cerrar panel">✕<\/button>/,
+    /<button type="button" onClick=\{handleClose\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title="Cerrar panel">✕<\/button>/,
     'Close button must have clean styling and title'
+  );
+});
+
+test('9. Widen Drawer & Flexbox Header Layout: w-[420px] max-w-lg with non-overlapping buttons', () => {
+  // Widen drawer class
+  assert.match(
+    globalMadreDrawerSource,
+    /<aside[^>]*w-\[420px\]/,
+    'Aside must contain w-[420px] for a wider drawer'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<aside[^>]*max-w-lg/,
+    'Aside must contain max-w-lg'
+  );
+
+  // Strict flexbox header with min-w-0 and truncate
+  assert.match(
+    globalMadreDrawerSource,
+    /<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white">/,
+    'Header must use strict flexbox layout'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<div className="flex items-center gap-2 min-w-0">/,
+    'Left side of header must include min-w-0 to prevent overflow'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<span className="font-bold text-sm tracking-wide truncate text-slate-800">MADRE<\/span>/,
+    'MADRE title must have truncate and text-slate-800'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<div className="flex items-center gap-2 shrink-0">/,
+    'Right side action buttons container must have shrink-0 and gap-2'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]/,
+    'Action buttons must have p-1.5, min-w-[28px], and clean hover transitions'
   );
 });
