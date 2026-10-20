@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
-import GlobalMadreDrawer from './components/GlobalMadreDrawer';
+import GlobalMadreDrawer, { getCoreProUIContext } from './components/GlobalMadreDrawer';
 import { getApiUrl } from './utils/apiConfig.js';
 
 /**
@@ -792,6 +792,6 @@ export function TopNav() {
 
 export { HashRouter, HashRouter as BrowserRouter };
 export { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef };
-export { GlobalMadreDrawer };
+export { GlobalMadreDrawer, getCoreProUIContext };
 export { default as VoyageExecutiveReportModal, buildVoyageStowagePlan } from './components/VoyageExecutiveReportModal.jsx';
 

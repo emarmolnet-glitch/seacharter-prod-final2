@@ -5,6 +5,34 @@ import React, { useState, useEffect, useRef } from 'react';
  */
 export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
 
+/**
+ * Helper function to safely extract active Core PRO parameters from DOM / state.
+ */
+export function getCoreProUIContext() {
+  const params = {};
+  if (typeof document !== 'undefined') {
+    const mgoEl = document.querySelector('[data-fuel="mgo"], #mgo-price, #bunker-mgo, .price-mgo, [data-metric="mgo"]');
+    const portfolioEl = document.querySelector('#portfolio-count, [data-portfolio-count], #fleet-summary-count');
+    if (mgoEl) {
+      const val = parseFloat((mgoEl.value || mgoEl.textContent || "").replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(val) && val > 0) params.mgo_price = val;
+    }
+    if (portfolioEl) {
+      const pVal = parseInt((portfolioEl.textContent || "").replace(/[^0-9]/g, ""), 10);
+      if (Number.isFinite(pVal) && pVal > 0) params.totalPortfolio = pVal;
+    }
+  }
+  return {
+    current_module: "core_pro",
+    vista_activa: "Core PRO - Panel y Mapa Operativo",
+    parametros_activos: params
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.getCoreProUIContext = getCoreProUIContext;
+}
+
 export function GlobalMadreDrawer({
   isOpen = false,
   onClose,
@@ -75,6 +103,7 @@ export function GlobalMadreDrawer({
       window.openMadreDrawer = handleOpen;
       window.closeMadreDrawer = handleCloseEvent;
       window.toggleMadreDrawer = handleToggle;
+      window.getCoreProUIContext = getCoreProUIContext;
     }
 
     return () => {
@@ -204,7 +233,8 @@ export function GlobalMadreDrawer({
         origin: "SeaCharter Core PRO",
         projectRef: projectRef,
         userName: "Esteban" // Injected for Data Bridge personalization parity
-      }
+      },
+      contexto_ui: getCoreProUIContext()
     };
 
     try {
