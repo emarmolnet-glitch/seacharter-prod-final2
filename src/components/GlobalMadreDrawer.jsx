@@ -415,7 +415,7 @@ export function GlobalMadreDrawer({
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`p-3 rounded-xl text-xs max-w-[85%] ${m.sender === 'user' ? 'bg-teal-600 text-white' : m.isError ? 'bg-red-950 text-red-200 border-red-800' : 'bg-slate-800 border border-slate-700 text-white'}`}>{m.text}</div>
+            <div className={`p-3 rounded-xl text-xs max-w-[85%] whitespace-pre-wrap ${m.sender === 'user' ? 'bg-teal-600 text-white' : m.isError ? 'bg-red-950 text-red-200 border-red-800' : 'bg-slate-800 border border-slate-700 text-white'}`}>{m.text}</div>
           </div>
         ))}
         {isLoading && <div className="text-xs text-teal-300 animate-pulse">Procesando...</div>}
