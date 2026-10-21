@@ -39,27 +39,27 @@ export function getCoreProUIContext() {
       if (match) referenciaActiva = match[0];
     }
 
-    // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
-    // Escaneamos los inputs de la calculadora buscando las PDA
-    // (Asegúrate de que tus inputs en React tengan name="pda_pol" o id="pda_pol", etc.)
-    const pdaPolInput = document.querySelector('input[name*="pda_pol"], input[name*="pdaPol"], [id*="pda-pol"], [id*="pdapol"]');
-    const pdaPodInput = document.querySelector('input[name*="pda_pod"], input[name*="pdaPod"], [id*="pda-pod"], [id*="pdapod"]');
+   // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
+    const pdaPolInput = document.getElementById('pda-pol');
+    const pdaPodInput = document.getElementById('pda-pod');
 
     if (pdaPolInput) {
-      const valPol = parseFloat((pdaPolInput.value || "").replace(/[^0-9.]/g, ""));
-      if (Number.isFinite(valPol)) params.pda_pol = valPol;
+      // Leemos el valor normal o el atributo especial de datos operativos que usa tu sistema
+      const rawPol = pdaPolInput.value || pdaPolInput.getAttribute('data-operational-pda-base') || "0";
+      const valPol = parseFloat(rawPol.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(valPol) && valPol > 0) params.pda_pol = valPol;
     }
+
     if (pdaPodInput) {
-      const valPod = parseFloat((pdaPodInput.value || "").replace(/[^0-9.]/g, ""));
-      if (Number.isFinite(valPod)) params.pda_pod = valPod;
+      const rawPod = pdaPodInput.value || pdaPodInput.getAttribute('data-operational-pda-base') || "0";
+      const valPod = parseFloat(rawPod.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(valPod) && valPod > 0) params.pda_pod = valPod;
     }
 
     // --- NUEVO: 4. Cambiar de vista dinámicamente ---
-    // Si la pantalla tiene las PDA cargadas, le decimos a MADRE que estamos en la Calculadora
     if (params.pda_pol || params.pda_pod) {
       vistaActivaActual = "Core PRO - Calculadora de Bunkers y PDAs";
     }
-  }
 
   // Se lo enviamos TODO a MADRE
   return {
