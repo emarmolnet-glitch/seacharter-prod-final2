@@ -13,7 +13,7 @@ import {
 /**
  * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
  */
-export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
+export const MADRE_API_ENDPOINT = "/.netlify/functions/madre-chat";
 
 /**
  * Helper function to safely extract active Core PRO parameters from DOM / state.
