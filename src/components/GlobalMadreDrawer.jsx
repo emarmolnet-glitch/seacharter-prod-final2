@@ -26,6 +26,7 @@ export function getCoreProUIContext() {
       const pVal = parseInt((portfolioEl.textContent || "").replace(/[^0-9]/g, ""), 10);
       if (Number.isFinite(pVal) && pVal > 0) params.totalPortfolio = pVal;
     }
+    }
 
     // --- NUEVO: 2. Rescatar la Referencia del Expediente (RDM/...) ---
     // Escaneamos la pantalla buscando el formato RDM/XXXX-XXXX
