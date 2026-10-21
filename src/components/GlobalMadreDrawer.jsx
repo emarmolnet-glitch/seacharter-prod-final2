@@ -10,9 +10,14 @@ export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.n
  */
 export function getCoreProUIContext() {
   const params = {};
+  let vistaActivaActual = "Core PRO - Panel y Mapa Operativo";
+  let referenciaActiva = null;
+
   if (typeof document !== 'undefined') {
+    // 1. MGO y Portfolio (lo que ya tenías)
     const mgoEl = document.querySelector('[data-fuel="mgo"], #mgo-price, #bunker-mgo, .price-mgo, [data-metric="mgo"]');
     const portfolioEl = document.querySelector('#portfolio-count, [data-portfolio-count], #fleet-summary-count');
+
     if (mgoEl) {
       const val = parseFloat((mgoEl.value || mgoEl.textContent || "").replace(/[^0-9.]/g, ""));
       if (Number.isFinite(val) && val > 0) params.mgo_price = val;
@@ -21,11 +26,47 @@ export function getCoreProUIContext() {
       const pVal = parseInt((portfolioEl.textContent || "").replace(/[^0-9]/g, ""), 10);
       if (Number.isFinite(pVal) && pVal > 0) params.totalPortfolio = pVal;
     }
+
+    // --- NUEVO: 2. Rescatar la Referencia del Expediente (RDM/...) ---
+    // Escaneamos la pantalla buscando el formato RDM/XXXX-XXXX
+    const allTextEls = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6, input'));
+    const refEl = allTextEls.find(el => {
+      const text = el.value || el.textContent || "";
+      return text.includes('RDM/');
+    });
+    if (refEl) {
+      const match = (refEl.value || refEl.textContent).match(/RDM\/\d{4}-\d{4,}/);
+      if (match) referenciaActiva = match[0];
+    }
+
+    // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
+    // Escaneamos los inputs de la calculadora buscando las PDA
+    // (Asegúrate de que tus inputs en React tengan name="pda_pol" o id="pda_pol", etc.)
+    const pdaPolInput = document.querySelector('input[name*="pda_pol"], input[name*="pdaPol"], [id*="pda-pol"], [id*="pdapol"]');
+    const pdaPodInput = document.querySelector('input[name*="pda_pod"], input[name*="pdaPod"], [id*="pda-pod"], [id*="pdapod"]');
+
+    if (pdaPolInput) {
+      const valPol = parseFloat((pdaPolInput.value || "").replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(valPol)) params.pda_pol = valPol;
+    }
+    if (pdaPodInput) {
+      const valPod = parseFloat((pdaPodInput.value || "").replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(valPod)) params.pda_pod = valPod;
+    }
+
+    // --- NUEVO: 4. Cambiar de vista dinámicamente ---
+    // Si la pantalla tiene las PDA cargadas, le decimos a MADRE que estamos en la Calculadora
+    if (params.pda_pol || params.pda_pod) {
+      vistaActivaActual = "Core PRO - Calculadora de Bunkers y PDAs";
+    }
   }
+
+  // Se lo enviamos TODO a MADRE
   return {
     current_module: "core_pro",
-    vista_activa: "Core PRO - Panel y Mapa Operativo",
-    parametros_activos: params
+    vista_activa: vistaActivaActual,
+    referenciaMadre: referenciaActiva, // <- VITAL PARA QUE NO FALLE NEON
+    parametros_activos: params         // <- AQUÍ VAN LOS GASTOS DE PUERTO
   };
 }
 
