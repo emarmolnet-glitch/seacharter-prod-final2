@@ -261,8 +261,8 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
   // Comprobar aside con fondo oscuro
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'#0f172a'/,
-    'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a'
+    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
+    'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a o #0B1121'
   );
 
   // Comprobar título MADRE

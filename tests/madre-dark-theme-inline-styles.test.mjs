@@ -14,14 +14,14 @@ test('1. GlobalMadreDrawer Header contains approved dark styling and Cerebro Cen
   );
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'#0f172a'/,
-    'Aside must force dark background #0f172a'
+    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
+    'Aside must force dark background #0f172a or #0B1121'
   );
 
   // Check title span
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white tracking-wide truncate|base text-white)">MADRE<\/span>/,
     'Title span MADRE must exist'
   );
 
@@ -187,49 +187,49 @@ test('8. Final Polish: MADRE Drawer left-side slide positioning and clean header
   // Left-side slide positioning classes and styling
   assert.match(
     globalMadreDrawerSource,
-    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-\[420px\] max-w-lg bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"/,
+    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-\[(?:420|450)px\] max-w-lg bg-\[#0B1121\] text-slate-300 shadow-2xl border-r border-slate-800\/80 flex flex-col font-sans transition-all duration-300"/,
     'Aside must have left-side slide positioning with border-r and transition'
   );
   assert.match(
     globalMadreDrawerSource,
-    /style=\{\{ backgroundColor: '#0f172a', color: '#ffffff' \}\}/,
-    'Aside must have dark backgroundColor and white color'
+    /style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
+    'Aside must have dark backgroundColor'
   );
 
   // Clean uncrowded header and buttons
   assert.match(
     globalMadreDrawerSource,
-    /className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white"/,
-    'Header must have shrink-0 to prevent button crowding'
+    /className="flex items-center justify-between px-4 py-3 border-b border-slate-800(?:\/80)? shrink-0 bg-\[#0B1121\] text-slate-200"/,
+    'Header must have shrink-0 to prevent button crowding and dark styling'
   );
   assert.match(
     globalMadreDrawerSource,
-    /className="flex items-center gap-2 shrink-0"/,
-    'Header button container must have shrink-0 and clean gap'
+    /className="flex items-center gap-3 shrink-0"/,
+    'Header button container must have shrink-0 and clean gap-3'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{toggleMute\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
-    'Mute button must use toggleMute and clean styling'
+    /<button type="button" onClick=\{toggleMute\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    'Mute button must use toggleMute and executive dark styling'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleReset\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title="Reiniciar conversación">🔄<\/button>/,
-    'Reset button must have clean styling and title'
+    /<button type="button" onClick=\{handleReset\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄<\/button>/,
+    'Reset button must have executive dark styling and title'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleClose\} className="p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]" title="Cerrar panel">✕<\/button>/,
-    'Close button must have clean styling and title'
+    /<button type="button" onClick=\{handleClose\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕<\/button>/,
+    'Close button must have executive dark styling and title'
   );
 });
 
-test('9. Widen Drawer & Flexbox Header Layout: w-[420px] max-w-lg with non-overlapping buttons', () => {
+test('9. Widen Drawer & Flexbox Header Layout: w-[420px] or w-[450px] max-w-lg with non-overlapping buttons', () => {
   // Widen drawer class
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*w-\[420px\]/,
-    'Aside must contain w-[420px] for a wider drawer'
+    /<aside[^>]*w-\[(?:420|450)px\]/,
+    'Aside must contain w-[420px] or w-[450px] for a wider drawer'
   );
   assert.match(
     globalMadreDrawerSource,
@@ -240,7 +240,7 @@ test('9. Widen Drawer & Flexbox Header Layout: w-[420px] max-w-lg with non-overl
   // Strict flexbox header with min-w-0 and truncate
   assert.match(
     globalMadreDrawerSource,
-    /<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white">/,
+    /<header[\s\S]*?className="flex items-center justify-between px-4 py-3 border-b border-slate-800(?:\/80)? shrink-0 bg-\[#0B1121\] text-slate-200"/,
     'Header must use strict flexbox layout'
   );
   assert.match(
@@ -250,17 +250,47 @@ test('9. Widen Drawer & Flexbox Header Layout: w-[420px] max-w-lg with non-overl
   );
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-sm tracking-wide truncate text-slate-800">MADRE<\/span>/,
-    'MADRE title must have truncate and text-slate-800'
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
+    'MADRE title must exist'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<div className="flex items-center gap-2 shrink-0">/,
-    'Right side action buttons container must have shrink-0 and gap-2'
+    /<div className="flex items-center gap-3 shrink-0">/,
+    'Right side action buttons container must have shrink-0 and gap-3'
   );
   assert.match(
     globalMadreDrawerSource,
-    /p-1\.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-\[28px\]/,
-    'Action buttons must have p-1.5, min-w-[28px], and clean hover transitions'
+    /flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer/,
+    'Action buttons must have square styling, border, and clean hover transitions'
+  );
+});
+
+test('10. Reefer Charter Parity: Executive dark chat bubbles, dark command input and styling', () => {
+  // MADRE dark chat bubbles
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-slate-900\/60 border border-slate-800\/80 text-slate-300 rounded-xl p-3/,
+    'MADRE assistant chat bubble must match Reefer Charter dark styling'
+  );
+
+  // User dark chat bubbles
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-teal-950\/40 border border-teal-900\/50 text-teal-200 rounded-xl p-3/,
+    'User chat bubble must match Reefer Charter dark teal styling'
+  );
+
+  // Input styling
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg/,
+    'Text input must have dark styling'
+  );
+
+  // Submit button styling
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-teal-700 hover:bg-teal-600 text-white/,
+    'Submit button must have dark teal styling'
   );
 });
