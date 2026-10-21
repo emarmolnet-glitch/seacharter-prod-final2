@@ -1,4 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  triggerLaserScanEffect,
+  ejecutarEscaneoVisual,
+  ejecutarEfectoLaserScan,
+  extractStructuredCoreProData,
+  extraerDatosEstructuradosCorePro,
+  compactPayload,
+  SCAN_COMMAND_REGEX,
+  ejecutarEscaneoCompleto
+} from '../utils/coreProScanner.js';
 
 /**
  * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
@@ -30,7 +40,9 @@ export function getCoreProUIContext() {
 
     // --- NUEVO: 2. Rescatar la Referencia del Expediente (RDM/...) ---
     // Escaneamos la pantalla buscando el formato RDM/XXXX-XXXX
-    const allTextEls = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6, input'));
+    const allTextEls = typeof document.querySelectorAll === 'function'
+      ? Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6, input'))
+      : [];
     const refEl = allTextEls.find(el => {
       const text = el.value || el.textContent || "";
       return text.includes('RDM/');
@@ -41,8 +53,8 @@ export function getCoreProUIContext() {
     }
 
    // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
-    const pdaPolInput = document.getElementById('pda-pol');
-    const pdaPodInput = document.getElementById('pda-pod');
+    const pdaPolInput = typeof document.getElementById === 'function' ? document.getElementById('pda-pol') : null;
+    const pdaPodInput = typeof document.getElementById === 'function' ? document.getElementById('pda-pod') : null;
 
     if (pdaPolInput) {
       // Leemos el valor normal o el atributo especial de datos operativos que usa tu sistema
@@ -62,17 +74,44 @@ export function getCoreProUIContext() {
       vistaActivaActual = "Core PRO - Calculadora de Bunkers y PDAs";
     }
 
+  // --- NUEVO: 5. Escaneo Estructurado Bloque por Bloque (Módulos 1 al 10) ---
+  let escaneoCompacto = null;
+  try {
+    const rawData = extractStructuredCoreProData();
+    escaneoCompacto = compactPayload(rawData);
+  } catch (_) {}
+
   // Se lo enviamos TODO a MADRE
   return {
     current_module: "core_pro",
-    vista_activa: vistaActivaActual,
+    vista_activa: "Core PRO - Panel y Mapa Operativo",
+    vista_dinamica: vistaActivaActual,
     referenciaMadre: referenciaActiva, // <- VITAL PARA QUE NO FALLE NEON
-    parametros_activos: params         // <- AQUÍ VAN LOS GASTOS DE PUERTO
+    parametros_activos: params,        // <- AQUÍ VAN LOS GASTOS DE PUERTO
+    escaneo_estructurado: escaneoCompacto,
+    modulos_1_a_10: escaneoCompacto?.bloques,
+    resumen_operativo: escaneoCompacto?.resumen,
+    pol: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol || 'Rotterdam',
+    pod: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod || 'Houston',
+    cargoQty: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga || 30000,
+    commodity: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.commodity || 'Siderúrgico / Carga General',
+    breakEvenUnitario: escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt || 28.5,
+    fleteUnitario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.flete_venta_fletador_mt || escaneoCompacto?.bloques?.bloque_7_analisis_fletes_riesgos?.flete_venta_sugerido_mt || 37.0,
+    loadRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_carga_tpd || 5000,
+    dischargeRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_descarga_tpd || 2500,
+    tceDiario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.tce_obtenido_usd_dia || 13500
   };
 }
 
 if (typeof window !== 'undefined') {
   window.getCoreProUIContext = getCoreProUIContext;
+  window.triggerLaserScanEffect = triggerLaserScanEffect;
+  window.ejecutarEscaneoVisual = ejecutarEscaneoVisual;
+  window.ejecutarEfectoLaserScan = ejecutarEfectoLaserScan;
+  window.extractStructuredCoreProData = extractStructuredCoreProData;
+  window.extraerDatosEstructuradosCorePro = extraerDatosEstructuradosCorePro;
+  window.compactPayload = compactPayload;
+  window.ejecutarEscaneoCompleto = ejecutarEscaneoCompleto;
 }
 
 export function GlobalMadreDrawer({
@@ -253,6 +292,11 @@ export function GlobalMadreDrawer({
     const urlParams = new URLSearchParams(window.location.search);
     const projectRef = urlParams.get('ref') || window.location.hash.match(/ref=([^&]+)/)?.[1] || "RDM/2026-TBN";
 
+    // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual
+    if (SCAN_COMMAND_REGEX.test(queryText)) {
+      triggerLaserScanEffect();
+    }
+
     // Clean the history to satisfy Gemini API requirements
     let cleanHistory = messages
       .filter(m => m.text && !m.isError && !m.text.includes("Indica error provocado"))
@@ -343,6 +387,31 @@ export function GlobalMadreDrawer({
           <button type="button" onClick={handleClose} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title="Cerrar panel">✕</button>
         </div>
       </header>
+
+      {/* Barra de acción rápida: Escaneo Visual Láser de Pantalla (Bloques 1 al 10) */}
+      <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/70 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 truncate">Escaneo Visual Core PRO</span>
+        </div>
+        <button
+          type="button"
+          id="btn-madre-scan-screen"
+          onClick={() => {
+            triggerLaserScanEffect();
+            setInputValue("Escanear y auditar pantalla Core PRO (Módulos 1 al 10)");
+            setTimeout(() => {
+              handleSubmit();
+            }, 60);
+          }}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+          title="Disparar escaneo visual láser y auditar módulos 1 al 10"
+        >
+          <span className="text-emerald-400 font-bold">⚡</span>
+          <span>Escanear Pantalla</span>
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
@@ -362,5 +431,16 @@ export function GlobalMadreDrawer({
     </aside>
   );
 }
+
+export {
+  triggerLaserScanEffect,
+  ejecutarEscaneoVisual,
+  ejecutarEfectoLaserScan,
+  extractStructuredCoreProData,
+  extraerDatosEstructuradosCorePro,
+  compactPayload,
+  SCAN_COMMAND_REGEX,
+  ejecutarEscaneoCompleto
+};
 
 export default GlobalMadreDrawer;
