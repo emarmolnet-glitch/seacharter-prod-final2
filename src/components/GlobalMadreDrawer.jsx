@@ -369,16 +369,18 @@ export function GlobalMadreDrawer({
   return (
     <aside className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300">
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121]">
+        {/* Left side: Logo and Title */}
         <div className="flex items-center gap-2 min-w-0">
           <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm" />
           <span className="font-bold text-base text-white truncate">MADRE</span>
           <span className="text-[10px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30 shrink-0">Cerebro Central</span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕</button>
+        {/* Right side: Action Buttons (Mute, Reset, Close) */}
+        <div className="flex items-center shrink-0" style={{ gap: '10px' }}>
+          <button type="button" onClick={toggleMute} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title="Cerrar panel">✕</button>
         </div>
       </header>
 
