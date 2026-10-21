@@ -367,22 +367,14 @@ export function GlobalMadreDrawer({
   if (!internalIsOpen) return null;
 
   return (
-    <aside
-      className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
-      style={{ backgroundColor: '#0B1121', color: '#cbd5e1' }}
-    >
-      <header
-        className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0 bg-[#0B1121] text-slate-200"
-        style={{ backgroundColor: '#0B1121', color: '#e2e8f0' }}
-      >
-        {/* Left side: Logo and Title */}
+    <aside className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121]">
         <div className="flex items-center gap-2 min-w-0">
           <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm" />
-          <span className="font-bold text-base text-white">MADRE</span>
+          <span className="font-bold text-base text-white truncate">MADRE</span>
           <span className="text-[10px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30 shrink-0">Cerebro Central</span>
         </div>
 
-        {/* Right side: Action Buttons (Mute, Reset, Close) */}
         <div className="flex items-center gap-3 shrink-0">
           <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
           <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
@@ -390,7 +382,7 @@ export function GlobalMadreDrawer({
         </div>
       </header>
 
-      {/* Barra de acción rápida: Escaneo Visual Láser de Pantalla (Bloques 1 al 10) */}
+      {/* Barra de acción rápida: Escaneo Visual Láser */}
       <div className="px-4 py-2 border-b border-slate-800/80 bg-slate-950/70 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
@@ -398,13 +390,14 @@ export function GlobalMadreDrawer({
         </div>
         <button
           type="button"
-          id="btn-madre-scan-screen"
-          onClick={() => {
+          onClick={(e) => {
             triggerLaserScanEffect();
-            handleSubmit(null, "Escanear y auditar pantalla Core PRO (Módulos 1 al 10)");
+            if (typeof handleSubmit === 'function') {
+               // Enviar la petición al instante (One-Click)
+               handleSubmit(e, "Escanear y auditar pantalla Core PRO (Módulos 1 al 10)");
+            }
           }}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
-          title="Disparar escaneo visual láser y auditar módulos 1 al 10"
         >
           <span className="text-emerald-400 font-bold">⚡</span>
           <span>Escanear Pantalla</span>
@@ -431,29 +424,17 @@ export function GlobalMadreDrawer({
         <div ref={messagesEndRef} />
       </div>
       <div className="p-3 border-t border-slate-800/80 bg-[#0B1121] flex gap-2 items-center shrink-0">
-        <button
-          type="button"
-          onClick={handleMicClick}
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700 text-teal-400 border border-slate-700/50 transition-all cursor-pointer shadow-sm shrink-0"
-          title="Dictar comando por voz"
-        >
-          🎙️
-        </button>
+        <button type="button" onClick={handleMicClick} className="flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700 text-teal-400 border border-slate-700/50 transition-all cursor-pointer shadow-sm shrink-0">🎙️</button>
         <form onSubmit={handleSubmit} className="flex gap-2 flex-1">
-          <input
+          <input 
             ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Comando..."
-            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 focus:border-teal-500/50 transition-all"
+            type="text" 
+            value={inputValue} 
+            onChange={(e) => setInputValue(e.target.value)} 
+            placeholder="Comando a MADRE..." 
+            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition-all" 
           />
-          <button
-            type="submit"
-            className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer shadow-sm shrink-0"
-          >
-            Enviar
-          </button>
+          <button type="submit" className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer shadow-sm shrink-0">Enviar</button>
         </form>
       </div>
     </aside>
