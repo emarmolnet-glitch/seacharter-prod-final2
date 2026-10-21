@@ -72,6 +72,17 @@ export async function handler(req: Request): Promise<Response> {
         `• **Bloque 9 (Matriz de Riesgo y Penalizaciones):** Demurrage pactado en $${(b9.tarifa_demurrage_usd_dia || 8500).toLocaleString('es-ES')}/día con cláusula de despacho al ${b9.despacho_pct || 50}%. Kill-switch de seguridad: ${b9.kill_switch_activo ? '⚠️ Alertas detectadas' : '✅ Despejado'}.\n` +
         `• **Bloque 10 (Simulador de Negociación y Arbitraje):** Flete Compra Armador: $${fleteCompra.toFixed(2)}/MT | Flete Venta Cliente: $${fleteVenta.toFixed(2)}/MT. **Spread Comercial: $${spread.toFixed(2)}/MT**. TCE obtenido: **$${tce.toLocaleString('es-ES')}/día** (Beneficio neto fletador: $${netCharterer.toLocaleString('es-ES')}).\n\n` +
         `🎯 **Dictamen Final MADRE:** Los 10 bloques validan viabilidad comercial robusta. Se recomienda blindar la oferta con cláusula Reachable on Arrival y garantía de ritmo mínimo de 2.500 MT/d en muelle para salvaguardar el TCE proyectado.`;
+      return new Response(JSON.stringify({
+      success: true,
+      message: reply,
+      text: reply,
+      response: reply,
+      escaneo_procesado: true,
+      bloques_auditados: 10
+    }), { 
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
     } else if (lower.includes('break-even') || lower.includes('flete') || lower.includes('coste') || lower.includes('margen')) {
       reply = 'Auditoría MADRE: El Break-Even base de la operación se sitúa en $28.50/MT con flete estimado de $37.00/MT (margen neto estimado del 22.9%). Se aconseja proteger márgenes frente a variaciones de bunker VLSFO en la ruta de retorno.';
     } else if (lower.includes('clausul') || lower.includes('laytime') || lower.includes('shinc') || lower.includes('plancha')) {
