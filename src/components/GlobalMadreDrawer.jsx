@@ -269,18 +269,18 @@ export function GlobalMadreDrawer({
     recognition.start();
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, overridePrompt) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
-    const trimmed = inputValue.trim();
-    if (!trimmed || isLoading) return;
+    const queryText = (typeof overridePrompt === 'string' ? overridePrompt : inputValue).trim();
+    if (!queryText || isLoading) return;
 
     const userMessage = {
       id: Date.now(),
       sender: 'user',
       role: 'user',
-      text: trimmed,
+      text: queryText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -288,7 +288,6 @@ export function GlobalMadreDrawer({
     setInputValue('');
     setIsLoading(true);
 
-    const queryText = trimmed;
     const urlParams = new URLSearchParams(window.location.search);
     const projectRef = urlParams.get('ref') || window.location.hash.match(/ref=([^&]+)/)?.[1] || "RDM/2026-TBN";
 
@@ -369,27 +368,30 @@ export function GlobalMadreDrawer({
 
   return (
     <aside
-      className="fixed top-0 left-0 bottom-0 z-[9999] w-[420px] max-w-lg bg-slate-900 text-slate-100 shadow-2xl border-r border-slate-800 flex flex-col font-sans transition-all duration-300"
-      style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+      className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
+      style={{ backgroundColor: '#0B1121', color: '#cbd5e1' }}
     >
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-white">
+      <header
+        className="flex items-center justify-between px-4 py-3 border-b border-slate-800 shrink-0 bg-[#0B1121] text-slate-200"
+        style={{ backgroundColor: '#0B1121', color: '#e2e8f0' }}
+      >
         {/* Left side: Logo and Title */}
         <div className="flex items-center gap-2 min-w-0">
-          <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0" />
-          <span className="font-bold text-sm tracking-wide truncate text-slate-800">MADRE</span>
-          <span className="text-[10px] font-mono bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded border border-teal-200 shrink-0">Cerebro Central</span>
+          <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm" />
+          <span className="font-bold text-base text-white">MADRE</span>
+          <span className="text-[10px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30 shrink-0">Cerebro Central</span>
         </div>
 
         {/* Right side: Action Buttons (Mute, Reset, Close) */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button type="button" onClick={toggleMute} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors flex items-center justify-center min-w-[28px]" title="Cerrar panel">✕</button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕</button>
         </div>
       </header>
 
       {/* Barra de acción rápida: Escaneo Visual Láser de Pantalla (Bloques 1 al 10) */}
-      <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/70 flex items-center justify-between gap-2 shrink-0">
+      <div className="px-4 py-2 border-b border-slate-800/80 bg-slate-950/70 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 truncate">Escaneo Visual Core PRO</span>
@@ -399,10 +401,7 @@ export function GlobalMadreDrawer({
           id="btn-madre-scan-screen"
           onClick={() => {
             triggerLaserScanEffect();
-            setInputValue("Escanear y auditar pantalla Core PRO (Módulos 1 al 10)");
-            setTimeout(() => {
-              handleSubmit();
-            }, 60);
+            handleSubmit(null, "Escanear y auditar pantalla Core PRO (Módulos 1 al 10)");
           }}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
           title="Disparar escaneo visual láser y auditar módulos 1 al 10"
@@ -415,17 +414,46 @@ export function GlobalMadreDrawer({
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`p-3 rounded-xl text-xs max-w-[85%] whitespace-pre-wrap ${m.sender === 'user' ? 'bg-teal-600 text-white' : m.isError ? 'bg-red-950 text-red-200 border-red-800' : 'bg-slate-800 border border-slate-700 text-white'}`}>{m.text}</div>
+            <div
+              className={`text-xs max-w-[85%] whitespace-pre-wrap ${
+                m.sender === 'user'
+                  ? 'bg-teal-950/40 border border-teal-900/50 text-teal-200 rounded-xl p-3'
+                  : m.isError
+                  ? 'bg-red-950/60 border border-red-900/60 text-red-300 rounded-xl p-3'
+                  : 'bg-slate-900/60 border border-slate-800/80 text-slate-300 rounded-xl p-3'
+              }`}
+            >
+              {m.text}
+            </div>
           </div>
         ))}
         {isLoading && <div className="text-xs text-teal-300 animate-pulse">Procesando...</div>}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-3 border-t border-slate-800 flex gap-2">
-        <button onClick={handleMicClick} className="p-2 rounded-lg text-xs bg-slate-800 text-teal-300">🎙️</button>
+      <div className="p-3 border-t border-slate-800/80 bg-[#0B1121] flex gap-2 items-center shrink-0">
+        <button
+          type="button"
+          onClick={handleMicClick}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700 text-teal-400 border border-slate-700/50 transition-all cursor-pointer shadow-sm shrink-0"
+          title="Dictar comando por voz"
+        >
+          🎙️
+        </button>
         <form onSubmit={handleSubmit} className="flex gap-2 flex-1">
-          <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Comando..." className="flex-1 px-3 py-2 bg-slate-800 border-slate-700 rounded-lg text-xs text-white" />
-          <button type="submit" className="px-3 py-2 bg-teal-600 text-white rounded-lg text-xs">Enviar</button>
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Comando..."
+            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 focus:border-teal-500/50 transition-all"
+          />
+          <button
+            type="submit"
+            className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer shadow-sm shrink-0"
+          >
+            Enviar
+          </button>
         </form>
       </div>
     </aside>
