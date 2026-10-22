@@ -9703,29 +9703,18 @@
         <!-- DERECHA: BOTONES DE ACCIÓN (FAQ, OWN/CHR, COLAPSAR) -->
         <div class="header-actions-right hidden md:flex items-center gap-1.5 shrink-0">
           <!-- Disparador MADRE -->
-          <button
-            id="madre-topbar-button"
-            type="button"
-            class="madre-topbar-btn relative flex items-center justify-center w-10 h-10 rounded-full p-0 bg-transparent border-0 cursor-pointer focus:outline-none mr-2"
-            style="background: transparent; border: none; padding: 0;"
-            aria-label="Abrir panel MADRE"
-            title="MADRE"
-            onclick="if(window.toggleMadreDrawer) window.toggleMadreDrawer(); else window.dispatchEvent(new CustomEvent('madre:toggle'));"
-          >
-            <div
-              id="madre-topbar-glow"
-              class="madre-topbar-glow absolute inset-0 rounded-full animate-pulse bg-cyan-500 blur-md pointer-events-none opacity-80"
-              style="display: none;"
-              aria-hidden="true"
-            ></div>
-            <img
-              id="madre-topbar-img"
-              src="/MADRE.png"
-              alt="MADRE"
-              class="madre-topbar-img w-10 h-10 rounded-full relative z-10 object-contain transition-all duration-300 grayscale opacity-70 scale-100 hover:grayscale-0 hover:opacity-100 hover:scale-110"
-            />
-            <span class="sr-only">MADRE</span>
-          </button>
+            <button
+                type="button"
+                id="btn-madre-trigger"
+                onclick="if(window.toggleMadreDrawer) window.toggleMadreDrawer(); else window.dispatchEvent(new CustomEvent('madre:toggle'));"
+                class="relative group flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-full border-2 border-slate-800 bg-slate-900 hover:scale-110 transition-transform duration-200 shadow-md cursor-pointer shrink-0"
+                title="Cerebro Central MADRE"
+            >
+                <!-- Resplandor trasero animado (Efecto Hover) -->
+                <div id="madre-topbar-glow" class="absolute inset-0 rounded-full animate-pulse bg-cyan-500 blur-md opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                <!-- Logo oficial MADRE -->
+                <img src="/MADRE.png" alt="MADRE" class="w-full h-full rounded-full object-cover relative z-10 pointer-events-none" />
+            </button>
             <!-- Botón FAQ / Manual -->
             <button
                 id="btn-open-faq-modal"
