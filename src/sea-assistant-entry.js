@@ -2931,19 +2931,32 @@ async function executeActionableAiAction(actionObj) {
     }
 
     if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {
-        return await executeActionableAiUpdateFields(actionObj);
+        // 1. Ejecutamos la actualización normal del resto de campos
+        const result = await executeActionableAiUpdateFields(actionObj);
+        
+        // 2. Extraemos los datos recibidos de Cerebro
+        const actionPayload = actionObj.payload || actionObj;
+
+        // 3. FORZAMOS LA INYECCIÓN DEL BÚNKER EN LA CALCULADORA
+        if (actionPayload.precio_vlsfo) {
+            const inputVlsfo = document.getElementById('precio-vlsfo') || document.querySelector('[name="precio-vlsfo"]');
+            if (inputVlsfo) {
+                inputVlsfo.value = actionPayload.precio_vlsfo;
+                inputVlsfo.dispatchEvent(new Event('input', { bubbles: true })); 
+            }
+        }
+
+        if (actionPayload.precio_mgo) {
+            const inputMgo = document.getElementById('precio-mgo') || document.querySelector('[name="precio-mgo"]');
+            if (inputMgo) {
+                inputMgo.value = actionPayload.precio_mgo;
+                inputMgo.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+        
+        // 4. Retornamos el resultado original
+        return result;
     }
-    if (actionName === "search_vessel" && typeof executeActionableAiSearchVessel === 'function') {
-        return executeActionableAiSearchVessel(actionObj);
-    }
-    if (actionObj?.action === "fill_complete_form" && typeof executeActionableAiCompleteForm === 'function') {
-        return executeActionableAiCompleteForm(actionObj);
-    }
-    if (actionName === "calculate_route" && typeof executeActionableAiRoute === 'function') {
-        return executeActionableAiRoute(actionObj);
-    }
-    return false;
-}
 
 window.executeActionableAiAction = executeActionableAiAction;
 
