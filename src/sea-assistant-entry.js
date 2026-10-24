@@ -2958,6 +2958,21 @@ async function executeActionableAiAction(actionObj) {
         return result;
     }
 
+    if (actionName === "search_vessel" && typeof executeActionableAiSearchVessel === "function") {
+        return executeActionableAiSearchVessel(actionObj);
+    }
+
+    if (actionObj?.action === "fill_complete_form" && typeof executeActionableAiCompleteForm === "function") {
+        return executeActionableAiCompleteForm(actionObj);
+    }
+
+    if (actionName === "calculate_route" && typeof executeActionableAiRoute === "function") {
+        return executeActionableAiRoute(actionObj);
+    }
+
+    return false;
+} // <--- ESTA ES LA LLAVE CRÍTICA QUE FALTABA PARA CERRAR LA FUNCIÓN
+
 window.executeActionableAiAction = executeActionableAiAction;
 
 export const AsistenteCore = {
