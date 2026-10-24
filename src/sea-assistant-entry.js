@@ -2931,64 +2931,7 @@ async function executeActionableAiAction(actionObj) {
     }
 
     if (actionName === "update_fields" && typeof executeActionableAiUpdateFields === "function") {
-        // 1. Ejecutamos la actualización normal del resto de campos
-        const result = await executeActionableAiUpdateFields(actionObj);
-        
-        // 2. Extraemos los datos recibidos de Cerebro
-        const actionPayload = actionObj.payload || actionObj;
-
-        // 3. FORZAMOS LA INYECCIÓN DEL BÚNKER EN LA CALCULADORA (VERSIÓN BLINDADA)
-        const priceVlsfo = actionPayload.precio_vlsfo || actionPayload.vlsfoPrice || actionPayload['precio-vlsfo'];
-        const priceMgo = actionPayload.precio_mgo || actionPayload.mgoPrice || actionPayload['precio-mgo'];
-
-        if (priceVlsfo) {
-            // 3.1 Buscamos la caja verde probando todas las variantes de ID posibles
-            const vlsfoIds = ['precio_vlsfo', 'precio-vlsfo', 'vlsfoPrice', 'vlsfo-price', 'vlsfo', 'precio_vlsfo_global'];
-            let inputVlsfo = null;
-            for (const id of vlsfoIds) {
-                inputVlsfo = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
-                if (inputVlsfo) break;
-            }
-
-            if (inputVlsfo) {
-                // 3.2 Bypass para saltar bloqueos de estado de React/Vanilla JS
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                if (nativeInputValueSetter) {
-                    nativeInputValueSetter.call(inputVlsfo, priceVlsfo);
-                } else {
-                    inputVlsfo.value = priceVlsfo;
-                }
-                
-                // 3.3 Disparamos todos los eventos posibles para despertar a la calculadora
-                inputVlsfo.dispatchEvent(new Event('input', { bubbles: true }));
-                inputVlsfo.dispatchEvent(new Event('change', { bubbles: true }));
-                inputVlsfo.dispatchEvent(new Event('blur', { bubbles: true })); 
-            } else {
-                console.error("Cerebro intentó inyectar el búnker, pero no encontró el ID de la caja VLSFO en el HTML.");
-            }
-        }
-
-        if (priceMgo) {
-            const mgoIds = ['precio_mgo', 'precio-mgo', 'mgoPrice', 'mgo-price', 'mgo', 'precio_mgo_global'];
-            let inputMgo = null;
-            for (const id of mgoIds) {
-                inputMgo = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
-                if (inputMgo) break;
-            }
-
-            if (inputMgo) {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                if (nativeInputValueSetter) nativeInputValueSetter.call(inputMgo, priceMgo);
-                else inputMgo.value = priceMgo;
-                
-                inputMgo.dispatchEvent(new Event('input', { bubbles: true }));
-                inputMgo.dispatchEvent(new Event('change', { bubbles: true }));
-                inputMgo.dispatchEvent(new Event('blur', { bubbles: true }));
-            }
-        }
-        
-        // 4. Retornamos el resultado original
-        return result;
+        return await executeActionableAiUpdateFields(actionObj);
     }
 
     if (actionName === "search_vessel" && typeof executeActionableAiSearchVessel === "function") {
