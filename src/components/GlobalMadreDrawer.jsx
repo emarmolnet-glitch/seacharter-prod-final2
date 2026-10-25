@@ -166,7 +166,21 @@ export function GlobalMadreDrawer({
       });
     };
     
-    const handleOpen = () => setInternalIsOpen(true);
+    // Regla estricta: MADRE SOLO debe abrirse si el usuario hace clic explícitamente
+    // en el botón de su avatar en el Header o si invoca el sistema mediante el Wake Word por voz.
+    // Nunca debe reaccionar abriéndose solo tras terminar un cálculo o estimación en SeaCharter.
+    const handleOpen = (e) => {
+      if (e?.detail?.fromCalculation || e?.fromCalculation) {
+        console.warn('[MADRE] Apertura automática por cálculo bloqueada según directriz de gobernanza.');
+        return;
+      }
+      setInternalIsOpen(true);
+    };
+
+    const handleWakeWord = () => {
+      // Apertura permitida: Invocación explícita mediante Wake Word por voz
+      setInternalIsOpen(true);
+    };
     
     const handleCloseEvent = () => {
       setInternalIsOpen(false);
@@ -177,11 +191,19 @@ export function GlobalMadreDrawer({
 
     window.addEventListener('madre:toggle', handleToggle);
     window.addEventListener('madre:open', handleOpen);
+    window.addEventListener('madre:wake-word', handleWakeWord);
     window.addEventListener('madre:close', handleCloseEvent);
 
     // EXPOSE TO GLOBAL WINDOW SO HTML BUTTON CAN FIRE IT
     if (typeof window !== 'undefined') {
       window.openMadreDrawer = handleOpen;
+      window.abrirPanelMadre = (opts) => {
+        if (opts?.fromCalculation) {
+          console.warn('[MADRE] Apertura automática rechazada tras cálculo.');
+          return;
+        }
+        handleOpen(opts);
+      };
       window.closeMadreDrawer = handleCloseEvent;
       window.toggleMadreDrawer = handleToggle;
       window.getCoreProUIContext = getCoreProUIContext;
@@ -190,6 +212,7 @@ export function GlobalMadreDrawer({
     return () => {
       window.removeEventListener('madre:toggle', handleToggle);
       window.removeEventListener('madre:open', handleOpen);
+      window.removeEventListener('madre:wake-word', handleWakeWord);
       window.removeEventListener('madre:close', handleCloseEvent);
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -367,20 +390,23 @@ export function GlobalMadreDrawer({
   if (!internalIsOpen) return null;
 
   return (
-    <aside className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121]">
+    <aside
+      className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
+      style={{ backgroundColor: '#0B1121' }}
+    >
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121] text-slate-200">
         {/* Left side: Logo and Title */}
         <div className="flex items-center gap-2 min-w-0">
           <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm" />
-          <span className="font-bold text-base text-white truncate">MADRE</span>
+          <span className="font-bold text-base text-white">MADRE</span>
           <span className="text-[10px] font-mono bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30 shrink-0">Cerebro Central</span>
         </div>
 
         {/* Right side: Action Buttons (Mute, Reset, Close) */}
-        <div className="flex items-center shrink-0" style={{ gap: '10px' }}>
-          <button type="button" onClick={toggleMute} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="inline-flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shrink-0" title="Cerrar panel">✕</button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕</button>
         </div>
       </header>
 
@@ -392,6 +418,7 @@ export function GlobalMadreDrawer({
         </div>
         <button
           type="button"
+          id="btn-madre-scan-screen"
           onClick={(e) => {
             triggerLaserScanEffect();
             if (typeof handleSubmit === 'function') {
@@ -400,6 +427,7 @@ export function GlobalMadreDrawer({
             }
           }}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+          title="Disparar escaneo visual láser y auditar módulos 1 al 10"
         >
           <span className="text-emerald-400 font-bold">⚡</span>
           <span>Escanear Pantalla</span>
