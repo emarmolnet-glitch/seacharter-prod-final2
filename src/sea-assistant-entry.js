@@ -2228,7 +2228,11 @@ const fileInput = root.querySelector("#sca-file-input");
 
   const agregarMensajeAsistenteMounted = (mensaje, options = {}) => {
     setActiveAgent("core");
-    setOpen(true);
+    // Regla estricta: NO abrir automáticamente el panel lateral de forma intrusiva tras un cálculo o estimación.
+    // Solo se abre si se solicita de manera explícita con options.open === true.
+    if (options.open === true) {
+      setOpen(true);
+    }
     const assistantOptions = {
       meta: formatTime(),
       aiType: "local",

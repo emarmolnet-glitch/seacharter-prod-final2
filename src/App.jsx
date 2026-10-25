@@ -584,57 +584,53 @@ export function useHeaderVisibility(defaultVisible = true) {
       if (typeof document !== 'undefined') {
         if (document.body) {
           document.body.classList.toggle('header-collapsed', !visible);
-          document.body.dataset.headerVisible = String(visible);
+          document.body.classList.remove('header-collapsed');
+          document.body.dataset.headerVisible = 'true';
         }
         const appHeader = document.querySelector('header.app-header');
         if (appHeader) {
           appHeader.classList.toggle('header-collapsed', !visible);
-          appHeader.setAttribute('aria-hidden', String(!visible));
+          appHeader.classList.remove('header-collapsed');
+          appHeader.classList.remove('is-hidden');
+          appHeader.setAttribute('aria-hidden', 'false');
+          appHeader.style.display = 'flex';
         }
         const collapseBtn = document.getElementById('btn-collapse-header');
         if (collapseBtn) {
-          collapseBtn.setAttribute('aria-expanded', String(visible));
+          collapseBtn.setAttribute('aria-expanded', String(true));
+          collapseBtn.style.display = 'none';
         }
         const expandBtn = document.getElementById('btn-expand-header');
         if (expandBtn) {
-          expandBtn.setAttribute('aria-expanded', String(visible));
+          expandBtn.setAttribute('aria-expanded', String(false));
+          expandBtn.style.display = 'none';
         }
       }
       window.dispatchEvent(new Event('resize'));
     };
 
-    syncDom(isHeaderVisible);
+    syncDom(true);
 
     const handleVisibilityEvent = (event) => {
-      const nextVal = event?.detail?.isHeaderVisible ?? event?.detail?.visible;
-      if (typeof nextVal === 'boolean') {
-        setIsHeaderVisible(nextVal);
-      }
+      setIsHeaderVisible(true);
     };
 
     const handleToggleEvent = () => {
-      setIsHeaderVisible((prev) => {
-        const next = !prev;
-        setStoredHeaderVisibility(next);
-        return next;
-      });
+      setIsHeaderVisible(true);
+      setStoredHeaderVisibility(true);
     };
 
     window.addEventListener('header:visibility-change', handleVisibilityEvent);
     window.addEventListener('header:toggle', handleToggleEvent);
 
-    window.isHeaderVisible = isHeaderVisible;
+    window.isHeaderVisible = true;
     window.setHeaderVisibility = (val) => {
-      const next = Boolean(val);
-      setStoredHeaderVisibility(next);
-      setIsHeaderVisible(next);
+      setStoredHeaderVisibility(true);
+      setIsHeaderVisible(true);
     };
     window.toggleHeaderVisibility = () => {
-      setIsHeaderVisible((prev) => {
-        const next = !prev;
-        setStoredHeaderVisibility(next);
-        return next;
-      });
+      setStoredHeaderVisibility(true);
+      setIsHeaderVisible(true);
     };
 
     return () => {
@@ -644,18 +640,18 @@ export function useHeaderVisibility(defaultVisible = true) {
   }, [isHeaderVisible]);
 
   const toggleHeader = () => {
-    const next = !isHeaderVisible;
-    setStoredHeaderVisibility(next);
-    setIsHeaderVisible(next);
+    setStoredHeaderVisibility(true);
+    setIsHeaderVisible(true);
   };
 
-  return { isHeaderVisible, setIsHeaderVisible, toggleHeader };
+  return { isHeaderVisible: true, setIsHeaderVisible, toggleHeader };
 }
 
 import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
 
 export function AppLayout({ children }) {
   const [currentView, setCurrentView] = useState(() => (typeof window !== 'undefined' ? window.currentView || '' : ''));
+  const { isHeaderVisible } = useHeaderVisibility(true);
 
   useSeaCharterSync();
   useUrlImoAutoLookup();
@@ -671,10 +667,24 @@ export function AppLayout({ children }) {
   }, []);
 
   // Maritime views: MAP | CALCULATOR | FORWARDERS
-  return currentView === 'FORWARDERS' ? (
-    <ForwarderWorkspace />
-  ) : (
-    children
+  return (
+    <div
+      className={`seacharter-core-pro-app ${isHeaderVisible ? 'header-visible' : 'header-collapsed'}`}
+      data-header-visible={isHeaderVisible}
+    >
+      <button
+        type="button"
+        id="react-header-toggle-btn"
+        aria-expanded={isHeaderVisible}
+        style={{ display: 'none' }}
+        tabIndex={-1}
+      />
+      {currentView === 'FORWARDERS' ? (
+        <ForwarderWorkspace />
+      ) : (
+        children
+      )}
+    </div>
   );
 }
 
