@@ -40,8 +40,27 @@ test('2. Definición y lógica de buildMotherExecutiveScript con ROI automatizad
 test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridge vía Web Audio API (Bypass CSP)', () => {
   assert.match(
     globalMadreDrawerSource,
-    /async function playNeuralMotherVoice\s*\(/,
-    'Debe definir la función playNeuralMotherVoice'
+    /async function playNeuralMotherVoice\s*\(\s*textToSpeak\s*\)/,
+    'Debe definir la función playNeuralMotherVoice recibiendo directamente textToSpeak'
+  );
+
+  // Verificación de envío del texto dinámico sin hardcodear buildMotherExecutiveScript(state)
+  assert.doesNotMatch(
+    globalMadreDrawerSource,
+    /const script = buildMotherExecutiveScript\(state\);/,
+    'playNeuralMotherVoice no debe sobrescribir el texto con buildMotherExecutiveScript(state)'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /body:\s*JSON\.stringify\(\{\s*text:\s*textToSpeak\s*\}\)/,
+    'Debe enviar textToSpeak dinámicamente en el body del fetch'
+  );
+
+  // Verificación de que speakText pasa la variable limpia clean
+  assert.match(
+    globalMadreDrawerSource,
+    /const audioInstance = await playNeuralMotherVoice\(clean\);/,
+    'speakText debe invocar playNeuralMotherVoice pasando la variable clean'
   );
 
   // Verificación del endpoint madre-voice y reproducción directa con Web Audio API (Bypass CSP media-src)
@@ -62,6 +81,11 @@ test('4. Limpieza de impresión en el Chat: Escaneo de pantalla muestra el guion
   assert.match(
     globalMadreDrawerSource,
     /if\s*\(\s*SCAN_COMMAND_REGEX\.test\(queryText\)\s*\)\s*\{[\s\S]*?replyText\s*=\s*buildMotherExecutiveScript\(stateForVoice\);/
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /isMarketQuery/,
+    'Debe discriminar consultas de mercado para respetar el replyText del servidor'
   );
   assert.match(
     globalMadreDrawerSource,

@@ -8,7 +8,7 @@
  */
 
 // Regex para identificar comandos o frases de escaneo en la conversación
-export const SCAN_COMMAND_REGEX = /(?:escan(?:ear|eo)?|scan(?:ner)?|auditar?\s+pantalla|analizar?\s+pantalla|revisar?\s+pantalla|inspeccionar?\s+pantalla|leer?\s+pantalla|pantalla)/i;
+export const SCAN_COMMAND_REGEX = /(?:escan(?:ear|eo)?|scan(?:ner)?|auditar?\s+pantalla|analizar?\s+pantalla|revisar?\s+pantalla|inspeccionar?\s+pantalla|leer?\s+pantalla)/i;
 
 /**
  * Utilidades seguras de lectura del DOM
