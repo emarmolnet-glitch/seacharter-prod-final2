@@ -33,15 +33,14 @@ function buildMotherExecutiveScript(state = {}) {
  * Reproducción de voz neuronal MADRE conectando con DataBridge (madre-voice.js / ElevenLabs)
  * Reproducción directa en hardware usando Web Audio API (Bypass CSP media-src / blob:)
  */
-async function playNeuralMotherVoice(state = {}) {
-  const script = buildMotherExecutiveScript(state);
+async function playNeuralMotherVoice(textToSpeak) {
   try {
     // Ajusta la URL base apuntando a la instancia de DataBridge del usuario
     const databridgeUrl = (typeof window !== 'undefined' && window.DATABRIDGE_API_URL) ? window.DATABRIDGE_API_URL : 'https://calm-shortbread-55bcfc.netlify.app';
     const response = await fetch(`${databridgeUrl}/.netlify/functions/madre-voice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: script })
+      body: JSON.stringify({ text: textToSpeak })
     });
 
     if (!response.ok) throw new Error('Error en DataBridge TTS');
@@ -283,8 +282,12 @@ export function GlobalMadreDrawer({
     if (isMuted || !internalIsOpen) return;
     try {
       stopCurrentAudio();
-      const st = stateForVoice || (typeof window !== 'undefined' ? (window.State || {}) : {});
-      const audioInstance = await playNeuralMotherVoice(st);
+      const clean = String(text || '')
+        .replace(/[*#_`~>\[\]]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!clean) return;
+      const audioInstance = await playNeuralMotherVoice(clean);
       if (audioInstance) {
         currentAudioRef.current = audioInstance;
       }
@@ -420,21 +423,27 @@ export function GlobalMadreDrawer({
       let replyText = data?.reply || data?.message || data?.text || 'Auditoría procesada.';
 
       // Limpieza de impresión en el Chat:
-      // Si la consulta es un escaneo de pantalla o auditoría visual de módulos,
-      // sustituimos la respuesta masiva del DOM por el guion ejecutivo exacto que narra Madre.
+      // Si la consulta es un escaneo explícito de pantalla o auditoría visual de módulos,
+      // sustituimos la respuesta por el guion ejecutivo exacto que narra Madre.
       let stateForVoice = (typeof window !== 'undefined' ? (window.State || {}) : {});
       if (SCAN_COMMAND_REGEX.test(queryText)) {
-        const rawUi = payload?.contexto_ui || {};
-        const b6 = rawUi?.modulos_1_a_10?.bloque_6_resumen_operacion_costes || {};
-        const b3 = rawUi?.modulos_1_a_10?.bloque_3_bunkers_gastos || {};
-        const b9 = rawUi?.modulos_1_a_10?.bloque_9_matriz_riesgo_psc || {};
-        stateForVoice = {
-          ...stateForVoice,
-          breakEven: stateForVoice.breakEven ?? b6.break_even_usd_mt ?? rawUi.breakEvenUnitario ?? 28.5,
-          pdaInyectada: Boolean(stateForVoice.pdaInyectada || b3.pda_pol_usd || b3.pda_pod_usd || rawUi?.parametros_activos?.pda_pol || rawUi?.parametros_activos?.pda_pod),
-          riesgosDetectados: Boolean(stateForVoice.riesgosDetectados || b9.kill_switch_activo || (b9.tarifa_demurrage_usd_dia && b9.tarifa_demurrage_usd_dia > 10000))
-        };
-        replyText = buildMotherExecutiveScript(stateForVoice);
+        const isScanButton = queryText.includes('Escanear y auditar pantalla');
+        const isMarketQuery = /(?:mercado|market|spot|baltic|flete)/i.test(queryText);
+        const isStrictScan = isScanButton || !isMarketQuery;
+
+        if (isStrictScan) {
+          const rawUi = payload?.contexto_ui || {};
+          const b6 = rawUi?.modulos_1_a_10?.bloque_6_resumen_operacion_costes || {};
+          const b3 = rawUi?.modulos_1_a_10?.bloque_3_bunkers_gastos || {};
+          const b9 = rawUi?.modulos_1_a_10?.bloque_9_matriz_riesgo_psc || {};
+          stateForVoice = {
+            ...stateForVoice,
+            breakEven: stateForVoice.breakEven ?? b6.break_even_usd_mt ?? rawUi.breakEvenUnitario ?? 28.5,
+            pdaInyectada: Boolean(stateForVoice.pdaInyectada || b3.pda_pol_usd || b3.pda_pod_usd || rawUi?.parametros_activos?.pda_pol || rawUi?.parametros_activos?.pda_pod),
+            riesgosDetectados: Boolean(stateForVoice.riesgosDetectados || b9.kill_switch_activo || (b9.tarifa_demurrage_usd_dia && b9.tarifa_demurrage_usd_dia > 10000))
+          };
+          replyText = buildMotherExecutiveScript(stateForVoice);
+        }
       }
 
       const assistantMessage = {
