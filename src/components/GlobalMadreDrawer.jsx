@@ -532,12 +532,12 @@ export function GlobalMadreDrawer({
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col w-full ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
             <div
-              className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap ${
+              className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium ${
                 m.sender === 'user'
-                  ? 'bg-teal-900/50 border border-teal-800/70 text-white rounded-xl p-3.5 shadow-sm'
+                  ? 'bg-teal-700 border border-teal-500 text-white rounded-xl p-3.5 shadow-sm'
                   : m.isError
-                  ? 'bg-red-950/60 border border-red-900/60 text-red-200 rounded-xl p-3.5 shadow-sm'
-                  : 'bg-slate-900/80 border border-slate-800/80 text-white rounded-xl p-3.5 shadow-sm'
+                  ? 'bg-red-950 border border-red-800 text-red-200 rounded-xl p-3.5 shadow-sm'
+                  : 'bg-slate-900 border border-slate-700 text-white rounded-xl p-3.5 shadow-sm'
               }`}
             >
               {m.text}
