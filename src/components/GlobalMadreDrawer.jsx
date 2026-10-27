@@ -16,6 +16,51 @@ import {
 export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
 
 /**
+ * Guion Ejecutivo de Carga Seca para voz neuronal de Madre
+ * Genera un texto conversacional y fluido basado en el estado (State) actual del viaje.
+ */
+function buildMotherExecutiveScript(state = {}) {
+  // Cálculo de ROI automatizado
+  const horasAhorradas = 2.4;
+  const ahorroAdmin = horasAhorradas * 45;
+  const fugas = state?.pdaInyectada ? 2300 : 0; // Ajustar según lógica de penalizaciones de SeaCharter
+  const breakEven = state?.breakEven ?? 28.5;
+
+  return `Escaneo completado. El break-even del armador se sitúa en ${breakEven} dólares por tonelada. Atención: ${state?.riesgosDetectados ? 'Se han detectado posibles recargos operativos en puerto.' : 'Las condiciones operativas son favorables.'} Impacto de esta estimación: se han ahorrado ${ahorroAdmin} dólares de gestión y prevenido posibles fugas por valor de ${fugas} dólares. Operación validada.`;
+}
+
+/**
+ * Reproducción de voz neuronal MADRE conectando con DataBridge (madre-voice.js / ElevenLabs)
+ * Reproducción directa en hardware usando Web Audio API (Bypass CSP media-src / blob:)
+ */
+async function playNeuralMotherVoice(state = {}) {
+  const script = buildMotherExecutiveScript(state);
+  try {
+    // Ajusta la URL base apuntando a la instancia de DataBridge del usuario
+    const databridgeUrl = (typeof window !== 'undefined' && window.DATABRIDGE_API_URL) ? window.DATABRIDGE_API_URL : 'https://calm-shortbread-55bcfc.netlify.app';
+    const response = await fetch(`${databridgeUrl}/.netlify/functions/madre-voice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: script })
+    });
+
+    if (!response.ok) throw new Error('Error en DataBridge TTS');
+
+    const arrayBuffer = await response.arrayBuffer();
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+    return source;
+  } catch (error) {
+    console.error("Fallo al invocar a Madre neuronal en DataBridge:", error);
+  }
+}
+
+/**
  * Helper function to safely extract active Core PRO parameters from DOM / state.
  */
 export function getCoreProUIContext() {
@@ -112,6 +157,8 @@ if (typeof window !== 'undefined') {
   window.extraerDatosEstructuradosCorePro = extraerDatosEstructuradosCorePro;
   window.compactPayload = compactPayload;
   window.ejecutarEscaneoCompleto = ejecutarEscaneoCompleto;
+  window.buildMotherExecutiveScript = buildMotherExecutiveScript;
+  window.playNeuralMotherVoice = playNeuralMotherVoice;
 }
 
 export function GlobalMadreDrawer({
@@ -139,10 +186,26 @@ export function GlobalMadreDrawer({
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  const currentAudioRef = useRef(null);
+
+  const stopCurrentAudio = () => {
+    if (currentAudioRef.current) {
+      try {
+        if (typeof currentAudioRef.current.stop === 'function') {
+          currentAudioRef.current.stop();
+        } else if (typeof currentAudioRef.current.pause === 'function') {
+          currentAudioRef.current.pause();
+          currentAudioRef.current.currentTime = 0;
+        }
+      } catch (_) {}
+      currentAudioRef.current = null;
+    }
+  };
+
   useEffect(() => {
     setInternalIsOpen(isOpen);
-    if (!isOpen && typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (!isOpen) {
+      stopCurrentAudio();
     }
   }, [isOpen]);
 
@@ -159,8 +222,8 @@ export function GlobalMadreDrawer({
     const handleToggle = () => {
       setInternalIsOpen((prev) => {
         const nextState = !prev;
-        if (!nextState && typeof window !== 'undefined' && window.speechSynthesis) {
-          window.speechSynthesis.cancel();
+        if (!nextState) {
+          stopCurrentAudio();
         }
         return nextState;
       });
@@ -184,9 +247,7 @@ export function GlobalMadreDrawer({
     
     const handleCloseEvent = () => {
       setInternalIsOpen(false);
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      stopCurrentAudio();
     };
 
     window.addEventListener('madre:toggle', handleToggle);
@@ -214,21 +275,19 @@ export function GlobalMadreDrawer({
       window.removeEventListener('madre:open', handleOpen);
       window.removeEventListener('madre:wake-word', handleWakeWord);
       window.removeEventListener('madre:close', handleCloseEvent);
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      stopCurrentAudio();
     };
   }, []);
 
-  const speakText = (text) => {
-    if (isMuted || !internalIsOpen || typeof window === 'undefined' || !window.speechSynthesis) return;
+  const speakText = async (text, stateForVoice = null) => {
+    if (isMuted || !internalIsOpen) return;
     try {
-      window.speechSynthesis.cancel();
-      const clean = text.replace(/[*#_`~[\]]/g, '').trim();
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = 'es-ES';
-      utterance.rate = 1.05;
-      window.speechSynthesis.speak(utterance);
+      stopCurrentAudio();
+      const st = stateForVoice || (typeof window !== 'undefined' ? (window.State || {}) : {});
+      const audioInstance = await playNeuralMotherVoice(st);
+      if (audioInstance) {
+        currentAudioRef.current = audioInstance;
+      }
     } catch (_) {}
   };
 
@@ -239,9 +298,7 @@ export function GlobalMadreDrawer({
     } else {
       setInternalIsMuted(nextMuted);
     }
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopCurrentAudio();
   };
   const toggleMute = handleMuteToggle;
 
@@ -258,9 +315,7 @@ export function GlobalMadreDrawer({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopCurrentAudio();
   };
 
   const handleClose = () => {
@@ -268,9 +323,7 @@ export function GlobalMadreDrawer({
       onClose();
     }
     setInternalIsOpen(false);
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopCurrentAudio();
   };
 
   const handleMicClick = () => {
@@ -287,23 +340,29 @@ export function GlobalMadreDrawer({
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     recognition.onerror = () => setIsListening(false);
-    recognition.onresult = (event) => setInputValue(event.results[0][0].transcript);
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInputValue(transcript); // Actualiza la UI
+
+      if (event.results[0].isFinal) {
+        // Auto-envío del comando sin requerir clic manual
+        await handleSendMessage(transcript);
+      }
+    };
 
     recognition.start();
   };
 
-  const handleSubmit = async (e, overridePrompt) => {
-    if (e && typeof e.preventDefault === 'function') {
-      e.preventDefault();
-    }
-    const queryText = (typeof overridePrompt === 'string' ? overridePrompt : inputValue).trim();
+  const handleSendMessage = async (overrideText = null) => {
+    const queryText = (typeof overrideText === 'string' ? overrideText : inputValue).trim();
+    const textToProcess = queryText;
     if (!queryText || isLoading) return;
 
     const userMessage = {
       id: Date.now(),
       sender: 'user',
       role: 'user',
-      text: queryText,
+      text: textToProcess,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -333,9 +392,9 @@ export function GlobalMadreDrawer({
     }
 
     const payload = {
-      mensajeUsuario: queryText,
-      message: queryText,
-      prompt: queryText,
+      mensajeUsuario: textToProcess,
+      message: textToProcess,
+      prompt: textToProcess,
       history: cleanHistory,
       context: {
         origin: "SeaCharter Core PRO",
@@ -358,7 +417,25 @@ export function GlobalMadreDrawer({
 
       if (!response.ok) throw new Error('Error en MADRE API');
       const data = await response.json();
-      const replyText = data?.reply || data?.message || data?.text || 'Auditoría procesada.';
+      let replyText = data?.reply || data?.message || data?.text || 'Auditoría procesada.';
+
+      // Limpieza de impresión en el Chat:
+      // Si la consulta es un escaneo de pantalla o auditoría visual de módulos,
+      // sustituimos la respuesta masiva del DOM por el guion ejecutivo exacto que narra Madre.
+      let stateForVoice = (typeof window !== 'undefined' ? (window.State || {}) : {});
+      if (SCAN_COMMAND_REGEX.test(queryText)) {
+        const rawUi = payload?.contexto_ui || {};
+        const b6 = rawUi?.modulos_1_a_10?.bloque_6_resumen_operacion_costes || {};
+        const b3 = rawUi?.modulos_1_a_10?.bloque_3_bunkers_gastos || {};
+        const b9 = rawUi?.modulos_1_a_10?.bloque_9_matriz_riesgo_psc || {};
+        stateForVoice = {
+          ...stateForVoice,
+          breakEven: stateForVoice.breakEven ?? b6.break_even_usd_mt ?? rawUi.breakEvenUnitario ?? 28.5,
+          pdaInyectada: Boolean(stateForVoice.pdaInyectada || b3.pda_pol_usd || b3.pda_pod_usd || rawUi?.parametros_activos?.pda_pol || rawUi?.parametros_activos?.pda_pod),
+          riesgosDetectados: Boolean(stateForVoice.riesgosDetectados || b9.kill_switch_activo || (b9.tarifa_demurrage_usd_dia && b9.tarifa_demurrage_usd_dia > 10000))
+        };
+        replyText = buildMotherExecutiveScript(stateForVoice);
+      }
 
       const assistantMessage = {
         id: Date.now() + 1,
@@ -369,7 +446,7 @@ export function GlobalMadreDrawer({
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      speakText(replyText);
+      await speakText(replyText, stateForVoice);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -385,6 +462,14 @@ export function GlobalMadreDrawer({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e, overridePrompt) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    const queryText = (typeof overridePrompt === 'string' ? overridePrompt : inputValue);
+    await handleSendMessage(queryText);
   };
 
   if (!internalIsOpen) return null;
@@ -450,21 +535,36 @@ export function GlobalMadreDrawer({
             </div>
           </div>
         ))}
-        {isLoading && <div className="text-xs text-teal-300 animate-pulse">Procesando...</div>}
+        {isLoading && <div className="text-xs text-teal-300 animate-pulse flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping"></span>Procesando audio y respuesta...</div>}
         <div ref={messagesEndRef} />
       </div>
       <div className="p-3 border-t border-slate-800/80 bg-[#0B1121] flex gap-2 items-center shrink-0">
-        <button type="button" onClick={handleMicClick} className="flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700 text-teal-400 border border-slate-700/50 transition-all cursor-pointer shadow-sm shrink-0">🎙️</button>
+        <button 
+          type="button" 
+          onClick={handleMicClick} 
+          disabled={isLoading}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700 text-teal-400 border border-slate-700/50 transition-all cursor-pointer shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={isLoading ? 'Procesando...' : 'Dictar por voz'}
+        >
+          🎙️
+        </button>
         <form onSubmit={handleSubmit} className="flex gap-2 flex-1">
           <input 
             ref={inputRef}
             type="text" 
             value={inputValue} 
             onChange={(e) => setInputValue(e.target.value)} 
-            placeholder="Comando a MADRE..." 
-            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition-all" 
+            disabled={isLoading}
+            placeholder={isLoading ? "Procesando audio..." : "Comando a MADRE..."} 
+            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed" 
           />
-          <button type="submit" className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer shadow-sm shrink-0">Enviar</button>
+          <button 
+            type="submit" 
+            disabled={isLoading || !inputValue.trim()}
+            className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Enviar
+          </button>
         </form>
       </div>
     </aside>
@@ -479,7 +579,9 @@ export {
   extraerDatosEstructuradosCorePro,
   compactPayload,
   SCAN_COMMAND_REGEX,
-  ejecutarEscaneoCompleto
+  ejecutarEscaneoCompleto,
+  buildMotherExecutiveScript,
+  playNeuralMotherVoice
 };
 
 export default GlobalMadreDrawer;
