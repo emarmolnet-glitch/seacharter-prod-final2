@@ -485,7 +485,7 @@ export function GlobalMadreDrawer({
 
   return (
     <aside
-      className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
+      className="fixed top-0 left-0 h-full w-full md:w-[450px] z-[9999] bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
       style={{ backgroundColor: '#0B1121' }}
     >
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121] text-slate-200">
@@ -497,10 +497,10 @@ export function GlobalMadreDrawer({
         </div>
 
         {/* Right side: Action Buttons (Mute, Reset, Close) */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕</button>
+        <div className="flex items-center gap-4 shrink-0">
+          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title="Cerrar panel">✕</button>
         </div>
       </header>
 
@@ -528,23 +528,23 @@ export function GlobalMadreDrawer({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         {messages.map((m) => (
-          <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
+          <div key={m.id} className={`flex flex-col w-full ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
             <div
-              className={`text-xs max-w-[85%] whitespace-pre-wrap ${
+              className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap ${
                 m.sender === 'user'
-                  ? 'bg-teal-950/40 border border-teal-900/50 text-teal-200 rounded-xl p-3'
+                  ? 'bg-teal-900/50 border border-teal-800/70 text-white rounded-xl p-3.5 shadow-sm'
                   : m.isError
-                  ? 'bg-red-950/60 border border-red-900/60 text-red-300 rounded-xl p-3'
-                  : 'bg-slate-900/60 border border-slate-800/80 text-slate-300 rounded-xl p-3'
+                  ? 'bg-red-950/60 border border-red-900/60 text-red-200 rounded-xl p-3.5 shadow-sm'
+                  : 'bg-slate-900/80 border border-slate-800/80 text-white rounded-xl p-3.5 shadow-sm'
               }`}
             >
               {m.text}
             </div>
           </div>
         ))}
-        {isLoading && <div className="text-xs text-teal-300 animate-pulse flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping"></span>Procesando audio y respuesta...</div>}
+        {isLoading && <div className="text-xs text-teal-300 font-medium animate-pulse flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping"></span>Procesando audio y respuesta...</div>}
         <div ref={messagesEndRef} />
       </div>
       <div className="p-3 border-t border-slate-800/80 bg-[#0B1121] flex gap-2 items-center shrink-0">
