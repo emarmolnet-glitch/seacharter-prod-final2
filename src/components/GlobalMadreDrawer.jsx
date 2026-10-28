@@ -20,54 +20,76 @@ export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.n
  * Genera un texto conversacional y fluido basado en el estado (State) actual del viaje.
  */
 function buildMotherExecutiveScript(state = {}) {
-  // 1. SCRAPING VISUAL DE DATOS Y ESCENARIOS DE RIESGO
-  let liveDays = 0;
-  let liveCargoQty = 0;
+  // Función auxiliar para parsear números respetando decimales (US y EU)
+  const parseValue = (val) => {
+      if (!val) return null;
+      let clean = val.replace(/[^0-9.,]/g, '');
+      // Si la coma está después del punto, es formato EU (1.234,56)
+      if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+          clean = clean.replace(/\./g, '').replace(',', '.');
+      } else {
+          // Formato US (1,234.56 o 19.61)
+          clean = clean.replace(/,/g, '');
+      }
+      return parseFloat(clean);
+  };
+
+  // 1. EXTRACCIÓN 100% DINÁMICA DEL DOM
+  let liveDays = null;
+  let liveCargoQty = null;
+  let extractedBreakEven = null;
+  let optimeFreight = null;
   let isExtracomunitario = false;
-  let extractedBreakEven = 0;
-  let optimeFreight = 27.53;
 
   if (typeof document !== 'undefined') {
       const domText = document.body.innerText || '';
       
       // Captura exacta de Días Totales
       const matchDays = domText.match(/Dias Mar\s*\+\s*Puerto\s*\+\s*Margen Clima:?\s*([\d,\.]+)/i);
-      if (matchDays) liveDays = parseFloat(matchDays[1].replace(/\./g, '').replace(',', '.'));
+      if (matchDays) liveDays = parseValue(matchDays[1]);
 
-      // Extraer Toneladas
+      // Extraer Toneladas / Carga
       const matchCargo = domText.match(/(?:Toneladas|Cargo Qty|\bMT\b)[:\s]*([\d\.,]+)/i);
-      if (matchCargo) liveCargoQty = parseFloat(matchCargo[1].replace(/\./g, '').replace(',', '.'));
+      if (matchCargo) {
+          const parsed = parseValue(matchCargo[1]);
+          if (parsed > 0) liveCargoQty = parsed;
+      }
 
-      // Extraer Break-Even base actual
-      const matchBe = domText.match(/(?:coste\s*base\s*-\s*break\s*even|\bbreak-even\b)[:\s]*\$?([\d\.,]+)/i);
-      if (matchBe) extractedBreakEven = parseFloat(matchBe[1].replace(/\./g, '').replace(',', '.'));
+      // Extraer Flete Break-Even
+      const matchBe = domText.match(/(?:FLETE BREAK-EVEN.*?|COSTE BASE - BREAK-EVEN)[:\s]*\$?([\d\.,]+)/i);
+      if (matchBe) extractedBreakEven = parseValue(matchBe[1]);
 
-      // Extraer flete del Escenario Óptimo de la Risk Matrix si está presente
-      const matchOpt = domText.match(/\$([\d\.,]+)\s*\/\s*MT[\s\S]{0,40}Escenario Óptimo/i);
-      if (matchOpt) optimeFreight = parseFloat(matchOpt[1].replace(/\./g, '').replace(',', '.'));
+      // Extraer Escenario Óptimo de la Risk Matrix
+      const matchOpt = domText.match(/ESCENARIO ÓPTIMO[\s\S]{0,30}\$([\d\.,]+)/i);
+      if (matchOpt) optimeFreight = parseValue(matchOpt[1]);
 
-      // Detectar origen extracomunitario para CBAM
+      // Detectar origen extracomunitario (CBAM)
       if (/Abidjan|Bejaia|Argelia|Algiers|Oran|Sfax|Dakar|Turkey|Turquía|Egipto|Casablanca/i.test(domText)) {
           isExtracomunitario = true;
       }
   }
 
-  // 2. CONSOLIDACIÓN
-  const breakEven = extractedBreakEven > 0 ? extractedBreakEven : Number(state?.breakEven ?? state?.breakEvenUnitario ?? 28.76);
-  const diasTotales = liveDays > 0 ? liveDays : Number(state?.diasTotales || 20.94);
-  const cargoMt = liveCargoQty > 0 && liveCargoQty < 1000000 ? liveCargoQty : Number(state?.cargoQty || 30000);
+  // 2. CONSOLIDACIÓN SEGURA
+  const breakEven = extractedBreakEven !== null ? extractedBreakEven : (state?.breakEven ?? state?.breakEvenUnitario ?? null);
+  const diasTotales = liveDays !== null ? liveDays : (state?.diasTotales ?? null);
+  const cargoMt = liveCargoQty !== null ? liveCargoQty : (state?.cargoQty ?? null);
   
-  const ahorroAdmin = Math.round(2.0 * 45); 
   let alertaRegulatoria = '';
   if (isExtracomunitario) {
       alertaRegulatoria = ' Alerta regulatoria: Origen extracomunitario detectado (liquidación CBAM y provisión EU ETS aplicables).';
   }
 
-  // 3. RECOMENDACIÓN COMERCIAL CON MENCION EXPLÍCITA DE DÍAS Y RITMOS
-  const diffAhorro = (breakEven - optimeFreight).toFixed(2);
-  const recomendacionRitmos = ` Análisis de Risk Matrix: El ciclo operativo actual se proyecta en ${diasTotales.toFixed(2)} días. Se recomienda intensificar los ritmos de carga en muelle para recortar días de puerto; al pasar al Escenario Óptimo, abates el coste a $${optimeFreight.toFixed(2)}/MT, ahorrando $${diffAhorro} por tonelada frente a la situación actual.`;
+  // 3. CONSTRUCCIÓN DE RESPUESTA ADAPTATIVA
+  const textoDias = diasTotales !== null ? `en un ciclo de ${Number(diasTotales).toFixed(2)} días` : 'con días operativos pendientes';
+  const textoCarga = cargoMt !== null ? `${Number(cargoMt).toLocaleString('es-ES')} toneladas métricas` : 'la carga establecida';
+  const textoBe = breakEven !== null ? `situado en $${Number(breakEven).toFixed(2)} por tonelada` : 'pendiente de validación';
 
-  return `Escaneo analítico completado. Operación evaluada para ${cargoMt.toLocaleString('es-ES')} toneladas métricas. El break-even actual se sitúa en $${breakEven.toFixed(2)} por tonelada.${recomendacionRitmos}${alertaRegulatoria} Impacto global: se han ahorrado ${ahorroAdmin} dólares en gestión y optimizado los márgenes operativos.`;
+  let recomendacionRitmos = '';
+  if (breakEven !== null && optimeFreight !== null) {
+      recomendacionRitmos = ` Análisis de Risk Matrix: Se recomienda intensificar los ritmos de carga para alcanzar el Escenario Óptimo de $${optimeFreight.toFixed(2)}/MT, optimizando el margen operativo frente al escenario actual.`;
+  }
+
+  return `Escaneo analítico completado. Operación evaluada para ${textoCarga} ${textoDias}. El break-even de armador se encuentra ${textoBe}.${recomendacionRitmos}${alertaRegulatoria} Impacto global: auditoría paramétrica finalizada con éxito.`;
 }
 
 /**

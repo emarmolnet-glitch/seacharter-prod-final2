@@ -25,7 +25,7 @@ test('2. Definición y lógica de buildMotherExecutiveScript con scraping visual
   );
 
   // Verificación del scraping visual en el DOM y Risk Matrix
-  assert.match(globalMadreDrawerSource, /SCRAPING VISUAL DE DATOS Y ESCENARIOS DE RIESGO/);
+  assert.match(globalMadreDrawerSource, /(?:SCRAPING VISUAL DE DATOS Y ESCENARIOS DE RIESGO|EXTRACCIÓN 100% DINÁMICA DEL DOM)/);
   assert.match(globalMadreDrawerSource, /matchDays\s*=\s*domText\.match/);
   assert.match(globalMadreDrawerSource, /Dias Mar\\s\*\\\+\\s\*Puerto\\s\*\\\+\\s\*Margen Clima/);
   assert.match(globalMadreDrawerSource, /matchCargo\s*=\s*domText\.match/);
@@ -33,13 +33,17 @@ test('2. Definición y lógica de buildMotherExecutiveScript con scraping visual
   assert.match(globalMadreDrawerSource, /matchOpt\s*=\s*domText\.match/);
   assert.match(globalMadreDrawerSource, /Abidjan\|Bejaia\|Argelia\|Algiers\|Oran\|Sfax\|Dakar\|Turkey\|Turquía\|Egipto\|Casablanca/);
 
+  // Verificación de función auxiliar parseValue (respeto a decimales US y EU)
+  assert.match(globalMadreDrawerSource, /const parseValue\s*=\s*\(val\)\s*=>/);
+  assert.match(globalMadreDrawerSource, /clean\.lastIndexOf\(','\)\s*>\s*clean\.lastIndexOf\('\.'\)/);
+
   // Verificación de recomendación Risk Matrix y alerta regulatoria CBAM / EU ETS
-  assert.match(globalMadreDrawerSource, /Análisis de Risk Matrix: El ciclo operativo actual se proyecta en/);
-  assert.match(globalMadreDrawerSource, /Se recomienda intensificar los ritmos de carga en muelle/);
+  assert.match(globalMadreDrawerSource, /Análisis de Risk Matrix:/);
+  assert.match(globalMadreDrawerSource, /Se recomienda intensificar los ritmos de carga/);
   assert.match(globalMadreDrawerSource, /Alerta regulatoria: Origen extracomunitario detectado/);
   assert.match(globalMadreDrawerSource, /Escaneo analítico completado/);
-  assert.match(globalMadreDrawerSource, /El break-even actual se sitúa en/);
-  assert.match(globalMadreDrawerSource, /optimizado los márgenes operativos/);
+  assert.match(globalMadreDrawerSource, /El break-even/);
+  assert.match(globalMadreDrawerSource, /optimiz/);
 });
 
 test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridge vía Web Audio API (Bypass CSP)', () => {
