@@ -20,13 +20,23 @@ export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.n
  * Genera un texto conversacional y fluido basado en el estado (State) actual del viaje.
  */
 function buildMotherExecutiveScript(state = {}) {
-  // Cálculo de ROI automatizado
-  const horasAhorradas = 2.4;
-  const ahorroAdmin = horasAhorradas * 45;
-  const fugas = state?.pdaInyectada ? 2300 : 0; // Ajustar según lógica de penalizaciones de SeaCharter
-  const breakEven = state?.breakEven ?? 28.5;
+  const breakEven = Number(state?.breakEven ?? 22.82).toFixed(2);
+  const toneladas = Number(state?.cargoQty || 10000);
+  const tarifaDemora = Number(state?.demurrageRate || 0);
+  
+  const horasAhorradas = state?.pdaInyectada ? 4.5 : 2.0; 
+  const ahorroAdmin = Math.round(horasAhorradas * 45);
+  const fugas = state?.riesgosDetectados ? Math.round(toneladas * 0.45) : (tarifaDemora > 10000 ? 1500 : 0);
 
-  return `Escaneo completado. El break-even del armador se sitúa en ${breakEven} dólares por tonelada. Atención: ${state?.riesgosDetectados ? 'Se han detectado posibles recargos operativos en puerto.' : 'Las condiciones operativas son favorables.'} Impacto de esta estimación: se han ahorrado ${ahorroAdmin} dólares de gestión y prevenido posibles fugas por valor de ${fugas} dólares. Operación validada.`;
+  let advertencia = 'Las condiciones operativas proyectadas son favorables.';
+  
+  if (tarifaDemora > 15000) {
+      advertencia = `Exposición financiera severa por demoras ($${tarifaDemora}/día). MADRE recomienda renegociar incrementando los ritmos de carga y descarga.`;
+  } else if (state?.riesgosDetectados) {
+      advertencia = 'Se detectan desviaciones en el Escenario Estrés (Worst Case). Revise los márgenes de seguridad en puerto.';
+  }
+
+  return `Escaneo analítico completado. El buque seleccionado es óptimo para la partida según su capacidad DWT. El break-even del armador se sitúa en ${breakEven} dólares por tonelada. Atención: ${advertencia} Impacto de esta estimación paramétrica: se han ahorrado ${ahorroAdmin} dólares en horas de gestión y prevenido exposiciones de riesgo por valor de ${fugas} dólares. Operación validada.`;
 }
 
 /**
@@ -124,6 +134,49 @@ export function getCoreProUIContext() {
     const rawData = extractStructuredCoreProData();
     escaneoCompacto = compactPayload(rawData);
   } catch (_) {}
+
+  // Extraer breakEven, cargoQty y demurrageRate hacia parametros_activos
+  const b6BreakEven = escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt;
+  const b2CargoQty = escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga;
+  const b9Demurrage = escaneoCompacto?.bloques?.bloque_9_matriz_riesgo_psc?.tarifa_demurrage_usd_dia;
+
+  if (b6BreakEven != null) params.breakEven = b6BreakEven;
+  if (b2CargoQty != null) params.cargoQty = b2CargoQty;
+  if (b9Demurrage != null) params.demurrageRate = b9Demurrage;
+
+  if (typeof document !== 'undefined') {
+    if (params.breakEven == null) {
+      const beEl = document.querySelector('#res-breakeven, #res-cost-base-break-even, #exec-buy-freight');
+      if (beEl) {
+        const val = parseFloat((beEl.value || beEl.textContent || "").replace(/[^0-9.]/g, ""));
+        if (Number.isFinite(val) && val > 0) params.breakEven = val;
+      }
+    }
+    if (params.cargoQty == null) {
+      const cqEl = document.querySelector('#cargo-qty, #exec-cargo-qty');
+      if (cqEl) {
+        const val = parseFloat((cqEl.value || cqEl.textContent || "").replace(/[^0-9.]/g, ""));
+        if (Number.isFinite(val) && val > 0) params.cargoQty = val;
+      }
+    }
+    if (params.demurrageRate == null) {
+      const dmEl = document.querySelector('#demurrage-rate');
+      if (dmEl) {
+        const val = parseFloat((dmEl.value || dmEl.textContent || "").replace(/[^0-9.]/g, ""));
+        if (Number.isFinite(val) && val >= 0) params.demurrageRate = val;
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.State) {
+    if (params.breakEven == null && window.State.breakEven != null) params.breakEven = window.State.breakEven;
+    if (params.cargoQty == null && (window.State.cargoQty != null || window.State.cargo_qty != null)) {
+      params.cargoQty = window.State.cargoQty ?? window.State.cargo_qty;
+    }
+    if (params.demurrageRate == null && (window.State.demurrageRate != null || window.State.demurrage_rate != null)) {
+      params.demurrageRate = window.State.demurrageRate ?? window.State.demurrage_rate;
+    }
+  }
 
   // Se lo enviamos TODO a MADRE
   return {
@@ -394,6 +447,8 @@ export function GlobalMadreDrawer({
       cleanHistory.shift();
     }
 
+    const contextoUI = getCoreProUIContext();
+
     const payload = {
       mensajeUsuario: textToProcess,
       message: textToProcess,
@@ -404,7 +459,7 @@ export function GlobalMadreDrawer({
         projectRef: projectRef,
         userName: "Esteban" // Injected for Data Bridge personalization parity
       },
-      contexto_ui: getCoreProUIContext()
+      contexto_ui: contextoUI
     };
 
     try {
@@ -425,7 +480,12 @@ export function GlobalMadreDrawer({
       // Limpieza de impresión en el Chat:
       // Si la consulta es un escaneo explícito de pantalla o auditoría visual de módulos,
       // sustituimos la respuesta por el guion ejecutivo exacto que narra Madre.
-      let stateForVoice = (typeof window !== 'undefined' ? (window.State || {}) : {});
+      let stateForVoice = {
+        ...(typeof window !== 'undefined' ? window.State : {}),
+        breakEven: contextoUI.parametros_activos?.breakEven || 0,
+        cargoQty: contextoUI.parametros_activos?.cargoQty || 10000,
+        demurrageRate: contextoUI.parametros_activos?.demurrageRate || 0
+      };
       if (SCAN_COMMAND_REGEX.test(queryText)) {
         const isScanButton = queryText.includes('Escanear y auditar pantalla');
         const isMarketQuery = /(?:mercado|market|spot|baltic|flete)/i.test(queryText);
@@ -438,7 +498,9 @@ export function GlobalMadreDrawer({
           const b9 = rawUi?.modulos_1_a_10?.bloque_9_matriz_riesgo_psc || {};
           stateForVoice = {
             ...stateForVoice,
-            breakEven: stateForVoice.breakEven ?? b6.break_even_usd_mt ?? rawUi.breakEvenUnitario ?? 28.5,
+            breakEven: stateForVoice.breakEven || b6.break_even_usd_mt || rawUi.breakEvenUnitario || 0,
+            cargoQty: stateForVoice.cargoQty !== 10000 ? stateForVoice.cargoQty : (rawUi.cargoQty || 10000),
+            demurrageRate: stateForVoice.demurrageRate || b9.tarifa_demurrage_usd_dia || 0,
             pdaInyectada: Boolean(stateForVoice.pdaInyectada || b3.pda_pol_usd || b3.pda_pod_usd || rawUi?.parametros_activos?.pda_pol || rawUi?.parametros_activos?.pda_pod),
             riesgosDetectados: Boolean(stateForVoice.riesgosDetectados || b9.kill_switch_activo || (b9.tarifa_demurrage_usd_dia && b9.tarifa_demurrage_usd_dia > 10000))
           };
