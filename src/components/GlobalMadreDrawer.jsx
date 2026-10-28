@@ -20,23 +20,54 @@ export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.n
  * Genera un texto conversacional y fluido basado en el estado (State) actual del viaje.
  */
 function buildMotherExecutiveScript(state = {}) {
-  const breakEven = Number(state?.breakEven ?? 22.82).toFixed(2);
-  const toneladas = Number(state?.cargoQty || 10000);
-  const tarifaDemora = Number(state?.demurrageRate || 0);
-  
-  const horasAhorradas = state?.pdaInyectada ? 4.5 : 2.0; 
-  const ahorroAdmin = Math.round(horasAhorradas * 45);
-  const fugas = state?.riesgosDetectados ? Math.round(toneladas * 0.45) : (tarifaDemora > 10000 ? 1500 : 0);
+  // 1. SCRAPING VISUAL DE DATOS Y ESCENARIOS DE RIESGO
+  let liveDays = 0;
+  let liveCargoQty = 0;
+  let isExtracomunitario = false;
+  let extractedBreakEven = 0;
+  let optimeFreight = 27.53;
 
-  let advertencia = 'Las condiciones operativas proyectadas son favorables.';
-  
-  if (tarifaDemora > 15000) {
-      advertencia = `Exposición financiera severa por demoras ($${tarifaDemora}/día). MADRE recomienda renegociar incrementando los ritmos de carga y descarga.`;
-  } else if (state?.riesgosDetectados) {
-      advertencia = 'Se detectan desviaciones en el Escenario Estrés (Worst Case). Revise los márgenes de seguridad en puerto.';
+  if (typeof document !== 'undefined') {
+      const domText = document.body.innerText || '';
+      
+      // Captura exacta de Días Totales
+      const matchDays = domText.match(/Dias Mar\s*\+\s*Puerto\s*\+\s*Margen Clima:?\s*([\d,\.]+)/i);
+      if (matchDays) liveDays = parseFloat(matchDays[1].replace(/\./g, '').replace(',', '.'));
+
+      // Extraer Toneladas
+      const matchCargo = domText.match(/(?:Toneladas|Cargo Qty|\bMT\b)[:\s]*([\d\.,]+)/i);
+      if (matchCargo) liveCargoQty = parseFloat(matchCargo[1].replace(/\./g, '').replace(',', '.'));
+
+      // Extraer Break-Even base actual
+      const matchBe = domText.match(/(?:coste\s*base\s*-\s*break\s*even|\bbreak-even\b)[:\s]*\$?([\d\.,]+)/i);
+      if (matchBe) extractedBreakEven = parseFloat(matchBe[1].replace(/\./g, '').replace(',', '.'));
+
+      // Extraer flete del Escenario Óptimo de la Risk Matrix si está presente
+      const matchOpt = domText.match(/\$([\d\.,]+)\s*\/\s*MT[\s\S]{0,40}Escenario Óptimo/i);
+      if (matchOpt) optimeFreight = parseFloat(matchOpt[1].replace(/\./g, '').replace(',', '.'));
+
+      // Detectar origen extracomunitario para CBAM
+      if (/Abidjan|Bejaia|Argelia|Algiers|Oran|Sfax|Dakar|Turkey|Turquía|Egipto|Casablanca/i.test(domText)) {
+          isExtracomunitario = true;
+      }
   }
 
-  return `Escaneo analítico completado. El buque seleccionado es óptimo para la partida según su capacidad DWT. El break-even del armador se sitúa en ${breakEven} dólares por tonelada. Atención: ${advertencia} Impacto de esta estimación paramétrica: se han ahorrado ${ahorroAdmin} dólares en horas de gestión y prevenido exposiciones de riesgo por valor de ${fugas} dólares. Operación validada.`;
+  // 2. CONSOLIDACIÓN
+  const breakEven = extractedBreakEven > 0 ? extractedBreakEven : Number(state?.breakEven ?? state?.breakEvenUnitario ?? 28.76);
+  const diasTotales = liveDays > 0 ? liveDays : Number(state?.diasTotales || 20.94);
+  const cargoMt = liveCargoQty > 0 && liveCargoQty < 1000000 ? liveCargoQty : Number(state?.cargoQty || 30000);
+  
+  const ahorroAdmin = Math.round(2.0 * 45); 
+  let alertaRegulatoria = '';
+  if (isExtracomunitario) {
+      alertaRegulatoria = ' Alerta regulatoria: Origen extracomunitario detectado (liquidación CBAM y provisión EU ETS aplicables).';
+  }
+
+  // 3. RECOMENDACIÓN COMERCIAL CON MENCION EXPLÍCITA DE DÍAS Y RITMOS
+  const diffAhorro = (breakEven - optimeFreight).toFixed(2);
+  const recomendacionRitmos = ` Análisis de Risk Matrix: El ciclo operativo actual se proyecta en ${diasTotales.toFixed(2)} días. Se recomienda intensificar los ritmos de carga en muelle para recortar días de puerto; al pasar al Escenario Óptimo, abates el coste a $${optimeFreight.toFixed(2)}/MT, ahorrando $${diffAhorro} por tonelada frente a la situación actual.`;
+
+  return `Escaneo analítico completado. Operación evaluada para ${cargoMt.toLocaleString('es-ES')} toneladas métricas. El break-even actual se sitúa en $${breakEven.toFixed(2)} por tonelada.${recomendacionRitmos}${alertaRegulatoria} Impacto global: se han ahorrado ${ahorroAdmin} dólares en gestión y optimizado los márgenes operativos.`;
 }
 
 /**

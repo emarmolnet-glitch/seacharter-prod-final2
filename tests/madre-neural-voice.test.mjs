@@ -17,24 +17,29 @@ test('1. Eliminación total de window.speechSynthesis en GlobalMadreDrawer', () 
   );
 });
 
-test('2. Definición y lógica de buildMotherExecutiveScript con ROI automatizado', () => {
+test('2. Definición y lógica de buildMotherExecutiveScript con scraping visual y recomendación Risk Matrix', () => {
   assert.match(
     globalMadreDrawerSource,
     /function buildMotherExecutiveScript\s*\(/,
     'Debe definir la función buildMotherExecutiveScript'
   );
 
-  // Verificación de los cálculos de ROI y texto
-  assert.match(globalMadreDrawerSource, /horasAhorradas\s*=\s*2\.4/);
-  assert.match(globalMadreDrawerSource, /ahorroAdmin\s*=\s*horasAhorradas\s*\*\s*45/);
-  assert.match(globalMadreDrawerSource, /fugas\s*=\s*state(?:\?\.|\.)pdaInyectada\s*\?\s*2300\s*:\s*0/);
-  assert.match(globalMadreDrawerSource, /Escaneo completado/);
-  assert.match(globalMadreDrawerSource, /El break-even del armador se sitúa en/);
-  assert.match(globalMadreDrawerSource, /dólares por tonelada/);
-  assert.match(globalMadreDrawerSource, /Atención:/);
-  assert.match(globalMadreDrawerSource, /Impacto de esta estimación: se han ahorrado/);
-  assert.match(globalMadreDrawerSource, /prevenido posibles fugas por valor de/);
-  assert.match(globalMadreDrawerSource, /Operación validada/);
+  // Verificación del scraping visual en el DOM y Risk Matrix
+  assert.match(globalMadreDrawerSource, /SCRAPING VISUAL DE DATOS Y ESCENARIOS DE RIESGO/);
+  assert.match(globalMadreDrawerSource, /matchDays\s*=\s*domText\.match/);
+  assert.match(globalMadreDrawerSource, /Dias Mar\\s\*\\\+\\s\*Puerto\\s\*\\\+\\s\*Margen Clima/);
+  assert.match(globalMadreDrawerSource, /matchCargo\s*=\s*domText\.match/);
+  assert.match(globalMadreDrawerSource, /matchBe\s*=\s*domText\.match/);
+  assert.match(globalMadreDrawerSource, /matchOpt\s*=\s*domText\.match/);
+  assert.match(globalMadreDrawerSource, /Abidjan\|Bejaia\|Argelia\|Algiers\|Oran\|Sfax\|Dakar\|Turkey\|Turquía\|Egipto\|Casablanca/);
+
+  // Verificación de recomendación Risk Matrix y alerta regulatoria CBAM / EU ETS
+  assert.match(globalMadreDrawerSource, /Análisis de Risk Matrix: El ciclo operativo actual se proyecta en/);
+  assert.match(globalMadreDrawerSource, /Se recomienda intensificar los ritmos de carga en muelle/);
+  assert.match(globalMadreDrawerSource, /Alerta regulatoria: Origen extracomunitario detectado/);
+  assert.match(globalMadreDrawerSource, /Escaneo analítico completado/);
+  assert.match(globalMadreDrawerSource, /El break-even actual se sitúa en/);
+  assert.match(globalMadreDrawerSource, /optimizado los márgenes operativos/);
 });
 
 test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridge vía Web Audio API (Bypass CSP)', () => {
