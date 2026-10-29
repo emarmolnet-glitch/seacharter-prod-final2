@@ -10,6 +10,225 @@ import {
   ejecutarEscaneoCompleto
 } from '../utils/coreProScanner.js';
 
+export const SEACHARTER_DOM_DICTIONARY = {
+  "cuartel_general": { "contenedor": "#view-ais", "inputs": ["#header-vessel-search-input", "#tracking-input-vessel", "#tracking-input-pol", "#tracking-input-pod", "#tracking-input-laydays", "#tracking-input-cancelling", "#tracking-input-cargo", "#ais-vessel-class-select", "#ais-radius-select", "#ais-ballast-filter"], "metricas": ["#ais-radar-status-badge", "#ais-kpi-total-vessels", "#ais-kpi-ballast-count", "#ais-kpi-laden-count", "#ais-kpi-fair-freight", "#ais-kpi-avg-dwt", "#ais-kpi-avg-speed", "#tracking-live-connection", "#tracking-live-last-sync", "#vessel-master-preview-card"] },
+  "market_intel": { "contenedor": "#market-intel-dashboard", "inputs": ["#market-intel-capesize-tc", "#market-intel-panamax-tc", "#market-intel-supramax-tc", "#market-intel-handysize-tc", "#market-intel-bdi-index", "#market-intel-spot-v2-tc", "#market-intel-vlsfo-price", "#market-intel-lsmgo-price", "#market-intel-ifo380-price", "#market-calibration-factor", "#inverse-tce-target", "#market-intelligence-client-offer"], "metricas": ["#baltic-spot-value", "#baltic-spot-variation", "#tce-spot-theoretical-value", "#res-market-benchmark-rate", "#res-market-benchmark-alert"] },
+  "mapa": { "contenedor": "#view-map", "inputs": ["#map-port-ballast", "#map-port-pol", "#map-port-pod", "#map-laycan-date", "#map-cancelling-date"], "metricas": ["#sync-miles-label", "#sync-miles-breakdown", "#sync-pol-label", "#sync-pod-label"] },
+  "calculadora": { "contenedor": "#view-estimator", "inputs": ["#port-ballast", "#port-pol", "#port-pod", "#dist-ballast", "#dist-laden", "#dist-total", "#spd-ballast", "#spd-laden", "#nombre-buque-calculadora", "#vessel-dwt", "#cargo-type", "#cargo-qty", "#cargo-sf", "#rate-load", "#rate-disch", "#price-sea", "#price-port", "#pda-pol", "#pda-pod", "#opex-daily", "#margin-charterer", "#margin-owner", "#freight-rate", "#freight-sell", "#demurrage-rate"], "metricas": ["#res-days-sea-total", "#res-days-port", "#res-days-total", "#res-cost-bunker", "#res-cost-pda", "#res-cost-opex", "#res-cost-total", "#res-breakeven", "#res-sug-charterer", "#res-net-profit-charterer", "#res-tce-label", "#negotiation-spread-pmt"] },
+  "dossiers": { "contenedor": "#view-dossiers", "inputs": ["#dossiers-search", "#quick-ref"], "metricas": ["#dossiers-count", "#dossiers-table-body"] },
+  "decisiones": { "contenedor": "#view-decisiones", "inputs": ["#input-jwlaPremiumUSD", "#input-ballastDays", "#input-freight-all-in", "#input-sim-speed", "#input-sim-loadrate", "#input-sim-bunker-price"], "metricas": ["#badge-jwc-risk", "#section-flete-all-in-gross", "#card-laycan", "#card-loadrate", "#card-financial", "#madre-offcanvas-veredicto-val"] },
+  "agenda": { "contenedor": "#market-directory-shell", "inputs": ["#market-directory-search", "#market-contact-company", "#market-contact-name", "#market-contact-role", "#market-contact-country", "#market-contact-imo-input"], "metricas": ["#market-directory-summary", "#market-directory-list"] }
+};
+
+/**
+ * Detecta el identificador del módulo activo en el DOM de SeaCharter Core PRO
+ */
+export function detectarModuloActual() {
+  if (typeof document === 'undefined') return 'calculadora';
+
+  // 1. Agenda de Brokers abierta (modal/drawer)
+  try {
+    const agendaShell = document.querySelector('#market-directory-shell');
+    if (agendaShell && !agendaShell.hasAttribute('hidden') && agendaShell.getAttribute('aria-hidden') !== 'true' && agendaShell.style.display !== 'none') {
+      return 'agenda';
+    }
+  } catch (_) {}
+
+  // 2. Decisiones DSS activo
+  try {
+    const viewDecisiones = document.querySelector('#view-decisiones');
+    if (viewDecisiones && (!viewDecisiones.classList.contains('hidden') || viewDecisiones.classList.contains('active-block') || viewDecisiones.classList.contains('active-flex'))) {
+      return 'decisiones';
+    }
+  } catch (_) {}
+
+  // 3. Dossiers activo
+  try {
+    const viewDossiers = document.querySelector('#view-dossiers');
+    if (viewDossiers && !viewDossiers.classList.contains('hidden')) {
+      return 'dossiers';
+    }
+  } catch (_) {}
+
+  // 4. Cuartel General / Radar AIS activo
+  try {
+    const viewAis = document.querySelector('#view-ais');
+    if (viewAis && (!viewAis.classList.contains('hidden') || viewAis.classList.contains('active-block') || viewAis.classList.contains('active-flex'))) {
+      return 'cuartel_general';
+    }
+  } catch (_) {}
+
+  // 5. Mapa activo
+  try {
+    const viewMap = document.querySelector('#view-map');
+    if (viewMap && (!viewMap.classList.contains('hidden') || viewMap.classList.contains('active-block') || viewMap.classList.contains('active-flex'))) {
+      return 'mapa';
+    }
+  } catch (_) {}
+
+  // 6. Market Intel activo
+  try {
+    const currentTab = typeof window !== 'undefined' ? (window.currentTab || window.activeTab) : null;
+    if (currentTab === 'market_intel') return 'market_intel';
+  } catch (_) {}
+
+  // 7. Estimador / Calculadora
+  try {
+    const viewEstimator = document.querySelector('#view-estimator');
+    if (viewEstimator && (!viewEstimator.classList.contains('hidden') || viewEstimator.classList.contains('active-block') || viewEstimator.classList.contains('active-flex'))) {
+      return 'calculadora';
+    }
+  } catch (_) {}
+
+  // 8. Chequeo por tab global si existe
+  if (typeof window !== 'undefined') {
+    const tab = window.currentTab || window.activeTab;
+    const tabMap = {
+      ais: 'cuartel_general',
+      map: 'mapa',
+      estimator: 'calculadora',
+      dossiers: 'dossiers',
+      decisiones: 'decisiones',
+      agenda: 'agenda',
+      market_intel: 'market_intel'
+    };
+    if (tab && tabMap[tab]) return tabMap[tab];
+    if (tab && SEACHARTER_DOM_DICTIONARY[tab]) return tab;
+  }
+
+  return 'calculadora';
+}
+
+/**
+ * Motor de Captura DOM por Módulo Activo usando SEACHARTER_DOM_DICTIONARY.
+ * Itera sobre arrays de inputs y metricas usando document.querySelector para
+ * extraer los valores prioritarios antes del barrido general.
+ * Añade las métricas encontradas en una lista llamada [Métricas Clave]:
+ * dentro del string de elementos visibles.
+ */
+export function capturarDomModuloActivo(moduloIdOpcional) {
+  let moduloKey = moduloIdOpcional;
+
+  // Si se pasa un selector de contenedor (ej. #view-ais), normalizar al ID de diccionario
+  if (moduloKey && typeof moduloKey === 'string') {
+    if (!SEACHARTER_DOM_DICTIONARY[moduloKey]) {
+      const entry = Object.entries(SEACHARTER_DOM_DICTIONARY).find(
+        ([, conf]) => conf.contenedor === moduloKey
+      );
+      if (entry) {
+        moduloKey = entry[0];
+      } else {
+        const aliasMap = {
+          ais: 'cuartel_general',
+          map: 'mapa',
+          estimator: 'calculadora',
+          calc: 'calculadora',
+          dossier: 'dossiers',
+          decision: 'decisiones',
+          contacts: 'agenda',
+          directory: 'agenda'
+        };
+        if (aliasMap[moduloKey]) moduloKey = aliasMap[moduloKey];
+      }
+    }
+  }
+
+  if (!moduloKey || !SEACHARTER_DOM_DICTIONARY[moduloKey]) {
+    moduloKey = detectarModuloActual();
+  }
+
+  const moduleConfig = SEACHARTER_DOM_DICTIONARY[moduloKey];
+  if (!moduleConfig) {
+    return {
+      suite: "SeaCharter Core PRO",
+      modulo_actual: moduloKey || "calculadora",
+      contenedor: "",
+      inputs: [],
+      metricas: [],
+      elementos_visibles: `[Módulo Activo]: ${moduloKey}\n[Métricas Clave]:\n- (Módulo no registrado)`
+    };
+  }
+
+  const contenedorSel = moduleConfig.contenedor;
+  const metricasEncontradas = [];
+  const inputsPrioritarios = [];
+  const lineasMetricas = [];
+  const lineasInputs = [];
+
+  if (typeof document !== 'undefined') {
+    // 1. Extraer valores prioritarios de metricas usando document.querySelector
+    if (Array.isArray(moduleConfig.metricas)) {
+      moduleConfig.metricas.forEach((sel) => {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            const val = (el.value != null && el.value !== '' ? el.value : (el.textContent || '')).trim();
+            metricasEncontradas.push({ selector: sel, valor: val });
+            lineasMetricas.push(`${sel}: ${val}`);
+          }
+        } catch (_) {}
+      });
+    }
+
+    // 2. Extraer valores prioritarios de inputs usando document.querySelector
+    if (Array.isArray(moduleConfig.inputs)) {
+      moduleConfig.inputs.forEach((sel) => {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            const val = (el.value != null ? el.value : (el.textContent || '')).trim();
+            inputsPrioritarios.push({ selector: sel, valor: val });
+            lineasInputs.push(`${sel}: ${val}`);
+          }
+        } catch (_) {}
+      });
+    }
+
+    // 3. Barrido general de inputs dentro del contenedor
+    const contenedorEl = (typeof document.querySelector === 'function' ? document.querySelector(contenedorSel) : null) || document;
+    const otrosInputs = [];
+    if (contenedorEl && typeof contenedorEl.querySelectorAll === 'function') {
+      const inputsPrioritariosSet = new Set(moduleConfig.inputs || []);
+      try {
+        const allFormEls = contenedorEl.querySelectorAll('input, select, textarea');
+        allFormEls.forEach((el) => {
+          const idSel = el.id ? `#${el.id}` : null;
+          if (!idSel || !inputsPrioritariosSet.has(idSel)) {
+            const val = (el.value != null ? el.value : '').trim();
+            otrosInputs.push({ selector: idSel || el.name || 'input', valor: val });
+          }
+        });
+      } catch (_) {}
+    }
+  }
+
+  // 4. Añadir las métricas encontradas en una lista llamada [Métricas Clave]: dentro del string de elementos visibles
+  let elementosVisibles = `[Módulo]: ${moduloKey} (${contenedorSel})\n\n`;
+
+  elementosVisibles += `[Métricas Clave]:\n`;
+  if (lineasMetricas.length > 0) {
+    elementosVisibles += lineasMetricas.map((m) => `  • ${m}`).join('\n') + '\n\n';
+  } else {
+    elementosVisibles += `  • (Sin métricas registradas en ${contenedorSel})\n\n`;
+  }
+
+  elementosVisibles += `[Inputs Prioritarios]:\n`;
+  if (lineasInputs.length > 0) {
+    elementosVisibles += lineasInputs.map((i) => `  • ${i}`).join('\n') + '\n';
+  } else {
+    elementosVisibles += `  • (Sin inputs registrados en ${contenedorSel})\n`;
+  }
+
+  return {
+    suite: "SeaCharter Core PRO",
+    modulo_actual: moduloKey,
+    contenedor: contenedorSel,
+    metricas: metricasEncontradas,
+    inputs: inputsPrioritarios,
+    elementos_visibles: elementosVisibles.trim()
+  };
+}
+
 /**
  * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
  */
@@ -188,14 +407,20 @@ export function getCoreProUIContext() {
     escaneoCompacto = compactPayload(rawData);
   } catch (_) {}
 
-  // Extraer breakEven, cargoQty y demurrageRate hacia parametros_activos
+  // Extraer breakEven, cargoQty y demurrageRate hacia parametros_activos únicamente si existen elementos en el DOM
+  const hasLiveDomElements = typeof document !== 'undefined' && typeof document.querySelector === 'function' && Boolean(
+    document.querySelector('#res-breakeven, #res-cost-base-break-even, #exec-buy-freight, #cargo-qty, #exec-cargo-qty, #demurrage-rate')
+  );
+
   const b6BreakEven = escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt;
   const b2CargoQty = escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga;
   const b9Demurrage = escaneoCompacto?.bloques?.bloque_9_matriz_riesgo_psc?.tarifa_demurrage_usd_dia;
 
-  if (b6BreakEven != null) params.breakEven = b6BreakEven;
-  if (b2CargoQty != null) params.cargoQty = b2CargoQty;
-  if (b9Demurrage != null) params.demurrageRate = b9Demurrage;
+  if (hasLiveDomElements) {
+    if (b6BreakEven != null) params.breakEven = b6BreakEven;
+    if (b2CargoQty != null) params.cargoQty = b2CargoQty;
+    if (b9Demurrage != null) params.demurrageRate = b9Demurrage;
+  }
 
   if (typeof document !== 'undefined') {
     if (params.breakEven == null) {
@@ -231,8 +456,13 @@ export function getCoreProUIContext() {
     }
   }
 
+  const moduloActual = detectarModuloActual();
+  const capturaDOM = capturarDomModuloActivo(moduloActual);
+
   // Se lo enviamos TODO a MADRE
   return {
+    suite: "SeaCharter Core PRO",
+    modulo_actual: moduloActual,
     current_module: "core_pro",
     vista_activa: "Core PRO - Panel y Mapa Operativo",
     vista_dinamica: vistaActivaActual,
@@ -241,6 +471,8 @@ export function getCoreProUIContext() {
     escaneo_estructurado: escaneoCompacto,
     modulos_1_a_10: escaneoCompacto?.bloques,
     resumen_operativo: escaneoCompacto?.resumen,
+    captura_dom: capturaDOM,
+    elementos_visibles: capturaDOM?.elementos_visibles,
     pol: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol || 'Rotterdam',
     pod: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod || 'Houston',
     cargoQty: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga || 30000,
@@ -254,6 +486,9 @@ export function getCoreProUIContext() {
 }
 
 if (typeof window !== 'undefined') {
+  window.SEACHARTER_DOM_DICTIONARY = SEACHARTER_DOM_DICTIONARY;
+  window.capturarDomModuloActivo = capturarDomModuloActivo;
+  window.detectarModuloActual = detectarModuloActual;
   window.getCoreProUIContext = getCoreProUIContext;
   window.triggerLaserScanEffect = triggerLaserScanEffect;
   window.ejecutarEscaneoVisual = ejecutarEscaneoVisual;
@@ -500,19 +735,24 @@ export function GlobalMadreDrawer({
       cleanHistory.shift();
     }
 
-    const contextoUI = getCoreProUIContext();
+    const moduloActualDetectado = capturarDomModuloActivo()?.modulo_actual || "calculadora";
+    const capturaDOM = capturarDomModuloActivo(moduloActualDetectado);
 
     const payload = {
+      suite: "SeaCharter Core PRO",
+      modulo_actual: moduloActualDetectado,
       mensajeUsuario: textToProcess,
       message: textToProcess,
       prompt: textToProcess,
       history: cleanHistory,
       context: {
         origin: "SeaCharter Core PRO",
+        suite: "SeaCharter Core PRO",
+        modulo_actual: moduloActualDetectado,
         projectRef: projectRef,
         userName: "Esteban" // Injected for Data Bridge personalization parity
       },
-      contexto_ui: contextoUI
+      contexto_ui: getCoreProUIContext()
     };
 
     try {
@@ -600,7 +840,7 @@ export function GlobalMadreDrawer({
 
   return (
     <aside
-      className="fixed top-0 left-0 h-full w-full md:w-[450px] z-[9999] bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
+      className="fixed top-0 left-0 bottom-0 z-[9999] w-[450px] max-w-lg bg-[#0B1121] text-slate-300 shadow-2xl border-r border-slate-800/80 flex flex-col font-sans transition-all duration-300"
       style={{ backgroundColor: '#0B1121' }}
     >
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 shrink-0 bg-[#0B1121] text-slate-200">
@@ -612,10 +852,10 @@ export function GlobalMadreDrawer({
         </div>
 
         {/* Right side: Action Buttons (Mute, Reset, Close) */}
-        <div className="flex items-center gap-4 shrink-0">
-          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
-          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title="Reiniciar conversación">🔄</button>
-          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 p-2 rounded-lg bg-slate-800/90 border border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-xs text-xs" title="Cerrar panel">✕</button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button type="button" onClick={toggleMute} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>{isMuted ? '🔇' : '🔊'}</button>
+          <button type="button" onClick={handleReset} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄</button>
+          <button type="button" onClick={handleClose} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕</button>
         </div>
       </header>
 
@@ -649,10 +889,10 @@ export function GlobalMadreDrawer({
             <div
               className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium ${
                 m.sender === 'user'
-                  ? 'bg-teal-700 border border-teal-500 text-white rounded-xl p-3.5 shadow-sm'
+                  ? 'bg-teal-950/40 border border-teal-900/50 text-teal-200 rounded-xl p-3 shadow-sm'
                   : m.isError
-                  ? 'bg-red-950 border border-red-800 text-red-200 rounded-xl p-3.5 shadow-sm'
-                  : 'bg-slate-900 border border-slate-700 text-white rounded-xl p-3.5 shadow-sm'
+                  ? 'bg-red-950 border border-red-800 text-red-200 rounded-xl p-3 shadow-sm'
+                  : 'bg-slate-900/60 border border-slate-800/80 text-slate-300 rounded-xl p-3 shadow-sm'
               }`}
             >
               {m.text}
