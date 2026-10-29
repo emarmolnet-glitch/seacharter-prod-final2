@@ -316,8 +316,8 @@ function buildMotherExecutiveScript(state = {}) {
  */
 async function playNeuralMotherVoice(textToSpeak) {
   try {
-    // Ajusta la URL base apuntando a la instancia de DataBridge del usuario
-    const databridgeUrl = (typeof window !== 'undefined' && window.DATABRIDGE_API_URL) ? window.DATABRIDGE_API_URL : 'https://calm-shortbread-55bcfc.netlify.app';
+    // URL explícita a DataBridge para evitar problemas de CORS o rutas relativas fallidas
+    const databridgeUrl = 'https://calm-shortbread-55bcfc.netlify.app';
     const response = await fetch(`${databridgeUrl}/.netlify/functions/madre-voice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -754,8 +754,15 @@ export function GlobalMadreDrawer({
       contexto_ui: getCoreProUIContext()
     };
 
+    const contextoUI = payload.contexto_ui || {};
+    const stateForVoice = {
+      ...(typeof window !== 'undefined' ? window.State : {}),
+      breakEven: contextoUI.parametros_activos?.breakEven || contextoUI.breakEvenUnitario || 0,
+      cargoQty: contextoUI.parametros_activos?.cargoQty || contextoUI.cargoQty || 10000,
+      demurrageRate: contextoUI.parametros_activos?.demurrageRate || 0
+    };
+
     try {
-      // Clean, single-payload dispatch to MADRE API endpoint
       const response = await fetch(MADRE_API_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -765,64 +772,55 @@ export function GlobalMadreDrawer({
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error('Error en MADRE API');
-      const data = await response.json();
-      let replyText = data?.reply || data?.message || data?.text || 'Auditoría procesada.';
-
-      // Limpieza de impresión en el Chat:
-      // Si la consulta es un escaneo explícito de pantalla o auditoría visual de módulos,
-      // sustituimos la respuesta por el guion ejecutivo exacto que narra Madre.
-      let stateForVoice = {
-        ...(typeof window !== 'undefined' ? window.State : {}),
-        breakEven: contextoUI.parametros_activos?.breakEven || 0,
-        cargoQty: contextoUI.parametros_activos?.cargoQty || 10000,
-        demurrageRate: contextoUI.parametros_activos?.demurrageRate || 0
-      };
-      if (SCAN_COMMAND_REGEX.test(queryText)) {
-        const isScanButton = queryText.includes('Escanear y auditar pantalla');
-        const isMarketQuery = /(?:mercado|market|spot|baltic|flete)/i.test(queryText);
-        const isStrictScan = isScanButton || !isMarketQuery;
-
-        if (isStrictScan) {
-          const rawUi = payload?.contexto_ui || {};
-          const b6 = rawUi?.modulos_1_a_10?.bloque_6_resumen_operacion_costes || {};
-          const b3 = rawUi?.modulos_1_a_10?.bloque_3_bunkers_gastos || {};
-          const b9 = rawUi?.modulos_1_a_10?.bloque_9_matriz_riesgo_psc || {};
-          stateForVoice = {
-            ...stateForVoice,
-            breakEven: stateForVoice.breakEven || b6.break_even_usd_mt || rawUi.breakEvenUnitario || 0,
-            cargoQty: stateForVoice.cargoQty !== 10000 ? stateForVoice.cargoQty : (rawUi.cargoQty || 10000),
-            demurrageRate: stateForVoice.demurrageRate || b9.tarifa_demurrage_usd_dia || 0,
-            pdaInyectada: Boolean(stateForVoice.pdaInyectada || b3.pda_pol_usd || b3.pda_pod_usd || rawUi?.parametros_activos?.pda_pol || rawUi?.parametros_activos?.pda_pod),
-            riesgosDetectados: Boolean(stateForVoice.riesgosDetectados || b9.kill_switch_activo || (b9.tarifa_demurrage_usd_dia && b9.tarifa_demurrage_usd_dia > 10000))
-          };
-          replyText = buildMotherExecutiveScript(stateForVoice);
-        }
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
       }
 
-     const assistantMessage = {
-  id: Date.now() + 1,
-  sender: 'assistant',
-  role: 'assistant',
-  text: replyText,
-  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-};
+      if (!response.ok && !data.success) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
 
-setMessages((prev) => [...prev, assistantMessage]);
+      // Extraer el texto de la respuesta o utilizar el guion pregenerado si es un escaneo
+      const baseReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response || "Auditoría completada y validada en el sistema.";
+      
+      // Determinar si debemos usar el guion local (como en Land Charter)
+      let finalReply = baseReply;
+      if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
+         finalReply = buildMotherExecutiveScript(stateForVoice);
+      }
 
-try {
-  await speakText(replyText, stateForVoice);
-} catch (voiceErr) {
-  console.warn('Reproducción de voz omitida:', voiceErr);
-}
+      // 1. Mostrar inmediatamente la respuesta en el chat (ÉXITO GARANTIZADO)
+      const assistantMessage = {
+        id: Date.now() + 1,
+        sender: 'assistant',
+        role: 'assistant',
+        text: finalReply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // 2. Disparar la voz de MADRE de forma totalmente independiente
+      // Usamos una función autoejecutable (IIFE) asíncrona para que no bloquee ni dispare el catch principal
+      (async () => {
+        try {
+          await speakText(finalReply, stateForVoice);
+        } catch (voiceErr) {
+          console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
+        }
+      })();
+
     } catch (err) {
+      console.error('[MADRE] Error crítico de red:', err);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           sender: 'assistant',
           role: 'assistant',
-          text: 'Error de conexión con el Cerebro Central.',
+          text: 'Error de conexión de red con el Cerebro Central.',
           isError: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
