@@ -26,39 +26,7 @@ export const SEACHARTER_DOM_DICTIONARY = {
 export function detectarModuloActual() {
   if (typeof document === 'undefined') return 'calculadora';
 
-  // 1. Agenda de Brokers abierta (modal/drawer)
-  try {
-    const agendaShell = document.querySelector('#market-directory-shell');
-    if (agendaShell && !agendaShell.hasAttribute('hidden') && agendaShell.getAttribute('aria-hidden') !== 'true' && agendaShell.style.display !== 'none') {
-      return 'agenda';
-    }
-  } catch (_) {}
-
-  // 2. Decisiones DSS activo
-  try {
-    const viewDecisiones = document.querySelector('#view-decisiones');
-    if (viewDecisiones && (!viewDecisiones.classList.contains('hidden') || viewDecisiones.classList.contains('active-block') || viewDecisiones.classList.contains('active-flex'))) {
-      return 'decisiones';
-    }
-  } catch (_) {}
-
-  // 3. Dossiers activo
-  try {
-    const viewDossiers = document.querySelector('#view-dossiers');
-    if (viewDossiers && !viewDossiers.classList.contains('hidden')) {
-      return 'dossiers';
-    }
-  } catch (_) {}
-
-  // 4. Cuartel General / Radar AIS activo
-  try {
-    const viewAis = document.querySelector('#view-ais');
-    if (viewAis && (!viewAis.classList.contains('hidden') || viewAis.classList.contains('active-block') || viewAis.classList.contains('active-flex'))) {
-      return 'cuartel_general';
-    }
-  } catch (_) {}
-
-  // 5. Mapa activo
+  // 1. Mapa activo (¡Subido al principio para evitar falsos positivos con decisiones!)
   try {
     const viewMap = document.querySelector('#view-map');
     if (viewMap && (!viewMap.classList.contains('hidden') || viewMap.classList.contains('active-block') || viewMap.classList.contains('active-flex'))) {
@@ -66,18 +34,50 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 6. Market Intel activo
-  try {
-    const currentTab = typeof window !== 'undefined' ? (window.currentTab || window.activeTab) : null;
-    if (currentTab === 'market_intel') return 'market_intel';
-  } catch (_) {}
-
-  // 7. Estimador / Calculadora
+  // 2. Estimador / Calculadora activo
   try {
     const viewEstimator = document.querySelector('#view-estimator');
     if (viewEstimator && (!viewEstimator.classList.contains('hidden') || viewEstimator.classList.contains('active-block') || viewEstimator.classList.contains('active-flex'))) {
       return 'calculadora';
     }
+  } catch (_) {}
+
+  // 3. Agenda de Brokers abierta (modal/drawer)
+  try {
+    const agendaShell = document.querySelector('#market-directory-shell');
+    if (agendaShell && !agendaShell.hasAttribute('hidden') && agendaShell.getAttribute('aria-hidden') !== 'true' && agendaShell.style.display !== 'none') {
+      return 'agenda';
+    }
+  } catch (_) {}
+
+  // 4. Decisiones DSS activo
+  try {
+    const viewDecisiones = document.querySelector('#view-decisiones');
+    if (viewDecisiones && (!viewDecisiones.classList.contains('hidden') || viewDecisiones.classList.contains('active-block') || viewDecisiones.classList.contains('active-flex'))) {
+      return 'decisiones';
+    }
+  } catch (_) {}
+
+  // 5. Dossiers activo
+  try {
+    const viewDossiers = document.querySelector('#view-dossiers');
+    if (viewDossiers && !viewDossiers.classList.contains('hidden')) {
+      return 'dossiers';
+    }
+  } catch (_) {}
+
+  // 6. Cuartel General / Radar AIS activo
+  try {
+    const viewAis = document.querySelector('#view-ais');
+    if (viewAis && (!viewAis.classList.contains('hidden') || viewAis.classList.contains('active-block') || viewAis.classList.contains('active-flex'))) {
+      return 'cuartel_general';
+    }
+  } catch (_) {}
+
+  // 7. Market Intel activo
+  try {
+    const currentTab = typeof window !== 'undefined' ? (window.currentTab || window.activeTab) : null;
+    if (currentTab === 'market_intel') return 'market_intel';
   } catch (_) {}
 
   // 8. Chequeo por tab global si existe
@@ -98,7 +98,6 @@ export function detectarModuloActual() {
 
   return 'calculadora';
 }
-
 /**
  * Motor de Captura DOM por Módulo Activo usando SEACHARTER_DOM_DICTIONARY.
  * Itera sobre arrays de inputs y metricas usando document.querySelector para
