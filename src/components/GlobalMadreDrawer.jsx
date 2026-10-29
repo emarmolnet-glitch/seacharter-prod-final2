@@ -316,9 +316,7 @@ function buildMotherExecutiveScript(state = {}) {
  */
 async function playNeuralMotherVoice(textToSpeak) {
   try {
-    // URL explícita a DataBridge para evitar problemas de CORS o rutas relativas fallidas
-    const databridgeUrl = 'https://calm-shortbread-55bcfc.netlify.app';
-    const response = await fetch(`${databridgeUrl}/.netlify/functions/madre-voice`, {
+    const response = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: textToSpeak })
