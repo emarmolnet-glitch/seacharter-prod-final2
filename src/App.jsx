@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
 import GlobalMadreDrawer, {
+  SEACHARTER_DOM_DICTIONARY,
+  capturarDomModuloActivo,
+  detectarModuloActual,
   getCoreProUIContext,
   triggerLaserScanEffect,
   ejecutarEscaneoVisual,
@@ -812,6 +815,9 @@ export { HashRouter, HashRouter as BrowserRouter };
 export { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef };
 export {
   GlobalMadreDrawer,
+  SEACHARTER_DOM_DICTIONARY,
+  capturarDomModuloActivo,
+  detectarModuloActual,
   getCoreProUIContext,
   triggerLaserScanEffect,
   ejecutarEscaneoVisual,
