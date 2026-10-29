@@ -801,16 +801,21 @@ export function GlobalMadreDrawer({
         }
       }
 
-      const assistantMessage = {
-        id: Date.now() + 1,
-        sender: 'assistant',
-        role: 'assistant',
-        text: replyText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
+     const assistantMessage = {
+  id: Date.now() + 1,
+  sender: 'assistant',
+  role: 'assistant',
+  text: replyText,
+  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+};
 
-      setMessages((prev) => [...prev, assistantMessage]);
-      await speakText(replyText, stateForVoice);
+setMessages((prev) => [...prev, assistantMessage]);
+
+try {
+  await speakText(replyText, stateForVoice);
+} catch (voiceErr) {
+  console.warn('Reproducción de voz omitida:', voiceErr);
+}
     } catch (err) {
       setMessages((prev) => [
         ...prev,
