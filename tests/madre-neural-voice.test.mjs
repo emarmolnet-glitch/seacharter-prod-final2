@@ -89,12 +89,7 @@ test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridg
 test('4. Limpieza de impresión en el Chat: Escaneo de pantalla muestra el guion ejecutivo idéntico a la voz', () => {
   assert.match(
     globalMadreDrawerSource,
-    /if\s*\(\s*SCAN_COMMAND_REGEX\.test\(queryText\)\s*\)\s*\{[\s\S]*?replyText\s*=\s*buildMotherExecutiveScript\(stateForVoice\);/
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /isMarketQuery/,
-    'Debe discriminar consultas de mercado para respetar el replyText del servidor'
+    /if\s*\(\s*SCAN_COMMAND_REGEX\.test\(queryText\)\s*&&\s*!\/\(\?:mercado\|market\|spot\)\/i\.test\(queryText\)\s*\)\s*\{[\s\S]*?finalReply\s*=\s*buildMotherExecutiveScript\(stateForVoice\);/
   );
   assert.match(
     globalMadreDrawerSource,
