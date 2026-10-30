@@ -8,6 +8,8 @@ import {
   extraerDatosEstructuradosCorePro,
   compactPayload,
   SCAN_COMMAND_REGEX,
+  hasOperationalInputData,
+  PENDING_OPERATION_MESSAGE,
   ejecutarEscaneoCompleto
 } from '../utils/coreProScanner.js';
 
@@ -238,7 +240,40 @@ export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.n
  * Guion Ejecutivo de Carga Seca para voz neuronal de Madre
  * Genera un texto conversacional y fluido basado en el estado (State) actual del viaje.
  */
+export function getScanPendingMessage(state = {}) {
+  const modulo = detectarModuloActual();
+  if (modulo === 'mapa') {
+    return 'Estás en el mapa operativo. Para auditar la operación, accede a la calculadora de SeaCharter e introduce o revisa los datos de carga y cálculo.';
+  }
+
+  const readMetric = (selectors, fallback) => {
+    for (const selector of selectors) {
+      const element = typeof document !== 'undefined' ? document.querySelector(selector) : null;
+      if (!element) continue;
+      const raw = String('value' in element ? element.value : element.textContent || '').trim();
+      let clean = raw.replace(/[^0-9.,-]/g, '');
+      clean = clean.lastIndexOf(',') > clean.lastIndexOf('.')
+        ? clean.replace(/\./g, '').replace(',', '.')
+        : clean.replace(/,/g, '');
+      return clean ? Number(clean) : 0;
+    }
+    return Number(fallback);
+  };
+
+  const cargo = readMetric(['#cargo-qty'], state.cargoQty ?? state.cargo);
+  const breakEven = readMetric(['#res-breakeven', '#res-cost-base-break-even'], state.breakEven ?? state.breakEvenUnitario);
+  if (!hasOperationalInputData() || !Number.isFinite(cargo) || cargo <= 0 || !Number.isFinite(breakEven) || breakEven <= 0) {
+    if (modulo === 'cuartel_general') {
+      return 'Estás en el radar AIS y faltan datos de carga o cálculo para auditar la operación. Accede a la calculadora de SeaCharter e introduce las toneladas de carga y los parámetros de la operación.';
+    }
+    return PENDING_OPERATION_MESSAGE;
+  }
+  return null;
+}
+
 function buildMotherExecutiveScript(state = {}) {
+  const pendingMessage = getScanPendingMessage(state);
+  if (pendingMessage) return pendingMessage;
   // Función auxiliar para parsear números respetando decimales (US y EU)
   const parseValue = (val) => {
       if (!val) return null;
@@ -293,6 +328,10 @@ function buildMotherExecutiveScript(state = {}) {
   const diasTotales = liveDays !== null ? liveDays : (state?.diasTotales ?? null);
   const cargoMt = liveCargoQty !== null ? liveCargoQty : (state?.cargoQty ?? null);
   
+  if (!Number.isFinite(Number(cargoMt)) || Number(cargoMt) <= 0 || !Number.isFinite(Number(breakEven)) || Number(breakEven) <= 0) {
+    return PENDING_OPERATION_MESSAGE;
+  }
+
   let alertaRegulatoria = '';
   if (isExtracomunitario) {
       alertaRegulatoria = ' Alerta regulatoria: Origen extracomunitario detectado (liquidación CBAM y provisión EU ETS aplicables).';
@@ -490,15 +529,15 @@ export function getCoreProUIContext() {
     resumen_operativo: escaneoCompacto?.resumen,
     captura_dom: capturaDOM,
     elementos_visibles: capturaDOM?.elementos_visibles,
-    pol: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol || 'Rotterdam',
-    pod: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod || 'Houston',
-    cargoQty: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga || 30000,
-    commodity: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.commodity || 'Siderúrgico / Carga General',
-    breakEvenUnitario: escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt || 28.5,
-    fleteUnitario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.flete_venta_fletador_mt || escaneoCompacto?.bloques?.bloque_7_analisis_fletes_riesgos?.flete_venta_sugerido_mt || 37.0,
-    loadRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_carga_tpd || 5000,
-    dischargeRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_descarga_tpd || 2500,
-    tceDiario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.tce_obtenido_usd_dia || 13500
+    pol: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol || '',
+    pod: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod || '',
+    cargoQty: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga || 0,
+    commodity: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.commodity || '',
+    breakEvenUnitario: escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt || 0,
+    fleteUnitario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.flete_venta_fletador_mt || escaneoCompacto?.bloques?.bloque_7_analisis_fletes_riesgos?.flete_venta_sugerido_mt || 0,
+    loadRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_carga_tpd || 0,
+    dischargeRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_descarga_tpd || 0,
+    tceDiario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.tce_obtenido_usd_dia || 0
   };
 }
 
@@ -770,6 +809,18 @@ export function GlobalMadreDrawer({
     // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual
     if (SCAN_COMMAND_REGEX.test(queryText)) {
       triggerLaserScanEffect();
+      const pendingMessage = getScanPendingMessage(window.State || {});
+      if (pendingMessage) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          sender: 'assistant',
+          role: 'assistant',
+          text: pendingMessage,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }]);
+        setIsLoading(false);
+        return;
+      }
     }
 
     // Clean the history to satisfy Gemini API requirements
@@ -809,7 +860,7 @@ export function GlobalMadreDrawer({
     const stateForVoice = {
       ...(typeof window !== 'undefined' ? window.State : {}),
       breakEven: contextoUI.parametros_activos?.breakEven || contextoUI.breakEvenUnitario || 0,
-      cargoQty: contextoUI.parametros_activos?.cargoQty || contextoUI.cargoQty || 10000,
+      cargoQty: contextoUI.parametros_activos?.cargoQty || contextoUI.cargoQty || 0,
       demurrageRate: contextoUI.parametros_activos?.demurrageRate || 0
     };
 
@@ -971,6 +1022,8 @@ export {
   extraerDatosEstructuradosCorePro,
   compactPayload,
   SCAN_COMMAND_REGEX,
+  hasOperationalInputData,
+  PENDING_OPERATION_MESSAGE,
   ejecutarEscaneoCompleto,
   buildMotherExecutiveScript,
   playNeuralMotherVoice
