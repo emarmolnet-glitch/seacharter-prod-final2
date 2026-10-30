@@ -10864,6 +10864,37 @@
                                     <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
                                     <div>Ref. Panamax/Kamsarmax (Cintas): 72,000 - 144,000 TM/D</div>
                                 </div>
+                                <div id="modulo-camion-tolva-pod" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
+                                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+                                        <div>
+                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POD</h4>
+                                            <p class="text-[10px] text-slate-500">Llenado a presión desde el buque mediante mangas en Y. Cadencia vinculada automáticamente al Ritmo Real POD.</p>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div class="input-group">
+                                            <label for="camion-tolva-pod-capacidad-mt">Capacidad camión (MT)</label>
+                                            <input type="number" id="camion-tolva-pod-capacidad-mt" class="input-gc font-bold" value="27" min="0" step="0.1" oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="camion-tolva-pod-slots">Slots simultáneos</label>
+                                            <input type="number" id="camion-tolva-pod-slots" class="input-gc font-bold" value="2" min="1" step="1" oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="camion-tolva-pod-tiempo-ciclo-min">Tiempo ciclo total (min)</label>
+                                            <input type="number" id="camion-tolva-pod-tiempo-ciclo-min" class="input-gc font-bold" value="15" min="0" step="1" placeholder="Posicionamiento + llenado + pesaje" oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Camiones totales</label>
+                                            <output id="camion-tolva-pod-camiones-totales" class="input-gc bg-gray-100 font-bold block">0.0</output>
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Ritmo sugerido (TM/día)</label>
+                                            <output id="camion-tolva-pod-ritmo-sugerido" class="input-gc bg-gray-100 font-bold block">0</output>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
@@ -65209,7 +65240,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (isCraneMethod(label)) {
                 calcularRitmoGrua(side);
             }
-            if (methodValue === 'camion_tolva' && side === 'pol' && typeof actualizarModuloCamionTolva === 'function') {
+            if (methodValue === 'camion_tolva' && typeof actualizarModuloCamionTolva === 'function') {
                 actualizarModuloCamionTolva();
             }
         }
@@ -66179,67 +66210,62 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof runEngine === 'function') runEngine();
         }
 
-        function calcularCadenciaCamionTolvaPol() {
+        function calcularCadenciaCamionTolva(side = 'pol') {
+            const isPod = side === 'pod';
+            const prefix = isPod ? 'camion-tolva-pod-' : 'camion-tolva-';
             const cargaTotal = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
-            const capacidadCamion = Math.max(0, parseFloat(document.getElementById('camion-tolva-capacidad-mt')?.value) || 0);
-            const slotsSimultaneos = Math.max(1, Math.floor(parseFloat(document.getElementById('camion-tolva-slots')?.value) || 1));
-            const tiempoCiclo = Math.max(0, parseFloat(document.getElementById('camion-tolva-tiempo-ciclo-min')?.value) || 0);
+            const capacidadCamion = Math.max(0, parseFloat(document.getElementById(`${prefix}capacidad-mt`)?.value) || 27);
+            const slotsSimultaneos = Math.max(1, Math.floor(parseFloat(document.getElementById(`${prefix}slots`)?.value) || (isPod ? 2 : 1)));
+            const tiempoCiclo = Math.max(0, parseFloat(document.getElementById(`${prefix}tiempo-ciclo-min`)?.value) || (isPod ? 15 : 35));
             const camionesTotales = capacidadCamion > 0 ? Math.ceil(cargaTotal / capacidadCamion) : 0;
             const ritmoSugerido = tiempoCiclo > 0 ? Math.floor((60 / tiempoCiclo) * capacidadCamion * slotsSimultaneos * 24) : 0;
             return { camionesTotales, ritmoSugerido };
         }
 
-        function actualizarModuloCamionTolva() {
-            const options = arguments[0] || {};
-            const rerun = options.rerun !== false;
-            const modulo = document.getElementById('modulo-camion-tolva-pol');
-            if (!modulo) return;
-            const product = getSelectedCargoProduct();
-            const productText = `${product?.nombre || product?.name || ''} ${document.getElementById('cargo-product')?.value || ''}`.toLowerCase();
-            const isCamionTolva = productText.includes('cemento')
-                || getMetodoEstibaActual() === 'camion_tolva'
-                || getMetodoDescargaActual() === 'camion_tolva';
-            if (isCamionTolva) {
-                [
-                    ['camion-tolva-capacidad-mt', 27],
-                    ['camion-tolva-slots', 1],
-                    ['camion-tolva-tiempo-ciclo-min', 35]
-                ].forEach(([id, defaultValue]) => {
-                    const input = document.getElementById(id);
-                    if (!input) return;
-                    if (!(Number(input.value) > 0)) input.value = String(defaultValue);
-                    updateSection2LocalState(id, input.value);
-                });
-            }
-            modulo.classList.toggle('hidden', !isCamionTolva);
-            modulo.setAttribute('aria-hidden', String(!isCamionTolva));
-            ['camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min'].forEach((id) => {
-                const el = document.getElementById(id);
-                if (el) el.disabled = !isCamionTolva;
-            });
+        function calcularCadenciaCamionTolvaPol() {
+            return calcularCadenciaCamionTolva('pol');
+        }
 
-            const { camionesTotales, ritmoSugerido } = calcularCadenciaCamionTolvaPol();
-            const totalEl = document.getElementById('camion-tolva-camiones-totales');
-            const ritmoEl = document.getElementById('camion-tolva-ritmo-sugerido');
-            if (totalEl) totalEl.textContent = camionesTotales.toLocaleString('en-US', {
-                maximumFractionDigits: 0
+        function actualizarModuloCamionTolva() {
+            const { rerun = true } = arguments[0] || {};
+            let changed = false;
+            ['pol', 'pod'].forEach((side) => {
+                const isPod = side === 'pod';
+                const modulo = document.getElementById(`modulo-camion-tolva-${side}`);
+                if (!modulo) return;
+                const active = (isPod ? getMetodoDescargaActual() : getMetodoEstibaActual()) === 'camion_tolva';
+                const prefix = isPod ? 'camion-tolva-pod-' : 'camion-tolva-';
+                modulo.classList.toggle('hidden', !active);
+                modulo.setAttribute('aria-hidden', String(!active));
+                [['capacidad-mt', 27], ['slots', isPod ? 2 : 1], ['tiempo-ciclo-min', isPod ? 15 : 35]].forEach(([field, defaultValue]) => {
+                    const input = document.getElementById(`${prefix}${field}`);
+                    if (!input) return;
+                    input.disabled = !active;
+                    if (active) {
+                        if (!(Number(input.value) > 0)) input.value = String(defaultValue);
+                        updateSection2LocalState(input.id, input.value);
+                    }
+                });
+                const { camionesTotales, ritmoSugerido } = calcularCadenciaCamionTolva(side);
+                const totalEl = document.getElementById(`${prefix}camiones-totales`);
+                const ritmoEl = document.getElementById(`${prefix}ritmo-sugerido`);
+                if (totalEl) totalEl.textContent = camionesTotales.toLocaleString('en-US');
+                if (ritmoEl) ritmoEl.textContent = ritmoSugerido.toLocaleString('en-US');
+                if (!active || isRitmoModoManual(side)) return;
+                const input = document.getElementById(isPod ? 'rate-disch' : 'rate-load');
+                if (!input) return;
+                const nextValue = String(ritmoSugerido);
+                changed = changed || input.value !== nextValue;
+                input.value = nextValue;
+                input.dataset[isPod ? 'autoMetodoDescarga' : 'autoMetodoCarga'] = 'camion_tolva';
+                setRitmoManualIndicator(side, false);
+                publicarRitmoRealEnEstado(side, ritmoSugerido);
             });
-            if (ritmoEl) ritmoEl.textContent = Math.round(ritmoSugerido).toLocaleString('en-US');
-            aplicarRitmoCamionTolvaPol({ rerun: rerun && isCamionTolva });
+            if (rerun && changed && typeof runEngine === 'function') runEngine();
         }
 
         function aplicarRitmoCamionTolvaPol(options = {}) {
-            const { rerun = true } = options;
-            if (getMetodoEstibaActual() !== 'camion_tolva') return;
-            const { ritmoSugerido } = calcularCadenciaCamionTolvaPol();
-            const inputCarga = document.getElementById('rate-load');
-            if (!inputCarga || ritmoSugerido <= 0) return;
-            const nextValue = String(Math.round(ritmoSugerido));
-            const changed = inputCarga.value !== nextValue;
-            inputCarga.value = nextValue;
-            inputCarga.dataset.autoMetodoCarga = 'camion_tolva';
-            setRitmoManualIndicator('pol', false);
-            if (rerun && changed && typeof runEngine === 'function') runEngine();
+            actualizarModuloCamionTolva(options);
         }
 
         function getOperacionModo() {
@@ -66733,6 +66759,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (isCustomPortMethod(metodo) || rateInput?.dataset.manualOverride === 'true') {
                 return enteredRate;
             }
+
+            if (metodo === 'camion_tolva') return calcularCadenciaCamionTolva(side).ritmoSugerido;
 
             // FUENTE ÚNICA DE VERDAD: si el método depende de grúas, el ritmo real es
             // el derivado de la física declarada (SWL/Tara/Ciclos/Eficiencia/Nº Grúas),
@@ -71301,7 +71329,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             estimatedTpd = window.calcularRitmoEfectivo(s);
                         }
                     } else if (methodVal) {
-                        estimatedTpd = methodVal === 'camion_tolva' ? (parseFloat(document.getElementById('camion-tolva-ritmo-sugerido')?.value) || 2000) : 2500;
+                        estimatedTpd = methodVal === 'camion_tolva' ? calcularCadenciaCamionTolva(s).ritmoSugerido : 2500;
                     }
 
                     if (estimatedTpd > 0) {
