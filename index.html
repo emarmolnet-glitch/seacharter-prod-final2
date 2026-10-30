@@ -10742,7 +10742,7 @@
                                 <select id="metodo_carga" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pol')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="bombas_neumaticas">Bombas Neumáticas</option>
-                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="camion_tolva">Semirremolque Neumático</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="cuchara_portuaria">Cuchara (Grab) - Grúa Portuaria</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
@@ -10790,7 +10790,7 @@
                                 <select id="metodo_descarga_pod" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pod')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="bombas_neumaticas">Bombas Neumáticas</option>
-                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="camion_tolva">Semirremolque Neumático</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="cuchara_portuaria">Cuchara (Grab) - Grúa Portuaria</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
@@ -10851,7 +10851,7 @@
                                 <div id="modulo-camion-tolva-pol" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
                                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
                                         <div>
-                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POL</h4>
+                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Semirremolque Neumático POL</h4>
                                             <p class="text-[10px] text-slate-500">Cadencia vinculada automáticamente al Ritmo Real POL.</p>
                                         </div>
                                     </div>
@@ -10897,8 +10897,8 @@
                                 <div id="modulo-camion-tolva-pod" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
                                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
                                         <div>
-                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POD</h4>
-                                            <p class="text-[10px] text-slate-500">Llenado a presión desde el buque mediante mangas en Y. Cadencia vinculada automáticamente al Ritmo Real POD.</p>
+                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Semirremolque Neumático POD</h4>
+                                            <p class="text-[10px] text-slate-500">Descarga presurizada mediante compresores de aire y mangueras estancas del buque cementero. Cadencia vinculada automáticamente al Ritmo Real POD.</p>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -64640,7 +64640,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'Hierro/Acero/Piezas': 1200,
             'Hierro/Acero - Grúa Barco': 1200,
             'Hierro/Acero - Grúa Portuaria': 1500,
-            'Camión Tolva': 'custom'
+            'Semirremolque Neumático': 'custom'
         });
         const METHOD_LABEL_BY_VALUE = Object.freeze({
             cinta_transportadora: 'Cinta Transportadora',
@@ -64657,7 +64657,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             big_bags: 'Big Bags - Grúa Barco',
             paletizado: 'Paletizado - Grúa Barco',
             hierro_acero_piezas: 'Hierro/Acero - Grúa Barco',
-            camion_tolva: 'Camión Tolva'
+            camion_tolva: 'Semirremolque Neumático'
         });
         const METHOD_VALUE_BY_LABEL = Object.freeze(Object.fromEntries(
             Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [methodLabel, methodValue])
@@ -64667,8 +64667,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             bombas_neumaticas: Object.freeze({ rate: 8000, turnTimeHours: 10 })
         });
         const equipmentMatrix = Object.freeze({
-            "Minerales y Construcción": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
-            "Biomasa y Combustibles Sólidos": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva"],
+            "Minerales y Construcción": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Semirremolque Neumático", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
+            "Biomasa y Combustibles Sólidos": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Semirremolque Neumático"],
             "Carga Siderúrgica y Metales": ["Hierro/Acero - Grúa Barco", "Hierro/Acero - Grúa Portuaria", "Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria"],
             "Carga Unitarizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
             "Carga Unitizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
@@ -65594,8 +65594,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // FASE 1: ALERTA DE COMPATIBILIDAD (CARGA VS. MÉTODO)
         // ==========================================
         const cargoCompatibilityMap = Object.freeze({
-            "Minerales y Construcción": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Camión Tolva'],
-            "Biomasa y Combustibles Sólidos": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Camión Tolva'],
+            "Minerales y Construcción": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Semirremolque Neumático'],
+            "Biomasa y Combustibles Sólidos": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Semirremolque Neumático'],
             "Carga Unificada / Sacos": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
             "Carga Unitarizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
             "Carga Unitizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
@@ -66854,7 +66854,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 || methodPolText.includes('bombas_neumaticas') || methodPodText.includes('bombas_neumaticas');
             const isBelt = methodPolText.includes('Cinta Transportadora') || methodPodText.includes('Cinta Transportadora')
                 || methodPolText.includes('cinta_transportadora') || methodPodText.includes('cinta_transportadora');
-            const isTruck = methodPolText.includes('Camión Tolva') || methodPodText.includes('Camión Tolva')
+            const isTruck = methodPolText.includes('Semirremolque Neumático') || methodPodText.includes('Semirremolque Neumático')
                 || methodPolText.includes('camion_tolva') || methodPodText.includes('camion_tolva');
             const isGrab = methodPolText.includes('Cuchara') || methodPodText.includes('Cuchara')
                 || methodPolText.includes('cuchara_grab') || methodPodText.includes('cuchara_grab');
@@ -66920,7 +66920,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 } else if (isTruck && maxRate > 9000) {
                     isAnomaly = true;
-                    causeMessage = `Superación de la capacidad técnica de evacuación por Camión Tolva (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~3,000-6,000 TM/d).`;
+                    causeMessage = `Superación de la capacidad técnica de evacuación por Semirremolque Neumático (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~3,000-6,000 TM/d).`;
                 } else if (isPneumatic && maxRate > 16000) {
                     isAnomaly = true;
                     causeMessage = `Superación de la capacidad técnica de bombeo neumático continuo (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~6,000-12,000 TM/d).`;
@@ -71356,7 +71356,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         /**
          * Función puente de actualización de costes de PDA según el Método seleccionado
-         * (Grúa Barco: Grúa Tierra = $0; Grúa Portuaria: Grúa Tierra = $1,800; Cinta / Bombas / Camión Tolva: Costes Terminal)
+         * (Grúa Barco: Grúa Tierra = $0; Grúa Portuaria: Grúa Tierra = $1,800; Cinta / Bombas / Semirremolque Neumático: Costes Terminal)
          */
         function actualizarCostesPDAPorMetodo(targetSide = null) {
             if (!window.State) window.State = {};
@@ -71382,7 +71382,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 const isConveyor = methodText.includes('Cinta Transportadora') || methodVal === 'cinta_transportadora'
                     || methodText.includes('Bombas Neumáticas') || methodVal === 'bombas_neumaticas';
-                const isHopper = methodText.includes('Camión Tolva') || methodVal === 'camion_tolva';
+                const isHopper = methodText.includes('Semirremolque Neumático') || methodVal === 'camion_tolva';
 
                 const breakdownKey = s === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
                 let breakdown = Array.isArray(window.State[breakdownKey]) ? [...window.State[breakdownKey]] : [];
@@ -71404,7 +71404,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         craneItem.amount = 1800;
                     }
                 } else if (isConveyor || isHopper) {
-                    // Para Cinta Transportadora o Camión Tolva, anula grúas de tierra y evalúa costes terminales
+                    // Para Cinta Transportadora o Semirremolque Neumático, anula grúas de tierra y evalúa costes terminales
                     breakdown.forEach(item => {
                         if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
                             item.amount = 0;
