@@ -258,17 +258,17 @@ test('6. UI/UX: Cero modo oscuro, fondo blanco puro (bg-white), texto gris corpo
 });
 
 test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
-  // Comprobar aside con fondo oscuro
+  // Comprobar aside flotante tema claro
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
-    'Aside de GlobalMadreDrawer debe forzar fondo oscuro #0f172a o #0B1121'
+    /<aside[^>]*w-\[450px\][^>]*bg-white/,
+    'Aside de GlobalMadreDrawer debe tener ancho w-[450px] y bg-white'
   );
 
   // Comprobar título MADRE
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-(?:slate|gray)-800|base text-white|sm text-(?:slate|gray)-800)">MADRE<\/span>/,
     'Título MADRE debe existir'
   );
 
@@ -279,20 +279,15 @@ test('7. GlobalMadreDrawer: Estructura del Header y Botones de Acción', () => {
     'Header debe contener badge Cerebro Central'
   );
 
-  // Botones Mute, Reset, Close
+  // Botones Mute, Close
   assert.match(
     globalMadreDrawerSource,
-    /<button[^>]*onClick=\{(?:toggleMute|handleMuteToggle)\}[^>]*>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    /<button[\s\S]*?onClick=\{(?:toggleMute|handleMuteToggle)\}[\s\S]*?>[\s\S]*?\{isMuted \? ["']🔇["'] : ["']🔊["']\}[\s\S]*?<\/button>/,
     'Botón Mute debe existir'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button[^>]*onClick=\{handleReset\}[^>]*>🔄<\/button>/,
-    'Botón Reset debe existir'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<button[^>]*onClick=\{handleClose\}[^>]*>✕<\/button>/,
+    /<button[\s\S]*?onClick=\{[\s\S]*?(?:handleClose|setIsMadreOpen\(false\))[\s\S]*?\}[\s\S]*?>[\s\S]*?✕[\s\S]*?<\/button>/,
     'Botón Close debe existir'
   );
 });

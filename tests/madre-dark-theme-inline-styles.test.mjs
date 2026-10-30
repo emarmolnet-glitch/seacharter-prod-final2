@@ -5,51 +5,54 @@ import { readFileSync, existsSync } from 'node:fs';
 const globalMadreDrawerSource = readFileSync(new URL('../src/components/GlobalMadreDrawer.jsx', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 
-test('1. GlobalMadreDrawer Header contains approved dark styling and Cerebro Central badge', () => {
-  // Check aside element with dark styling and left-side slide positioning
+test('1. GlobalMadreDrawer Header contains approved floating light styling and Cerebro Central badge', () => {
+  // Check aside element with light styling and floating bottom-right positioning
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*className="[^"]*fixed top-0 left-0 bottom-0[^"]*"/,
-    'Aside must be positioned on the left side'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<aside[^>]*style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
-    'Aside must force dark background #0f172a or #0B1121'
+    /fixed bottom-4 right-4 z-\[(?:60|9999)\] w-\[450px\] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col text-gray-800 overflow-hidden/,
+    'Aside must be positioned as a floating widget on the bottom-right with light styling'
   );
 
   // Check title span
   assert.match(
     globalMadreDrawerSource,
-    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white tracking-wide truncate|base text-white)">MADRE<\/span>/,
-    'Title span MADRE must exist'
+    /<span className="font-bold text-(?:sm tracking-wide truncate text-(?:slate|gray)-800|base text-white|sm text-gray-800 tracking-wide truncate|sm text-gray-800)">MADRE<\/span>/,
+    'Title span MADRE must exist with text-gray-800'
   );
 
-  // Check Cerebro Central badge
+  // Check Cerebro Central reference in module or header
   assert.match(
     globalMadreDrawerSource,
     /Cerebro Central/,
-    'Header must have Cerebro Central badge'
+    'Header or component must have Cerebro Central reference'
   );
 });
 
-test('2. GlobalMadreDrawer Action Buttons have audio mute, reset, and close handlers', () => {
-  // Check Close, Mute, and Reset buttons
+test('2. GlobalMadreDrawer Action Buttons have audio mute, scan, and close handlers', () => {
+  // Check Drag Handle header classes
   assert.match(
     globalMadreDrawerSource,
-    /<button[^>]*onClick=\{(?:toggleMute|handleMuteToggle)\}[^>]*>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
+    /className="drag-handle cursor-move bg-white border-b border-gray-100 p-[23] flex justify-between items-center/,
+    'Header must be a drag handle with approved light classes'
+  );
+
+  // Check Scan button inside header
+  assert.match(
+    globalMadreDrawerSource,
+    /id="btn-madre-scan-screen"/,
+    'Scan button must exist'
+  );
+
+  // Check Close and Mute buttons
+  assert.match(
+    globalMadreDrawerSource,
+    /<button[\s\S]*?onClick=\{(?:toggleMute|handleMuteToggle)\}[\s\S]*?>[\s\S]*?\{isMuted \? ["']🔇["'] : ["']🔊["']\}[\s\S]*?<\/button>/,
     'Mute button must exist'
   );
 
   assert.match(
     globalMadreDrawerSource,
-    /<button[^>]*onClick=\{handleReset\}[^>]*>🔄<\/button>/,
-    'Reset button must exist'
-  );
-
-  assert.match(
-    globalMadreDrawerSource,
-    /<button[^>]*onClick=\{handleClose\}[^>]*>✕<\/button>/,
+    /<button[\s\S]*?onClick=\{[\s\S]*?(?:handleClose|setIsMadreOpen\(false\))[\s\S]*?\}[\s\S]*?>[\s\S]*?✕[\s\S]*?<\/button>/,
     'Close button must exist'
   );
 });
@@ -108,12 +111,12 @@ test('3. GlobalMadreDrawer contains full API fetch logic, chat UI, loading indic
   );
 });
 
-test('4. App.jsx TopNav trigger button has dark inline styles, explicit sizing and styles for MADRE image', () => {
-  // Check exact trigger button tag
+test('4. App.jsx TopNav trigger button has toggle handler, explicit sizing and styles for MADRE image', () => {
+  // Check trigger button tag with onClick toggle
   assert.match(
     appSource,
-    /<button[\s\S]*?id="btn-madre-trigger"[\s\S]*?className="inline-flex items-center gap-2 px-3 py-1\.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold"[\s\S]*?style=\{\{ backgroundColor: '#0f172a', color: '#5eead4', border: '1px solid rgba\(45,212,191,0\.4\)' \}\}/,
-    'Trigger button must match exact attributes and inline style override'
+    /<button[\s\S]*?id="btn-madre-trigger"[\s\S]*?onClick=\{\(\) => setIsMadreOpen\(!isMadreOpen\)\}/,
+    'Trigger button must toggle isMadreOpen state on click'
   );
 
   // Check accessibility attributes
@@ -183,114 +186,102 @@ test('7. madre-drawer-entry.jsx exists, mounts GlobalMadreDrawer, and is linked 
   );
 });
 
-test('8. Final Polish: MADRE Drawer left-side slide positioning and clean header action buttons', () => {
-  // Left-side slide positioning classes and styling
+test('8. Floating Widget: Draggable wrapper, conditional rendering, and clean header action buttons', () => {
+  // react-draggable import and Draggable wrapping
+  assert.match(globalMadreDrawerSource, /import Draggable from 'react-draggable';/);
+  assert.match(globalMadreDrawerSource, /<Draggable[^>]*handle="\.drag-handle"/);
+
+  // Returns null when closed
+  assert.match(globalMadreDrawerSource, /if\s*\(!isMadreOpen\)\s*return\s*null;/);
+
+  // Header action buttons styling
   assert.match(
     globalMadreDrawerSource,
-    /className="fixed top-0 left-0 bottom-0 z-\[9999\] w-\[(?:420|450)px\] max-w-lg bg-\[#0B1121\] text-slate-300 shadow-2xl border-r border-slate-800\/80 flex flex-col font-sans transition-all duration-300"/,
-    'Aside must have left-side slide positioning with border-r and transition'
+    /text-gray-600 hover:bg-gray-100/,
+    'Action buttons must have text-gray-600 hover:bg-gray-100'
   );
   assert.match(
     globalMadreDrawerSource,
-    /style=\{\{\s*backgroundColor:\s*'(?:#0f172a|#0B1121)'/,
-    'Aside must have dark backgroundColor'
+    /<button[\s\S]*?onClick=\{toggleMute\}[\s\S]*?title=\{isMuted \? ["']Activar voz["'] : ["']Silenciar voz["']\}[\s\S]*?>[\s\S]*?\{isMuted \? ["']🔇["'] : ["']🔊["']\}[\s\S]*?<\/button>/,
+    'Mute button must use toggleMute and light styling'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /<button[\s\S]*?onClick=\{\(\) => setIsMadreOpen\(false\)\}[\s\S]*?title="Cerrar"[\s\S]*?>[\s\S]*?✕[\s\S]*?<\/button>/,
+    'Close button must have light styling and title'
   );
 
-  // Clean uncrowded header and buttons
+  // Audio tag check
   assert.match(
     globalMadreDrawerSource,
-    /className="flex items-center justify-between px-4 py-3 border-b border-slate-800(?:\/80)? shrink-0 bg-\[#0B1121\] text-slate-200"/,
-    'Header must have shrink-0 to prevent button crowding and dark styling'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /className="flex items-center gap-3 shrink-0"/,
-    'Header button container must have shrink-0 and clean gap-3'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<button type="button" onClick=\{toggleMute\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title=\{isMuted \? 'Activar voz' : 'Silenciar voz'\}>\{isMuted \? '🔇' : '🔊'\}<\/button>/,
-    'Mute button must use toggleMute and executive dark styling'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleReset\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Reiniciar conversación">🔄<\/button>/,
-    'Reset button must have executive dark styling and title'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<button type="button" onClick=\{handleClose\} className="flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer" title="Cerrar panel">✕<\/button>/,
-    'Close button must have executive dark styling and title'
+    /<audio ref=\{currentAudioRef\} className="hidden" aria-hidden="true" \/>/,
+    'Audio tag must exist before aside closes'
   );
 });
 
-test('9. Widen Drawer & Flexbox Header Layout: w-[420px] or w-[450px] max-w-lg with non-overlapping buttons', () => {
-  // Widen drawer class
+test('9. Width & Floating Dimensions: w-[450px] shadow-2xl rounded-xl with non-overlapping header', () => {
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*w-\[(?:420|450)px\]/,
-    'Aside must contain w-[420px] or w-[450px] for a wider drawer'
+    /w-\[450px\]/,
+    'Aside must contain w-[450px]'
   );
   assert.match(
     globalMadreDrawerSource,
-    /<aside[^>]*max-w-lg/,
-    'Aside must contain max-w-lg'
+    /shadow-2xl/,
+    'Aside must contain shadow-2xl'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /rounded-xl/,
+    'Aside must contain rounded-xl'
   );
 
   // Strict flexbox header with min-w-0 and truncate
   assert.match(
     globalMadreDrawerSource,
-    /<header[\s\S]*?className="flex items-center justify-between px-4 py-3 border-b border-slate-800(?:\/80)? shrink-0 bg-\[#0B1121\] text-slate-200"/,
-    'Header must use strict flexbox layout'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<div className="flex items-center gap-2 min-w-0">/,
-    'Left side of header must include min-w-0 to prevent overflow'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<span className="font-bold text-(?:sm tracking-wide truncate text-slate-800|base text-white)">MADRE<\/span>/,
-    'MADRE title must exist'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /<div className="flex items-center gap-3 shrink-0">/,
-    'Right side action buttons container must have shrink-0 and gap-3'
-  );
-  assert.match(
-    globalMadreDrawerSource,
-    /flex items-center justify-center w-8 h-8 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer/,
-    'Action buttons must have square styling, border, and clean hover transitions'
+    /<header[\s\S]*?className="drag-handle cursor-move bg-white border-b border-gray-100 p-[23] flex justify-between items-center/,
+    'Header must use drag-handle flexbox layout'
   );
 });
 
-test('10. Reefer Charter Parity: Executive dark chat bubbles, dark command input and styling', () => {
-  // MADRE dark chat bubbles
+test('10. Light Theme Parity: Chat bubbles, input and styling', () => {
+  // Chat body
   assert.match(
     globalMadreDrawerSource,
-    /bg-slate-900\/60 border border-slate-800\/80 text-slate-300 rounded-xl p-3/,
-    'MADRE assistant chat bubble must match Reefer Charter dark styling'
+    /overflow-y-auto max-h-\[60vh\](?: min-h-\[300px\])? bg-gray-50 p-4/,
+    'Chat body must use overflow-y-auto max-h-[60vh] bg-gray-50 p-4'
   );
 
-  // User dark chat bubbles
+  // MADRE light chat bubbles
   assert.match(
     globalMadreDrawerSource,
-    /bg-teal-950\/40 border border-teal-900\/50 text-teal-200 rounded-xl p-3/,
-    'User chat bubble must match Reefer Charter dark teal styling'
+    /bg-white border border-gray-200 text-gray-800/,
+    'MADRE assistant chat bubble must use bg-white border border-gray-200 text-gray-800'
+  );
+
+  // User light chat bubbles
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-blue-50 border border-blue-100 text-gray-800/,
+    'User chat bubble must use light styling with text-gray-800'
   );
 
   // Input styling
   assert.match(
     globalMadreDrawerSource,
-    /bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 rounded-lg/,
-    'Text input must have dark styling'
+    /bg-white border-t border-gray-100 p-3/,
+    'Footer container must use bg-white border-t border-gray-100 p-3'
+  );
+  assert.match(
+    globalMadreDrawerSource,
+    /bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-lg p-2 w-full/,
+    'Text input must have light styling'
   );
 
   // Submit button styling
   assert.match(
     globalMadreDrawerSource,
     /bg-teal-700 hover:bg-teal-600 text-white/,
-    'Submit button must have dark teal styling'
+    'Submit button must have teal styling'
   );
 });
