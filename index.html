@@ -45081,14 +45081,41 @@ function scheduleReactiveEngine() {
         }
         window.buildAuditHTMLTemplate = buildAuditHTMLTemplate;
 
+        function resolveFixtureRecapOperations(state = {}) {
+            const calculator = typeof State !== 'undefined' && State ? State : {};
+            const readInput = (id) => typeof document !== 'undefined' ? document.getElementById(id)?.value : '';
+            const readText = (value) => String(value?.label || value?.value || value || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const product = readText(state.productoEspecifico || state.cargoProduct || state.cargo_product
+                || readInput('cargo-product') || calculator.productoEspecifico || state.commodity);
+            const method = readText(state.loadingMethod || state.methodPOL || state.loading_method || state.loadMethod
+                || readInput('metodo_carga') || calculator.loadingMethod || calculator.loadMethod);
+            const isBagged = /big[ _-]?bags?|bagged|ensacad|sacos/.test(product + ' ' + method);
+            const isPneumatic = !isBagged && (/neumat|pneumat/.test(method + ' ' + product)
+                || /(?:cemento?|cement)\s+(?:a\s+)?(?:granel|bulk)|bulk\s+cement/.test(product));
+            const positiveRate = (...values) => values.map(Number).find(value => Number.isFinite(value) && value > 0);
+            // Preserve injected DSS rates; the pneumatic assistant writes its calculated rates to these inputs.
+            const loadRate = positiveRate(state.loadRate, state.loadingRate, state.ratePOL, readInput('rate-load'), calculator.loadRate);
+            const dischargeRate = positiveRate(state.dischargeRate, state.ratePOD, readInput('rate-disch'), calculator.dischargeRate);
+            return {
+                isPneumatic,
+                vesselType: isPneumatic ? 'Pneumatic Cement Carrier' : 'Geared Bulker',
+                loadRate: loadRate ? loadRate.toLocaleString('en-US') : (isPneumatic ? 'TBA' : '5,000'),
+                dischargeRate: dischargeRate ? dischargeRate.toLocaleString('en-US') : 'TBA',
+                equipmentClause: isPneumatic
+                    ? ['PNEUMATIC CLAUSE', 'VESSEL SHALL PROVIDE AIR PRESSURE AND AIRTIGHT HOSES FOR PNEUMATIC LOADING AND DISCHARGING, FREE OF ALL RISK AND EXPENSE TO CHARTERERS.']
+                    : ['GEAR CLAUSE', "VESSEL'S CRANES AND GRABS SHALL BE PROVIDED FREE OF EXPENSE TO CHARTERERS FOR LOADING AND DISCHARGING OPERATIONS. HOWEVER, DISCHARGE RATE USING VESSEL'S GEAR IS STRICTLY LIMITED MECHANICALLY TO MAXIMUM ~2,000 MT/DAY. SHOULD CHARTERERS REQUIRE OR DEMAND A HIGHER LOADING/DISCHARGING RATE, CHARTERERS SHALL HIRE AND PAY FOR SHORE CRANES, SHORE EQUIPMENT OR SHORE LABOR AT THEIR SOLE EXPENSE UNDER FIO TERMS WITHOUT DELAY OR LIABILITY TO THE VESSEL."]
+            };
+        }
+
         function buildFixtureRecapHTMLTemplate(state) {
             const safeState = state || {};
+            const operations = resolveFixtureRecapOperations(safeState);
             const pol = String(safeState.pol || 'TBA');
             const pod = String(safeState.pod || 'TBA');
             const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'CARGA GENERAL');
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
-            const loadRate = Number(safeState.loadRate) || 5000;
 
             const rawVesselName = String(
                 safeState.vesselName || 
@@ -45100,7 +45127,8 @@ function scheduleReactiveEngine() {
                 ''
             ).trim();
 
-            const shipName = rawVesselName ? rawVesselName.toUpperCase() : 'MV TBN';
+            const shipName = rawVesselName && !(operations.isPneumatic && /^MV GEARED BULKER$/i.test(rawVesselName))
+                ? rawVesselName.toUpperCase() : 'MV TBN';
 
             const rawDwt = Number(
                 safeState.dwt || 
@@ -45116,12 +45144,7 @@ function scheduleReactiveEngine() {
             const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : cargoQty;
             const formattedDwt = dwt.toLocaleString('en-US');
 
-            const rawVesselType = String(
-                safeState.vesselType ||
-                (typeof State !== 'undefined' ? State.vesselType : '') ||
-                'GENERAL CARGO'
-            ).trim().toUpperCase();
-            const vesselType = rawVesselType || 'GENERAL CARGO';
+            const vesselType = operations.vesselType;
 
             const rawFlete = Number(
                 safeState.allInRateGross ||
@@ -45164,7 +45187,7 @@ function scheduleReactiveEngine() {
             const cleanPol = pol.toUpperCase();
             const cleanPod = pod.toUpperCase();
             const cleanCargoQty = cargoQty.toLocaleString('en-US');
-            const cleanLoadRate = loadRate.toLocaleString('en-US');
+            const cleanLoadRate = operations.loadRate;
 
             /*
              * RENDERIZADO DE DUPLAS ETIQUETA / VALOR
@@ -45203,7 +45226,9 @@ function scheduleReactiveEngine() {
             const mainTerms = [
                 ['ACCT', 'CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS'],
                 ['OWNERS', 'RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)'],
-                ['VESSEL', `${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${vesselType})`],
+                ['VESSEL', operations.isPneumatic
+                    ? `${shipName} - ABT ${formattedDwt} MT DWT (${vesselType})`
+                    : `${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${vesselType})`],
                 ['CARGO', `${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN OWNERS' OPTION) OF ${cleanCommodity}`],
                 ['POL', `1 SAFE BERTH / 1 SAFE PORT ${cleanPol}`],
                 ['POD', `1 SAFE BERTH / 1 SAFE PORT ${cleanPod}`],
@@ -45218,14 +45243,16 @@ function scheduleReactiveEngine() {
 
             const laytimeTerms = [
                 ['LOADING RATE', `${cleanLoadRate} METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC).`],
-                ['DISDISCH RATE', 'MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC) ON VESSEL\'S GEAR.'],
+                ['DISDISCH RATE', operations.isPneumatic
+                    ? `${operations.dischargeRate} METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC).`
+                    : 'MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC) ON VESSEL\'S GEAR.'],
                 ['DEMURRAGE', `USD ${demurrageRate} PER DAY PRO RATA FOR ANY TIME LOST AT POL/POD.`],
                 ['DESPATCH', 'NIL / HALF DEMURRAGE ON WORKING TIME SAVED.'],
                 ['NOTICES', '5 / 3 / 2 / 1 DAYS APPROXIMATE NOTICE AND 24 HOURS DEFINITE NOTICE OF READINESS (NOR) TO BE TENDERED AT POL AND POD.']
             ];
 
             const specialClauses = [
-                ['GEAR CLAUSE', 'VESSEL\'S CRANES AND GRABS SHALL BE PROVIDED FREE OF EXPENSE TO CHARTERERS FOR LOADING AND DISCHARGING OPERATIONS. HOWEVER, DISCHARGE RATE USING VESSEL\'S GEAR IS STRICTLY LIMITED MECHANICALLY TO MAXIMUM ~2,000 MT/DAY. SHOULD CHARTERERS REQUIRE OR DEMAND A HIGHER LOADING/DISCHARGING RATE, CHARTERERS SHALL HIRE AND PAY FOR SHORE CRANES, SHORE EQUIPMENT OR SHORE LABOR AT THEIR SOLE EXPENSE UNDER FIO TERMS WITHOUT DELAY OR LIABILITY TO THE VESSEL.'],
+                operations.equipmentClause,
                 ['WEATHER CLAUSE', 'TIME LOST DUE TO ADVERSE WEATHER, BAD SEA CONDITIONS, OR FORCE MAJEURE EVENTS PREVENTING SAFE LOADING/DISCHARGING OPERATIONS SHALL NOT COUNT AS LAYTIME UNLESS THE VESSEL IS ALREADY ON DEMURRAGE.'],
                 ...jwcClauseRows,
                 ['C/P FORM', 'GENCON 1994 CHARTERPARTY FORM AS REVISED, INCORPORATING BIMCO WAR RISKS CLAUSE (VOYWAR 2025), SANCTIONS CLAUSE, AND EU CBAM COMPLIANCE CLAUSE.'],
@@ -46238,6 +46265,7 @@ function scheduleReactiveEngine() {
             doc.setFontSize(8);
             
             const safeState = state || {};
+            const operations = resolveFixtureRecapOperations(safeState);
             const rawVesselName = String(
                 safeState.vesselName || 
                 safeState.vessel || 
@@ -46247,7 +46275,8 @@ function scheduleReactiveEngine() {
                 (typeof State !== 'undefined' ? State.vessel : '') || 
                 ''
             ).trim();
-            const shipName = rawVesselName ? rawVesselName.toUpperCase() : 'MV TBN';
+            const shipName = rawVesselName && !(operations.isPneumatic && /^MV GEARED BULKER$/i.test(rawVesselName))
+                ? rawVesselName.toUpperCase() : 'MV TBN';
 
             const rawDwt = Number(
                 safeState.dwt || 
@@ -46269,7 +46298,9 @@ function scheduleReactiveEngine() {
                 '========================================================================',
                 '1. MAIN TERMS:',
                 `- OWNERS   : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)`,
-                `- VESSEL   : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS`,
+                operations.isPneumatic
+                    ? `- VESSEL   : ${shipName} - ABT ${formattedDwt} MT DWT (${operations.vesselType})`
+                    : `- VESSEL   : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${operations.vesselType})`,
                 `- CARGO    : ${(Number(safeState.cargoQty) || 0).toLocaleString('en-US')} MT 5% MOLOO - ${String(safeState.commodity || 'CARGA GENERAL').toUpperCase()}`,
                 `- POL      : ${String(safeState.pol || 'TBA').toUpperCase()}`,
                 `- POD      : ${String(safeState.pod || 'TBA').toUpperCase()}`,
@@ -46281,13 +46312,14 @@ function scheduleReactiveEngine() {
                 `- PAYMENT  : 100% PRE-PAYABLE UPON RELEASE OF BS/L`,
                 '',
                 '3. LAYTIME & OPERATIONS:',
-                `- LOAD RATE: ${state.loadRate.toLocaleString('en-US')} MT WWD SHINC`,
-                `- DISCH    : LIMITED MECHANICALLY TO ~2,000 MT WWD SHINC ON SHIP'S GEAR`,
+                `- LOAD RATE: ${operations.loadRate} MT WWD SHINC`,
+                operations.isPneumatic
+                    ? `- DISCH    : ${operations.dischargeRate} MT WWD SHINC`
+                    : `- DISCH    : LIMITED MECHANICALLY TO ~2,000 MT WWD SHINC ON SHIP'S GEAR`,
                 `- DEMURRAGE: USD 15,000 / DAY OR PRO RATA`,
                 '',
                 '4. SPECIAL CLAUSES:',
-                `- GEAR CLAUSE: SHIP'S CRANES FREE BUT LIMITED TO ~2,000 MT/D DISCHARGE.`,
-                `               SHORE CRANES AT CHARTERERS EXPENSE IF HIGHER RATE DEMANDED.`,
+                `- ${operations.equipmentClause[0]}: ${operations.equipmentClause[1]}`,
                 `- WEATHER CLAUSE: WWD SHINC / BAD WEATHER TIME NOT TO COUNT`,
                 `- FORM     : GENCON 1994 / BIMCO VOYWAR 2025 / SANCTIONS / EU CBAM`,
                 '========================================================================'
@@ -46295,8 +46327,12 @@ function scheduleReactiveEngine() {
             
             let y = 28;
             recapText.forEach(line => {
-                doc.text(line, 14, y);
-                y += 5;
+                const wrappedLines = doc.splitTextToSize(line, 182);
+                wrappedLines.forEach(wrappedLine => {
+                    if (y > 280) { doc.addPage(); y = 20; }
+                    doc.text(wrappedLine, 14, y);
+                    y += 5;
+                });
             });
             
             doc.save(filename);

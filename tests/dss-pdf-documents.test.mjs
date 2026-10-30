@@ -85,7 +85,7 @@ test('buildAuditHTMLTemplate generates complete corporate risk audit document', 
 });
 
 test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture recap', () => {
-  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   assert.notEqual(startIdx, -1, 'buildFixtureRecapHTMLTemplate function must be present');
   assert.notEqual(endIdx, -1, 'buildFixtureRecapHTMLTemplate function end marker must be present');
@@ -143,7 +143,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
 });
 
 test('buildFixtureRecapHTMLTemplate renders label-value pairs without a standalone colon cell', () => {
-  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   const fnSource = indexHtml.slice(startIdx, endIdx);
   const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
@@ -169,7 +169,7 @@ test('buildFixtureRecapHTMLTemplate renders label-value pairs without a standalo
 });
 
 test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousands separator, and MV TBN fallback', () => {
-  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   const fnSource = indexHtml.slice(startIdx, endIdx);
   const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
@@ -188,7 +188,7 @@ test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousa
 });
 
 test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined and incomplete state properties safely without throwing TypeError', () => {
-  const startIdxRecap = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const startIdxRecap = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdxRecap = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdxRecap);
   const fnSourceRecap = indexHtml.slice(startIdxRecap, endIdxRecap);
   const evalFnRecap = new Function('state', `${fnSourceRecap}; return buildFixtureRecapHTMLTemplate(state);`);
@@ -230,3 +230,67 @@ test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined 
   }, 'Audit with undefined properties must not throw TypeError');
 });
 
+
+const operationsSource = indexHtml.slice(
+  indexHtml.indexOf('function resolveFixtureRecapOperations('),
+  indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)')
+);
+const recapSource = indexHtml.slice(
+  indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)'),
+  indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate =')
+);
+const renderRecap = new Function('state', `${operationsSource}\n${recapSource}\nreturn buildFixtureRecapHTMLTemplate(state);`);
+
+for (const selection of [
+  { productoEspecifico: 'Cemento a Granel' },
+  { loadingMethod: 'Semirremolque Neumático' },
+  { loadingMethod: 'bombas_neumaticas' },
+  { methodPOL: { value: 'pneumatic', label: 'Pneumatic trailers' } }
+]) {
+  test(`pneumatic recap uses actual rates and compatible equipment: ${JSON.stringify(selection)}`, () => {
+    const text = plainText(renderRecap({ ...selection, vesselName: 'MV GEARED BULKER', loadRate: 1110, dischargeRate: 5184 }));
+    assert.match(text, /Pneumatic Cement Carrier/);
+    assert.match(text, /LOADING RATE:\s*1,110 METRIC TONS/);
+    assert.match(text, /DISDISCH RATE:\s*5,184 METRIC TONS/);
+    assert.match(text, /AIR PRESSURE AND AIRTIGHT HOSES/);
+    assert.match(text, /FREE OF ALL RISK AND EXPENSE TO CHARTERERS/);
+    assert.doesNotMatch(text, /cranes?|grabs?|SWL|Geared|2,000/i);
+  });
+}
+
+test('general cargo, minerals and bagged cement retain conventional equipment', () => {
+  for (const productoEspecifico of ['Carga General', 'Minerales', 'Big Bags (Minerales/Cemento)', 'Cemento ensacado']) {
+    const text = plainText(renderRecap({ productoEspecifico, loadRate: 3500 }));
+    assert.match(text, /Geared Bulker/);
+    assert.match(text, /SWL CRANES AND ELECTRIC GRABS/);
+    assert.doesNotMatch(text, /PNEUMATIC CLAUSE/);
+  }
+});
+
+test('pneumatic rates remain dynamic and missing rates are marked TBA', () => {
+  const text = plainText(renderRecap({ productoEspecifico: 'Bulk cement', loadRate: 2345, dischargeRate: 6789 }));
+  assert.match(text, /LOADING RATE:\s*2,345 METRIC TONS/);
+  assert.match(text, /DISDISCH RATE:\s*6,789 METRIC TONS/);
+  assert.match(plainText(renderRecap({ productoEspecifico: 'Cemento a granel' })), /DISDISCH RATE:\s*TBA/);
+});
+
+test('jsPDF fallback applies pneumatic equipment and rates without crane clauses', async () => {
+  const source = indexHtml.slice(
+    indexHtml.indexOf('async function generateFixtureRecapJsPDDFallback('),
+    indexHtml.indexOf('window.generateFixtureRecapJsPDDFallback =')
+  );
+  const lines = [];
+  const doc = { setFont() {}, setFontSize() {}, text(text) { lines.push(text); },
+    splitTextToSize(text) { return [text]; }, addPage() {}, save() {} };
+  const run = new Function('window', 'state', `${operationsSource}\n${source}\nreturn generateFixtureRecapJsPDDFallback(state, 'test.pdf');`);
+  await run({ jsPDF: function () { return doc; } }, {
+    loadingMethod: 'Semirremolque neumático', loadRate: 1110, dischargeRate: 5184,
+    fleteEstimado: 50000, cargoQty: 1000
+  });
+  const text = lines.join(' ');
+  assert.match(text, /Pneumatic Cement Carrier/);
+  assert.match(text, /1,110 MT/);
+  assert.match(text, /5,184 MT/);
+  assert.match(text, /AIR PRESSURE AND AIRTIGHT HOSES/);
+  assert.doesNotMatch(text, /cranes?|grabs?|SWL|Geared|2,000/i);
+});
