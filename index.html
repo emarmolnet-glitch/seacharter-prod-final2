@@ -11092,7 +11092,7 @@
                                         <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (WORLD)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="610" step="any" oninput="markManualBunkerPrice(this); runEngine()">
+                                    <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
@@ -11106,23 +11106,23 @@
                                         <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (WORLD)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="830" step="any" oninput="markManualBunkerPrice(this); runEngine()">
+                                    <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                             </div>
                             <p id="bunker-index-cache-label" class="-mt-2 mb-4 text-xs italic text-slate-500">Esperando cotización del día...</p>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="input-group">
                                     <label id="label-cons-sea">Consumo Mar (t/d)</label>
-                                    <input type="number" id="cons-sea" class="input-gc text-red-300 font-bold" value="5.5" step="any" oninput="runEngine()">
+                                    <input type="number" id="cons-sea" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                                     <span id="net-cons-indicator" class="text-[10px] text-slate-400 font-mono block mt-1">Consumo Neto (incluye 5% de margen por mal tiempo): 5.78 T/D</span>
                                 </div>
                                 <div class="input-group">
                                     <label id="label-cons-port">Consumo Puerto (t/d)</label>
-                                    <input type="number" id="cons-port" class="input-gc text-red-300 font-bold" value="0.5" step="any" oninput="runEngine()">
+                                    <input type="number" id="cons-port" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label id="label-cons-anchorage">Consumo Fondeo (t/d)</label>
-                                    <input type="number" id="cons-anchorage" class="input-gc text-red-300 font-bold" value="0.8" step="any" oninput="runEngine()">
+                                    <input type="number" id="cons-anchorage" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                                 </div>
                             </div>
 
@@ -12102,7 +12102,7 @@
                             <div>
                                 <label id="label-buying-freight" class="mb-1 block text-[10px] font-bold uppercase text-indigo-700">Flete Compra Armador ($)</label>
                                 <div class="flex">
-                                    <input type="number" id="freight-rate" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="32.50" step="any" oninput="runEngine()">
+                                    <input type="number" id="freight-rate" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="0" step="any" oninput="runEngine()">
                                     <button type="button" id="btn-calc-owner-freight" onclick="handleFreightMasterTrigger('owner', event)" class="border-y border-indigo-700 bg-indigo-700 px-2 text-white transition hover:bg-indigo-800" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-owner-freight" onclick="predictSpotMarketLocal()" class="rounded-r-md border border-blue-700 bg-blue-700 px-2 text-white transition hover:bg-blue-800" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>
@@ -12118,7 +12118,7 @@
                             <div>
                                 <label id="label-demurrage-rate" class="mb-1 block text-[10px] font-bold uppercase text-emerald-700 transition-colors duration-300">Demurrage ($/d)</label>
                                 <div class="flex">
-                                    <input type="number" id="demurrage-rate" class="input-gc h-9 rounded-r-none text-sm font-bold text-slate-900 transition-colors duration-300" value="10000" step="any" oninput="updateDemurrageExposureAlert(); runEngine()">
+                                    <input type="number" id="demurrage-rate" class="input-gc h-9 rounded-r-none text-sm font-bold text-slate-900 transition-colors duration-300" value="0" step="any" oninput="updateDemurrageExposureAlert(); runEngine()">
                                     <button id="btn-estimate-demurrage" onclick="sugerirDemoraAutomatica(true)" class="rounded-r-md border border-red-200 bg-red-50 px-2 text-red-700 transition hover:bg-red-100" title="Sugerir Demurrage desde TCE actual"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                                 <!-- ASBATANKVOY Delay Hours input (only relevant for Liquid Bulk / ASBATANKVOY) -->
@@ -12159,7 +12159,7 @@
                             <div class="sm:col-span-2">
                                 <label id="label-selling-freight" class="mb-1 block text-[10px] font-bold uppercase text-emerald-700">Flete Venta Fletador ($)</label>
                                 <div class="flex">
-                                    <input type="number" id="freight-sell" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="35.00" step="any" oninput="runEngine()">
+                                    <input type="number" id="freight-sell" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="0" step="any" oninput="runEngine()">
                                     <button type="button" id="btn-calc-charter-freight" onclick="handleFreightMasterTrigger('charterer', event)" class="border-y border-emerald-700 bg-emerald-700 px-2 text-white transition hover:bg-emerald-800" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-charter-freight" onclick="predictSpotMarketLocal()" class="rounded-r-md border border-teal-700 bg-teal-700 px-2 text-white transition hover:bg-teal-800" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>

@@ -10,6 +10,24 @@
 // Regex para identificar comandos o frases de escaneo en la conversación
 export const SCAN_COMMAND_REGEX = /(?:escan(?:ear|eo)?|scan(?:ner)?|auditar?\s+pantalla|analizar?\s+pantalla|revisar?\s+pantalla|inspeccionar?\s+pantalla|leer?\s+pantalla)/i;
 
+export const PENDING_OPERATION_MESSAGE = 'Formulario pendiente de datos de carga o cálculo. Por favor, accede a la calculadora de SeaCharter e introduce las toneladas de carga y los parámetros de la operación para poder auditar.';
+
+// Read operation inputs only: labels, calculated results, market quotes and
+// preset speed/margin/commission settings do not establish a real operation.
+export function hasOperationalInputData() {
+  const selectors = [
+    '#cargo-qty', '#dist-ballast', '#dist-laden',
+    '#price-sea', '#price-ifo', '#price-port', '#cons-sea', '#cons-port', '#cons-anchorage',
+    '#pda-pol', '#pda-pod', '#pda-misc', '#opex-daily', '#stevedoring-costs',
+    '#cargo-surcharge', '#freight-rate', '#freight-sell', '#demurrage-rate'
+  ];
+  return selectors.some(selector => {
+    const input = safeQuery(selector);
+    const raw = typeof input?.value === 'string' ? input.value.trim() : '';
+    return raw !== '' && Number.isFinite(Number(raw)) && Number(raw) > 0;
+  });
+}
+
 /**
  * Utilidades seguras de lectura del DOM
  */
@@ -130,7 +148,16 @@ export const ejecutarEfectoLaserScan = triggerLaserScanEffect;
 export function extractStructuredCoreProData() {
   if (typeof document === 'undefined') {
     return {
-      metadata: { fuente: 'no-dom' },
+      metadata: { fuente: 'no-dom', estado: 'pendiente_datos', datos_operativos: false },
+      mensaje: PENDING_OPERATION_MESSAGE,
+      bloques: {}
+    };
+  }
+
+  if (!hasOperationalInputData()) {
+    return {
+      metadata: { estado: 'pendiente_datos', datos_operativos: false },
+      mensaje: PENDING_OPERATION_MESSAGE,
       bloques: {}
     };
   }
@@ -151,13 +178,13 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 1: DERROTA Y PUERTOS ---
   // Distancias, velocidades, días de mar y puerto
-  const b1_pol = safeGetText('#port-pol') || safeGetText('#exec-pol', 'Rotterdam');
-  const b1_pod = safeGetText('#port-pod') || safeGetText('#exec-pod', 'Houston');
+  const b1_pol = safeGetText('#port-pol') || safeGetText('#exec-pol', '');
+  const b1_pod = safeGetText('#port-pod') || safeGetText('#exec-pod', '');
   const b1_dist_ballast = safeGetNumber('#dist-ballast', 0);
   const b1_dist_laden = safeGetNumber('#dist-laden', 0);
   const b1_dist_total = safeGetNumber('#dist-total', (b1_dist_ballast + b1_dist_laden));
-  const b1_spd_ballast = safeGetNumber('#spd-ballast', 12.0);
-  const b1_spd_laden = safeGetNumber('#spd-laden', 11.5);
+  const b1_spd_ballast = safeGetNumber('#spd-ballast', 0);
+  const b1_spd_laden = safeGetNumber('#spd-laden', 0);
   const b1_days_sea_ballast = safeGetNumber('#res-days-ballast', 0);
   const b1_days_sea_laden = safeGetNumber('#res-days-laden', 0);
   const b1_days_sea_total = safeGetNumber('#exec-sea-days', (b1_days_sea_ballast + b1_days_sea_laden));
@@ -189,21 +216,21 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 2: BUQUE, CARGA Y LIMPIEZA ---
   // Tipo de buque, toneladas, commodity, estiba
-  const b2_vessel_name = safeGetText('#nombre-buque-calculadora') || (typeof window !== 'undefined' && window.State?.vessel) || 'MV TBN BULKER';
-  const b2_vessel_type = safeGetText('#vessel-badge') || safeGetText('#exec-vessel-type') || safeGetText('#cargo-vessel-class-display', 'Handysize / Geared Bulker');
-  const b2_dwt = safeGetNumber('#vessel-dwt', safeGetNumber('#vessel-identity-dwt', 35000));
+  const b2_vessel_name = safeGetText('#nombre-buque-calculadora') || (typeof window !== 'undefined' && window.State?.vessel) || '';
+  const b2_vessel_type = safeGetText('#vessel-badge') || safeGetText('#exec-vessel-type') || safeGetText('#cargo-vessel-class-display', '');
+  const b2_dwt = safeGetNumber('#vessel-dwt', safeGetNumber('#vessel-identity-dwt', 0));
   const b2_gt = safeGetNumber('#vessel-identity-gt', null);
-  const b2_flag = safeGetText('#vessel-identity-flag', safeGetText('#vessel-flag', 'Panama'));
-  const b2_year = safeGetNumber('#vessel-identity-year', 2018);
+  const b2_flag = safeGetText('#vessel-identity-flag', safeGetText('#vessel-flag', ''));
+  const b2_year = safeGetNumber('#vessel-identity-year', 0);
   const b2_imo = safeGetText('#vessel-identity-imo', headerSearchImo || '');
-  const b2_cargo_qty = safeGetNumber('#cargo-qty', safeGetNumber('#exec-cargo-qty', 30000));
-  const b2_cargo_cat = safeGetText('#cargo-type', 'Granel Seco / Dry Bulk');
-  const b2_commodity = safeGetText('#cargo-product', safeGetText('#cargo-type-manual', safeGetText('#exec-cargo-type', 'Carga General / Siderúrgicos')));
+  const b2_cargo_qty = safeGetNumber('#cargo-qty', safeGetNumber('#exec-cargo-qty', 0));
+  const b2_cargo_cat = safeGetText('#cargo-type', '');
+  const b2_commodity = safeGetText('#cargo-product', safeGetText('#cargo-type-manual', safeGetText('#exec-cargo-type', '')));
   const b2_cp_standard = safeGetText('#charter-party-standard', 'GENCON 1994');
   const b2_nav_strategy = (typeof window !== 'undefined' && window.State?.navigationStrategy) || (safeQuery('#nav-strategy-full')?.classList.contains('active') ? 'Full Speed' : 'Eco Speed');
   const b2_has_scrubber = safeGetChecked('#vessel-has-scrubber-yes', false);
-  const b2_rate_load = safeGetNumber('#rate-load', safeGetNumber('#exec-load-rate', 5000));
-  const b2_rate_disch = safeGetNumber('#rate-disch', safeGetNumber('#exec-disch-rate', 2500));
+  const b2_rate_load = safeGetNumber('#rate-load', safeGetNumber('#exec-load-rate', 0));
+  const b2_rate_disch = safeGetNumber('#rate-disch', safeGetNumber('#exec-disch-rate', 0));
   const b2_load_method = safeGetText('#metodo_carga', 'Grúas del Buque (Ship Cranes)');
   const b2_disch_method = safeGetText('#metodo_descarga', 'Medios de Tierra (Shore Cranes)');
   const b2_stevedoring_terms = safeGetText('#terms-stevedoring', 'FIOS - Free In and Out Stowed');
@@ -233,12 +260,12 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 3: BUNKERS Y GASTOS ---
   // Precios de IFO/MGO, consumos, PDAs POL y POD
-  const b3_price_vlsfo = safeGetNumber('#price-sea', 610.0);
-  const b3_price_ifo = safeGetNumber('#price-ifo', 480.0);
-  const b3_price_mgo = safeGetNumber('#price-port', safeGetNumber('#mgo-price', 830.0));
-  const b3_cons_sea = safeGetNumber('#cons-sea', 5.5);
-  const b3_cons_port = safeGetNumber('#cons-port', 0.5);
-  const b3_cons_anchorage = safeGetNumber('#cons-anchorage', 0.8);
+  const b3_price_vlsfo = safeGetNumber('#price-sea', 0);
+  const b3_price_ifo = safeGetNumber('#price-ifo', 0);
+  const b3_price_mgo = safeGetNumber('#price-port', safeGetNumber('#mgo-price', 0));
+  const b3_cons_sea = safeGetNumber('#cons-sea', 0);
+  const b3_cons_port = safeGetNumber('#cons-port', 0);
+  const b3_cons_anchorage = safeGetNumber('#cons-anchorage', 0);
   const b3_pda_pol = safeGetNumber('#pda-pol', 0);
   const b3_pda_pod = safeGetNumber('#pda-pod', 0);
   const b3_extras_canal = safeGetNumber('#pda-misc', 0);
@@ -267,7 +294,7 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 4: OPEX Y PARÁMETROS AVANZADOS ---
   // Costes diarios, bandera, PSC
-  const b4_opex_daily = safeGetNumber('#opex-daily', 4500.0);
+  const b4_opex_daily = safeGetNumber('#opex-daily', 0);
   const b4_psc_status = safeGetText('#vessel-psc', 'low (<= 3 deficiencias)');
   const b4_cost_capex = safeGetNumber('#res-cost-capex', 0);
 
@@ -309,14 +336,14 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 6: RESUMEN DE OPERACIÓN Y COSTES ---
   // Break-even, ETS estimado, costes totales
-  const b6_break_even = safeGetNumber('#res-breakeven', safeGetNumber('#res-cost-base-break-even', safeGetNumber('#exec-buy-freight', 28.5)));
+  const b6_break_even = safeGetNumber('#res-breakeven', safeGetNumber('#res-cost-base-break-even', safeGetNumber('#exec-buy-freight', 0)));
   const b6_cost_total = safeGetNumber('#res-cost-total', 0);
   const b6_cost_bunkers = safeGetNumber('#res-cost-bunker', 0);
   const b6_cost_opex_total = safeGetNumber('#res-cost-opex', 0);
   const b6_cost_pda_total = safeGetNumber('#res-cost-pda', 0);
   const b6_cost_ets = safeGetNumber('#res-cost-ets', safeGetNumber('#res-ets-total-cost', 0));
   const b6_ets_emissions = safeGetNumber('#res-ets-emissions', 0);
-  const b6_eu_carbon_price = safeGetNumber('#eu-carbon-price', 75.0);
+  const b6_eu_carbon_price = safeGetNumber('#eu-carbon-price', 0);
   const b6_ets_route_type = safeGetText('#ets-route-type', 'Extra-EU (50% Scope)');
 
   const bloque6 = {
@@ -335,8 +362,8 @@ export function extractStructuredCoreProData() {
   // --- BLOQUE 7: ANÁLISIS DE FLETES Y RIESGOS ---
   // Spot, COA, primas de riesgo
   const b7_mode = safeQuery('#btn-mode-coa')?.classList.contains('active') ? 'COA' : 'SPOT';
-  const b7_freight_sug_chr = safeGetNumber('#res-venta-sugerida', safeGetNumber('#res-sug-charterer', safeGetNumber('#exec-sell-freight', 37.0)));
-  const b7_target_margin = safeGetNumber('#target-margin', safeGetNumber('#margin-charterer', 20.0));
+  const b7_freight_sug_chr = safeGetNumber('#res-venta-sugerida', safeGetNumber('#res-sug-charterer', safeGetNumber('#exec-sell-freight', 0)));
+  const b7_target_margin = safeGetNumber('#target-margin', safeGetNumber('#margin-charterer', 0));
   const b7_freight_sug_own = safeGetNumber('#res-sug-owner', b6_break_even * 1.15);
   const b7_jwla_active = safeGetChecked('#input-jwlaRiskActive', false);
   const b7_jwla_usd = safeGetNumber('#input-jwlaPremiumUSD', 0);
@@ -360,11 +387,11 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 8: COMPARATIVA DE MERCADO / INTELIGENCIA COMERCIAL ---
   // UN Comtrade, Datalastic
-  const b8_market_benchmark = safeGetNumber('#res-market-benchmark-rate', 35.5);
-  const b8_market_source = safeGetText('#res-market-benchmark-source', 'Baltic Exchange FFA / Fearnleys Reference');
-  const b8_baltic_spot = safeGetNumber('#baltic-spot-value', 36.2);
-  const b8_baltic_var = safeGetText('#baltic-spot-variation', '+1.8%');
-  const b8_tce_spot_theo = safeGetNumber('#tce-spot-theoretical-value', 14200);
+  const b8_market_benchmark = safeGetNumber('#res-market-benchmark-rate', 0);
+  const b8_market_source = safeGetText('#res-market-benchmark-source', '');
+  const b8_baltic_spot = safeGetNumber('#baltic-spot-value', 0);
+  const b8_baltic_var = safeGetText('#baltic-spot-variation', '');
+  const b8_tce_spot_theo = safeGetNumber('#tce-spot-theoretical-value', 0);
   const b8_tce_spot_class = safeGetText('#tce-spot-theoretical-class', b2_vessel_type);
   const b8_comtrade_active = Boolean(safeQuery('#comtrade-competitiveness-radar'));
   const b8_datalastic_active = safeGetText('#btn-wpi', '').includes('Datalastic activo');
@@ -377,22 +404,22 @@ export function extractStructuredCoreProData() {
     tce_spot_teorico_usd_dia: b8_tce_spot_theo,
     tce_spot_teorico_clase: b8_tce_spot_class,
     mercado_dry_bulk_tc: {
-      capesize: safeGetNumber('#market-intel-capesize-tc', 24500),
-      panamax: safeGetNumber('#market-intel-panamax-tc', 16800),
-      supramax: safeGetNumber('#market-intel-supramax-tc', 14100),
-      handysize: safeGetNumber('#market-intel-handysize-tc', 11900),
-      bdi_index: safeGetNumber('#market-intel-bdi-index', 1845)
+      capesize: safeGetNumber('#market-intel-capesize-tc', 0),
+      panamax: safeGetNumber('#market-intel-panamax-tc', 0),
+      supramax: safeGetNumber('#market-intel-supramax-tc', 0),
+      handysize: safeGetNumber('#market-intel-handysize-tc', 0),
+      bdi_index: safeGetNumber('#market-intel-bdi-index', 0)
     },
     radar_un_comtrade_activo: b8_comtrade_active,
     datalastic_activo: b8_datalastic_active
   };
 
   // --- BLOQUE 9: MATRIZ DE RIESGO Y PENALIZACIONES / INSPECCIONES PSC ---
-  const b9_risk_matrix_status = safeGetText('#auto-risk-status', 'Analizado');
-  const b9_risk_tooltip = safeGetText('#auto-risk-tooltip', 'Margen operativo evaluado');
-  const b9_demurrage_rate = safeGetNumber('#demurrage-rate', 8500.0);
+  const b9_risk_matrix_status = safeGetText('#auto-risk-status', 'Pendiente de validación');
+  const b9_risk_tooltip = safeGetText('#auto-risk-tooltip', '');
+  const b9_demurrage_rate = safeGetNumber('#demurrage-rate', 0);
   const b9_dispatch_active = safeGetChecked('#dispatch-clause-active', true);
-  const b9_dispatch_pct = safeGetNumber('#dispatch-pct', 50.0);
+  const b9_dispatch_pct = safeGetNumber('#dispatch-pct', 0);
   const b9_kill_switch = Boolean(safeQuery('#core-kill-switch-alert') && !safeQuery('#core-kill-switch-alert')?.classList.contains('hidden'));
 
   const bloque9 = {
@@ -407,11 +434,11 @@ export function extractStructuredCoreProData() {
 
   // --- BLOQUE 10: SIMULADOR DE NEGOCIACIÓN Y CONTRAOFERTAS ---
   // TCE final, fletes de oferta y margen comercial
-  const b10_freight_buy = safeGetNumber('#freight-rate', safeGetNumber('#exec-buy-freight', 29.0));
-  const b10_freight_sell = safeGetNumber('#freight-sell', safeGetNumber('#exec-sell-freight', 37.0));
-  const b10_comm_pct = safeGetNumber('#comm-pct', 2.5);
+  const b10_freight_buy = safeGetNumber('#freight-rate', safeGetNumber('#exec-buy-freight', 0));
+  const b10_freight_sell = safeGetNumber('#freight-sell', safeGetNumber('#exec-sell-freight', 0));
+  const b10_comm_pct = safeGetNumber('#comm-pct', 0);
   const b10_net_owner = safeGetNumber('#res-net-profit-owner', 0);
-  const b10_tce_obtained = safeGetNumber('#res-tce-label', safeGetNumber('#exec-tce', 13500));
+  const b10_tce_obtained = safeGetNumber('#res-tce-label', safeGetNumber('#exec-tce', 0));
   const b10_net_charterer = safeGetNumber('#res-net-profit-charterer', safeGetNumber('#exec-charterer-profit', 0));
   const b10_spread = safeGetNumber('#negotiation-spread-pmt', safeGetNumber('#exec-spread-mt', (b10_freight_sell - b10_freight_buy)));
   const b10_savings = safeGetNumber('#negotiation-total-savings', 0);
@@ -420,7 +447,7 @@ export function extractStructuredCoreProData() {
   const b10_charterer_target = safeGetNumber('#negotiation-charterer-target', b10_freight_sell);
   const b10_target_tce = safeGetText('#negotiation-target-tce', '');
   const b10_break_even_sim = safeGetNumber('#negotiation-break-even', b6_break_even);
-  const b10_viability_msg = safeGetText('#negotiation-viability-message', 'Operación Comercialmente Viable');
+  const b10_viability_msg = safeGetText('#negotiation-viability-message', 'Pendiente de validación');
   const b10_safety_factor = safeGetNumber('#negotiation-safety-factor', 0);
   const b10_mi_client_offer = safeGetNumber('#market-intelligence-client-offer', null);
   const b10_mi_delta = safeGetText('[data-mi-delta-value]', '');
@@ -447,6 +474,8 @@ export function extractStructuredCoreProData() {
 
   return {
     metadata: {
+      estado: 'datos_disponibles',
+      datos_operativos: true,
       expediente_ref: projectRef,
       buque_consultado: headerSearchImo,
       modo_visual: activeMode,
@@ -536,6 +565,8 @@ export async function ejecutarEscaneoCompleto() {
 
   return {
     laserEjecutado: Boolean(laserOk),
+    estado: datos.metadata.estado,
+    mensaje: datos.mensaje,
     datos: compactPayload(datos)
   };
 }
