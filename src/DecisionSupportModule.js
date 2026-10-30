@@ -1,21 +1,31 @@
+import './dss-panel.css';
+import { initializeDssPanel } from './dss-panel-toggle.js';
+
 const DECISION_SUPPORT_TEMPLATE = String.raw`
-            <div class="w-full px-4 md:px-8 space-y-6">
+            <div class="w-full px-4 md:px-8">
 
                 <!-- CABECERA CON RESUMEN DEL VIAJE Y CONTROL DE ESTADO -->
-                <header class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
+                <header class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl flex items-center justify-between gap-3">
                     <div class="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
                         <span class="text-xs text-slate-400 font-mono shrink-0">Audit Engine</span>
-                        <h1 class="text-base font-bold tracking-tight text-slate-800 flex items-center gap-2 shrink-0 bg-transparent">
+                        <h1 class="text-base font-bold tracking-tight text-slate-800 flex items-center gap-2 min-w-0 bg-transparent">
                             <span>Sistema de Soporte de Decisiones (DSS)</span>
                         </h1>
-                        <span class="hidden md:inline text-slate-600">|</span>
+                    </div>
+                    <button type="button" id="dss-panel-toggle" class="dss-panel-toggle" aria-expanded="true" aria-controls="dss-panel-content" aria-label="Plegar Sistema de Soporte de Decisiones (DSS)" title="Plegar DSS">
+                        <i class="fa-solid fa-chevron-up transition-transform duration-200" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div id="dss-panel-content" class="dss-panel-content">
+                    <div class="dss-panel-inner">
+                        <div class="space-y-6 pt-6">
+                            <div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl space-y-3">
                         <p id="voyage-summary-subtitle" class="text-xs md:text-sm text-slate-300 font-medium">
                             POL: <span id="summary-pol" class="text-indigo-400 font-bold">—</span> ➔
                             POD: <span id="summary-pod" class="text-indigo-400 font-bold">—</span> |
                             <span id="summary-qty" class="text-emerald-400 font-bold">0 MT</span> ·
                             <span id="summary-commodity" class="text-slate-200">Esperando datos de ruta</span>
                         </p>
-                    </div>
 
                     <!-- Botones de Acción / Simulación y Volver -->
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
@@ -61,7 +71,7 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                             <i class="fa-solid fa-calculator mr-1"></i> Volver a Calculadora
                         </button>
                     </div>
-                </header>
+                </div>
 
                 <div id="dss-empty-state" class="rounded-xl border border-dashed border-slate-600 bg-slate-800/70 px-5 py-10 text-center text-sm" style="color: white !important;"></div>
 
@@ -779,6 +789,9 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                     </footer>
                 </aside>
 
+                        </div>
+                    </div>
+                </div>
             </div>
 `;
 
@@ -829,6 +842,7 @@ export function mountDecisionSupportModule(container) {
 
     container.innerHTML = DECISION_SUPPORT_TEMPLATE;
     container.dataset.dssMounted = "true";
+    initializeDssPanel(container);
     renderDecisionSupportEmptyState();
     hydrateDecisionSupportState();
     return container;

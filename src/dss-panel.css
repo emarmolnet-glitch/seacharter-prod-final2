@@ -1,0 +1,34 @@
+.dss-panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #475569;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: background-color 200ms, color 200ms;
+}
+.dss-panel-toggle:hover { background-color: #334155; color: #fff; }
+.dss-panel-toggle:focus-visible { outline: 2px solid #818cf8; outline-offset: 3px; }
+.dss-panel-toggle i { transition: transform 200ms ease; }
+.dss-panel-toggle[aria-expanded="false"] i { transform: rotate(180deg); }
+.dss-panel-content {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    transition: grid-template-rows 200ms ease, opacity 200ms ease, visibility 200ms;
+}
+.dss-panel-inner { min-height: 0; overflow: hidden; }
+.dss-panel-content--collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+    .dss-panel-content, .dss-panel-toggle, .dss-panel-toggle i { transition: none; }
+}

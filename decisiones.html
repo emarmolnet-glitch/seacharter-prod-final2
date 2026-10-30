@@ -9,13 +9,14 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="./src/dss-panel.css">
 </head>
 <body class="bg-slate-900 text-sm text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
 
-    <div class="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-7xl mx-auto">
 
         <!-- CABECERA CON RESUMEN DEL VIAJE Y CONTROL DE ESTADO -->
-        <header class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <header class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl flex items-center justify-between gap-4">
             <div class="space-y-1">
                 <div class="flex items-center gap-3">
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-900/80 text-indigo-300 border border-indigo-700/50">
@@ -26,13 +27,21 @@
                 <h1 class="text-base font-bold tracking-tight text-slate-800 flex items-center gap-2">
                     <span>Sistema de Soporte de Decisiones (DSS)</span>
                 </h1>
-                <p id="voyage-summary-subtitle" class="text-sm text-slate-300 font-medium">
+                </div>
+                    <button type="button" id="dss-panel-toggle" class="dss-panel-toggle" aria-expanded="true" aria-controls="dss-panel-content" aria-label="Plegar Sistema de Soporte de Decisiones (DSS)" title="Plegar DSS">
+                        <i class="fa-solid fa-chevron-up transition-transform duration-200" aria-hidden="true"></i>
+                    </button>
+                </header>
+                <div id="dss-panel-content" class="dss-panel-content">
+                    <div class="dss-panel-inner">
+                        <div class="space-y-6 pt-6">
+                            <div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl space-y-3">
+                        <p id="voyage-summary-subtitle" class="text-sm text-slate-300 font-medium">
                     POL: <span id="summary-pol" class="text-indigo-400 font-bold">—</span> ➔
                     POD: <span id="summary-pod" class="text-indigo-400 font-bold">—</span> |
                     <span id="summary-qty" class="text-emerald-400 font-bold">0 MT</span> ·
                     <span id="summary-commodity" class="text-slate-200">Esperando datos de ruta</span>
                 </p>
-            </div>
 
             <!-- Botones de Acción / Simulación -->
             <div class="flex flex-wrap items-center gap-2">
@@ -75,7 +84,7 @@
                     <span>Fijar Condiciones Definitivas</span>
                 </button>
             </div>
-        </header>
+        </div>
 
         <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE / ACORDEONES) -->
         <section id="panel-parametros" class="hidden bg-slate-800/90 border border-slate-700 rounded-2xl p-5 shadow-xl transition-all text-slate-200 duration-300 ease-in-out overflow-hidden">
@@ -791,6 +800,9 @@
             </footer>
         </aside>
 
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- LÓGICA MODULAR EN JAVASCRIPT VANILLA -->
@@ -3808,6 +3820,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             generarAuditoriaOperativa(estadoInicial);
         });
+    </script>
+    <script type="module">
+        import { initializeDssPanel } from "./src/dss-panel-toggle.js";
+        initializeDssPanel(document);
     </script>
 </body>
 </html>
