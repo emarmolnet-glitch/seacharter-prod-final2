@@ -10848,6 +10848,36 @@
                                     <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
                                     <div>Ref. Panamax/Kamsarmax (Cintas): 72,000 - 144,000 TM/D</div>
                                 </div>
+                                <div id="modulo-camion-tolva-pol" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
+                                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+                                        <div>
+                                            <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POL</h4>
+                                            <p class="text-[10px] text-slate-500">Cadencia vinculada automáticamente al Ritmo Real POL.</p>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div class="input-group">
+                                            <label for="camion-tolva-capacidad-mt">Capacidad camión (MT)</label>
+                                            <input type="number" id="camion-tolva-capacidad-mt" class="input-gc font-bold" value="27" min="0" step="0.1" oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="camion-tolva-slots">Slots simultáneos</label>
+                                            <input type="number" id="camion-tolva-slots" class="input-gc font-bold" value="1" min="1" step="1" oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="camion-tolva-tiempo-ciclo-min">Tiempo ciclo total (min)</label>
+                                            <input type="number" id="camion-tolva-tiempo-ciclo-min" class="input-gc font-bold" value="" min="0" step="1" placeholder="Carga + Pres. + Limp." oninput="actualizarModuloCamionTolva()">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Camiones totales</label>
+                                            <output id="camion-tolva-camiones-totales" class="input-gc bg-gray-100 font-bold block">0.0</output>
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Ritmo sugerido (TM/día)</label>
+                                            <output id="camion-tolva-ritmo-sugerido" class="input-gc bg-gray-100 font-bold block">0</output>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <div class="flex justify-between items-center mb-1">
@@ -10932,37 +10962,6 @@
                         <div id="demurrage-exposure-alert" class="hidden mb-4 rounded-lg border border-orange-300 bg-orange-50 p-3 text-orange-900 shadow-sm" role="alert" aria-live="polite">
                             <p id="demurrage-exposure-text" class="text-[12px] font-black leading-snug"></p>
                             <p id="demurrage-exposure-impact" class="mt-1 text-[11px] font-bold leading-snug"></p>
-                        </div>
-
-                        <div id="modulo-camion-tolva-pol" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
-                                <div>
-                                    <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POL</h4>
-                                    <p class="text-[10px] text-slate-500">Cadencia vinculada automáticamente al Ritmo Real POL.</p>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-                                <div class="input-group">
-                                    <label for="camion-tolva-capacidad-mt">Capacidad camión (MT)</label>
-                                    <input type="number" id="camion-tolva-capacidad-mt" class="input-gc font-bold" value="27" min="0" step="0.1" oninput="actualizarModuloCamionTolva()">
-                                </div>
-                                <div class="input-group">
-                                    <label for="camion-tolva-slots">Slots simultáneos</label>
-                                    <input type="number" id="camion-tolva-slots" class="input-gc font-bold" value="1" min="1" step="1" oninput="actualizarModuloCamionTolva()">
-                                </div>
-                                <div class="input-group">
-                                    <label for="camion-tolva-tiempo-ciclo-min">Tiempo ciclo total (min)</label>
-                                    <input type="number" id="camion-tolva-tiempo-ciclo-min" class="input-gc font-bold" value="" min="0" step="1" placeholder="Carga + Pres. + Limp." oninput="actualizarModuloCamionTolva()">
-                                </div>
-                                <div class="input-group">
-                                    <label>Camiones totales</label>
-                                    <output id="camion-tolva-camiones-totales" class="input-gc bg-gray-100 font-bold block">0.0</output>
-                                </div>
-                                <div class="input-group">
-                                    <label>Ritmo sugerido (TM/día)</label>
-                                    <output id="camion-tolva-ritmo-sugerido" class="input-gc bg-gray-100 font-bold block">0</output>
-                                </div>
-                            </div>
                         </div>
 
                         <div id="contractual-parameters-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">
