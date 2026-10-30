@@ -819,6 +819,9 @@ export function GlobalMadreDrawer({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }]);
         setIsLoading(false);
+        if (voiceRequestVersion === playbackVersionRef.current) {
+          void speakText(pendingMessage);
+        }
         return;
       }
     }
