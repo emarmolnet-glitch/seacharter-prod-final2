@@ -858,34 +858,36 @@ export function GlobalMadreDrawer({
         ref={nodeRef}
         className="fixed bottom-4 right-4 z-[9999] w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col text-gray-800 overflow-hidden"
       >
-        {/* HEADER DES-APELOTONADO Y ESTRUCTURADO */}
-        <header className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex justify-between items-center select-none w-full">
-          <div className="flex items-center gap-2 shrink-0 pointer-events-none">
-            <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full shadow-sm" />
-            <span className="font-bold text-sm text-gray-800">MADRE</span>
+        {/* HEADER A PRUEBA DE CONFLICTOS CSS */}
+        <div className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex flex-row justify-between items-center select-none w-full overflow-hidden gap-4">
+          
+          <div className="flex flex-row items-center gap-2 shrink-0 pointer-events-none">
+            <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full shadow-sm shrink-0" />
+            <span className="font-bold text-sm text-gray-800 whitespace-nowrap">MADRE</span>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-row items-center justify-end gap-1.5 shrink-0">
             <button 
               type="button" 
               onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} 
-              className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+              className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-xs font-semibold flex flex-row items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
               title="Escanear Pantalla"
             >
               <span className="text-emerald-600 font-bold text-sm">⚡</span>
-              <span>Escanear</span>
+              <span className="hidden sm:inline-block">Escanear</span>
             </button>
-            <button type="button" onClick={toggleMute} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>
+            <button type="button" onClick={toggleMute} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer shrink-0" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>
               {isMuted ? '🔇' : '🔊'}
             </button>
-            <button type="button" onClick={handleReset} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer" title="Reiniciar">
+            <button type="button" onClick={handleReset} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer shrink-0" title="Reiniciar">
               🔄
             </button>
-            <button type="button" onClick={() => setIsMadreOpen(false)} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors font-bold text-sm cursor-pointer" title="Cerrar">
+            <button type="button" onClick={() => setIsMadreOpen(false)} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors font-bold text-sm cursor-pointer shrink-0" title="Cerrar">
               ✕
             </button>
           </div>
-        </header>
+          
+        </div>
 
         {/* CUERPO DEL CHAT LIMPIO */}
         <div className="overflow-y-auto max-h-[60vh] min-h-[300px] bg-gray-50 p-4 flex flex-col gap-3">
