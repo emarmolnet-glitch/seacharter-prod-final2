@@ -124,7 +124,7 @@ test('ALL-IN Gross Engine Tonnage Data Binding: calculates exact unit surcharge 
 });
 
 test('Fixture Recap Generator: injects dynamic Vessel, Freight Gross, Demurrage, and JWC clause', () => {
-  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   const fnSource = indexHtml.slice(startIdx, endIdx);
   const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
