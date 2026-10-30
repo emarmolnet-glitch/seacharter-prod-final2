@@ -34075,6 +34075,7 @@ function createRouteAnchorElement(type) {
         function applySelectedCargoProduct(userInitiated = false) {
             if (userInitiated === true) markCargoSelectionCommitted();
             const product = getSelectedCargoProduct();
+            updateCargoVesselClassDisplay();
             const sfInput = document.getElementById('cargo-sf');
             if (sfInput && product) sfInput.value = product.sf.toFixed(2);
             autoAdjustSF();
@@ -64825,7 +64826,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getCentralizedVesselClass() {
             const badgeEl = document.getElementById('vessel-badge');
-            const badgeText = badgeEl?.innerText?.trim();
+            const badgeText = badgeEl?.innerText?.trim() === 'Cement Carrier' && badgeEl.dataset?.operationalClass
+                ? badgeEl.dataset.operationalClass
+                : badgeEl?.innerText?.trim();
             if (badgeText && badgeText !== 'Desconocido' && badgeText !== 'Unknown' && badgeText !== '-') {
                 return badgeText;
             }
@@ -64849,10 +64852,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 badgeEl.innerText = vClass;
                 if (window.State) window.State.class = vClass;
             }
+            const displayClass = window.SeaCharterVoyageCostEngine?.getVesselTypeDisplayLabel(vClass) || vClass;
+            if (badgeEl) {
+                if (badgeEl.dataset) badgeEl.dataset.operationalClass = vClass;
+                badgeEl.innerText = displayClass;
+            }
             const displayEl = document.getElementById('cargo-vessel-class-display');
             if (displayEl) {
                 displayEl.textContent = (vClass && vClass !== 'Desconocido' && vClass !== 'Unknown')
-                    ? `Clasificado como: ${vClass}`
+                    ? `Clasificado como: ${displayClass}`
                     : '';
             }
             return vClass;
