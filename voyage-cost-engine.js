@@ -267,7 +267,27 @@
         };
     }
 
+    // Presentation only: keep the operational vessel class and rates unchanged.
+    function getVesselTypeDisplayLabel(vesselType, cargo = {}, documentRef = root.document) {
+        const state = root.State || {};
+        const read = (id) => documentRef?.getElementById(id)?.value;
+        const product = read('cargo-product')
+            || cargo.productoEspecifico || cargo.cargoProduct || cargo.cargo_product
+            || root.section2LocalState?.['cargo-product']
+            || state.productoEspecifico || state.cargoProduct || state.cargo_product || '';
+        const category = read('cargo-type') || cargo.cargoType || state.cargoType || '';
+        const packaging = cargo.packaging ?? state.packaging ?? '';
+        const description = `${product} ${category} ${packaging}`
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return /cement|semirremolque[\s_-]+neumatico/.test(description)
+            ? 'Cement Carrier'
+            : vesselType;
+    }
+
     function updateExecutiveDashboard(calcResults = {}, riskData = {}, documentRef = root.document) {
+        if (documentRef === root.document && typeof root.updateCargoVesselClassDisplay === 'function') {
+            root.updateCargoVesselClassDisplay();
+        }
         if (!documentRef || typeof documentRef.getElementById !== 'function') return false;
 
         const setText = (id, value) => {
@@ -374,7 +394,7 @@
         setText('exec-cargo-type', calcResults.cargoType || 'Carga no definida');
         setText('exec-load-rate', formatDailyRate(calcResults.loadRate));
         setText('exec-disch-rate', formatDailyRate(calcResults.dischargeRate));
-        setText('exec-vessel-type', calcResults.vesselType || 'Buque no definido');
+        setText('exec-vessel-type', getVesselTypeDisplayLabel(calcResults.vesselType || 'Buque no definido', calcResults, documentRef));
         setText('exec-sea-days', formatDays(calcResults.seaDays));
         setText('exec-port-days', formatDays(calcResults.portDays));
         setText('exec-total-days', formatDays(calcResults.totalDays));
@@ -1932,6 +1952,7 @@
         ISLAMIC_WEEKEND_COUNTRIES,
         calculateOperationalRisk,
         updateExecutiveDashboard,
+        getVesselTypeDisplayLabel,
         BIG_BAGS_PORT_CRANE,
         isBigBagsPortCraneMethod,
         getBigBagsPortCraneLiftCapacityMt,

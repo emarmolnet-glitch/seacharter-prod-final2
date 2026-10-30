@@ -20,7 +20,8 @@ function formatDate(value) {
 }
 
 function getSelectedVesselClass() {
-  const vesselType = String(document.getElementById('vessel-badge')?.textContent || '').trim().toLowerCase();
+  const badge = document.getElementById('vessel-badge');
+  const vesselType = String((badge?.textContent === 'Cement Carrier' ? badge?.dataset?.operationalClass : badge?.textContent) || '').trim().toLowerCase();
   if (vesselType.includes('cape')) return 'Capesize';
   if (vesselType.includes('panamax') || vesselType.includes('kamsar')) return 'Panamax';
   if (vesselType.includes('supra') || vesselType.includes('ultra')) return 'Supramax';
