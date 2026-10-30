@@ -631,7 +631,7 @@ export function GlobalMadreDrawer({
   }, []);
 
   const speakText = async (text, stateForVoice = null) => {
-    if (isMuted || !internalIsOpen) return;
+    if (isMuted || !isMadreOpen) return;
     try {
       stopCurrentAudio();
       const clean = String(text || '')
