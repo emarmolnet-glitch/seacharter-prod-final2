@@ -639,10 +639,36 @@ function applyAssistantCalculatorAutofill(payload = {}) {
     setValue('vessel-dwt', requiredDwt);
     setSelectValue('metodo_carga', loadingMethod);
     setSelectValue('metodo_descarga_pod', dischargeMethod);
+    // Assimilate truck parameters after form synchronization so local defaults cannot replace them.
+    const truckFields = [
+        ['asistente_camion_capacidad_mt', 'camion-tolva-capacidad-mt'],
+        ['asistente_camion_slots', 'camion-tolva-slots'],
+        ['asistente_camion_ciclo_min', 'camion-tolva-tiempo-ciclo-min'],
+    ];
+    let hasTruckUpdates = false;
+    truckFields.forEach(([key, id]) => {
+        const value = payload[key];
+        if (value === null || value === undefined || String(value).trim() === '') return;
+        if (!Number.isFinite(Number(value)) || Number(value) < 0) return;
+        setValue(id, value);
+        window.section2LocalState = window.section2LocalState || {};
+        window.section2LocalState[id] = String(value);
+        hasTruckUpdates = true;
+    });
+    if (hasTruckUpdates) window.actualizarModuloCamionTolva?.({ rerun: false });
     applyManualOperationalRate('pol', loadingRate);
     applyManualOperationalRate('pod', dischargeRate);
     window.recalcularDiasPuerto?.();
     window.runEngine?.();
+    // The total is an <output>; retain Cerebro's exact value after dependent calculations.
+    const truckTotal = payload.asistente_camion_totales;
+    if (truckTotal !== null && truckTotal !== undefined && String(truckTotal).trim() !== ''
+        && Number.isFinite(Number(truckTotal)) && Number(truckTotal) >= 0) {
+        const totalOutput = document.getElementById('camion-tolva-camiones-totales');
+        if (totalOutput) totalOutput.textContent = String(truckTotal);
+        window.section2LocalState = window.section2LocalState || {};
+        window.section2LocalState['camion-tolva-camiones-totales'] = String(truckTotal);
+    }
     window.dispatchEvent(new CustomEvent('calculator:assistant-autofilled', {
         detail: { payload, cargoQuantity, cargoPreserved },
     }));
