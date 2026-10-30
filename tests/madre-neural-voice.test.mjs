@@ -49,7 +49,7 @@ test('2. Definición y lógica de buildMotherExecutiveScript con scraping visual
 test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridge vía Web Audio API (Bypass CSP)', () => {
   assert.match(
     globalMadreDrawerSource,
-    /async function playNeuralMotherVoice\s*\(\s*textToSpeak\s*\)/,
+    /async function playNeuralMotherVoice\s*\(\s*textToSpeak\s*,\s*playback\s*=\s*\{\}\s*\)/,
     'Debe definir la función playNeuralMotherVoice recibiendo directamente textToSpeak'
   );
 
@@ -68,7 +68,7 @@ test('3. Definición y lógica de playNeuralMotherVoice conectando con DataBridg
   // Verificación de que speakText pasa la variable limpia clean
   assert.match(
     globalMadreDrawerSource,
-    /const audioInstance = await playNeuralMotherVoice\(clean\);/,
+    /const audioInstance = await playNeuralMotherVoice\(clean,\s*\{/,
     'speakText debe invocar playNeuralMotherVoice pasando la variable clean'
   );
 

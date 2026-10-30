@@ -207,15 +207,15 @@ test('8. Floating Widget: Draggable wrapper, conditional rendering, and clean he
   );
   assert.match(
     globalMadreDrawerSource,
-    /<button[\s\S]*?onClick=\{\(\) => setIsMadreOpen\(false\)\}[\s\S]*?title="Cerrar"[\s\S]*?>[\s\S]*?✕[\s\S]*?<\/button>/,
+    /<button[\s\S]*?onClick=\{handleClose\}[\s\S]*?title="Cerrar"[\s\S]*?>[\s\S]*?✕[\s\S]*?<\/button>/,
     'Close button must have light styling and title'
   );
 
-  // Audio tag check
-  assert.match(
+  // Web Audio sources must not share their ref with a DOM audio element.
+  assert.doesNotMatch(
     globalMadreDrawerSource,
     /<audio ref=\{currentAudioRef\} className="hidden" aria-hidden="true" \/>/,
-    'Audio tag must exist before aside closes'
+    'Web Audio reference must not be overwritten by a DOM audio element'
   );
 });
 

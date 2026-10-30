@@ -315,7 +315,8 @@ function buildMotherExecutiveScript(state = {}) {
  * Reproducción de voz neuronal MADRE conectando con DataBridge (madre-voice.js / ElevenLabs)
  * Reproducción directa en hardware usando Web Audio API (Bypass CSP media-src / blob:)
  */
-async function playNeuralMotherVoice(textToSpeak) {
+async function playNeuralMotherVoice(textToSpeak, playback = {}) {
+  let audioCtx;
   try {
     const response = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-voice', {
       method: 'POST',
@@ -327,14 +328,32 @@ async function playNeuralMotherVoice(textToSpeak) {
 
     const arrayBuffer = await response.arrayBuffer();
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
+    audioCtx = new AudioContext();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    if (playback.shouldPlay && !playback.shouldPlay()) {
+      await audioCtx.close();
+      return;
+    }
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
+    source.onended = () => {
+      source.disconnect();
+      void audioCtx.close().catch(() => {});
+      playback.onEnded?.(source);
+    };
+    playback.onReady?.(source);
+    // No asynchronous work between the final validity check and playback.
+    if (playback.shouldPlay && !playback.shouldPlay()) {
+      source.disconnect();
+      await audioCtx.close();
+      playback.onEnded?.(source);
+      return;
+    }
     source.start(0);
     return source;
   } catch (error) {
+    if (audioCtx) void audioCtx.close().catch(() => {});
     console.error("Fallo al invocar a Madre neuronal en DataBridge:", error);
   }
 }
@@ -526,19 +545,24 @@ export function GlobalMadreDrawer({
   const nodeRef = useRef(null);
 
   const currentAudioRef = useRef(null);
+  const playbackVersionRef = useRef(0);
+  const voiceStateRef = useRef({ muted: false, open: isOpen });
+  const isMuted = controlledIsMuted !== undefined ? controlledIsMuted : internalIsMuted;
+  voiceStateRef.current = { muted: isMuted, open: isMadreOpen };
 
   const stopCurrentAudio = () => {
-    if (currentAudioRef.current) {
-      try {
-        if (typeof currentAudioRef.current.stop === 'function') {
-          currentAudioRef.current.stop();
-        } else if (typeof currentAudioRef.current.pause === 'function') {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.currentTime = 0;
-        }
-      } catch (_) {}
-      currentAudioRef.current = null;
-    }
+    playbackVersionRef.current += 1;
+    const audio = currentAudioRef.current;
+    currentAudioRef.current = null;
+    if (!audio) return;
+    try {
+      if (typeof audio.stop === 'function') audio.stop();
+      else if (typeof audio.pause === 'function') {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    } catch (_) {}
+    try { audio.disconnect?.(); } catch (_) {}
   };
 
   useEffect(() => {
@@ -548,7 +572,9 @@ export function GlobalMadreDrawer({
     }
   }, [isOpen]);
 
-  const isMuted = controlledIsMuted !== undefined ? controlledIsMuted : internalIsMuted;
+  useEffect(() => {
+    if (isMuted || !isMadreOpen) stopCurrentAudio();
+  }, [isMuted, isMadreOpen]);
 
   useEffect(() => {
     if (isMadreOpen && messagesEndRef.current) {
@@ -631,7 +657,7 @@ export function GlobalMadreDrawer({
   }, []);
 
   const speakText = async (text, stateForVoice = null) => {
-    if (isMuted || !isMadreOpen) return;
+    if (voiceStateRef.current.muted || !voiceStateRef.current.open) return;
     try {
       stopCurrentAudio();
       const clean = String(text || '')
@@ -639,21 +665,32 @@ export function GlobalMadreDrawer({
         .replace(/\s+/g, ' ')
         .trim();
       if (!clean) return;
-      const audioInstance = await playNeuralMotherVoice(clean);
-      if (audioInstance) {
-        currentAudioRef.current = audioInstance;
+      const version = playbackVersionRef.current;
+      const shouldPlay = () => version === playbackVersionRef.current
+        && !voiceStateRef.current.muted && voiceStateRef.current.open;
+      const audioInstance = await playNeuralMotherVoice(clean, {
+        shouldPlay,
+        onReady: (source) => { currentAudioRef.current = source; },
+        onEnded: (source) => {
+          if (currentAudioRef.current === source) currentAudioRef.current = null;
+        },
+      });
+      if (audioInstance && !shouldPlay()) {
+        try { audioInstance.stop(); } catch (_) {}
+        if (currentAudioRef.current === audioInstance) currentAudioRef.current = null;
       }
     } catch (_) {}
   };
 
   const handleMuteToggle = () => {
-    const nextMuted = !isMuted;
+    const nextMuted = !voiceStateRef.current.muted;
+    voiceStateRef.current.muted = nextMuted;
+    stopCurrentAudio();
     if (typeof onMuteToggle === 'function') {
       onMuteToggle(nextMuted);
     } else {
       setInternalIsMuted(nextMuted);
     }
-    stopCurrentAudio();
   };
   const toggleMute = handleMuteToggle;
 
@@ -674,11 +711,12 @@ export function GlobalMadreDrawer({
   };
 
   const handleClose = () => {
+    voiceStateRef.current.open = false;
+    stopCurrentAudio();
     if (typeof onClose === 'function') {
       onClose();
     }
-    setInternalIsOpen(false);
-    stopCurrentAudio();
+    setIsMadreOpen(false);
   };
 
   const handleMicClick = () => {
@@ -711,6 +749,7 @@ export function GlobalMadreDrawer({
   const handleSendMessage = async (overrideText = null) => {
     const queryText = (typeof overrideText === 'string' ? overrideText : inputValue).trim();
     const textToProcess = queryText;
+    const voiceRequestVersion = playbackVersionRef.current;
     if (!queryText || isLoading) return;
 
     const userMessage = {
@@ -818,6 +857,7 @@ export function GlobalMadreDrawer({
       // Usamos una función autoejecutable (IIFE) asíncrona para que no bloquee ni dispare el catch principal
       (async () => {
         try {
+          if (voiceRequestVersion !== playbackVersionRef.current) return;
           await speakText(finalReply, stateForVoice);
         } catch (voiceErr) {
           console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
@@ -853,7 +893,7 @@ export function GlobalMadreDrawer({
   if (!isMadreOpen) return null;
 
   return (
-    <Draggable nodeRef={nodeRef} handle=".drag-handle">
+    <Draggable nodeRef={nodeRef} handle=".drag-handle" cancel="button, .madre-header-controls">
       <aside
         ref={nodeRef}
         className="fixed bottom-4 right-4 z-[9999] w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col text-gray-800 overflow-hidden"
@@ -866,7 +906,7 @@ export function GlobalMadreDrawer({
             <span className="font-bold text-sm text-gray-800 whitespace-nowrap">MADRE</span>
           </div>
 
-          <div className="flex flex-row items-center justify-end gap-1.5 shrink-0">
+          <div className="madre-header-controls flex flex-row items-center justify-end gap-1.5 shrink-0">
             <button 
               type="button" 
               onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} 
@@ -882,7 +922,7 @@ export function GlobalMadreDrawer({
             <button type="button" onClick={handleReset} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer shrink-0" title="Reiniciar">
               🔄
             </button>
-            <button type="button" onClick={() => setIsMadreOpen(false)} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors font-bold text-sm cursor-pointer shrink-0" title="Cerrar">
+            <button type="button" onClick={handleClose} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors font-bold text-sm cursor-pointer shrink-0" title="Cerrar">
               ✕
             </button>
           </div>
@@ -906,7 +946,7 @@ export function GlobalMadreDrawer({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* FOOTER Y RESTAURACIÓN DE AUDIO */}
+        {/* FOOTER */}
         <div className="bg-white border-t border-gray-100 p-3 flex gap-2 items-center shrink-0">
           <button type="button" onClick={handleMicClick} disabled={isLoading} className="flex items-center justify-center w-9 h-9 rounded-lg text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 transition-colors disabled:opacity-50 shrink-0 cursor-pointer">
             🎙️
@@ -918,8 +958,6 @@ export function GlobalMadreDrawer({
             </button>
           </form>
         </div>
-        
-        <audio ref={currentAudioRef} className="hidden" aria-hidden="true" />
       </aside>
     </Draggable>
   );
