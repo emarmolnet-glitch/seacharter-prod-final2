@@ -66184,8 +66184,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const capacidadCamion = Math.max(0, parseFloat(document.getElementById('camion-tolva-capacidad-mt')?.value) || 0);
             const slotsSimultaneos = Math.max(1, Math.floor(parseFloat(document.getElementById('camion-tolva-slots')?.value) || 1));
             const tiempoCiclo = Math.max(0, parseFloat(document.getElementById('camion-tolva-tiempo-ciclo-min')?.value) || 0);
-            const camionesTotales = capacidadCamion > 0 ? (cargaTotal / capacidadCamion) : 0;
-            const ritmoSugerido = tiempoCiclo > 0 ? (capacidadCamion * slotsSimultaneos * (1440 / tiempoCiclo)) : 0;
+            const camionesTotales = capacidadCamion > 0 ? Math.ceil(cargaTotal / capacidadCamion) : 0;
+            const ritmoSugerido = tiempoCiclo > 0 ? Math.floor((60 / tiempoCiclo) * capacidadCamion * slotsSimultaneos * 24) : 0;
             return { camionesTotales, ritmoSugerido };
         }
 
@@ -66194,7 +66194,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const rerun = options.rerun !== false;
             const modulo = document.getElementById('modulo-camion-tolva-pol');
             if (!modulo) return;
-            const isCamionTolva = getMetodoEstibaActual() === 'camion_tolva';
+            const product = getSelectedCargoProduct();
+            const productText = `${product?.nombre || product?.name || ''} ${document.getElementById('cargo-product')?.value || ''}`.toLowerCase();
+            const isCamionTolva = productText.includes('cemento')
+                || getMetodoEstibaActual() === 'camion_tolva'
+                || getMetodoDescargaActual() === 'camion_tolva';
+            if (isCamionTolva) {
+                [
+                    ['camion-tolva-capacidad-mt', 27],
+                    ['camion-tolva-slots', 1],
+                    ['camion-tolva-tiempo-ciclo-min', 35]
+                ].forEach(([id, defaultValue]) => {
+                    const input = document.getElementById(id);
+                    if (!input) return;
+                    if (!(Number(input.value) > 0)) input.value = String(defaultValue);
+                    updateSection2LocalState(id, input.value);
+                });
+            }
             modulo.classList.toggle('hidden', !isCamionTolva);
             modulo.setAttribute('aria-hidden', String(!isCamionTolva));
             ['camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min'].forEach((id) => {
@@ -66206,8 +66222,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const totalEl = document.getElementById('camion-tolva-camiones-totales');
             const ritmoEl = document.getElementById('camion-tolva-ritmo-sugerido');
             if (totalEl) totalEl.textContent = camionesTotales.toLocaleString('en-US', {
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1
+                maximumFractionDigits: 0
             });
             if (ritmoEl) ritmoEl.textContent = Math.round(ritmoSugerido).toLocaleString('en-US');
             aplicarRitmoCamionTolvaPol({ rerun: rerun && isCamionTolva });
@@ -71827,6 +71842,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const el = document.getElementById(id);
                 if (!el) return;
                 const syncCargoVoyageParams = () => {
+                    if (['cargo-qty', 'cargo-type', 'cargo-type-manual', 'cargo-product', 'metodo_carga', 'metodo_descarga_pod'].includes(id)) {
+                        actualizarModuloCamionTolva({ rerun: false });
+                    }
                     SeaCharterStore.set(readValidatedCargoOperationState(), {
                         force: true,
                         source: `calculator-${id}`
