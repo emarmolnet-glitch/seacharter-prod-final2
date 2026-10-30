@@ -118,7 +118,7 @@ test('6. Asincronía, Latencia, Await en voz y Auto-envío en micrófono', () =>
 
   // Estado visual de carga y bloqueo de inputs
   assert.match(globalMadreDrawerSource, /disabled=\{isLoading\}/);
-  assert.match(globalMadreDrawerSource, /Procesando audio\.\.\./);
+  assert.match(globalMadreDrawerSource, /Procesando audio(?: y respuesta)?\.\.\./);
 
   // Auto-envío en micrófono al finalizar dictado (isFinal)
   assert.match(globalMadreDrawerSource, /if\s*\(\s*event\.results\[0\]\.isFinal\s*\)\s*\{[\s\S]*?await\s+handleSendMessage\(transcript\);/);

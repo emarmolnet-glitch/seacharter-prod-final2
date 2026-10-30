@@ -692,11 +692,13 @@ export function AppLayout({ children }) {
 }
 
 export default function App(props) {
+  const [isMadreOpen, setIsMadreOpen] = useState(false);
+
   return (
     <HashRouter>
       <ProjectProvider>
-        <GlobalMadreDrawer />
-        <AppLayout {...props} />
+        <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
+        <AppLayout {...props} isMadreOpen={isMadreOpen} setIsMadreOpen={setIsMadreOpen} />
       </ProjectProvider>
     </HashRouter>
   );
@@ -710,12 +712,30 @@ export function TopNav() {
   const { activeProjectRef, setActiveProjectRef } = useProject();
   const [isMadreOpen, setIsMadreOpen] = useState(false);
 
-  const handleToggleMadre = () => {
-    setIsMadreOpen((prev) => !prev);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('madre:toggle'));
+  useEffect(() => {
+    const handleToggle = () => setIsMadreOpen((prev) => !prev);
+    const handleOpen = () => setIsMadreOpen(true);
+    const handleClose = () => setIsMadreOpen(false);
+    window.addEventListener('madre:toggle', handleToggle);
+    window.addEventListener('madre:open', handleOpen);
+    window.addEventListener('madre:close', handleClose);
+    return () => {
+      window.removeEventListener('madre:toggle', handleToggle);
+      window.removeEventListener('madre:open', handleOpen);
+      window.removeEventListener('madre:close', handleClose);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMadreOpen && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('resize'));
+      if (window.GlobalFleetGlobe?.resize) {
+        try {
+          window.GlobalFleetGlobe.resize();
+        } catch (_) {}
+      }
     }
-  };
+  }, [isMadreOpen]);
 
   const handleRefChange = (e) => {
     setActiveProjectRef(e.target.value);
@@ -786,16 +806,8 @@ export function TopNav() {
         <div className="header-actions-right flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                if (typeof window.toggleMadreDrawer === 'function') {
-                  window.toggleMadreDrawer();
-                } else {
-                  window.dispatchEvent(new CustomEvent('madre:toggle'));
-                }
-              }
-            }}
             id="btn-madre-trigger"
+            onClick={() => setIsMadreOpen(!isMadreOpen)}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold"
             style={{ backgroundColor: '#0f172a', color: '#5eead4', border: '1px solid rgba(45,212,191,0.4)' }}
             title="Abrir Asistente Estratégico MADRE"
@@ -806,7 +818,7 @@ export function TopNav() {
           </button>
         </div>
       </header>
-      <GlobalMadreDrawer />
+      <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
     </>
   );
 }
