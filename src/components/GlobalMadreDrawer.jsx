@@ -858,82 +858,65 @@ export function GlobalMadreDrawer({
         ref={nodeRef}
         className="fixed bottom-4 right-4 z-[9999] w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col text-gray-800 overflow-hidden"
       >
-        {/* CABECERA EXACTA */}
-        <header className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex justify-between items-center select-none">
-          <div className="flex items-center gap-2 pointer-events-none">
+        {/* HEADER DES-APELOTONADO Y ESTRUCTURADO */}
+        <header className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex justify-between items-center select-none w-full">
+          <div className="flex items-center gap-2 shrink-0 pointer-events-none">
             <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full shadow-sm" />
             <span className="font-bold text-sm text-gray-800">MADRE</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" id="btn-madre-scan-screen" onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer" title="Escanear Pantalla">
-              <span className="text-emerald-600 font-bold">⚡</span>
-              <span>Escanear Pantalla</span>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button 
+              type="button" 
+              onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} 
+              className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+              title="Escanear Pantalla"
+            >
+              <span className="text-emerald-600 font-bold text-sm">⚡</span>
+              <span>Escanear</span>
             </button>
-            <button type="button" onClick={toggleMute} className="text-gray-600 hover:bg-gray-100 rounded p-1.5 text-xs transition-colors cursor-pointer" title={isMuted ? "Activar voz" : "Silenciar voz"}>
-              {isMuted ? "🔇" : "🔊"}
+            <button type="button" onClick={toggleMute} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer" title={isMuted ? 'Activar voz' : 'Silenciar voz'}>
+              {isMuted ? '🔇' : '🔊'}
             </button>
-            <button type="button" onClick={() => setIsMadreOpen(false)} className="text-gray-600 hover:bg-gray-100 rounded p-1.5 text-xs transition-colors cursor-pointer font-bold" title="Cerrar">
+            <button type="button" onClick={handleReset} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors text-sm cursor-pointer" title="Reiniciar">
+              🔄
+            </button>
+            <button type="button" onClick={() => setIsMadreOpen(false)} className="text-gray-600 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center transition-colors font-bold text-sm cursor-pointer" title="Cerrar">
               ✕
             </button>
           </div>
         </header>
 
-        {/* CHAT CONTAINER */}
+        {/* CUERPO DEL CHAT LIMPIO */}
         <div className="overflow-y-auto max-h-[60vh] min-h-[300px] bg-gray-50 p-4 flex flex-col gap-3">
           {messages.map((m) => (
             <div key={m.id} className={`flex flex-col w-full ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-              <div
-                className={`text-xs max-w-[85%] leading-relaxed whitespace-pre-wrap font-medium p-3 rounded-xl shadow-xs ${
-                  m.sender === 'user'
-                    ? 'bg-blue-50 border border-blue-100 text-gray-800'
-                    : m.isError
-                    ? 'bg-red-50 border border-red-200 text-red-800'
-                    : 'bg-white border border-gray-200 text-gray-800'
-                }`}
-              >
+              <div className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium p-3 rounded-xl shadow-sm border ${m.sender === 'user' ? 'bg-blue-50 border-blue-100 text-gray-800' : m.isError ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border-gray-200 text-gray-800'}`}>
                 {m.text}
               </div>
             </div>
           ))}
           {isLoading && (
             <div className="text-xs text-teal-700 font-medium animate-pulse flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping"></span>
-              Procesando audio y respuesta...
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping"></span> Procesando...
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* FOOTER */}
-        <div className="bg-white border-t border-gray-100 p-3 flex gap-2 items-center">
-          <button
-            type="button"
-            onClick={handleMicClick}
-            disabled={isLoading}
-            className="p-2 rounded-lg text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-all cursor-pointer"
-            title="Dictar por voz"
-          >
+        {/* FOOTER Y RESTAURACIÓN DE AUDIO */}
+        <div className="bg-white border-t border-gray-100 p-3 flex gap-2 items-center shrink-0">
+          <button type="button" onClick={handleMicClick} disabled={isLoading} className="flex items-center justify-center w-9 h-9 rounded-lg text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 transition-colors disabled:opacity-50 shrink-0 cursor-pointer">
             🎙️
           </button>
           <form onSubmit={handleSubmit} className="flex gap-2 flex-1">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={isLoading}
-              placeholder="Comando a MADRE..."
-              className="bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-lg p-2 w-full text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputValue.trim()}
-              className="px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs transition-all font-medium cursor-pointer"
-            >
+            <input ref={inputRef} type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isLoading} placeholder="Comando a MADRE..." className="bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-lg p-2 w-full text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all" />
+            <button type="submit" disabled={isLoading || !inputValue.trim()} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 shrink-0 cursor-pointer">
               Enviar
             </button>
           </form>
         </div>
+        
         <audio ref={currentAudioRef} className="hidden" aria-hidden="true" />
       </aside>
     </Draggable>
