@@ -14,6 +14,7 @@ function setup({ download, decode } = {}) {
   const stats = { starts: 0, stops: 0, closes: 0, disconnects: 0 };
   const context = vm.createContext({
     console,
+    URLSearchParams,
     fetch: async () => {
       if (download) await download.promise;
       return { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
@@ -38,7 +39,20 @@ function setup({ download, decode } = {}) {
     ${between('async function playNeuralMotherVoice(', '\n/**')}
     ${between('  const currentAudioRef =', '\n  useEffect')}
     ${between('  const speakText =', '  const handleReset =')}
-    globalThis.api = { speakText, toggleMute, stopCurrentAudio, currentAudioRef, voiceStateRef };
+    const inputValue = '', isLoading = false;
+    const messages = [];
+    let loading = false;
+    const setMessages = update => { messages.splice(0, messages.length, ...update(messages)); };
+    const setInputValue = () => {};
+    const setIsLoading = value => { loading = value; };
+    const URLSearchParams = globalThis.URLSearchParams;
+    window.location = { search: '', hash: '' };
+    const SCAN_COMMAND_REGEX = /Escanear/;
+    const triggerLaserScanEffect = () => {};
+    const getScanPendingMessage = () => 'Pendiente de datos';
+    ${between('  const handleSendMessage =', '  const handleSubmit =')}
+    globalThis.api = { speakText, toggleMute, stopCurrentAudio, currentAudioRef, voiceStateRef,
+      handleSendMessage, messages, isLoading: () => loading };
   `, context);
   return { ...context.api, stats };
 }
@@ -103,6 +117,35 @@ test('overlapping requests only start the newest source', async () => {
   await Promise.all([first, second]);
   assert.equal(api.stats.starts, 1);
   assert.equal(api.stats.closes, 1);
+});
+
+test('scan pending message starts voice with the chat text and releases loading', async () => {
+  const api = setup();
+  await api.handleSendMessage('Escanear y auditar pantalla Core PRO');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.messages.at(-1).text, 'Pendiente de datos');
+  assert.equal(api.stats.starts, 1);
+  assert.equal(api.isLoading(), false);
+});
+
+test('muted scan keeps the pending message without playing audio', async () => {
+  const api = setup();
+  api.toggleMute();
+  await api.handleSendMessage('Escanear y auditar pantalla Core PRO');
+  assert.equal(api.messages.at(-1).text, 'Pendiente de datos');
+  assert.equal(api.stats.starts, 0);
+});
+
+test('muting while scan voice downloads invalidates playback after unmuting', async () => {
+  const download = deferred();
+  const api = setup({ download });
+  await api.handleSendMessage('Escanear y auditar pantalla Core PRO');
+  api.toggleMute();
+  api.toggleMute();
+  download.resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.stats.starts, 0);
+  assert.equal(api.currentAudioRef.current, null);
 });
 
 // Guard the native touch-to-click path: controls must be excluded before drag starts.
