@@ -1,7 +1,7 @@
 /* Tracking GIS comparte el sistema visual claro de MAPA y Calculadora. */
 body.tracking-live-open { overflow: hidden !important; }
 
-#view-decisiones .dss-awaiting-data > :not(header):not(#dss-empty-state) { display: none !important; }
+#view-decisiones .dss-awaiting-data .dss-panel-inner > div > :not(#dss-empty-state) { display: none !important; }
 
 .tracking-live-overlay {
     position: absolute;
