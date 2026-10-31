@@ -234,7 +234,7 @@ export function capturarDomModuloActivo(moduloIdOpcional) {
 /**
  * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
  */
-export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
+export const MADRE_API_ENDPOINT = "/api/madre-chat";
 
 /**
  * Guion Ejecutivo de Carga Seca para voz neuronal de Madre
@@ -809,21 +809,6 @@ export function GlobalMadreDrawer({
     // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual
     if (SCAN_COMMAND_REGEX.test(queryText)) {
       triggerLaserScanEffect();
-      const pendingMessage = getScanPendingMessage(window.State || {});
-      if (pendingMessage) {
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          sender: 'assistant',
-          role: 'assistant',
-          text: pendingMessage,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-        setIsLoading(false);
-        if (voiceRequestVersion === playbackVersionRef.current) {
-          void speakText(pendingMessage);
-        }
-        return;
-      }
     }
 
     // Clean the history to satisfy Gemini API requirements
@@ -844,6 +829,7 @@ export function GlobalMadreDrawer({
 
     const payload = {
       suite: "SeaCharter Core PRO",
+      current_module: "core_pro",
       modulo_actual: moduloActualDetectado,
       mensajeUsuario: textToProcess,
       message: textToProcess,
@@ -884,17 +870,14 @@ export function GlobalMadreDrawer({
         console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
       }
 
-      if (!response.ok && !data.success) {
+      if (!response.ok) {
         throw new Error(`Error HTTP: ${response.status}`);
       }
 
-      // Extraer el texto de la respuesta o utilizar el guion pregenerado si es un escaneo
-      const baseReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response || "Auditoría completada y validada en el sistema.";
-      
-      // Determinar si debemos usar el guion local (como en Land Charter)
-      let finalReply = baseReply;
-      if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
-         finalReply = buildMotherExecutiveScript(stateForVoice);
+      // Mostrar el resultado real del servidor, también para el escaneo.
+      const finalReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response;
+      if (typeof finalReply !== 'string' || !finalReply.trim()) {
+        throw new Error('MADRE no devolvió una respuesta válida.');
       }
 
       // 1. Mostrar inmediatamente la respuesta en el chat (ÉXITO GARANTIZADO)

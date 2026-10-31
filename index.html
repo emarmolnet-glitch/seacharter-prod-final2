@@ -70251,9 +70251,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
+        function syncMarketIntelToInverseTce(vesselCategory = currentVesselPricingCategory) {
+            const vesselClass = getMarketSpeedVesselClass(vesselCategory);
+            const marketInput = document.getElementById(`market-intel-${String(vesselClass).toLowerCase()}-tc`);
+            const tceInput = document.getElementById('inverse-tce-target');
+            const raw = String(marketInput?.value || marketInput?.textContent || '').trim();
+            const cleaned = raw.replace(/[^0-9.,]/g, '');
+            const normalized = /^\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?$/.test(cleaned)
+                ? cleaned.replace(/[.,](?=\d{3}(?:[.,]|$))/g, '').replace(',', '.')
+                : cleaned.replace(',', '.');
+            const marketRate = Number(normalized);
+            if (!tceInput || !cleaned || !Number.isFinite(marketRate) || marketRate <= 0) return false;
+            tceInput.value = String(marketRate);
+            updateBalticSpotSourceLabel(`${vesselClass} T/C - Market Intel (panel en vivo)`);
+            calculateInverseTce();
+            return true;
+        }
+
         function applyMarketLatestToInverseTce(record, vesselCategory = currentVesselPricingCategory) {
             const tceInput = document.getElementById('inverse-tce-target');
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
+            if (syncMarketIntelToInverseTce(vesselCategory)) return true;
             const classSnapshot = record?._marketSnapshot?.tceSpotByClass?.[vesselClass];
             const field = MARKET_TCE_FIELD_BY_CLASS[vesselClass];
             const marketRate = Number(classSnapshot?.theoreticalSpotTce ?? record?.[field]);
@@ -70999,6 +71017,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.forceRefreshCalculations = forceRefreshCalculations;
 
+        document.getElementById('vessel-dwt')?.addEventListener('change', () => {
+            updateVesselPricingRouter();
+            syncMarketIntelToInverseTce();
+        });
+
         function updateVesselPricingRouter() {
             const vesselDwt = readInverseTceNumber('vessel-dwt');
             const vesselClass = getVesselClass(vesselDwt);
@@ -71032,7 +71055,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 && !isManualBalticSpotOverride
                 && (previousCategory !== currentVesselPricingCategory || lastBalticSpotPricingCategory !== currentVesselPricingCategory)
             ) {
-                void handleFetchBalticSpotTce();
+                if (!syncMarketIntelToInverseTce(vesselClass.categoryName)) {
+                    void handleFetchBalticSpotTce();
+                }
             }
 
             if (vesselClass.type === 'Cost-Plus') {

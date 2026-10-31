@@ -21,13 +21,13 @@ function firstNonEmptyText(...values) {
   return values.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
 
-function parseOperationalRate(message, operation) {
+export function parseOperationalRate(message, operation) {
   const normalized = String(message || "").toLocaleLowerCase("es");
   const numberPattern = "(\\d{1,3}(?:[.,\\s]\\d{3})+|\\d+(?:[.,]\\d+)?)";
   const operationPattern = operation === "load" ? "carga" : "descarga";
   const expressions = [
+    new RegExp(`\\b(?:ritmos?\\s+de\\s+)?${operationPattern}\\b\\s*(?:de|a|:|=)?\\s*${numberPattern}`, "i"),
     new RegExp(`${numberPattern}\\s*(?:tm|mt|t|toneladas?)?(?:\\s*\\/\\s*d[ií]a)?\\s*(?:de\\s+)?${operationPattern}\\b`, "i"),
-    new RegExp(`\\b${operationPattern}\\b\\s*(?:de|a|:)?\\s*${numberPattern}`, "i"),
   ];
   for (const expression of expressions) {
     const match = normalized.match(expression);

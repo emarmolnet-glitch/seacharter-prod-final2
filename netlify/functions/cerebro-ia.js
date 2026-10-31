@@ -1,4 +1,5 @@
 import chatAssistant from "./chat-assistant.js";
+import { parseOperationalRate } from "./_shared/calculator-autofill-reasoning.mjs";
 
 export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
 
@@ -73,12 +74,31 @@ export function extractPromptText(bodyBuffer, contentType) {
         const text = typeof bodyBuffer === "string" ? bodyBuffer : new TextDecoder().decode(bodyBuffer);
         if (contentType?.includes("application/json")) {
             const parsed = JSON.parse(text);
-            return String(parsed.mensaje || parsed.UserContext || parsed.prompt || parsed.text || parsed.message || "");
+            return String(parsed.mensaje || parsed.mensajeUsuario || parsed.UserContext || parsed.prompt || parsed.text || parsed.message || "");
         }
         return text;
     } catch {
         return "";
     }
+}
+
+// Los ritmos explícitos tienen prioridad sobre defaults y estimaciones del backend.
+export function applyOperationalRateOverride(responseObj, promptText = "") {
+    const loadingRate = parseOperationalRate(promptText, "load");
+    const dischargeRate = parseOperationalRate(promptText, "discharge");
+    const targets = [responseObj, responseObj?.payload, responseObj?.data?.payload,
+        responseObj?.action, responseObj?.action?.payload, responseObj?.data,
+        responseObj?.parametros, responseObj?.data?.parametros];
+    for (const target of targets) {
+        if (!target || typeof target !== "object") continue;
+        if (loadingRate) {
+            for (const key of ["loadRate", "loadingRate", "loading_rate", "ratePOL", "ritmo_carga"]) target[key] = loadingRate;
+        }
+        if (dischargeRate) {
+            for (const key of ["dischRate", "dischargeRate", "discharge_rate", "ratePOD", "ritmo_descarga"]) target[key] = dischargeRate;
+        }
+    }
+    return responseObj;
 }
 
 export function applyPackagingOverride(responseObj, promptText = "") {
@@ -284,6 +304,7 @@ export default async function proxyRequest(request) {
         try {
             const parsed = JSON.parse(responseData);
             applyPackagingOverride(parsed, promptText);
+            applyOperationalRateOverride(parsed, promptText);
             finalResponseData = JSON.stringify(parsed);
         } catch {
             // Si la respuesta no es JSON válido, se devuelve intacta
@@ -310,6 +331,11 @@ export default async function proxyRequest(request) {
                         body: rawBody
                     }) : request);
                 const fallbackRes = await chatAssistant(targetReq);
+                if (fallbackRes.ok && fallbackRes.headers.get("content-type")?.includes("application/json")) {
+                    const parsed = await fallbackRes.json();
+                    applyOperationalRateOverride(parsed, promptText);
+                    return new Response(JSON.stringify(parsed), { status: fallbackRes.status, headers: fallbackRes.headers });
+                }
                 return fallbackRes;
             }
         } catch (localError) {

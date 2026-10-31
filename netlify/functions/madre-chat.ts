@@ -74,6 +74,7 @@ export async function handler(req: Request): Promise<Response> {
         `🎯 **Dictamen Final MADRE:** Los 10 bloques validan viabilidad comercial robusta. Se recomienda blindar la oferta con cláusula Reachable on Arrival y garantía de ritmo mínimo de 2.500 MT/d en muelle para salvaguardar el TCE proyectado.`;
       return new Response(JSON.stringify({
       success: true,
+      respuesta: reply,
       message: reply,
       text: reply,
       response: reply,
@@ -96,6 +97,7 @@ export async function handler(req: Request): Promise<Response> {
 
     return new Response(JSON.stringify({
       success: true,
+      respuesta: reply,
       reply,
       message: reply,
       text: reply,
