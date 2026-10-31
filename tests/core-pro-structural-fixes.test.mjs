@@ -55,3 +55,43 @@ test('scan sends local request with context and renders server reply without loc
   assert.doesNotMatch(request, /buildMotherExecutiveScript/);
   assert.match(request, /text: finalReply/);
 });
+
+test('grouped rates extract POL and POD separately without inventing a missing discharge rate', () => {
+  for (const phrase of [
+    'ritmos de carga 1500 y 2000',
+    'ritmos de carga y descarga: 1500 y 2000',
+    'ritmos de carga 1.500 y 2,000',
+    'ritmos de carga 1500 MT/día y descarga 2000',
+  ]) {
+    assert.equal(parseOperationalRate(phrase, 'load'), 1500, phrase);
+    assert.equal(parseOperationalRate(phrase, 'discharge'), 2000, phrase);
+  }
+  assert.equal(parseOperationalRate('ritmo de carga 1500', 'discharge'), 0);
+});
+
+test('assistant rates leave both ports in Auto and dispatch input/change even for unchanged values', () => {
+  const source = read('../src/voyage-draft-entry.js');
+  const start = source.indexOf('function applyAssistantOperationalRate(');
+  const end = source.indexOf('function injectVoyageScenario(', start);
+  const elements = new Map(['rate-load', 'rate-disch'].map(id => [id, {
+    value: '2000', readOnly: false, dataset: { manualOverride: 'true' },
+    events: [], dispatchEvent(event) { this.events.push(event); },
+  }]));
+  const calls = [];
+  const window = { State: { podCalcMode: 'manual' }, setRitmoMode(...args) { calls.push(args); } };
+  const applyRate = vm.runInNewContext(`(${source.slice(start, end).trim()})`, {
+    window, document: { getElementById: id => elements.get(id) }, Event,
+  });
+  for (const side of ['pol', 'pod']) {
+    assert.equal(applyRate(side, 2000), true);
+    const input = elements.get(side === 'pod' ? 'rate-disch' : 'rate-load');
+    assert.equal(input.value, '2000');
+    assert.equal(input.readOnly, true);
+    assert.equal(input.dataset.manualOverride, 'false');
+    assert.equal(window.State[`ritmoMode_${side}`], 'auto');
+    assert.deepEqual(input.events.map(event => [event.type, event.bubbles]), [['input', true], ['change', true]]);
+  }
+  assert.equal(window.State.podCalcMode, 'auto');
+  assert.equal(window.State.dischargeRate, 2000);
+  assert.deepEqual(calls.map(args => args.slice(0, 2)), [['auto', 'pol'], ['auto', 'pod']]);
+});

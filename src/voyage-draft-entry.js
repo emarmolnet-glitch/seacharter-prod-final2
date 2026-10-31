@@ -245,6 +245,36 @@ function applyManualOperationalRate(side, rate) {
     return true;
 }
 
+function applyAssistantOperationalRate(side, rate) {
+    if (!(Number(rate) > 0)) return false;
+    const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+    const input = document.getElementById(inputId);
+    if (!input) return false;
+    window.setRitmoMode?.('auto', side, { commit: true, deferCalculations: true });
+    window.State = window.State || {};
+    window.State[`ritmoMode_${side}`] = 'auto';
+    if (side === 'pod') {
+        window.State.podCalcMode = 'auto';
+        window.State.dischRate = Number(rate);
+        window.State.dischargeRate = Number(rate);
+    } else {
+        window.State.ritmoMode = 'auto';
+        window.State.loadRate = Number(rate);
+    }
+    window.section2LocalState = window.section2LocalState || {};
+    window.section2LocalState[`ritmoMode_${side}`] = 'auto';
+    window.section2LocalState[`manualInput_${inputId}`] = false;
+    window.section2LocalState[inputId] = String(rate);
+    input.value = String(rate);
+    input.readOnly = true;
+    input.dataset.manualOverride = 'false';
+    input.dataset.draftCalcMode = 'auto';
+    if (side === 'pod') input.dataset.podCalcMode = 'auto';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+}
+
 function injectVoyageScenario(incomingScenario = {}, options = {}) {
     incomingScenario = normalizeNlpVoyagePayload(incomingScenario);
     const previousDraft = voyageStore.getState().draft;
@@ -557,8 +587,8 @@ function applyAssistantCalculatorAutofill(payload = {}) {
         setSelectValue('metodo_descarga_pod', dischargeMethod);
         if (payload.laytimePOL) setSelectValue('laytime-load-condition', payload.laytimePOL);
         if (payload.laytimePOD) setSelectValue('laytime-disch-condition', payload.laytimePOD);
-        applyManualOperationalRate('pol', loadingRate);
-        applyManualOperationalRate('pod', dischargeRate);
+        applyAssistantOperationalRate('pol', loadingRate);
+        applyAssistantOperationalRate('pod', dischargeRate);
 
         const vesselBadge = document.getElementById('vessel-badge');
         if (vesselBadge) vesselBadge.textContent = vesselClass;
@@ -619,10 +649,10 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             laytimeDischCondition: payload.laytimePOD,
             ratePOL: loadingRate,
             ratePOD: dischargeRate,
-            ritmoMode: 'manual',
-            ritmoMode_pol: 'manual',
-            ritmoMode_pod: 'manual',
-            podCalcMode: 'manual',
+            ritmoMode: 'auto',
+            ritmoMode_pol: 'auto',
+            ritmoMode_pod: 'auto',
+            podCalcMode: 'auto',
         }, { force: true, source: 'assistant-calculator-autofill' });
     };
     if (typeof window.SeaCharterStore?.batch === 'function') {
@@ -656,8 +686,9 @@ function applyAssistantCalculatorAutofill(payload = {}) {
         hasTruckUpdates = true;
     });
     if (hasTruckUpdates) window.actualizarModuloCamionTolva?.({ rerun: false });
-    applyManualOperationalRate('pol', loadingRate);
-    applyManualOperationalRate('pod', dischargeRate);
+    applyAssistantOperationalRate('pol', loadingRate);
+    applyAssistantOperationalRate('pod', dischargeRate);
+    window.forceRefreshCalculations?.();
     window.recalcularDiasPuerto?.();
     window.runEngine?.();
     // The total is an <output>; retain Cerebro's exact value after dependent calculations.
