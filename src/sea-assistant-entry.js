@@ -1026,14 +1026,14 @@ async function executeActionableAiUpdateFields(actionObj) {
                 elements.forEach((input) => {
                     if (input.id === "rate-load" || input.id === "rate-disch") {
                         const side = input.id === "rate-disch" ? "pod" : "pol";
-                        window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
-                        input.readOnly = false;
+                        window.setRitmoMode?.("auto", side, { commit: true, deferCalculations: true });
+                        input.readOnly = true;
                         input.disabled = false;
-                        input.removeAttribute("readonly");
+                        input.setAttribute("readonly", "readonly");
                         input.removeAttribute("disabled");
-                        input.dataset.manualOverride = "true";
-                        input.dataset.draftCalcMode = "manual";
-                        if (side === "pod") input.dataset.podCalcMode = "manual";
+                        input.dataset.manualOverride = "false";
+                        input.dataset.draftCalcMode = "auto";
+                        if (side === "pod") input.dataset.podCalcMode = "auto";
                     }
 
                     if (input.tagName === 'SELECT') {
@@ -1081,8 +1081,11 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
         updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
         updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
-        updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
+        updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate ?? p.loadRate);
         updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
+        if (Number(p.loadingRate ?? p.loadRate) > 0 || Number(p.dischargeRate) > 0) {
+            window.forceRefreshCalculations?.();
+        }
 
         // 1b. PROJECT CARGO ENGINE & VOLUMETRIC HYDRATION
         const rawProjectCargo = p.projectCargo || p.project_cargo || p.payload?.projectCargo || {};
@@ -1100,13 +1103,6 @@ async function executeActionableAiUpdateFields(actionObj) {
             updateInputs(["project-height"], height);
             if (handlingMode) updateInputs(["project-handling-mode"], handlingMode);
         }
-
-        // Forzar modo MANUAL en ritmos
-        document.querySelectorAll('button, span, label, div').forEach(el => {
-            const txt = el.textContent.trim().toLowerCase();
-            if (txt === 'manual' || txt === 'auto / manual') el.click();
-        });
-        document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, #btn-rate-disch-manual, .rate-mode-manual, button[id*="manual"]')?.forEach(btn => btn.click());
 
         const isMapView = getActiveModuleDescriptor().id === 'map';
         const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);

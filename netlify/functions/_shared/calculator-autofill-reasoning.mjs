@@ -25,13 +25,17 @@ export function parseOperationalRate(message, operation) {
   const normalized = String(message || "").toLocaleLowerCase("es");
   const numberPattern = "(\\d{1,3}(?:[.,\\s]\\d{3})+|\\d+(?:[.,]\\d+)?)";
   const operationPattern = operation === "load" ? "carga" : "descarga";
+  // A single loading label may introduce the ordered POL/POD pair.
+  const grouped = normalized.match(new RegExp(
+    `\\britmos?\\s+de\\s+carga(?:\\s+y\\s+descarga)?\\b\\s*(?:de|a|:|=)?\\s*${numberPattern}\\s*(?:tm|mt|t|toneladas?)?(?:\\s*\\/\\s*d[ií]a)?\\s+y\\s+(?:descarga\\s*)?${numberPattern}(?![\\d.,])`,
+    "i",
+  ));
+  const groupedValue = grouped?.[operation === "load" ? 1 : 2];
   const expressions = [
     new RegExp(`\\b(?:ritmos?\\s+de\\s+)?${operationPattern}\\b\\s*(?:de|a|:|=)?\\s*${numberPattern}`, "i"),
     new RegExp(`${numberPattern}\\s*(?:tm|mt|t|toneladas?)?(?:\\s*\\/\\s*d[ií]a)?\\s*(?:de\\s+)?${operationPattern}\\b`, "i"),
   ];
-  for (const expression of expressions) {
-    const match = normalized.match(expression);
-    const rawValue = match?.[1];
+  for (const rawValue of [groupedValue, ...expressions.map(expression => normalized.match(expression)?.[1])]) {
     if (!rawValue) continue;
     const compact = rawValue.replace(/\s/g, "");
     const normalizedNumber = /^[0-9]{1,3}([.,][0-9]{3})+$/.test(compact)
