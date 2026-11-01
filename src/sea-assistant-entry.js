@@ -1,3 +1,4 @@
+import { parseCalculatorInputCommand } from "../shared/calculator-input-command.mjs";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
@@ -579,6 +580,17 @@ function getActiveAssistantEndpoint() {
 }
 
 async function requestAssistantResponse(userText, historyElement, signal, attachedFiles = []) {
+  const localUpdates = attachedFiles.length === 0 ? parseCalculatorInputCommand(userText) : null;
+  if (localUpdates) {
+    // Resolve assignments before simulation keywords, agent switching or network calls.
+    const missingField = localUpdates.find((action) => !findActionableAiField(action.field));
+    if (missingField) {
+      return { local: true, respuesta: "No encuentro ese input de la calculadora. Abre la calculadora e inténtalo de nuevo." };
+    }
+    for (const action of localUpdates) executeActionableAiUpdate(action);
+    return { local: true, respuesta: `Valores actualizados en la calculadora: ${localUpdates.map((action) => action.value).join(", ")}.` };
+  }
+
   const historial = collectConversationHistory(historyElement);
   const uiLanguage = getUILanguage();
   
@@ -2569,7 +2581,7 @@ const fileInput = root.querySelector("#sca-file-input");
     console.group("📨 [Cerebro.ia/Chat] Procesando respuesta normalizada");
     try {
       const response = await requestAssistantResponse(userText, history, controller.signal, filesToSend);
-      const wasCerebro = (iaActiva === 'cerebro');
+      const wasCerebro = !response.local && (iaActiva === 'cerebro');
       console.log("Respuesta recibida por el submit:", response);
 
       const actionableResponse = extractActionableAiResponse(response.respuesta);

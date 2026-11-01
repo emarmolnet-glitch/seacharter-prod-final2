@@ -48,13 +48,15 @@ test('informational questions can interrupt an active simulation without consumi
   );
 });
 
-test('frontend sends every message directly without local intent routing', () => {
+test('frontend intercepts calculator assignments before delegating other messages', () => {
   assert.doesNotMatch(frontendSource, /classifyChatIntent/);
   assert.doesNotMatch(frontendSource, /CHAT_INTENTS\.SIMULATION/);
   assert.doesNotMatch(frontendSource, /hasSimulationRouteAndVolume/);
   assert.doesNotMatch(frontendSource, /hasOperationalSimulationUpdate/);
   assert.doesNotMatch(frontendSource, /wizardStatus|wizardStep|nlpChecklistStep/);
-  assert.match(frontendSource, /await requestAssistantResponse\(userText, history, controller\.signal\)/);
+  assert.match(frontendSource, /parseCalculatorInputCommand\(userText\)/);
+  assert.ok(frontendSource.indexOf('const localUpdates =') < frontendSource.indexOf('const historial = collectConversationHistory'));
+  assert.match(frontendSource, /await requestAssistantResponse\(userText, history, controller\.signal, filesToSend\)/);
 });
 
 test('backend gates extraction actions and instructs the model not to demand calculator data', () => {
