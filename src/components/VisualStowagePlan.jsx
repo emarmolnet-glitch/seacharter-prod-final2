@@ -9,6 +9,7 @@ import React from 'react';
  */
 export function resolveVesselProfile(vesselType = '', title = '') {
   const text = `${vesselType} ${title}`.toLowerCase();
+  if (/cement|pneumatic|neum[aá]tic/.test(text)) return 'PNEUMATIC';
   if (text.includes('ro-ro') || text.includes('roro') || text.includes('ro-lo') || text.includes('rolo') || text.includes('vehicle') || text.includes('car carrier')) {
     return 'RORO';
   }
@@ -156,7 +157,9 @@ export function VisualStowagePlan({
 
   const gm = Number(hydro.metacentricHeightGmEstimatedM || 1.55);
 
-  const profileBadgeLabel = profile === 'COASTER'
+  const profileBadgeLabel = profile === 'PNEUMATIC'
+    ? 'PNEUMATIC CEMENT CARRIER (SEALED HOLDS)'
+    : profile === 'COASTER'
     ? 'COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · GEARLESS)'
     : profile === 'RORO'
     ? 'RO-RO / RO-LO CARRIER (CUBIERTAS CORRIDAS & RAMPA POPA)'
@@ -206,8 +209,12 @@ export function VisualStowagePlan({
       </div>
 
       {/* Silueta Lateral Esquemática 2D en Modo Claro (Gráfico Vectorial SVG) */}
-      <div className="relative w-full overflow-hidden rounded-lg bg-gray-100 border border-gray-400 p-2 sm:p-3 my-2 shadow-inner">
+      <div className="vessel-schematic-frame rounded-lg bg-gray-100 border border-gray-400 my-2" style={{ display: 'block', position: 'relative', width: '100%', padding: 0, boxSizing: 'border-box' }}>
         <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="1000"
+          height="320"
+          style={{ display: 'block', width: '100%', height: 'auto' }}
           viewBox="0 0 1000 320"
           className="w-full h-auto select-none"
           preserveAspectRatio="xMidYMid meet"
@@ -335,7 +342,7 @@ export function VisualStowagePlan({
           {/* En perfil COASTER se eliminan (gearless o grúas ligeras) */}
           {/* En perfil RORO se omiten (operativa rodada con rampa)    */}
           {/* ======================================================== */}
-          {profile === 'HANDYSIZE' && (
+          {profile === 'HANDYSIZE' && !/cement|pneumatic|neum[aá]tic/i.test(vesselType) && (
             <g id="deck-cranes" stroke="#64748b" opacity="0.95">
               <rect x="305" y="90" width="16" height="30" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" />
               <circle cx="313" cy="90" r="5" fill="#475569" />
@@ -666,7 +673,7 @@ export function VisualStowagePlan({
       </div>
 
       {/* Leyenda y Resumen Rápido de Compartimentos */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[10px] font-mono text-gray-700 mt-3 pt-3 border-t border-slate-200">
+      <div data-stowage-legend data-html2canvas-ignore="true" className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[10px] font-mono text-gray-700 mt-3 pt-3 border-t border-slate-200 print:hidden">
         <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded border border-slate-200">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-600 border border-blue-700 shrink-0" />
           <span className="truncate font-semibold">Cargada (&gt;0 MT)</span>

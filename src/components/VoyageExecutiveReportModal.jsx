@@ -1,3 +1,4 @@
+import { resolveReportVessel } from '../report-vessel.mjs';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import VisualStowagePlan, { resolveVesselProfile, MemoizedVisualStowagePlan } from './VisualStowagePlan.jsx';
 import { buildVoyageStowagePlan } from '../voyage-stowage-builder.mjs';
@@ -24,10 +25,11 @@ export default function VoyageExecutiveReportModal({
   const winState = typeof window !== 'undefined' ? window.State || {} : {};
   const data = voyageData || winState || {};
 
-  const vesselName = data.vessel || data.vesselName || 'TBN (To Be Named)';
+  const reportVessel = resolveReportVessel(data);
+  const vesselName = reportVessel.name;
   const vesselClass = data.class || data.shipClass || data.vesselClass || 'Handysize';
   const shipProfile = data.shipProfile || data.ship_profile || data.designCategory || data.categoriaDiseno || '';
-  const dwt = Number(data.dwt || data.vesselDwt || 32000);
+  const dwt = reportVessel.dwt;
   const cargoTons = Number(data.cargo || data.cargoQty || 25000);
   const cargoType = data.cargoType || 'Granel Sólido (Dry Bulk)';
   const pol = data.pol || 'Puerto de Carga (POL)';
@@ -57,8 +59,8 @@ export default function VoyageExecutiveReportModal({
   const totalSaleAmount = freightSell * cargoTons;
 
   // Resolver vesselType exacto (ej. Coaster, Minibulker, Handysize, Ro-Ro, Ro-Lo)
-  const resolvedVesselType = data.vesselType || shipProfile || (data.vessel ? `${data.vessel} (${vesselClass})` : `${vesselClass} ${dwt > 0 ? `${dwt.toLocaleString('en-US')} DWT` : ''}`.trim());
-  const vesselDescription = resolvedVesselType;
+  const resolvedVesselType = reportVessel.type;
+  const vesselDescription = reportVessel.description;
 
   // Memoizar el plan de estiba para evitar re-cálculos o desmontajes innecesarios al alternar isClientMode
   const stowagePlan = useMemo(() => {

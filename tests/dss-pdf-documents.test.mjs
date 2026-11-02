@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { resolveReportVessel } from '../src/report-vessel.mjs';
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -23,7 +24,7 @@ test('DSS PDF generation functions are defined and exposed on window in index.ht
   assert.match(indexHtml, /function generateAuditPDF\(\)/, 'generateAuditPDF function must be defined');
   assert.match(indexHtml, /window\.generateAuditPDF = generateAuditPDF;/, 'generateAuditPDF must be exported on window');
 
-  assert.match(indexHtml, /function generateFixtureRecapPDF\(\)/, 'generateFixtureRecapPDF function must be defined');
+  assert.match(indexHtml, /function generateFixtureRecapPDF\(options = \{\}\)/, 'generateFixtureRecapPDF function must be defined');
   assert.match(indexHtml, /window\.generateFixtureRecapPDF = generateFixtureRecapPDF;/, 'generateFixtureRecapPDF must be exported on window');
 
   assert.match(indexHtml, /function buildAuditHTMLTemplate\(state\)/, 'buildAuditHTMLTemplate function must be defined');
@@ -293,4 +294,45 @@ test('jsPDF fallback applies pneumatic equipment and rates without crane clauses
   assert.match(text, /5,184 MT/);
   assert.match(text, /AIR PRESSURE AND AIRTIGHT HOSES/);
   assert.doesNotMatch(text, /cranes?|grabs?|SWL|Geared|2,000/i);
+});
+
+test('Option B appends the executive snapshot with MADRE freight and preserves ordinary recap export', async () => {
+  const start = indexHtml.indexOf('async function generateFixtureRecapPDF(options');
+  const end = indexHtml.indexOf('window.generateFixtureRecapPDF =', start);
+  const source = indexHtml.slice(start, end);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  let output;
+  let snapshot;
+  const base = { cargoQty: 1000, fleteUnitario: 35, allInRateGross: 35 };
+  const state = { netProfitOwner: 7654, freightSell: 35 };
+  const win = {
+    dssFormState: { ...base, loadRate: 5000 },
+    dssInjectedRecapFreight: 48.70,
+    buildFixtureExecutiveReportHTML: voyage => {
+      snapshot = voyage;
+      return '<section>EXECUTIVE</section>';
+    }
+  };
+  const run = new AsyncFunction('resolveFixtureRecapOperations', 'window', 'State', 'getDSSCurrentState', 'ensurePdfLibrariesLoaded', 'buildFixtureRecapHTMLTemplate', 'html2pdf', 'options',
+    `${source}; await generateFixtureRecapPDF(options);`);
+  const worker = { from(html) { output = html; return this; }, set() { return this; }, async save() {} };
+  await run(() => ({ isPneumatic: true, vesselType: 'Pneumatic Cement Carrier' }), win, state, () => base, async () => {}, () => '<main>COMMERCIAL</main>', () => worker, { includeExecutiveReport: true });
+  assert.equal(snapshot.freightSell, 48.70);
+  assert.equal(snapshot.vesselType, 'Pneumatic Cement Carrier');
+  assert.equal(snapshot.netProfitOwner, 7654);
+  assert.equal(snapshot.cargo, 1000);
+  assert.ok(output.indexOf('COMMERCIAL') < output.indexOf('EXECUTIVE'));
+  assert.equal(base.fleteUnitario, 35);
+  assert.equal(state.freightSell, 35);
+  await run(() => ({ isPneumatic: true, vesselType: 'Pneumatic Cement Carrier' }), win, state, () => base, async () => {}, () => '<main>COMMERCIAL</main>', () => worker, {});
+  assert.equal(output, '<main>COMMERCIAL</main>');
+});
+
+
+test('executive vessel binding supports policy objects and removes the generic cement-carrier name', () => {
+  assert.equal(resolveReportVessel({ vesselName: 'MV GEARED BULKER', vesselType: 'Pneumatic Cement Carrier', dwt: 28750 }).description,
+    'MV TBN - Pneumatic Cement Carrier (28,750 DWT)');
+  const vessel = { name: 'MV Real Vessel', type: 'Pneumatic Cement Carrier', dwt: 28750 };
+  assert.equal(resolveReportVessel({ vessel, vesselName: 'MV GEARED BULKER', dwt: 32000 }).description,
+    'MV Real Vessel - Pneumatic Cement Carrier (28,750 DWT)');
 });
