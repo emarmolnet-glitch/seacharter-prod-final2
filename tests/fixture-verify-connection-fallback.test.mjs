@@ -16,7 +16,7 @@ function setup(fetch) {
     state: Object.freeze({ pol: 'Bilbao', pod: 'Lima' }),
     html: '<p>Approved fixture</p>', executiveHTML: '<p>Approved strategy</p>'
   });
-  const window = { fetch, State: { fixtureRecapSnapshot: snapshot } };
+  const window = { printFixtureRecap: value => exports.push(value), fetch, State: { fixtureRecapSnapshot: snapshot } };
   const context = vm.createContext({
     window, AbortController,
     document: { getElementById: () => null },
@@ -31,7 +31,6 @@ function setup(fetch) {
     clearTimeout: () => { cleared = true; },
     ensurePdfLibrariesLoaded: async () => {},
     getDSSCurrentState: () => { throw new Error('Must use frozen snapshot'); },
-    exportFixtureRecapInFrame: async value => { exports.push(value); },
     console: { error: (...args) => { throw new Error(`Unexpected PDF failure: ${args[0]}`); } }
   });
   vm.runInContext(html.slice(start, end) + html.slice(pdfStart, pdfEnd), context);

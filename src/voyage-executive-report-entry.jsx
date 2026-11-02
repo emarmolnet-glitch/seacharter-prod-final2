@@ -2,7 +2,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { resolveReportVessel } from './report-vessel.mjs';
-import { prepareExecutivePDF } from './executive-pdf-render.mjs';
 import { translateExecutivePDF } from './executive-pdf-english.mjs';
 import VisualStowagePlan from './components/VisualStowagePlan.jsx';
 import VoyageExecutiveReportModal, { buildVoyageStowagePlan } from './components/VoyageExecutiveReportModal.jsx';
@@ -91,7 +90,6 @@ export async function buildFixtureExecutiveReportHTML(state) {
   report.querySelectorAll('.no-print, button').forEach(node => node.remove());
   report.querySelectorAll('*').forEach(node => { if (node.classList.contains('print:hidden')) node.remove(); });
   translateExecutivePDF(report);
-  await prepareExecutivePDF(report);
   report.style.cssText = 'width:100%;max-width:none;border:0;border-radius:0;box-shadow:none;background:white';
   const section = document.createElement('section');
   section.lang = 'en';

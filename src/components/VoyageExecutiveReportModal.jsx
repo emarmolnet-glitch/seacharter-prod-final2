@@ -16,6 +16,7 @@ export default function VoyageExecutiveReportModal({
   onClose = () => {},
   voyageData = null,
   initialClientMode = false,
+  textOnly = false,
 }) {
   const [isClientMode, setIsClientMode] = useState(initialClientMode);
   const [printPending, setPrintPending] = useState(false);
@@ -352,7 +353,7 @@ export default function VoyageExecutiveReportModal({
               <div className="flex items-center gap-2">
                 <span className="text-blue-600 text-sm">📐</span>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                  CROQUIS NAVAL Y PLANO DE ESTIBA MATRICIAL
+                  {textOnly ? 'STOWAGE ALLOCATION AND TECHNICAL VALIDATION' : 'CROQUIS NAVAL Y PLANO DE ESTIBA MATRICIAL'}
                 </h4>
               </div>
               <span className="text-[10px] font-mono font-bold text-slate-600">
@@ -361,6 +362,7 @@ export default function VoyageExecutiveReportModal({
             </div>
 
             <VisualStowagePlan
+              textOnly={textOnly}
               stowagePlan={stowagePlan}
               vesselType={resolvedVesselType}
               projectRef={estId}
