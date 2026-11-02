@@ -1,3 +1,4 @@
+import '../fixture-operating-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -28,7 +29,7 @@ test('VisualStowagePlan Dynamic - 1. resolveVesselProfile detecta perfiles naval
   assert.equal(resolveVesselProfile('Handysize Bulk Carrier'), 'HANDYSIZE');
   assert.equal(resolveVesselProfile('Multi-Purpose MPP / Handysize Bulker'), 'HANDYSIZE');
   assert.equal(resolveVesselProfile('Geared Breakbulk (Lo-Lo)'), 'HANDYSIZE');
-  assert.equal(resolveVesselProfile('Supramax Bulk Carrier'), 'HANDYSIZE');
+  assert.equal(resolveVesselProfile('Supramax Bulk Carrier'), 'SUPRAMAX');
 });
 
 test('VisualStowagePlan Dynamic - 2. Renderizado condicional de arquitectura naval por perfil', () => {

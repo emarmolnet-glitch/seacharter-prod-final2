@@ -1,8 +1,6 @@
-/** Cryptographic references avoid the collision-prone four-digit namespace. */
+/** Commercial references are allocated by the persistent annual counter. */
 export function generateRandomProjectRef() {
-  const uuid = globalThis.crypto.randomUUID().toUpperCase();
-  return `RDM/${new Date().getUTCFullYear()}-${uuid}`;
+  return globalThis.FixtureReferenceService?.create() || '';
 }
-
 export const generateNewProjectRef = generateRandomProjectRef;
 export default generateRandomProjectRef;

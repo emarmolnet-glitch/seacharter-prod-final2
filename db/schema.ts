@@ -448,3 +448,13 @@ export const multimodalOperations = pgTable("multimodal_operations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+
+// Atomic annual allocation and stable aliases for commercial fixture references.
+export const fixtureReferenceCounters = pgTable('fixture_reference_counters', {
+  year: integer('year').primaryKey(),
+  lastNumber: integer('last_number').notNull(),
+});
+export const fixtureReferenceAliases = pgTable('fixture_reference_aliases', {
+  legacyId: text('legacy_id').primaryKey(),
+  reference: text('reference').notNull().unique(),
+});

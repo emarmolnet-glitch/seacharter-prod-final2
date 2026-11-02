@@ -1,3 +1,4 @@
+import '../fixture-operating-profile.js';
 import test from 'node:test';
 import fs from 'node:fs';
 import puppeteer from 'puppeteer-core';

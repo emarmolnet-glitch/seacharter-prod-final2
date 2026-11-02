@@ -14,7 +14,7 @@ for (const file of ['index.html', 'decisiones.html', 'src/DecisionSupportModule.
     const snapshot = { state: { allInRateGross: 48.7 }, html: 'approved' };
     let resolveCapture;
     const captured = new Promise(resolve => { resolveCapture = resolve; });
-    const window = { State: {}, dssBaseActualState: {}, dssFormState: {},
+    const window = { State: { loadRate: 5000, dischargeRate: 2000 }, dssBaseActualState: {}, dssFormState: {},
       madreUltimaAuditoria: { modificaciones_recap: { allInRateGross: 48.7, loadRate: 5000, dischargeRate: 2000 } },
       captureFixtureFinancialSnapshot: async state => { approved = state; captures++; await captured; if (fail) throw new Error('Save failed'); return snapshot; },
       sincronizarFormularioDesdeEstado() { steps.push('sync'); },

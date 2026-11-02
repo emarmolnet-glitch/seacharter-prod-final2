@@ -9,14 +9,19 @@ const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8'
 const dossiersSource = readFileSync(new URL('../dossiers.js', import.meta.url), 'utf8');
 const contractRefSource = readFileSync(new URL('../contract-reference.js', import.meta.url), 'utf8');
 
-test('1. Generador canónico con año actual y UUID', async () => {
+test('1. Generador canónico delegado al contador persistente', async () => {
   const { generateRandomProjectRef } = await import('../src/utils/projectRef.mjs');
   assert.equal(typeof generateRandomProjectRef, 'function', 'generateRandomProjectRef must be an exported function');
 
-  const refs = new Set(Array.from({ length: 1000 }, () => generateRandomProjectRef()));
-  assert.equal(refs.size, 1000);
-  for (const ref of refs) assert.match(ref, new RegExp(`^RDM/${new Date().getUTCFullYear()}-[0-9A-F-]{36}$`));
-  assert.match(projectRefSource, /crypto.randomUUID/);
+  let next = 1;
+  globalThis.FixtureReferenceService = { create: () => `RDM/2026-${String(next++).padStart(4, '0')}` };
+  try {
+    const refs = new Set(Array.from({ length: 1000 }, () => generateRandomProjectRef()));
+    assert.equal(refs.size, 1000);
+    for (const ref of refs) assert.match(ref, /^RDM\/2026-\d{4}$/);
+  } finally { delete globalThis.FixtureReferenceService; }
+  assert.match(projectRefSource, /FixtureReferenceService/);
+  assert.doesNotMatch(projectRefSource, /crypto.randomUUID/);
   assert.match(projectContextSource, /generateRandomProjectRef/);
   assert.match(appSource, /generateRandomProjectRef/);
   assert.match(contractRefSource, /generateRandomProjectRef/);

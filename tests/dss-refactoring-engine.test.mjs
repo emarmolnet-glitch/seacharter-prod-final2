@@ -1,7 +1,11 @@
+import '../fixture-operating-profile.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+const fixtureHelpers = readFileSync(new URL('../public/fixture-financial-snapshot.js', import.meta.url), 'utf8');
+// Keep the selected estimation fixture aligned with its form; the reader no longer scrapes DOM fallbacks.
+const currentEstimation = inputs => Object.fromEntries(Object.entries(inputs).filter(([key]) => key.startsWith('input-')).map(([key, value]) => [key.slice(6), value !== '' && Number.isFinite(Number(value)) ? Number(value) : value]));
 const indexDocument = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const decisionSupportModule = readFileSync(new URL('../src/DecisionSupportModule.js', import.meta.url), 'utf8');
 const indexHtml = `${indexDocument}\n${decisionSupportModule}`;
@@ -57,11 +61,13 @@ test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutatio
   };
 
   const fakeWindow = {};
+  if (typeof domState !== 'undefined') fakeWindow.State = { ...currentEstimation(domState), ...fakeWindow.State };
   globalThis.window = fakeWindow;
 
   const evalContext = new Function(
     'document',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     cargarEscenario('riesgo');
     return document;
@@ -131,12 +137,14 @@ test('PARTE 2: Mathematical formulas (Unit vs Total Freight, Derived Port Days) 
   };
 
   const fakeWindow = {};
+  if (typeof domState !== 'undefined') fakeWindow.State = { ...currentEstimation(domState), ...fakeWindow.State };
   globalThis.window = fakeWindow;
 
   const evalFn = new Function(
     'document',
     'state',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     generarAuditoriaOperativa(state);
     return document;
@@ -201,12 +209,14 @@ test('PARTE 3: Commercial Recommendation Engine uses strict chartering catalogs 
   };
 
   const fakeWindow = {};
+  if (typeof domState !== 'undefined') fakeWindow.State = { ...currentEstimation(domState), ...fakeWindow.State };
   globalThis.window = fakeWindow;
 
   const evalFn = new Function(
     'document',
     'state',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     generarAuditoriaOperativa(state);
     return document.getElementById('contenedor-recomendaciones');
@@ -283,6 +293,7 @@ test('PARTE 4: Isolated dssSimulationState, local cancellingDate rendering, and 
   const fakeWin = {
     State: globalState
   };
+  fakeWin.State = Object.assign(fakeWin.State || {}, currentEstimation(domState));
   globalThis.window = fakeWin;
   globalThis.State = globalState;
 
@@ -291,6 +302,7 @@ test('PARTE 4: Isolated dssSimulationState, local cancellingDate rendering, and 
     'window',
     'State',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     window.dssSimulationState = dssSimulationState;
     window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
@@ -382,6 +394,7 @@ test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/
   const fakeWin = {
     State: globalState
   };
+  fakeWin.State = Object.assign(fakeWin.State || {}, currentEstimation(domState));
   globalThis.window = fakeWin;
   globalThis.State = globalState;
 
@@ -390,6 +403,7 @@ test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/
     'window',
     'State',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     window.dssSimulationState = dssSimulationState;
     window.dssFormState = dssFormState;
@@ -469,6 +483,7 @@ test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchroniza
     removeEventListener: () => {},
     State: { cancellingDate: '2026-08-09' }
   };
+  fakeWin.State = Object.assign(fakeWin.State || {}, currentEstimation(domState));
   globalThis.window = fakeWin;
 
   const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
@@ -479,6 +494,7 @@ test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchroniza
     'document',
     'window',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     actualizarDesdeFormulario();
     `
@@ -583,12 +599,14 @@ test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Co
     removeEventListener: () => {},
     State: { cancellingDate: '2026-08-20' }
   };
+  fakeWin.State = Object.assign(fakeWin.State || {}, currentEstimation(domState));
   globalThis.window = fakeWin;
 
   const evalContext = new Function(
     'document',
     'window',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     window.cargarEscenario = cargarEscenario;
     window.limpiarDssSimulationState = limpiarDssSimulationState;
@@ -657,6 +675,7 @@ test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Co
     removeEventListener: () => {},
     State: { cancellingDate: new Date('2026-08-09T00:00:00Z') }
   };
+  fakeWin.State = Object.assign(fakeWin.State || {}, currentEstimation(domState));
   globalThis.window = fakeWin;
 
   const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
@@ -667,6 +686,7 @@ test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Co
     'document',
     'window',
     `
+    ${fixtureHelpers}
     ${helpersCode}
     window.generarAuditoriaOperativa = generarAuditoriaOperativa;
     window.cargarEscenario = cargarEscenario;

@@ -1,3 +1,4 @@
+import '../fixture-operating-profile.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -53,7 +54,7 @@ test('buildAuditHTMLTemplate generates complete corporate risk audit document', 
     seaDays: 8,
     fleteEstimado: 250000,
     breakEven: 210000,
-    vesselName: 'MV GEARED BULKER'
+    vesselName: 'MV GEARED BULKER', vesselType: 'Geared Bulker'
   };
 
   const html = evalFn(mockState);
@@ -64,8 +65,8 @@ test('buildAuditHTMLTemplate generates complete corporate risk audit document', 
 
   // Section 1: Inconsistencia Operativa
   assert.match(html, /ANÁLISIS DE INCONSISTENCIA OPERATIVA Y CAPACIDAD MECÁNICA DEL BUQUE/, 'Section 1 header');
-  assert.match(html, /2\.000 MT\/día/, 'Section 1 must reference Geared 2,000 MT/day limitation');
-  assert.match(html, /5\.000 MT\/día/, 'Section 1 must reference 5,000 MT/day demand');
+  assert.doesNotMatch(html, /2\.000 MT\/día/, 'No invented mechanical limit');
+  assert.match(html, /TBA MT\/día/, 'Missing rate requires agreement');
 
   // Section 2: Riesgo de Puerto
   assert.match(html, /MATRIZ DINÁMICA DE RIESGO DE PUERTO Y ALERTAS OPERATIVAS/, 'Section 2 header');
@@ -74,7 +75,7 @@ test('buildAuditHTMLTemplate generates complete corporate risk audit document', 
 
   // Section 3: Lógica DSS Triggers
   assert.match(html, /DOCUMENTACIÓN DE TRIGGERS Y REGLAS ALGORÍTMICAS ACTIVADAS/, 'Section 3 header');
-  assert.match(html, /Exigencia Cláusula FIOS/, 'Trigger 1 FIO clause');
+  assert.match(html, /Términos NO ESPECIFICADOS/, 'Contractual terms must remain explicit');
   assert.match(html, /Ajuste \/ Recargo de Flete/, 'Trigger 2 Freight Surcharge');
   assert.match(html, /Demurrage Disuasorio/, 'Trigger 3 Demurrage Protection');
 
@@ -92,7 +93,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.notEqual(endIdx, -1, 'buildFixtureRecapHTMLTemplate function end marker must be present');
 
   const fnSource = indexHtml.slice(startIdx, endIdx);
-  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
+  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
 
   const mockState = {
     pol: 'Rotterdam',
@@ -106,7 +107,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
     seaDays: 8,
     fleteEstimado: 250000,
     breakEven: 210000,
-    vesselName: 'MV GEARED BULKER'
+    vesselName: 'MV GEARED BULKER', vesselType: 'Geared Bulker'
   };
 
   const html = evalFn(mockState);
@@ -120,7 +121,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.match(text, /1\. MAIN TERMS/, 'Section 1 header');
   assert.match(text, /ACCT\s*:\s*CHARTERERS ACCOUNT/, 'ACCT term');
   assert.match(text, /OWNERS\s*:\s*RODAHMAR SHIPPING SL \(AS DISPONENT OWNERS\)/, 'OWNERS as Disponent Owners');
-  assert.match(text, /VESSEL\s*:\s*MV GEARED BULKER - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Geared Vessel term with DWT');
+  assert.match(text, /VESSEL\s*:\s*MV GEARED BULKER - ABT 50,000 MT DWT GEARED OPERATIONS WITH/, 'Geared Vessel term with DWT');
   assert.match(text, /CARGO\s*:\s*50,000 METRIC TONS/, 'Cargo quantity and commodity');
   assert.match(text, /POL\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT ROTTERDAM/, 'POL term');
   assert.match(text, /POD\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT HOUSTON/, 'POD term');
@@ -133,7 +134,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   // 3. LAYTIME & OPERATIONS
   assert.match(text, /3\. LAYTIME & OPERATIONS/, 'Section 3 header');
   assert.match(text, /LOADING RATE\s*:\s*5,000 METRIC TONS PER WEATHER WORKING DAY/, 'Load rate');
-  assert.match(text, /DISDISCH RATE\s*:\s*MECHANICALLY LIMITED TO ~2,000 METRIC TONS/, 'Discharge rate limited to ~2,000 MT WWD SHINC');
+  assert.match(text, /DISDISCH RATE\s*:\s*TBA METRIC TONS/, 'Missing discharge rate remains TBA');
   assert.match(text, /DEMURRAGE\s*:\s*USD 15,000 PER DAY/, 'Demurrage protection rate');
 
   // 4. SPECIAL CLAUSES
@@ -147,7 +148,7 @@ test('buildFixtureRecapHTMLTemplate renders label-value pairs without a standalo
   const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   const fnSource = indexHtml.slice(startIdx, endIdx);
-  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
+  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
 
   const html = evalFn({ pol: 'Rotterdam', pod: 'Houston', cargoQty: 50000, loadRate: 5000 });
   const markup = html.replace(/<style[\s\S]*?<\/style>/, '');
@@ -173,19 +174,19 @@ test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousa
   const startIdx = indexHtml.indexOf('function resolveFixtureRecapOperations(');
   const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
   const fnSource = indexHtml.slice(startIdx, endIdx);
-  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
+  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
 
   // 1. Dynamic vessel name and formatted DWT
-  const htmlCustom = evalFn({ vesselName: 'MV OCEAN TRADER', dwt: 11500, cargoQty: 10000 });
-  assert.match(plainText(htmlCustom), /VESSEL\s*:\s*MV OCEAN TRADER - ABT 11,500 MT DWT FULLY GEARED WITH/, 'Captures real vessel name and formatted DWT with thousands separator');
+  const htmlCustom = evalFn({ vesselType: 'Geared Bulker', vesselName: 'MV OCEAN TRADER', dwt: 11500, cargoQty: 10000 });
+  assert.match(plainText(htmlCustom), /VESSEL\s*:\s*MV OCEAN TRADER - ABT 11,500 MT DWT GEARED OPERATIONS WITH/, 'Captures real vessel name and formatted DWT with thousands separator');
 
   // 2. Fallback to MV TBN when vessel name is empty
-  const htmlBlank = evalFn({ vesselName: '   ', dwt: 25000 });
-  assert.match(plainText(htmlBlank), /VESSEL\s*:\s*MV TBN - ABT 25,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vessel name is blank');
+  const htmlBlank = evalFn({ vesselType: 'Geared Bulker', vesselName: '   ', dwt: 25000 });
+  assert.match(plainText(htmlBlank), /VESSEL\s*:\s*MV TBN - ABT 25,000 MT DWT GEARED OPERATIONS WITH/, 'Falls back to MV TBN when vessel name is blank');
 
   // 3. Fallback when vesselName is undefined
-  const htmlUndefined = evalFn({ dwt: 50000 });
-  assert.match(plainText(htmlUndefined), /VESSEL\s*:\s*MV TBN - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vesselName is missing');
+  const htmlUndefined = evalFn({ vesselType: 'Geared Bulker', dwt: 50000 });
+  assert.match(plainText(htmlUndefined), /VESSEL\s*:\s*MV TBN - ABT 50,000 MT DWT GEARED OPERATIONS WITH/, 'Falls back to MV TBN when vesselName is missing');
 });
 
 test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined and incomplete state properties safely without throwing TypeError', () => {
@@ -199,11 +200,7 @@ test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined 
   const fnSourceAudit = indexHtml.slice(startIdxAudit, endIdxAudit);
   const evalFnAudit = new Function('state', `${fnSourceAudit}; return buildAuditHTMLTemplate(state);`);
 
-  // Test with completely empty object
-  assert.doesNotThrow(() => {
-    const htmlRecap = evalFnRecap({});
-    assert.match(htmlRecap, /TBA/, 'Empty state should fall back to TBA in Recap');
-  }, 'Recap with empty object must not throw');
+  assert.throws(() => evalFnRecap({}), /POL y POD/);
 
   assert.doesNotThrow(() => {
     const htmlAudit = evalFnAudit({});
@@ -220,10 +217,7 @@ test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined 
     fleteEstimado: undefined
   };
 
-  assert.doesNotThrow(() => {
-    const htmlRecap = evalFnRecap(incompleteState);
-    assert.match(htmlRecap, /TBA/, 'Incomplete state with undefined props should fall back to TBA in Recap');
-  }, 'Recap with undefined properties must not throw TypeError');
+  assert.throws(() => evalFnRecap(incompleteState), /POL y POD/);
 
   assert.doesNotThrow(() => {
     const htmlAudit = evalFnAudit(incompleteState);
@@ -240,7 +234,7 @@ const recapSource = indexHtml.slice(
   indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)'),
   indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate =')
 );
-const renderRecap = new Function('state', `${operationsSource}\n${recapSource}\nreturn buildFixtureRecapHTMLTemplate(state);`);
+const renderRecap = new Function('state', `${operationsSource}\n${recapSource}\nreturn buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
 
 for (const selection of [
   { productoEspecifico: 'Cemento a Granel' },
@@ -259,11 +253,11 @@ for (const selection of [
   });
 }
 
-test('general cargo, minerals and bagged cement retain conventional equipment', () => {
-  for (const productoEspecifico of ['Carga General', 'Minerales', 'Big Bags (Minerales/Cemento)', 'Cemento ensacado']) {
+test('bagged cement retains explicitly selected handling equipment', () => {
+  for (const productoEspecifico of ['Big Bags (Minerales/Cemento)', 'Cemento ensacado']) {
     const text = plainText(renderRecap({ productoEspecifico, loadRate: 3500 }));
-    assert.match(text, /Geared Bulker/);
-    assert.match(text, /SWL CRANES AND ELECTRIC GRABS/);
+    assert.match(text, /Geared General Cargo \/ Big Bags/);
+    assert.match(text, /GEARED OPERATIONS WITH CERTIFIED ONBOARD CRANES/);
     assert.doesNotMatch(text, /PNEUMATIC CLAUSE/);
   }
 });
@@ -285,7 +279,7 @@ test('jsPDF fallback applies pneumatic equipment and rates without crane clauses
     splitTextToSize(text) { return [text]; }, addPage() {}, save() {} };
   const run = new Function('window', 'state', `${operationsSource}\n${source}\nreturn generateFixtureRecapJsPDDFallback(state, 'test.pdf');`);
   await run({ jsPDF: function () { return doc; } }, {
-    loadingMethod: 'Semirremolque neumático', loadRate: 1110, dischargeRate: 5184,
+    pol: 'Bilbao', pod: 'Lima', loadingMethod: 'Semirremolque neumático', loadRate: 1110, dischargeRate: 5184,
     fleteEstimado: 50000, cargoQty: 1000
   });
   const text = lines.join(' ');
@@ -307,12 +301,12 @@ test('Option B exports the approved executive snapshot and ordinary recap still 
     html: '<main>COMMERCIAL</main>', executiveHTML: '<section>EXECUTIVE</section>' });
   const run = new AsyncFunction('window', 'getDSSCurrentState', 'buildFixtureRecapHTMLTemplate', 'unusedExporter', 'options',
     `${source}; await generateFixtureRecapPDF(options);`);
-  await run({ printFixtureRecap: html => { output = html; } }, () => base, () => { throw new Error('Approved HTML must be reused'); },
+  await run({ getFixtureRecapSnapshot: (_state, explicit) => explicit || null, printFixtureRecap: html => { output = html; } }, () => base, () => { throw new Error('Approved HTML must be reused'); },
     async html => { output = html; }, { includeExecutiveReport: true, fixtureRecapSnapshot: snapshot });
   assert.ok(output.indexOf('COMMERCIAL') < output.indexOf('EXECUTIVE'));
   assert.equal(snapshot.state.freightSell, 48.70);
   assert.equal(base.fleteUnitario, 35);
-  await run({ printFixtureRecap: html => { output = html; } }, () => base, () => '<main>COMMERCIAL</main>', async html => { output = html; }, {});
+  await run({ getFixtureRecapSnapshot: (_state, explicit) => explicit || null, printFixtureRecap: html => { output = html; } }, () => base, () => '<main>COMMERCIAL</main>', async html => { output = html; }, {});
   assert.equal(output, '<main>COMMERCIAL</main>');
 });
 
@@ -320,8 +314,8 @@ test('Option B exports the approved executive snapshot and ordinary recap still 
 
 test('executive vessel binding supports policy objects and removes the generic cement-carrier name', () => {
   assert.equal(resolveReportVessel({ vesselName: 'MV GEARED BULKER', vesselType: 'Pneumatic Cement Carrier', dwt: 28750 }).description,
-    'MV TBN - Pneumatic Cement Carrier (28,750 DWT)');
+    'MV TBN - Pneumatic Cement Carrier (Gearless / Sealed Holds) (28,750 DWT)');
   const vessel = { name: 'MV Real Vessel', type: 'Pneumatic Cement Carrier', dwt: 28750 };
   assert.equal(resolveReportVessel({ vessel, vesselName: 'MV GEARED BULKER', dwt: 32000 }).description,
-    'MV Real Vessel - Pneumatic Cement Carrier (28,750 DWT)');
+    'MV TBN - Pneumatic Cement Carrier (Gearless / Sealed Holds) (28,750 DWT)');
 });

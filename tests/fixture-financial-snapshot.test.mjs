@@ -1,8 +1,9 @@
+import '../fixture-operating-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync('public/fixture-financial-snapshot.js', 'utf8');
+const source = (fs.readFileSync('fixture-operating-profile.js', 'utf8') + '\n' + fs.readFileSync('public/fixture-financial-snapshot.js', 'utf8'));
 function setup(ok = true) {
   let stored;
   const window = {
@@ -13,6 +14,8 @@ function setup(ok = true) {
   vm.runInNewContext(source, { window, setTimeout, fetch: async (url, options) => {
     stored = JSON.parse(options.body); return { ok };
   } });
+  const capture = window.captureFixtureFinancialSnapshot;
+  window.captureFixtureFinancialSnapshot = async (state, ...args) => capture({ pol: 'Bilbao', pod: 'Lima', ...window.selectFixtureRecapState(state) }, ...args);
   return { window, stored: () => stored };
 }
 test('approved unit rates above 1000 remain unit rates and survive mutation and persistence', async () => {
@@ -44,7 +47,7 @@ test('both HTML entry points render snapshot financial amounts without magnitude
     const html = fs.readFileSync(file, 'utf8');
     const start = html.indexOf('function buildFixtureRecapHTMLTemplate(state)');
     const end = html.indexOf('window.buildFixtureRecapHTMLTemplate =', start);
-    const render = new Function('state', `const resolveFixtureRecapOperations = () => ({equipmentClause: [], loadRate: '5000', dischargeRate: '2000'}); ${html.slice(start, end)}; return buildFixtureRecapHTMLTemplate(state);`);
+    const render = new Function('state', `const resolveFixtureRecapOperations = () => ({equipmentClause: [], loadRate: '5000', dischargeRate: '2000'}); ${html.slice(start, end)}; return buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
     const result = render({ cargoQty: 2000, allInRateGross: 9999, fixtureFinancial: { totalFreightGross: 2469120, unitRateText: '1234.56', totalFreightText: '2,469,120' } });
     assert.match(result, /1234\.56/);
     assert.match(result, /2,469,120/);
@@ -169,7 +172,7 @@ test('clean state retains the financial, operational and vessel fields consumed 
     const operationsStart = entry.indexOf('function resolveFixtureRecapOperations(');
     const start = operationsStart >= 0 ? operationsStart : entry.indexOf('function buildFixtureRecapHTMLTemplate(');
     const end = entry.indexOf('window.buildFixtureRecapHTMLTemplate =', start);
-    ctx.window.buildFixtureRecapHTMLTemplate = new Function('state', `${entry.slice(start, end)}; return buildFixtureRecapHTMLTemplate(state);`);
+    ctx.window.buildFixtureRecapHTMLTemplate = new Function('state', `${entry.slice(start, end)}; return buildFixtureRecapHTMLTemplate({pol: "Bilbao", pod: "Lima", ...state});`);
     const snapshot = await ctx.window.captureFixtureFinancialSnapshot({
       estimationId: 'fixture-27', pol: 'Bilbao', pod: 'Lima', cargoQty: 5000, allInRateGross: 48.7,
       vesselName: 'MV CLEAN', dwt: 28750, commodity: 'Bulk cement', productoEspecifico: 'Bulk cement',
