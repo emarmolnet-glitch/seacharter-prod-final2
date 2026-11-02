@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db, ensureApplicationSchema } from "../../db/index.js";
 import { charterDossiers } from "../../db/schema.js";
@@ -43,7 +44,7 @@ function serialize(row: typeof charterDossiers.$inferSelect, includePayload = fa
 
 function generateReference() {
   const year = new Date().getUTCFullYear();
-  const suffix = Math.floor(1000 + Math.random() * 9000);
+  const suffix = randomUUID().toUpperCase();
   return `RDM/${year}-${suffix}`;
 }
 
@@ -127,10 +128,9 @@ export default async (req: Request) => {
     }
 
     const [row] = await db.insert(charterDossiers).values(values)
-      .onConflictDoUpdate({
-        target: [charterDossiers.accountKey, charterDossiers.reference],
-        set: values,
-      }).returning();
+      .onConflictDoNothing({ target: [charterDossiers.accountKey, charterDossiers.reference] })
+      .returning();
+    if (!row) return Response.json({ success: false, error: "La referencia ya existe. Abre el expediente para actualizarlo o inicia una nueva estimación." }, { status: 409 });
     return Response.json({ success: true, dossier: serialize(row, true) }, { status: 201 });
   } catch (error) {
     console.error("[dossiers] Request failed.", error);

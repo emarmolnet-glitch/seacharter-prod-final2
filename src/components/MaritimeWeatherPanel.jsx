@@ -145,6 +145,7 @@ export default function MaritimeWeatherPanel({ pol, pod, laydays, cancelling, is
   );
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.dossierSnapshotLocked) return;
     voyageStore.getState().setWeatherSnapshot(snapshot);
   }, [snapshot]);
 

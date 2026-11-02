@@ -712,10 +712,12 @@
             };
 
             const generateVoyageRef = function() {
-                const randomValues = new Uint32Array(1);
-                if (globalObject.crypto?.getRandomValues) globalObject.crypto.getRandomValues(randomValues);
-                else randomValues[0] = Math.floor(Math.random() * 0xFFFFFFFF);
-                return `RDM/${new Date().getFullYear()}-${String(randomValues[0] % 10000).padStart(4, '0')}`;
+                const bytes = new Uint8Array(16);
+                globalObject.crypto.getRandomValues(bytes);
+                bytes[6] = (bytes[6] & 15) | 64;
+                bytes[8] = (bytes[8] & 63) | 128;
+                const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+                return `RDM/${new Date().getUTCFullYear()}-${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
             };
             const generateNextVoyageRef = function(currentReference) {
                 const year = new Date().getFullYear();
@@ -801,7 +803,7 @@
                     if (isInjectionLocked && !force) {
                         return getActiveContractRef();
                     }
-                    return setActiveContractRef(generateNextVoyageRef(getActiveContractRef()));
+                    return setActiveContractRef(generateVoyageRef());
                 },
                 persistSessionToDatabase,
                 saveSessionState: persistSessionToDatabase,
@@ -18457,6 +18459,9 @@
         if (typeof window !== 'undefined') {
             window.State = State;
         }
+        const INITIAL_CALCULATOR_STATE = structuredClone(State);
+        window.calculatorSessionEpoch = 0;
+        window.dossierSnapshotLocked = false;
 
         function normalizeActiveVoyageState(partial = {}, baseState = State) {
             const source = partial && typeof partial === 'object' ? partial : {};
@@ -19011,7 +19016,7 @@
                 const wasBatching = this.isBatching;
                 this.isBatching = true;
                 try {
-                    fn();
+                    return fn();
                 } finally {
                     this.isBatching = wasBatching;
                     if (!wasBatching) this.flushBatch();
@@ -19050,9 +19055,11 @@
 	        };
         window.SeaCharterStore = SeaCharterStore;
         const initializeSessionDraftController = () => {
+            const sessionEpoch = window.calculatorSessionEpoch;
             window.SeaCharterSessionDraftController = window.SeaCharterSessionDraft?.initialize({
                 store: SeaCharterStore,
                 hydrate: (sessionState) => {
+                    if (sessionEpoch !== window.calculatorSessionEpoch) return;
                     SeaCharterStore.set(sessionState);
                     syncGlobalStateToForms();
                 }
@@ -19062,6 +19069,9 @@
         else document.addEventListener('DOMContentLoaded', initializeSessionDraftController, { once: true });
 
         const CALCULATOR_LOCAL_STORAGE_KEYS = [
+            'seacharter_active_project_weight_tons',
+            'seacharter_active_project_land_cost',
+            'seacharter_active_project_land_rate_usd_mt',
             'calculator_break_even',
             'calculator_cargo_qty',
             'calculator_pol',
@@ -19213,232 +19223,287 @@
             if (decisionsView?.dataset.dssMounted === 'true') {
                 decisionsView.innerHTML = '';
                 delete decisionsView.dataset.dssMounted;
-                ensureDecisionSupportModule(decisionsView);
             }
             window.dispatchEvent(new CustomEvent('core-pro:global-reset', { detail: { source: 'new-estimation' } }));
         }
 
-        function resetGlobalState({ silent = false } = {}) {
-            if (!silent) window.DossierManager?.clearActive();
-            const referenceManager = window.ContractReference || window.ContractRefManager;
-            const initialReference = String(State.activeReference || '').trim();
-            const nextActiveReference = silent && initialReference
-                ? referenceManager?.setActiveContractRef?.(initialReference) || initialReference
-                : referenceManager?.createNewReference?.()
-                    || referenceManager?.setActiveContractRef?.(window.generateVoyageRef?.() || '')
-                    || window.generateVoyageRef?.()
-                    || '';
-            if (!silent) {
-                window.HeaderWorkflowActions?.resetProgress?.();
-                window.TrackingStore?.getState?.().reset?.();
-            }
-            clearCalculatorLocalStorage();
-            Object.keys(State).forEach((key) => {
-                if (key === 'uploadedFile') State[key] = null;
-                else if (Array.isArray(State[key])) State[key] = [];
-                else if (State[key] && typeof State[key] === 'object') State[key] = {};
-                else if (typeof State[key] === 'number') State[key] = 0;
-                else if (typeof State[key] === 'boolean') State[key] = false;
-                else State[key] = '';
-            });
-            Object.assign(State, {
-                activeReference: nextActiveReference,
-                vessel: '',
-                dwt: 0,
-                class: '',
-                uploadedFile: null,
-                vesselDwtFixed: false,
-                userHasEditedSpecialty: false,
-                cargoType: '',
-                cargoTypeCode: '100',
-                cargoTypeManual: 'Otros',
-                charterPartyStandard: 'GENCON',
-                marginOwner: 0,
-                marginCharterer: 0,
-                spdBallast: 0,
-                spdLaden: 0,
-                portBallastCoordinates: null,
-                polCoordinates: null,
-                podCoordinates: null,
-                pesoUnitario: 0,
-                unitWeightMT: 0,
-                largo: 0,
-                length: 0,
-                ancho: 0,
-                width: 0,
-                alto: 0,
-                height: 0,
-                handlingMode: 'direct-lift',
-                projectHandlingMode: 'direct-lift',
-                projectCargo: {
-                    unitWeightMT: 0,
-                    pesoUnitario: 0,
-                    length: 0,
-                    largo: 0,
-                    width: 0,
-                    ancho: 0,
-                    height: 0,
-                    alto: 0,
-                    handlingMode: 'direct-lift',
-                    dimensions: {
-                        lengthM: 0,
-                        widthM: 0,
-                        heightM: 0
-                    }
-                },
-                smartAdjustments: {}
-            });
-
-            const zeroIds = [
-                'dist-ballast', 'dist-laden', 'vessel-dwt', 'vessel-draft', 'vessel-loa',
-                'spd-ballast', 'spd-laden', 'cargo-qty', 'ritmo_nominal_pol', 'ritmo_nominal_pod',
-                'rate-load', 'rate-disch', 'cons-sea', 'price-sea', 'cons-port', 'cons-anchorage',
-                'price-port', 'opex-daily', 'pda-pol', 'pda-pod', 'stevedoring-costs', 'pda-misc',
-                'cargo-surcharge', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion',
-                'project-unit-weight', 'project-length', 'project-width', 'project-height',
-                'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'days-margin',
-                'freight-rate', 'freight-sell', 'comm-pct', 'margin-owner', 'margin-charterer',
-                'demurrage-rate', 'coa-num-embarques', 'coa-total-tm', 'target-margin',
-                'eu-carbon-price', 'gruas-swl-pol', 'gruas-tara-pol', 'gruas-ciclos-pol', 'gruas-eficiencia-num-pol',
-                'gruas-swl-pod', 'gruas-tara-pod', 'gruas-ciclos-pod', 'gruas-eficiencia-num-pod',
-                'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'cargo-sf',
-                'cost-plus-daily-opex', 'cost-plus-target-margin', 'cost-plus-days-sea', 'cost-plus-days-port',
-                'cost-plus-bunker-cost', 'cost-plus-port-costs', 'cost-plus-cargo-volume', 'cost-plus-contingency-days',
-                'inverse-days-sea', 'inverse-days-port', 'inverse-bunker-cost', 'inverse-port-costs', 'inverse-cargo-volume', 'inverse-bunker-daily-port',
-                'market-calibration-factor', 'dispatch-pct', 'laycan-dias-libres'
-            ];
-            zeroIds.forEach((id) => setInputValue(id, 0));
-            setInputValue('project-handling-mode', 'direct-lift');
-            setInputValue('margin-owner', 0);
-            setInputValue('margin-charterer', 0);
-            ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => setInputValue(id, nextActiveReference));
-            [
-                'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
-                'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
-                'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date',
-                'asb-cancel-time', 'nombre-buque-calculadora',
-                'vessel-name', 'vessel-flag'
-            ].forEach((id) => setInputValue(id, ''));
-            setInputValue('cargo-type', 'Minerales y Construcción');
-            populateCargoProducts('Cemento a granel');
-            setInputValue('cargo-type-manual', '100');
-            window.CargoTypeSelector?.persistSelection('100');
-            setInputValue('charter-party-standard', 'GENCON');
-            setInputValue('turn-time-hours', 24);
-            setInputValue('apply-ets-surcharge', 'NO');
-            setInputValue('ets-route-type', '0');
-            // Nueva estimación: el Lumpsum vuelve a estar desactivado (decisión comercial explícita)
-            const lumpsumModeReset = document.getElementById('lumpsum-mode');
-            if (lumpsumModeReset) lumpsumModeReset.checked = false;
-            setInputValue('lumpsum-base-mt', DEFAULT_LUMPSUM_TARGET_BASE_MT);
-
-            ['delta-historico', 'factor-clima', 't-fondeo'].forEach((id) => {
-                const el = document.getElementById(id);
-                if (el) el.dataset.historicalAutofill = 'false';
-            });
-            const source = document.getElementById('historical-risk-source');
-            if (source) source.innerText = 'Selecciona POL/POD y pulsa Cargar desde Histórico para aplicar promedios internos.';
-            setCalculatorWaitingState();
-            resetGeneratedModuleState();
-
-            if (typeof window.forceResetAisDensityResults === 'function') {
-                window.forceResetAisDensityResults();
-            } else if (typeof window.resetAisDensityResults === 'function') {
-                window.resetAisDensityResults({ force: true, source: 'new-estimation' });
-            }
-
-            if (window.GlobalStore) {
-                window.GlobalStore.setMatchingFleet?.([], { source: 'reset-estimation', allowClear: true });
-                window.GlobalStore.compatibleVessels = [];
-                window.GlobalStore.nearbyVessels = [];
-                window.GlobalStore.nearbyCount = 0;
-                window.GlobalStore.filteredVessels = [];
-                window.GlobalStore.filteredVesselsInitialized = false;
-                window.GlobalStore.selectedTaxonomies = [];
-                window.GlobalStore.selectedTaxonomy = '';
-                window.GlobalStore.matchingReady = false;
-                window.GlobalStore.matchingSelectionPending = false;
-                window.GlobalStore.matchingSelection = null;
-                window.GlobalStore.matchingCacheSessionId = '';
-                window.GlobalStore.vessels = [];
-                window.GlobalStore.rawVessels = [];
-                window.GlobalStore.renderedAisVessels = [];
-                window.GlobalStore.auditVessels = [];
-                window.GlobalStore.setActiveVessels?.([], { source: 'reset-estimation' });
-                if (typeof window.GlobalStore.setAisMatchingState === 'function') {
-                    window.GlobalStore.setAisMatchingState([], [], null, { source: 'reset-estimation' });
+        function resetGlobalState({ silent = false, reference = null, restoring = false } = {}) {
+            const wasRestoring = isRestoringAuditSession;
+            isRestoringAuditSession = true;
+            try {
+            return SeaCharterStore.batch(() => {
+                window.calculatorSessionEpoch += 1;
+                window.dossierSnapshotLocked = restoring;
+                if (pendingCalculationTimer) clearTimeout(pendingCalculationTimer);
+                pendingCalculationTimer = null;
+                Object.values(window.autoFillPdaDebounceTimers || {}).forEach(timer => clearTimeout(timer));
+                window.autoFillPdaDebounceTimers = { pol: null, pod: null };
+                // DOM metadata is part of the calculation contract, never of the previous dossier.
+                document.querySelectorAll('input[id], select[id], textarea[id]').forEach((el) => {
+                    SESSION_FIELD_METADATA_KEYS.forEach(key => delete el.dataset[key]);
+                    if (el.type === 'file' || el.type === 'password' || el.id === 'language-selector') return;
+                    if (el.type === 'checkbox' || el.type === 'radio') el.checked = el.defaultChecked;
+                    else if (el.tagName === 'SELECT') {
+                        const selected = Array.from(el.options).find(option => option.defaultSelected);
+                        el.value = selected?.value ?? el.options[0]?.value ?? '';
+                    } else el.value = el.defaultValue ?? '';
+                });
+                costPlusStrategy = 'cost-plus';
+                costPlusMarginType = 'percentage';
+                isManualBalticSpotOverride = false;
+                isInverseTceSyncEnabled = true;
+                lastBalticSpotPricingCategory = '';
+                balticSpotTceRequest = null;
+                window.CalculatedState = null;
+                window.__coreProVoyageParams = null;
+                window.activeMaritimeRoute = null;
+                window.coreProMatchingRouteContext = null;
+                if (window.GlobalStore) {
+                    window.GlobalStore.calculatedState = null;
+                    window.GlobalStore.calculatorVessel = null;
+                    window.GlobalStore.activeVessel = null;
+                    window.GlobalStore.voyageParams = null;
+                    window.GlobalStore.geopoliticalRoute = null;
                 }
-            }
+                marketSpeedRequestSequence += 1;
+                lastMarketSpeedVesselClass = '';
+                marketSpeedCache.clear();
+                learnedPortRiskHistory.clear();
+                navigationStrategy = 'eco';
+                navigationStrategyMode = 'auto';
+                window.__aisstreamCoasterSpeed = null;
+                window.__aisstreamMinibulkerSpeed = null;
+                ['dssBaseActualState', 'dssOptimizedState', 'dssInjectedRecapFreight', 'lastDssAuditResponse'].forEach(key => delete window[key]);
+                try { window.sessionStorage.removeItem(CALCULATED_STATE_STORAGE_KEY); } catch (_) {}
 
-            window.matchingResultsState = { vessels: [], count: 0, sourceCounts: { liveRadar: 0, technicalMatches: 0 } };
-            window.lastMatchingEngineResults = [];
-            window.lastClassifiedVessels = [];
-            window.lastRenderedAisAuditVessels = [];
-            window.renderedMatchingVessels = [];
-            window.aisMatchingCache = [];
-            window.matchingLocalState = { status: 'idle', validated: [] };
-            if (window.buquesAlmacenados instanceof Map) {
-                window.buquesAlmacenados.clear();
-            }
-            window.buquesEncontrados = {};
-            window.listaBarcos = [];
+                if (!silent) window.DossierManager?.clearActive();
+                const referenceManager = window.ContractReference || window.ContractRefManager;
+                const initialReference = String(State.activeReference || '').trim();
+                const nextActiveReference = reference !== null
+                    ? String(reference)
+                    : silent && initialReference
+                    ? initialReference
+                    : referenceManager?.createNewReference?.(true)
+                        || referenceManager?.setActiveContractRef?.(window.generateVoyageRef?.() || '')
+                        || window.generateVoyageRef?.()
+                        || '';
+                if (!silent) {
+                    window.HeaderWorkflowActions?.resetProgress?.();
+                    window.TrackingStore?.getState?.().reset?.();
+                }
+                clearCalculatorLocalStorage();
+                Object.keys(State).forEach(key => delete State[key]);
+                Object.assign(State, structuredClone(INITIAL_CALCULATOR_STATE));
+                Object.assign(State, {
+                    activeReference: nextActiveReference,
+                    activeProjectRef: nextActiveReference,
+                    vessel: '',
+                    dwt: 0,
+                    class: '',
+                    uploadedFile: null,
+                    vesselDwtFixed: false,
+                    userHasEditedSpecialty: false,
+                    cargoType: '',
+                    cargoTypeCode: '100',
+                    cargoTypeManual: 'Otros',
+                    charterPartyStandard: 'GENCON',
+                    marginOwner: 0,
+                    marginCharterer: 0,
+                    spdBallast: 0,
+                    spdLaden: 0,
+                    portBallastCoordinates: null,
+                    polCoordinates: null,
+                    podCoordinates: null,
+                    pesoUnitario: 0,
+                    unitWeightMT: 0,
+                    largo: 0,
+                    length: 0,
+                    ancho: 0,
+                    width: 0,
+                    alto: 0,
+                    height: 0,
+                    handlingMode: 'direct-lift',
+                    projectHandlingMode: 'direct-lift',
+                    projectCargo: {
+                        unitWeightMT: 0,
+                        pesoUnitario: 0,
+                        length: 0,
+                        largo: 0,
+                        width: 0,
+                        ancho: 0,
+                        height: 0,
+                        alto: 0,
+                        handlingMode: 'direct-lift',
+                        dimensions: {
+                            lengthM: 0,
+                            widthM: 0,
+                            heightM: 0
+                        }
+                    },
+                    smartAdjustments: {}
+                });
 
-            if (typeof window.renderFilteredAisCounters === 'function') {
-                window.renderFilteredAisCounters([]);
-            }
-            if (typeof window.renderAisNearbyCount === 'function') {
-                window.renderAisNearbyCount(0);
-            }
-            if (typeof window.updateSequentialTelemetryBlock === 'function') {
-                window.updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Esperando importación de candidatos');
-                window.updateSequentialTelemetryBlock('matching-execution-success-stick', 'pending', 'Sin ejecuciones activas');
-            }
+                const zeroIds = [
+                    'dist-ballast', 'dist-laden', 'vessel-dwt', 'vessel-draft', 'vessel-loa',
+                    'spd-ballast', 'spd-laden', 'cargo-qty', 'ritmo_nominal_pol', 'ritmo_nominal_pod',
+                    'rate-load', 'rate-disch', 'cons-sea', 'price-sea', 'cons-port', 'cons-anchorage',
+                    'price-port', 'opex-daily', 'pda-pol', 'pda-pod', 'stevedoring-costs', 'pda-misc',
+                    'cargo-surcharge', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion',
+                    'project-unit-weight', 'project-length', 'project-width', 'project-height',
+                    'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'days-margin',
+                    'freight-rate', 'freight-sell', 'comm-pct', 'margin-owner', 'margin-charterer',
+                    'demurrage-rate', 'coa-num-embarques', 'coa-total-tm', 'target-margin',
+                    'eu-carbon-price', 'gruas-swl-pol', 'gruas-tara-pol', 'gruas-ciclos-pol', 'gruas-eficiencia-num-pol',
+                    'gruas-swl-pod', 'gruas-tara-pod', 'gruas-ciclos-pod', 'gruas-eficiencia-num-pod',
+                    'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'cargo-sf',
+                    'cost-plus-daily-opex', 'cost-plus-target-margin', 'cost-plus-days-sea', 'cost-plus-days-port',
+                    'cost-plus-bunker-cost', 'cost-plus-port-costs', 'cost-plus-cargo-volume', 'cost-plus-contingency-days',
+                    'inverse-days-sea', 'inverse-days-port', 'inverse-bunker-cost', 'inverse-port-costs', 'inverse-cargo-volume', 'inverse-bunker-daily-port',
+                    'market-calibration-factor', 'dispatch-pct', 'laycan-dias-libres'
+                ];
+                zeroIds.forEach((id) => setInputValue(id, 0));
+                setInputValue('project-handling-mode', 'direct-lift');
+                setInputValue('margin-owner', 0);
+                setInputValue('margin-charterer', 0);
+                ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => setInputValue(id, nextActiveReference));
+                [
+                    'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
+                    'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
+                    'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date',
+                    'asb-cancel-time', 'nombre-buque-calculadora',
+                    'vessel-name', 'vessel-flag'
+                ].forEach((id) => setInputValue(id, ''));
+                setInputValue('cargo-type', 'Minerales y Construcción');
+                populateCargoProducts('Cemento a granel');
+                setInputValue('cargo-type-manual', '100');
+                window.CargoTypeSelector?.persistSelection('100');
+                setInputValue('charter-party-standard', 'GENCON');
+                setInputValue('turn-time-hours', 24);
+                setInputValue('apply-ets-surcharge', 'NO');
+                setInputValue('ets-route-type', '0');
+                // Nueva estimación: el Lumpsum vuelve a estar desactivado (decisión comercial explícita)
+                const lumpsumModeReset = document.getElementById('lumpsum-mode');
+                if (lumpsumModeReset) lumpsumModeReset.checked = false;
+                setInputValue('lumpsum-base-mt', DEFAULT_LUMPSUM_TARGET_BASE_MT);
 
-            const resultsList = document.getElementById('matching-results-list');
-            if (resultsList) {
-                resultsList.innerHTML = '';
-                resultsList.dataset.matchingResultCount = '0';
-                resultsList.dataset.matchingHydrated = 'false';
-                resultsList.dataset.matchingExecutionState = 'idle';
-                resultsList.dataset.technicalWarningCount = '0';
-                resultsList.classList.add('hidden');
+                ['delta-historico', 'factor-clima', 't-fondeo'].forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.dataset.historicalAutofill = 'false';
+                });
+                const source = document.getElementById('historical-risk-source');
+                if (source) source.innerText = 'Selecciona POL/POD y pulsa Cargar desde Histórico para aplicar promedios internos.';
+                const vesselBadge = document.getElementById('vessel-badge');
+                if (vesselBadge) vesselBadge.innerText = '';
+                setCalculatorWaitingState();
+                resetGeneratedModuleState();
+
+                if (typeof window.forceResetAisDensityResults === 'function') {
+                    window.forceResetAisDensityResults();
+                } else if (typeof window.resetAisDensityResults === 'function') {
+                    window.resetAisDensityResults({ force: true, source: 'new-estimation' });
+                }
+
+                if (window.GlobalStore) {
+                    window.GlobalStore.setMatchingFleet?.([], { source: 'reset-estimation', allowClear: true });
+                    window.GlobalStore.compatibleVessels = [];
+                    window.GlobalStore.nearbyVessels = [];
+                    window.GlobalStore.nearbyCount = 0;
+                    window.GlobalStore.filteredVessels = [];
+                    window.GlobalStore.filteredVesselsInitialized = false;
+                    window.GlobalStore.selectedTaxonomies = [];
+                    window.GlobalStore.selectedTaxonomy = '';
+                    window.GlobalStore.matchingReady = false;
+                    window.GlobalStore.matchingSelectionPending = false;
+                    window.GlobalStore.matchingSelection = null;
+                    window.GlobalStore.matchingCacheSessionId = '';
+                    window.GlobalStore.vessels = [];
+                    window.GlobalStore.rawVessels = [];
+                    window.GlobalStore.renderedAisVessels = [];
+                    window.GlobalStore.auditVessels = [];
+                    window.GlobalStore.setActiveVessels?.([], { source: 'reset-estimation' });
+                    if (typeof window.GlobalStore.setAisMatchingState === 'function') {
+                        window.GlobalStore.setAisMatchingState([], [], null, { source: 'reset-estimation' });
+                    }
+                }
+
+                window.matchingResultsState = { vessels: [], count: 0, sourceCounts: { liveRadar: 0, technicalMatches: 0 } };
+                window.lastMatchingEngineResults = [];
+                window.lastClassifiedVessels = [];
+                window.lastRenderedAisAuditVessels = [];
+                window.renderedMatchingVessels = [];
+                window.aisMatchingCache = [];
+                window.matchingLocalState = { status: 'idle', validated: [] };
+                if (window.buquesAlmacenados instanceof Map) {
+                    window.buquesAlmacenados.clear();
+                }
+                window.buquesEncontrados = {};
+                window.listaBarcos = [];
+
+                if (typeof window.renderFilteredAisCounters === 'function') {
+                    window.renderFilteredAisCounters([]);
+                }
+                if (typeof window.renderAisNearbyCount === 'function') {
+                    window.renderAisNearbyCount(0);
+                }
+                if (typeof window.updateSequentialTelemetryBlock === 'function') {
+                    window.updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Esperando importación de candidatos');
+                    window.updateSequentialTelemetryBlock('matching-execution-success-stick', 'pending', 'Sin ejecuciones activas');
+                }
+
+                const resultsList = document.getElementById('matching-results-list');
+                if (resultsList) {
+                    resultsList.innerHTML = '';
+                    resultsList.dataset.matchingResultCount = '0';
+                    resultsList.dataset.matchingHydrated = 'false';
+                    resultsList.dataset.matchingExecutionState = 'idle';
+                    resultsList.dataset.technicalWarningCount = '0';
+                    resultsList.classList.add('hidden');
+                }
+
+                const emptyState = document.getElementById('matching-empty-state');
+                if (emptyState) emptyState.classList.remove('hidden');
+
+                const loadingState = document.getElementById('matching-loading-state');
+                if (loadingState) loadingState.classList.add('hidden');
+
+                const resultsBadge = document.getElementById('match-results-badge');
+                if (resultsBadge) {
+                    resultsBadge.innerText = '0 Buques';
+                    resultsBadge.classList.add('hidden');
+                }
+
+                const btnRunMatching = document.getElementById('btn-run-matching');
+                if (btnRunMatching) {
+                    btnRunMatching.disabled = true;
+                    btnRunMatching.setAttribute('aria-disabled', 'true');
+                    btnRunMatching.dataset.matchingReady = 'false';
+                    btnRunMatching.dataset.readyVesselCount = '0';
+                    btnRunMatching.dataset.matchingResultCount = '0';
+                    btnRunMatching.dataset.hasCachedResults = 'false';
+                }
+                if (typeof window.syncMatchingButtonWithCachedResults === 'function') {
+                    window.syncMatchingButtonWithCachedResults(0);
+                }
+
+                const technicalToggleStatus = document.getElementById('technical-toggle-status');
+                if (technicalToggleStatus) {
+                    technicalToggleStatus.textContent = '0 advertencias técnicas';
+                }
+
+                window.activeProjectRef = nextActiveReference;
+                if (!restoring && nextActiveReference) {
+                    window.setActiveProjectRef?.(nextActiveReference);
+                    syncActiveContractReference(nextActiveReference);
+                }
+                SeaCharterStore.set(readRouteStateFromCalculator());
+                syncGlobalStateToForms();
+                if (!restoring && typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+                if (!silent && typeof showToast === 'function') showToast('Nueva estimación iniciada en estado cero.');
+                return nextActiveReference;
+            });
+            } finally {
+                isRestoringAuditSession = wasRestoring;
             }
-
-            const emptyState = document.getElementById('matching-empty-state');
-            if (emptyState) emptyState.classList.remove('hidden');
-
-            const loadingState = document.getElementById('matching-loading-state');
-            if (loadingState) loadingState.classList.add('hidden');
-
-            const resultsBadge = document.getElementById('match-results-badge');
-            if (resultsBadge) {
-                resultsBadge.innerText = '0 Buques';
-                resultsBadge.classList.add('hidden');
-            }
-
-            const btnRunMatching = document.getElementById('btn-run-matching');
-            if (btnRunMatching) {
-                btnRunMatching.disabled = true;
-                btnRunMatching.setAttribute('aria-disabled', 'true');
-                btnRunMatching.dataset.matchingReady = 'false';
-                btnRunMatching.dataset.readyVesselCount = '0';
-                btnRunMatching.dataset.matchingResultCount = '0';
-                btnRunMatching.dataset.hasCachedResults = 'false';
-            }
-            if (typeof window.syncMatchingButtonWithCachedResults === 'function') {
-                window.syncMatchingButtonWithCachedResults(0);
-            }
-
-            const technicalToggleStatus = document.getElementById('technical-toggle-status');
-            if (technicalToggleStatus) {
-                technicalToggleStatus.textContent = '0 advertencias técnicas';
-            }
-
-            SeaCharterStore.set(readRouteStateFromCalculator());
-            syncGlobalStateToForms();
-            if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
-            if (!silent && typeof showToast === 'function') showToast('Nueva estimación iniciada en estado cero.');
-            return nextActiveReference;
         }
         function resetTotalEstimation(options = {}) {
             return resetGlobalState(options);
@@ -28626,6 +28691,8 @@ function createRouteAnchorElement(type) {
         window.applyCalculatedStateToMatchingContext = applyCalculatedStateToMatchingContext;
 
         async function rehydrateCalculatedState(options = {}) {
+            const sessionEpoch = window.calculatorSessionEpoch;
+            if (window.dossierSnapshotLocked) return window.CalculatedState || null;
             const applyToContext = options.applyToContext !== false;
             const storeState = window.GlobalStore?.calculatedState;
             if (isCalculatedStateCurrent(storeState)) {
@@ -28647,6 +28714,7 @@ function createRouteAnchorElement(type) {
             try {
                 const response = await fetch('/api/calculation-state', { headers: { Accept: 'application/json' }, cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
+                if (sessionEpoch !== window.calculatorSessionEpoch) return null;
                 if (response.ok && isCalculatedStateCurrent(payload?.calculation)) {
                     window.CalculatedState = payload.calculation;
                     if (applyToContext) applyCalculatedStateToMatchingContext(payload.calculation);
@@ -33348,7 +33416,9 @@ function createRouteAnchorElement(type) {
         }
 
         async function autoCalculateDistances() {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const result = await calculateVoyageRouteService();
+            if (sessionEpoch !== window.calculatorSessionEpoch) return null;
             applyRouteServiceResult(result);
             if (isMasterRouteMapMounted()) {
                 renderMasterRouteMap(result);
@@ -33368,6 +33438,7 @@ function createRouteAnchorElement(type) {
         }
 
         async function geocodeAllPorts() {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const btn = document.querySelector('button[onclick="geocodeAllPorts()"]');
             const originalText = btn ? btn.innerHTML : '';
             if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculando...';
@@ -33378,6 +33449,7 @@ function createRouteAnchorElement(type) {
                     showToast("⚠️ Satélite: No se halló " + result.errors.join(", "));
                 }
 
+                if (sessionEpoch !== window.calculatorSessionEpoch) return;
                 applyRouteServiceResult(result);
                 renderMasterRouteMap(result);
 
@@ -34938,6 +35010,7 @@ function createRouteAnchorElement(type) {
         async function handleMasterValidationAndCalculate(event = null) {
             event?.preventDefault?.();
             if (isCalculatingMaster) return null;
+            if (typeof window !== 'undefined') window.dossierSnapshotLocked = false;
 
             isCalculatingMaster = true;
             setMasterCalculationLoading(true);
@@ -35946,6 +36019,7 @@ function createRouteAnchorElement(type) {
 	        }
 
 	        function debouncedAutoFillPDA(type, showNotification = false, delay = 450) {
+                const sessionEpoch = window.calculatorSessionEpoch;
 	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
 	                ? window.autoFillPdaDebounceTimers
 	                : { pol: null, pod: null };
@@ -35954,6 +36028,7 @@ function createRouteAnchorElement(type) {
 	                clearTimeout(timers[type]);
 	            }
 	            timers[type] = setTimeout(() => {
+                    if (sessionEpoch !== window.calculatorSessionEpoch) return;
 	                if (typeof autoFillPDA === 'function') {
 	                    autoFillPDA(type, showNotification);
 	                }
@@ -38021,6 +38096,7 @@ function createRouteAnchorElement(type) {
         }
 
         function applyBunkerIndexData(cache = {}, options = {}) {
+            if (window.dossierSnapshotLocked) return { ...cache, snapshotLocked: true };
             const routeRegion = getCurrentBunkerRegionContext();
             const selection = resolveRegionalBunkerSelection(cache, routeRegion.region);
             const marketPrices = selection.prices;
@@ -38168,6 +38244,7 @@ function createRouteAnchorElement(type) {
         window.refreshBunkerRegionSelection = refreshBunkerRegionSelection;
 
         async function performRegionalBunkerFetch(detectedRegion, options = {}) {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const routeRegion = options.routeRegion || getCurrentBunkerRegionContext();
             const btn = document.getElementById('btn-consult-bunker');
             const originalText = btn ? btn.innerHTML : '';
@@ -38186,6 +38263,7 @@ function createRouteAnchorElement(type) {
                 const hydration = window.MarketIntelligenceHydration;
                 if (!hydration) throw new Error('Market Intelligence Hydration todavía no está disponible.');
                 const snapshot = await hydration.refresh({ force: true });
+                if (sessionEpoch !== window.calculatorSessionEpoch) return null;
                 const record = snapshot?.bunkers || {};
                 const vlsfo = Number(record.vlsfo);
                 const ifo380 = Number(record.hsfo);
@@ -38217,6 +38295,7 @@ function createRouteAnchorElement(type) {
                 if (!managedByMaster) showToast('Precios VLSFO, HSFO y MGO sincronizados desde Data Bridge');
                 return appliedPrices;
             } catch (error) {
+                if (sessionEpoch !== window.calculatorSessionEpoch) return null;
                 console.error('Error sincronizando el snapshot unificado de mercado:', error);
                 const staleCache = readBunkerIndexCache({ allowStale: true });
                 let appliedPrices;
@@ -38312,6 +38391,7 @@ function createRouteAnchorElement(type) {
         }
 
         function syncBunkerIndexMarket() {
+            window.dossierSnapshotLocked = false;
             return autoFillBunkers({
                 forceRefresh: true,
                 allowWithoutPol: true,
@@ -38863,6 +38943,7 @@ function scheduleReactiveEngine() {
         }
 
         async function loadLearnedRiskForSelectedPorts({ apply = false } = {}) {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const ports = getSelectedRiskPorts();
             if (!ports.length) return;
             try {
@@ -38871,6 +38952,7 @@ function scheduleReactiveEngine() {
                 const response = await fetch(`/api/risk/history?${params.toString()}`);
                 if (!response.ok) throw new Error('Port risk API failed');
                 const data = await response.json();
+                if (sessionEpoch !== window.calculatorSessionEpoch) return;
                 (data.ports || []).forEach(mergeLearnedPortRisk);
                 const source = document.getElementById('historical-risk-source');
                 if (source && (data.ports || []).length) {
@@ -39884,6 +39966,7 @@ function scheduleReactiveEngine() {
 
         let carbonPriceHydrationStarted = false;
         async function hydrateLatestEuCarbonPrice() {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const input = document.getElementById('eu-carbon-price');
             if (!input || carbonPriceHydrationStarted) return;
 
@@ -39900,7 +39983,7 @@ function scheduleReactiveEngine() {
                     throw new Error('Carbon price unavailable');
                 }
 
-                if (input.dataset.manualOverride === 'true') return;
+                if (sessionEpoch !== window.calculatorSessionEpoch || window.dossierSnapshotLocked || input.dataset.manualOverride === 'true') return;
 
                 input.value = marketPrice.toFixed(2);
                 input.dataset.marketDefault = 'true';
@@ -40159,7 +40242,7 @@ function scheduleReactiveEngine() {
         let isRunningEngine = false;
 
         function runEngine() {
-            if (isRunningEngine) return;
+            if (isRestoringAuditSession || isRunningEngine) return;
             isRunningEngine = true;
             try {
             const options = arguments[0] || {};
@@ -41037,6 +41120,7 @@ function scheduleReactiveEngine() {
             const coaAhorroVsSpot = operacionModo === 'COA' && coaTotalTmContrato > 0
                 ? Math.max(0, (spotEquivalentBreakEven - coaBreakEvenPromedio) * coaTotalTmContrato)
                 : 0;
+            State.emissionsCO2 = emissionsCO2;
             syncInverseTceFromVoyage(cargo, T_sea, T_port);
             const inverseTceResults = typeof calculateInverseTce === 'function'
                 ? calculateInverseTce()
@@ -47304,10 +47388,6 @@ function scheduleReactiveEngine() {
 
         function syncActiveContractReference(value) {
             let activeReference = String(value || '').trim().toUpperCase();
-            const currentActive = String(State.activeReference || '').trim().toUpperCase();
-            if (activeReference && currentActive === activeReference) {
-                return activeReference;
-            }
             try {
                 const referenceManager = window.ContractReference || window.ContractRefManager;
                 activeReference = referenceManager?.setActiveContractRef?.(activeReference)
@@ -47382,8 +47462,7 @@ function scheduleReactiveEngine() {
         }
 
         function generateVoyageRefFallback() {
-            const suffix = Math.floor(1000 + Math.random() * 9000);
-            return `RDM/2026-${suffix}`;
+            return window.ContractRefManager.generateVoyageRef();
         }
         window.generateRandomProjectRef = generateVoyageRefFallback;
         window.generateNewProjectRef = generateVoyageRefFallback;
@@ -47460,89 +47539,8 @@ function scheduleReactiveEngine() {
         }
         window.clearGeographicData = clearGeographicData;
 
-        let lastNewProjectTick = 0;
         function handleNewProject() {
-            const now = Date.now();
-            if (now - lastNewProjectTick < 100 && window.activeProjectRef) {
-                return window.activeProjectRef;
-            }
-            lastNewProjectTick = now;
-
-            // a) Generar una constante:
-            const newRef = "RDM/2026-" + Math.floor(1000 + Math.random() * 9000);
-
-            // b) Actualizar el estado global y caché con la nueva referencia:
-            if (typeof window.setActiveProjectRef === 'function') {
-                window.setActiveProjectRef(newRef);
-            } else {
-                window.activeProjectRef = newRef;
-                if (typeof State !== 'undefined') {
-                    State.activeProjectRef = newRef;
-                    State.activeReference = newRef;
-                }
-                syncActiveContractReference(newRef);
-            }
-            try {
-                window.sessionStorage?.setItem('active_project_ref', newRef);
-                window.sessionStorage?.setItem('active_contract_ref', newRef);
-                window.localStorage?.setItem('active_contract_ref', newRef);
-                window.localStorage?.setItem('active_core_pro_session', JSON.stringify({ reference: newRef, timestamp: Date.now() }));
-            } catch (_) {}
-
-            const quickRefEl = document.getElementById('quick-ref');
-            if (quickRefEl && quickRefEl.value !== newRef) {
-                quickRefEl.value = newRef;
-            }
-
-            // c) Limpiar los estados de los puertos (POL, POD) y ruta marítima:
-            clearGeographicData();
-
-            // Limpiar variables de mercancía, camiones y costes
-            const cargoAndTruckIds = [
-                'cargo-qty', 'cargo-type', 'cargo-product', 'cargo-sf',
-                'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min',
-                'camion-tolva-camiones-totales', 'camion-tolva-ritmo-sugerido',
-                'ritmo_nominal_pol', 'ritmo_nominal_pod', 'rate-load', 'rate-disch'
-            ];
-            cargoAndTruckIds.forEach((id) => {
-                const el = document.getElementById(id);
-                if (el) {
-                    if (id === 'cargo-qty' || id.startsWith('camion-') || id.startsWith('ritmo_') || id.startsWith('rate-')) {
-                        el.value = '0';
-                    } else {
-                        el.value = '';
-                    }
-                    try {
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    } catch (_) {}
-                }
-            });
-
-            if (typeof State !== 'undefined') {
-                State.cargo = 0;
-                State.cargoQty = 0;
-                State.cargoQuantity = 0;
-                State.cargoType = '';
-            }
-
-            try {
-                localStorage.removeItem('seacharter_active_project_weight_tons');
-                localStorage.removeItem('seacharter_active_project_land_cost');
-                localStorage.removeItem('seacharter_active_project_land_rate_usd_mt');
-                localStorage.removeItem('calculator_cargo_qty');
-                localStorage.removeItem('calculator_cargo_type');
-                localStorage.removeItem('calculator_pol');
-                localStorage.removeItem('calculator_laycan');
-                localStorage.removeItem('calculator_cancelling_date');
-                localStorage.removeItem('seacharter_session_draft');
-            } catch (_) {}
-
-            if (typeof showToast === 'function') {
-                showToast(`✨ Nuevo expediente iniciado: ${newRef}`, 'success');
-            }
-
-            return newRef;
+            return resetTotalEstimation();
         }
         window.handleNewProject = handleNewProject;
         window.createNewProject = handleNewProject;
@@ -55043,6 +55041,39 @@ ADDITIONAL NOTES:
         }
 
         // --- AUDIT VIEW SESSION MANAGEMENT ---
+        const SESSION_FIELD_METADATA_KEYS = [
+            'manualOverride', 'userOverride', 'marginSynced', 'autoMetodoCarga', 'autoMetodoDescarga',
+            'manualUnlocked', 'etaSource', 'historicalAutofill', 'autoDetected', 'autoEstimated',
+            'autoEstimatedLift', 'autoFromLaydays', 'autoInferred', 'autoMarginDays', 'laytimeManualOverride',
+            'marketDefault', 'marketRecordDate', 'navigationBase', 'tarifaBase', 'operationalPdaBase', 'tpdAutoSombra',
+            'operationalPdaTotal', 'operationalPdaIncrement', 'basePda', 'calculationMode', 'totalTugs', 'tugsPorManiobra'
+        ];
+        function getSessionFieldMetadata() {
+            const metadata = {};
+            document.querySelectorAll('input[id], select[id], textarea[id]').forEach(el => {
+                const flags = {};
+                SESSION_FIELD_METADATA_KEYS.forEach(key => {
+                    if (el.dataset[key] !== undefined) flags[key] = el.dataset[key];
+                });
+                if (Object.keys(flags).length) metadata[el.id] = flags;
+            });
+            return metadata;
+        }
+        function restoreSessionFieldMetadata(metadata, fields = {}) {
+            Object.entries(metadata || {}).forEach(([id, flags]) => {
+                const el = document.getElementById(id);
+                if (!el || !flags || typeof flags !== 'object') return;
+                SESSION_FIELD_METADATA_KEYS.forEach(key => {
+                    if (typeof flags[key] === 'string') el.dataset[key] = flags[key];
+                });
+            });
+            // Legacy snapshots saved numbers but no flags: preserve explicit saved rates.
+            if (!metadata) ['rate-load', 'rate-disch', 'eu-carbon-price'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && Number(fields[id]) > 0) el.dataset.manualOverride = 'true';
+            });
+        }
+
         function getSessionFieldSnapshot() {
             const snapshot = {};
             document.querySelectorAll('input[id], select[id], textarea[id]').forEach((el) => {
@@ -55082,7 +55113,7 @@ ADDITIONAL NOTES:
         function getPrimitiveCalculatorStateSnapshot() {
             const source = typeof State !== 'undefined' ? State : {};
             const snapshot = {};
-            AUDIT_SESSION_STATE_KEYS.forEach((key) => {
+            new Set([...AUDIT_SESSION_STATE_KEYS, ...Object.keys(source)]).forEach((key) => {
                 const value = source[key];
                 if (isSessionPrimitive(value)) snapshot[key] = value;
             });
@@ -55111,6 +55142,7 @@ ADDITIONAL NOTES:
                 recapText: text,
                 calculatorState: getPrimitiveCalculatorStateSnapshot(),
                 fields: getSessionFieldSnapshot(),
+                fieldMetadata: getSessionFieldMetadata(),
                 workspaceState: captureHolisticWorkspaceState()
             };
         }
@@ -55122,13 +55154,15 @@ ADDITIONAL NOTES:
                 if (element) htmlById[id] = element.innerHTML;
             });
             const calculatorObjects = {};
-            ['portBallastCoordinates', 'polCoordinates', 'podCoordinates', 'smartAdjustments'].forEach((key) => {
+            ['portBallastCoordinates', 'polCoordinates', 'podCoordinates', 'smartAdjustments', 'voyageFinancials', 'costBreakdown', 'marketBenchmark'].forEach((key) => {
                 const value = State?.[key];
                 if (value && typeof value === 'object') calculatorObjects[key] = value;
             });
             return {
                 htmlById,
-                calculatorObjects,
+                calculatorObjects: structuredClone(calculatorObjects),
+                pricingState: { costPlusStrategy, costPlusMarginType, isInverseTceSyncEnabled, isManualBalticSpotOverride, navigationStrategy, navigationStrategyMode },
+                weatherSnapshot: structuredClone(window.VoyageDraftStore?.getState?.()?.draft?.weather || null),
                 masterReportWorkflowState: typeof masterReportWorkflowState === 'object'
                     ? JSON.parse(JSON.stringify(masterReportWorkflowState))
                     : null,
@@ -55244,7 +55278,7 @@ ADDITIONAL NOTES:
                 throw new Error("Calculator state is not available");
             }
 
-            Object.assign(State, calculatorState);
+            Object.assign(State, structuredClone(calculatorState));
 
             const setVal = (id, val) => {
                 const el = document.getElementById(id);
@@ -55297,8 +55331,10 @@ ADDITIONAL NOTES:
             setVal('eu-carbon-price', resolveEuCarbonPrice(State.euCarbonPrice));
             setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
 
+            // Legacy dossiers may omit class; derive it from their DWT, never a previous badge.
+            State.class = calculatorState.class || (Number(State.dwt) > 0 ? detectVesselSegment(Number(State.dwt)).segment : '');
             if (document.getElementById('vessel-badge')) {
-                document.getElementById('vessel-badge').innerText = State.class || "Coaster";
+                document.getElementById('vessel-badge').innerText = State.class;
             }
 
             // Tras repoblar los inputs, el interruptor y el input del POD vuelven a
@@ -55854,41 +55890,39 @@ ADDITIONAL NOTES:
             };
         }
 
-        async function applyAuditSessionPayload(decodedData) {
-            if (!isValidAuditSessionPayload(decodedData)) {
-                throw new Error("Invalid session content");
-            }
-
+        async function applyAuditSessionPayload(decodedData, options = {}) {
+            if (!isValidAuditSessionPayload(decodedData)) throw new Error('Invalid session content');
+            const payload = structuredClone(decodedData);
+            const reference = options.reference ?? payload.calculatorState?.activeReference ?? '';
             isRestoringAuditSession = true;
             try {
-                document.getElementById('recapInput').value = decodedData.recapText || '';
-
-                restoreSessionFields(decodedData.fields);
-
-                if (decodedData.calculatorState) {
-                    restoreCalculatorSessionState(decodedData.calculatorState);
-                }
+                SeaCharterStore.batch(() => {
+                    if (!options.dossierId) window.DossierManager?.clearActive();
+                    resetGlobalState({ silent: true, reference, restoring: true });
+                    document.getElementById('recapInput').value = payload.recapText || '';
+                    restoreSessionFields(payload.fields);
+                    if (payload.calculatorState) restoreCalculatorSessionState(payload.calculatorState);
+                    restoreSessionFieldMetadata(payload.fieldMetadata, payload.fields);
+                    restoreHolisticWorkspaceState(payload.workspaceState);
+                    const pricing = payload.workspaceState?.pricingState || {};
+                    costPlusStrategy = pricing.costPlusStrategy === 'market' ? 'market' : 'cost-plus';
+                    costPlusMarginType = pricing.costPlusMarginType === 'fixed' ? 'fixed' : 'percentage';
+                    isInverseTceSyncEnabled = pricing.isInverseTceSyncEnabled !== false;
+                    isManualBalticSpotOverride = pricing.isManualBalticSpotOverride === true;
+                    navigationStrategy = pricing.navigationStrategy || 'eco';
+                    navigationStrategyMode = pricing.navigationStrategyMode || 'auto';
+                    window.VoyageDraftStore?.getState?.()?.setWeatherSnapshot?.(payload.workspaceState?.weatherSnapshot || null);
+                    // The dossier reference overrides stale input/State references inside legacy payloads.
+                    State.activeReference = '';
+                    syncActiveContractReference(reference);
+                    window.setActiveProjectRef?.(reference);
+                    refreshImportedAuditSession();
+                });
             } finally {
                 isRestoringAuditSession = false;
             }
-
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            if (decodedData.recapText) showDocPreview('paste');
-            refreshImportedAuditSession();
-
-            if (decodedData.calculatorState) {
-                try {
-                    await geocodeAllPorts();
-                } catch (err) {
-                    console.error("Error geocodificando al cargar sesión:", err);
-                    if (typeof runEngine === 'function') runEngine();
-                }
-            } else if (typeof runEngine === 'function') {
-                runEngine();
-            }
-
-            restoreHolisticWorkspaceState(decodedData.workspaceState);
-
+            if (payload.recapText) showDocPreview('paste');
+            if (typeof runEngine === 'function') runEngine();
             switchTab('estimator');
         }
 
@@ -69681,6 +69715,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         async function recalculateAdjustedAndSave(options = {}) {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const btn = document.getElementById('btn-recalculate-adjusted');
             const originalHtml = btn ? btn.innerHTML : '';
             const managedByMaster = options.managedByMaster === true;
@@ -69701,6 +69736,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 if (typeof autoCalculateDistances === 'function') {
                     const routeResult = await autoCalculateDistances();
+                    if (sessionEpoch !== window.calculatorSessionEpoch) return false;
                     if (!routeResult || !routeResult.routes?.laden) {
                         const error = new Error('No se pudo calcular la distancia marítima entre POL y POD. Revisa ambos puertos.');
                         if (managedByMaster) throw error;
@@ -70181,6 +70217,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         async function loadMarketIntelLatest() {
+            const sessionEpoch = window.calculatorSessionEpoch;
             const hydration = window.MarketIntelligenceHydration;
             if (!hydration) throw new Error('Market Intelligence Hydration todavía no está disponible.');
             const snapshot = hydration.getSnapshot() || await hydration.refresh();
@@ -70196,6 +70233,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 setDataBridgeVerifiedConnection(true);
             }
 
+            if (sessionEpoch !== window.calculatorSessionEpoch || window.dossierSnapshotLocked) return record;
             if (snapshot.aisstream_coaster_speed) {
                 window.__aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
                 if (typeof State !== 'undefined') State.aisstreamCoasterSpeed = snapshot.aisstream_coaster_speed;
@@ -70273,6 +70311,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function syncMarketIntelToInverseTce(vesselCategory = currentVesselPricingCategory) {
+            if (window.dossierSnapshotLocked) return false;
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
             const marketInput = document.getElementById(`market-intel-${String(vesselClass).toLowerCase()}-tc`);
             const tceInput = document.getElementById('inverse-tce-target');
@@ -70290,6 +70329,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function applyMarketLatestToInverseTce(record, vesselCategory = currentVesselPricingCategory) {
+            if (window.dossierSnapshotLocked) return false;
             const tceInput = document.getElementById('inverse-tce-target');
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
             if (syncMarketIntelToInverseTce(vesselCategory)) return true;
@@ -70936,6 +70976,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function applyBallastMarketSpeed(marketSpeed, vesselCategory) {
+            if (window.dossierSnapshotLocked) return;
             const input = document.getElementById('spd-ballast');
             const averageSpeedKnots = Number(marketSpeed?.averageSpeedKnots);
             if (!input || !Number.isFinite(averageSpeedKnots) || averageSpeedKnots <= 0) return false;
@@ -71054,7 +71095,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const previousCategory = currentVesselPricingCategory;
             currentVesselPricingCategory = vesselClass.categoryName;
 
-            if (previousCategory !== currentVesselPricingCategory) {
+            if (!window.dossierSnapshotLocked && previousCategory !== currentVesselPricingCategory) {
                 marketSpeedRequestSequence += 1;
                 lastMarketSpeedVesselClass = '';
                 clearBallastMarketSpeedDefault();
@@ -71071,6 +71112,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 badge.className = 'rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm';
             }
 
+            if (window.dossierSnapshotLocked || isRestoringAuditSession) return;
             if (
                 useReverseTceCalculator
                 && !isManualBalticSpotOverride
@@ -71139,6 +71181,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         async function handleFetchBalticSpotTce(options = {}) {
+            window.dossierSnapshotLocked = false;
+            const sessionEpoch = window.calculatorSessionEpoch;
             const managedByMaster = options.managedByMaster === true;
             if (balticSpotTceRequest) {
                 try {
@@ -71163,6 +71207,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const activeRequest = (async () => {
                 const record = await loadMarketIntelLatest();
+                if (sessionEpoch !== window.calculatorSessionEpoch) return null;
                 if (!applyMarketLatestToInverseTce(record, vesselCategory)) {
                     throw new Error(`No existe una referencia T/C válida para ${vesselCategory}.`);
                 }

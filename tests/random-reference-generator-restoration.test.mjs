@@ -9,21 +9,14 @@ const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8'
 const dossiersSource = readFileSync(new URL('../dossiers.js', import.meta.url), 'utf8');
 const contractRefSource = readFileSync(new URL('../contract-reference.js', import.meta.url), 'utf8');
 
-test('1. Función generadora: formato canonical RDM/2026-XXXX con 4 dígitos aleatorios', async () => {
+test('1. Generador canónico con año actual y UUID', async () => {
   const { generateRandomProjectRef } = await import('../src/utils/projectRef.mjs');
   assert.equal(typeof generateRandomProjectRef, 'function', 'generateRandomProjectRef must be an exported function');
 
-  const refs = new Set();
-  for (let i = 0; i < 50; i++) {
-    const ref = generateRandomProjectRef();
-    assert.match(ref, /^RDM\/2026-\d{4}$/, `Reference ${ref} must match RDM/2026-XXXX format`);
-    const num = parseInt(ref.replace('RDM/2026-', ''), 10);
-    assert.ok(num >= 1000 && num <= 9999, `Suffix ${num} must be a 4-digit number between 1000 and 9999`);
-    refs.add(ref);
-  }
-  assert.ok(refs.size > 10, 'Generator must produce pseudo-random references across multiple calls');
-
-  assert.match(projectRefSource, /RDM\/2026-\$\{Math\.floor\(1000\s*\+\s*Math\.random\(\)\s*\*\s*9000\)\}/);
+  const refs = new Set(Array.from({ length: 1000 }, () => generateRandomProjectRef()));
+  assert.equal(refs.size, 1000);
+  for (const ref of refs) assert.match(ref, new RegExp(`^RDM/${new Date().getUTCFullYear()}-[0-9A-F-]{36}$`));
+  assert.match(projectRefSource, /crypto.randomUUID/);
   assert.match(projectContextSource, /generateRandomProjectRef/);
   assert.match(appSource, /generateRandomProjectRef/);
   assert.match(contractRefSource, /generateRandomProjectRef/);
@@ -63,23 +56,10 @@ test('3. Input de la barra superior restaurado y conectado con activeProjectRef'
   assert.match(indexHtml, /id="quick-ref"/);
 });
 
-test('4. Botón Nuevo Proyecto (+) en sidebar ejecuta lógica de estado pura: const newRef, setActiveProjectRef, y limpia puertos', () => {
-  // Sidebar button
+test('4. Nueva estimación usa un único reseteo sin un segundo listener React', () => {
   assert.match(indexHtml, /id="new-estimation-btn"/);
-
-  // index.html handleNewProject
-  assert.match(indexHtml, /const newRef = "RDM\/2026-" \+ Math\.floor\(1000 \+ Math\.random\(\) \* 9000\);/);
-  assert.match(indexHtml, /window\.setActiveProjectRef\(newRef\)/);
-  assert.match(indexHtml, /clearGeographicData\(\)/);
-
-  // dossiers.js requestNewEstimation
-  assert.match(dossiersSource, /const newRef = "RDM\/2026-" \+ Math\.floor\(1000 \+ Math\.random\(\) \* 9000\);/);
-  assert.match(dossiersSource, /window\.setActiveProjectRef\(newRef\)/);
-  assert.match(dossiersSource, /clearGeographicData/);
-
-  // ProjectContext button listener
-  assert.match(projectContextSource, /document\.getElementById\('new-estimation-btn'\)/);
-  assert.match(projectContextSource, /const newRef = "RDM\/2026-" \+ Math\.floor\(1000 \+ Math\.random\(\) \* 9000\);/);
-  assert.match(projectContextSource, /setActiveProjectRef\(newRef\)/);
-  assert.match(projectContextSource, /'port-pol',\s*'port-pod'/);
+  assert.match(indexHtml, /function handleNewProject\(\) \{\s*return resetTotalEstimation\(\);/);
+  assert.match(dossiersSource, /function requestNewEstimation\(\) \{\s*return window.resetTotalEstimation\(\);/);
+  assert.doesNotMatch(projectContextSource, /addBtn.addEventListener/);
+  assert.doesNotMatch(indexHtml, /const newRef = "RDM\/2026-"/);
 });

@@ -37,7 +37,7 @@ test('save and new-estimation actions open dedicated modals before persistence',
 
 test('new estimation reset is centralized in the store and clears generated modules', () => {
   assert.match(html, /resetGlobalState\(options = \{\}\)/);
-  assert.match(html, /function resetGlobalState\(\{ silent = false \} = \{\}\)/);
+  assert.match(html, /function resetGlobalState\(\{ silent = false, reference = null, restoring = false \} = \{\}\)/);
   assert.match(html, /window\.MapController\?\.reset\?\.\(\)/);
   assert.match(html, /window\.VoyageDraftStore\?\.getState\?\.\(\)\.clearDraft\?\.\(\)/);
   assert.match(html, /resetFactoryControls\(\['view-gencon', 'view-asbatankvoy', 'view-auditor'\]\)/);
