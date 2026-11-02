@@ -50,3 +50,36 @@ test('both HTML entry points render snapshot financial amounts without magnitude
     assert.match(result, /2,469,120/);
   }
 });
+
+test('snapshot histories are pruned before serialization, including nested copies', async () => {
+  const ctx = setup();
+  const old = { toJSON() { throw new Error('Previous snapshot must never be serialized'); } };
+  const input = Object.freeze({ allInRateGross: 42.37, cargoQty: 5000,
+    fixtureRecapSnapshot: old, nested: Object.freeze({ fixtureRecapSnapshot: old, value: 7 }) });
+  const snapshot = await ctx.window.captureFixtureFinancialSnapshot(input, 'B', true);
+  assert.equal(snapshot.state.fixtureRecapSnapshot, undefined);
+  assert.equal(snapshot.state.nested.fixtureRecapSnapshot, undefined);
+  assert.equal(snapshot.state.nested.value, 7);
+  assert.equal(input.fixtureRecapSnapshot, old);
+});
+
+test('repeated approvals do not accumulate history or grow the saved payload', async () => {
+  const ctx = setup();
+  const lengths = [];
+  for (let i = 0; i < 15; i++) {
+    const snapshot = await ctx.window.captureFixtureFinancialSnapshot({ ...ctx.window.State,
+      allInRateGross: 42.37, cargoQty: 5000 }, 'B', true);
+    assert.equal(snapshot.state.fixtureRecapSnapshot, undefined);
+    lengths.push(JSON.stringify(ctx.stored()).length);
+  }
+  assert.equal(new Set(lengths).size, 1);
+});
+
+test('failed persistence preserves the previously approved session snapshot', async () => {
+  const ctx = setup(false);
+  const previous = Object.freeze({ html: 'Already approved' });
+  ctx.window.State.fixtureRecapSnapshot = previous;
+  await assert.rejects(ctx.window.captureFixtureFinancialSnapshot({ ...ctx.window.State,
+    allInRateGross: 42.37, cargoQty: 5000 }));
+  assert.equal(ctx.window.State.fixtureRecapSnapshot, previous);
+});
