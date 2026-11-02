@@ -1,8 +1,10 @@
 import type { Config } from "@netlify/functions";
-import { eq } from "drizzle-orm";
-import { db, ensureApplicationSchema } from "../../db/index.js";
-import { appConfig } from "../../db/schema.js";
+import { eq, or } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/netlify-db";
+import { appConfig, fixtureReferenceAliases } from "../../db/schema.js";
 import { createCorsHeaders } from "./_shared/cors.js";
+
+const db = drizzle({ schema: { appConfig, fixtureReferenceAliases } });
 
 const ESTIMATIONS_CONFIG_PREFIX = "estimation_";
 const DEFAULT_ESTIMATION_KEY = "latest_estimation";
@@ -26,21 +28,37 @@ export default async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
 
   const url = new URL(req.url);
-  const pathParts = url.pathname.split("/").filter(Boolean);
-  const rawId = pathParts.length > 2 ? pathParts[pathParts.length - 1] : "current";
-  const estimationId = rawId && rawId !== "estimations" ? rawId : "current";
-  const storageKey = estimationId !== "current" 
-    ? `${ESTIMATIONS_CONFIG_PREFIX}${estimationId}` 
-    : DEFAULT_ESTIMATION_KEY;
+  let estimationId: string;
+  try {
+    const suffix = url.pathname.replace(/^\/api\/estimations\/?/, '');
+    estimationId = decodeURIComponent(suffix || 'current').trim();
+    if (/^RDM\/\d{4}-\d{4}$/i.test(estimationId)) estimationId = estimationId.toUpperCase();
+  } catch {
+    return Response.json({ error: 'Invalid estimation reference' }, { status: 400, headers });
+  }
+  const originalId = estimationId;
+  let legacyId = originalId;
+  try {
+    const [alias] = await db.select({ reference: fixtureReferenceAliases.reference, legacyId: fixtureReferenceAliases.legacyId }).from(fixtureReferenceAliases)
+      .where(or(eq(fixtureReferenceAliases.legacyId, estimationId), eq(fixtureReferenceAliases.reference, estimationId))).limit(1);
+    estimationId = alias?.reference || estimationId;
+    legacyId = alias?.legacyId || originalId;
+  } catch {
+    return Response.json({ error: 'Estimation identity is unavailable' }, { status: 503, headers });
+  }
+  const storageKey = estimationId !== 'current' ? `${ESTIMATIONS_CONFIG_PREFIX}${estimationId}` : DEFAULT_ESTIMATION_KEY;
 
   if (req.method === "GET") {
     try {
-      await ensureApplicationSchema();
-      const [row] = await db
+      let [row] = await db
         .select({ value: appConfig.value, updatedAt: appConfig.updatedAt })
         .from(appConfig)
         .where(eq(appConfig.key, storageKey))
         .limit(1);
+      if (!row && legacyId !== estimationId) {
+        [row] = await db.select({ value: appConfig.value, updatedAt: appConfig.updatedAt }).from(appConfig)
+          .where(eq(appConfig.key, `${ESTIMATIONS_CONFIG_PREFIX}${legacyId}`)).limit(1);
+      }
       const estimation = row?.value ? JSON.parse(row.value) : null;
       return Response.json({
         success: true,
@@ -76,7 +94,6 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: "Estimation payload is too large" }, { status: 413, headers });
     }
 
-    await ensureApplicationSchema();
     await db
       .insert(appConfig)
       .values({ key: storageKey, value, updatedAt: new Date() })

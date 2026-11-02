@@ -62,8 +62,8 @@ export function mountVisualStowageInExecutiveModal(containerId = 'voyage-visual-
   if (!target) return null;
 
   const state = options.state || (typeof window !== 'undefined' ? window.State : {});
-  const stowagePlan = options.stowagePlan || buildVoyageStowagePlan(state);
-  const vesselType = options.vesselType || resolveReportVessel(state).type;
+  const vesselType = resolveReportVessel(state).type;
+  const stowagePlan = buildVoyageStowagePlan({ ...state, vesselType });
 
   if (!visualStowageRoot) {
     visualStowageRoot = createRoot(target);
@@ -82,9 +82,11 @@ export function mountVisualStowageInExecutiveModal(containerId = 'voyage-visual-
 
 // Render a fresh snapshot: never copy the open modal, which may contain base values.
 export async function buildFixtureExecutiveReportHTML(state) {
+  const operations = window.resolveFixtureRecapOperations?.(state);
+  const approvedState = operations ? { ...state, operationalProfile: operations.operationalProfile } : state;
   const template = document.createElement('template');
   template.innerHTML = renderToStaticMarkup(
-    <VoyageExecutiveReportModal voyageData={state} initialClientMode={true} />
+    <VoyageExecutiveReportModal voyageData={approvedState} initialClientMode={true} />
   );
   const report = template.content.firstElementChild.firstElementChild;
   report.querySelectorAll('.no-print, button').forEach(node => node.remove());

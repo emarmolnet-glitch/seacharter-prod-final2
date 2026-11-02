@@ -8,15 +8,7 @@ import React from 'react';
  * - 'HANDYSIZE': Handysize, MPP, Multi-Purpose, Bulk Carrier, Geared Breakbulk con 4 bodegas independientes y grúas de a bordo.
  */
 export function resolveVesselProfile(vesselType = '', title = '') {
-  const text = String(vesselType || title).toLowerCase();
-  if (/cement|pneumatic|neum[aá]tic/.test(text)) return 'PNEUMATIC';
-  if (text.includes('ro-ro') || text.includes('roro') || /roll[ -]?on/.test(text) || text.includes('ro-lo') || text.includes('rolo') || text.includes('vehicle') || text.includes('car carrier')) {
-    return 'RORO';
-  }
-  if (text.includes('coaster') || text.includes('mini-bulker') || text.includes('minibulker') || text.includes('mini bulker') || text.includes('cabotage') || text.includes('cabotaje') || text.includes('costero')) {
-    return 'COASTER';
-  }
-  return 'HANDYSIZE';
+  return globalThis.FixtureOperatingProfile.navalProfile({ vesselType: vesselType || title });
 }
 
 /**
@@ -62,11 +54,12 @@ export function adaptRoRoJustification(text = '', profile = 'HANDYSIZE') {
  */
 export function VisualStowagePlan({
   stowagePlan = null,
-  vesselType = 'Handysize MPP 32.000 DWT',
+  vesselType = '',
   projectRef = '',
   textOnly = false,
 }) {
-  const profile = resolveVesselProfile(vesselType, stowagePlan?.vesselModel?.type || '');
+  const model = stowagePlan?.vesselModel;
+  const profile = resolveVesselProfile((!vesselType || vesselType === model?.type || vesselType === model?.selectedType) ? (model?.operationalType || vesselType) : vesselType, model?.type || '');
 
   const rawHolds = Array.isArray(stowagePlan?.holds) ? stowagePlan.holds : [];
   const deck = stowagePlan?.weatherDeck || {};
@@ -164,7 +157,9 @@ export function VisualStowagePlan({
     ? 'COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · GEARLESS)'
     : profile === 'RORO'
     ? 'RO-RO / RO-LO CARRIER (CUBIERTAS CORRIDAS & RAMPA POPA)'
-    : 'HANDYSIZE / BULK CARRIER (4 BODEGAS INDEPENDIENTES & GRÚAS)';
+    : ['PANAMAX', 'CAPESIZE', 'GEARLESS'].includes(profile)
+    ? `${profile} (GEARLESS · BODEGAS INDEPENDIENTES)`
+    : `${profile} / BULK CARRIER (4 BODEGAS INDEPENDIENTES & GRÚAS)`;
 
   return (
     <div
@@ -356,7 +351,7 @@ export function VisualStowagePlan({
           {/* En perfil COASTER se eliminan (gearless o grúas ligeras) */}
           {/* En perfil RORO se omiten (operativa rodada con rampa)    */}
           {/* ======================================================== */}
-          {profile === 'HANDYSIZE' && !/cement|pneumatic|neum[aá]tic/i.test(vesselType) && (
+          {(profile === 'HANDYSIZE' || profile === 'SUPRAMAX') && !/cement|pneumatic|neum[aá]tic/i.test(vesselType) && (
             <g id="deck-cranes" stroke="#64748b" opacity="0.95">
               <rect x="305" y="90" width="16" height="30" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" />
               <circle cx="313" cy="90" r="5" fill="#475569" />

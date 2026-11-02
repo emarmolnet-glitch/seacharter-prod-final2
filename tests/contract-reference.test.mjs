@@ -28,7 +28,9 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '', lo
     close() {}
   }
 
+  let referenceSequence = 1000;
   const window = {
+    FixtureReferenceService: { create: () => `RDM/2026-${++referenceSequence}` },
     BroadcastChannel: MockBroadcastChannel,
     CustomEvent: class CustomEvent {
       constructor(type, options) {
@@ -123,7 +125,7 @@ test('fallback follows the maritime business format and persists immediately', (
   const { api, location, session } = loadUtility();
   const reference = api.getActiveContractRef();
 
-  assert.match(reference, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
+  assert.match(reference, /^RDM\/\d{4}-\d{4}$/);
   assert.equal(session.get('active_contract_ref'), reference);
   assert.equal(location.searchParams.get('ref'), reference);
 });
@@ -133,18 +135,18 @@ test('new estimation creates and persists a different temporary reference', () =
   const initialReference = api.getActiveContractRef();
   const nextReference = api.createNewReference();
 
-  assert.match(nextReference, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
+  assert.match(nextReference, /^RDM\/\d{4}-\d{4}$/);
   assert.notEqual(nextReference, initialReference);
   assert.equal(session.get('active_contract_ref'), nextReference);
   assert.equal(location.searchParams.get('ref'), nextReference);
 });
 
-test('new estimation replaces a legacy reference with a fresh UUID', () => {
+test('new estimation replaces a legacy reference with a fresh short reference', () => {
   const { api } = loadUtility({ sessionReference: 'RDM/2026-0042' });
 
   const next = api.createNewReference();
   assert.notEqual(next, 'RDM/2026-0042');
-  assert.match(next, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
+  assert.match(next, /^RDM\/\d{4}-\d{4}$/);
 });
 
 test('persists active session immediately to localStorage and emits via BroadcastChannel on active ref retrieval or change', () => {

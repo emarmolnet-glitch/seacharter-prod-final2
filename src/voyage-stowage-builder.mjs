@@ -1,3 +1,5 @@
+import { resolveReportVessel } from './report-vessel.mjs';
+
 /**
  * Resolves a vessel classification profile for stowage modeling
  * Supports:
@@ -6,36 +8,7 @@
  * - HANDYSIZE: Handysize, MPP, Multi-Purpose, Bulk Carrier, Geared Breakbulk
  */
 export function resolveVesselStowageProfile(vesselType = '', vesselClass = '', shipProfile = '') {
-  const combined = String(vesselType || shipProfile || vesselClass).toLowerCase();
-  if (/cement|pneumatic|neum[aá]tic/.test(combined)) return 'PNEUMATIC';
-  if (
-    /roll[ -]?on/.test(combined) ||
-    combined.includes('ro-ro') ||
-    combined.includes('roro') ||
-    combined.includes('ro-lo') ||
-    combined.includes('rolo') ||
-    combined.includes('vehicle') ||
-    combined.includes('car carrier') ||
-    combined.includes('pcc') ||
-    combined.includes('pctc')
-  ) {
-    return 'RORO';
-  }
-  if (
-    combined.includes('coaster') ||
-    combined.includes('mini-bulker') ||
-    combined.includes('minibulker') ||
-    combined.includes('mini bulker') ||
-    combined.includes('cabotage') ||
-    combined.includes('cabotaje') ||
-    combined.includes('costero')
-  ) {
-    return 'COASTER';
-  }
-  if (combined.includes('panamax')) return 'PANAMAX';
-  if (combined.includes('capesize')) return 'CAPESIZE';
-  if (combined.includes('supramax') || combined.includes('ultramax')) return 'SUPRAMAX';
-  return 'HANDYSIZE';
+  return globalThis.FixtureOperatingProfile.navalProfile({ vesselType: vesselType || shipProfile || vesselClass });
 }
 
 /**
@@ -44,30 +17,14 @@ export function resolveVesselStowageProfile(vesselType = '', vesselClass = '', s
 export function buildVoyageStowagePlan(voyageState = {}) {
   const cargoTons = Number(voyageState.cargo || voyageState.cargoQty || 0);
   const dwt = Number(voyageState.dwt || 32000);
-  const rawShipType = String(
-    voyageState.shipProfile ||
-    voyageState.ship_profile ||
-    voyageState.vesselType ||
-    voyageState.vessel_type ||
-    voyageState.designCategory ||
-    voyageState.design_category ||
-    voyageState.categoriaDiseno ||
-    voyageState.tipoBuque ||
-    voyageState.vesselClass ||
-    voyageState.vessel_class ||
-    voyageState.class ||
-    voyageState.shipClass ||
-    voyageState.vessel ||
-    'Handysize'
-  ).trim();
-
-  const vesselClass = voyageState.class || voyageState.shipClass || voyageState.vesselClass || rawShipType || 'Handysize';
+  const vesselType = resolveReportVessel(voyageState).type;
+  const rawShipType = vesselType;
+  const vesselClass = vesselType;
   const cargoType = voyageState.cargoType || 'Granel Sólido (Dry Bulk)';
-  const vesselType = voyageState.vesselType || rawShipType || `${vesselClass} ${dwt > 0 ? `${dwt.toLocaleString('en-US')} DWT` : ''}`.trim();
   const stowageFactor = Number(voyageState.stowageFactor || voyageState.stowage_factor || 1.35) || 1.35;
   const cargoVolumeCbm = Number(voyageState.cargoVolume || voyageState.volumeCbm || Math.round(cargoTons * stowageFactor * 100) / 100);
 
-  const profile = resolveVesselStowageProfile(vesselType, vesselClass, voyageState.shipProfile || rawShipType);
+  const profile = resolveVesselStowageProfile(resolveReportVessel(voyageState).operationalType, vesselClass, voyageState.shipProfile || rawShipType);
 
   let holds = [];
   let weatherDeck = {
@@ -177,7 +134,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     justification = [
       `1. Distribución simétrica de ${cargoTons.toLocaleString('en-US')} MT entre las 4 bodegas independientes para minimizar esfuerzos flectores y cortantes en navegación.`,
       `2. Altura metacéntrica transversal (GM) proyectada en 1.55 m, cumpliendo holgadamente el criterio de estabilidad intacta OMI A.749(18).`,
-      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, compatible con grúas de a bordo y calado admisible del buque.`,
+      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, ${profile === 'HANDYSIZE' || profile === 'SUPRAMAX' ? 'operativa obligatoria con grúas de a bordo, eslingas certificadas y sacas/big bags sobre madera de estiba seca, con manipulación a cargo del fletador bajo supervisión del capitán' : 'medios de terminal acordados para operativa gearless'} y calado admisible del buque.`,
     ];
   }
 
@@ -201,6 +158,8 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     },
     vesselModel: {
       type: vesselType,
+      selectedType: voyageState.vesselType,
+      operationalType: resolveReportVessel(voyageState).operationalType,
       profile,
       dwt,
     },

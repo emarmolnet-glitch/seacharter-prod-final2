@@ -1,4 +1,4 @@
-import { resolveReportVessel } from '../report-vessel.mjs';
+import { resolveReportVessel, reportOperationalClauses } from '../report-vessel.mjs';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import VisualStowagePlan, { resolveVesselProfile, MemoizedVisualStowagePlan } from './VisualStowagePlan.jsx';
 import { buildVoyageStowagePlan } from '../voyage-stowage-builder.mjs';
@@ -28,7 +28,7 @@ export default function VoyageExecutiveReportModal({
 
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
-  const vesselClass = data.class || data.shipClass || data.vesselClass || 'Handysize';
+  const vesselClass = reportVessel.type;
   const shipProfile = data.shipProfile || data.ship_profile || data.designCategory || data.categoriaDiseno || '';
   const dwt = reportVessel.dwt;
   const cargoTons = Number(data.cargo || data.cargoQty || 25000);
@@ -39,7 +39,7 @@ export default function VoyageExecutiveReportModal({
   const totalDays = Number(data.totalDays || 0);
   const distTotal = Number(data.distTotal || (Number(data.distBallast || 0) + Number(data.distLaden || 0)) || 0);
   const cpStandard = data.charterPartyStandard || (cargoType.includes('Líquido') ? 'ASBATANKVOY' : 'GENCON');
-  const estId = data.activeReference ? `EST-${data.activeReference}` : 'RDM-EST-001';
+  const estId = data.activeReference || data.estimationId || 'REFERENCE PENDING';
 
   // Métricas financieras
   const freightSell = Number(data.freightSell || 0);
@@ -62,10 +62,12 @@ export default function VoyageExecutiveReportModal({
   // Resolver vesselType exacto (ej. Coaster, Minibulker, Handysize, Ro-Ro, Ro-Lo)
   const resolvedVesselType = reportVessel.type;
   const vesselDescription = reportVessel.description;
+  const operationalProfile = resolveVesselProfile(reportVessel.operationalType);
+  const operationalClauses = reportOperationalClauses(operationalProfile, globalThis.FixtureOperatingProfile.resolve(data).isBagged);
 
   // Memoizar el plan de estiba para evitar re-cálculos o desmontajes innecesarios al alternar isClientMode
   const stowagePlan = useMemo(() => {
-    return (data.stowagePlan && data.stowagePlan.vesselModel?.profile === resolveVesselProfile(resolvedVesselType) ? data.stowagePlan : null) || buildVoyageStowagePlan({
+    return buildVoyageStowagePlan({
       ...data,
       vesselType: resolvedVesselType,
       shipProfile,
@@ -79,7 +81,7 @@ export default function VoyageExecutiveReportModal({
   const activeRole = data.commercialRole ||
                      data.commercial_role ||
                      data.role ||
-                     (typeof window !== 'undefined' && typeof window.getGlobalViewMode === 'function' ? window.getGlobalViewMode() : 'owner');
+                     'owner';
 
   const cargoIdentifier = data.bulk_category ||
                           data.bulkCategory ||
@@ -88,12 +90,17 @@ export default function VoyageExecutiveReportModal({
                           data.cargo_type ||
                           data.cargoType ||
                           data.commodity ||
-                          (typeof document !== 'undefined' ? (document.getElementById('cargo-product')?.value || document.getElementById('cargo-type')?.value) : '') ||
                           cargoType;
 
   const stipulatedClausesData = useMemo(() => {
-    return getStipulatedClauses(cargoIdentifier, activeRole);
-  }, [cargoIdentifier, activeRole]);
+    const cargoClauses = getStipulatedClauses(cargoIdentifier, activeRole);
+    // Cargo-only clauses prescribe incompatible handling (grabs, trimming, etc.).
+    // These profiles carry their own complete operational terms.
+    if (!['HANDYSIZE', 'SUPRAMAX'].includes(operationalProfile)) {
+      return { ...cargoClauses, clauses: operationalClauses };
+    }
+    return { ...cargoClauses, clauses: [...operationalClauses, ...cargoClauses.clauses.filter(clause => !/grabs?|cranes?|derricks?|trimming/i.test(clause))] };
+  }, [cargoIdentifier, activeRole, operationalProfile]);
 
   // Manejo de impresión reactivo sin setTimeout mágicos
   const handlePrint = (clientMode) => {
@@ -421,7 +428,7 @@ export default function VoyageExecutiveReportModal({
               </summary>
               <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
                 <p><strong>Puerto de Carga (POL):</strong> {pol} · Calado y eslora validados conforme a carta náutica.</p>
-                <p><strong>Puerto de Descarga (POD):</strong> {pod} · Infraestructura de grúas y calado operativo verificado.</p>
+                <p><strong>Puerto de Descarga (POD):</strong> {pod} · {operationalProfile === 'PNEUMATIC' ? 'Conexiones neumáticas, compatibilidad de terminal y calado a confirmar.' : operationalProfile === 'RORO' ? 'Acceso por rampas, superficie de cubierta y límites por eje a confirmar.' : 'Medios de manipulación y calado operativo a confirmar.'}</p>
               </div>
             </details>
           </section>

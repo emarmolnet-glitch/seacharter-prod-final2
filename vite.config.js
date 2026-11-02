@@ -6,6 +6,7 @@ const legacyAssets = [
   "_headers",
   "_redirects",
   "contract-reference.js",
+  "fixture-operating-profile.js",
   "network-resilience.js",
   "project-cargo-engine.js",
   "dossiers.js",
@@ -57,6 +58,7 @@ export default defineConfig({
     target: "es2022",
     cssCodeSplit: true,
     rollupOptions: {
+      input: { main: resolve(process.cwd(), "index.html"), decisiones: resolve(process.cwd(), "decisiones.html") },
       output: {
         manualChunks(id) {
           if (id.includes("jspdf") || id.includes("html2pdf") || id.includes("html2canvas") || id.includes("pdf-export-service")) {

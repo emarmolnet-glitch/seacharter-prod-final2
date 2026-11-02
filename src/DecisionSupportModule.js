@@ -1465,12 +1465,13 @@ export async function generarFixtureRecapOpcionB() {
     try {
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
-        const approved = window.selectFixtureRecapState(window.State, window.dssBaseActualState, window.getDSSCurrentState?.(), window.dssFormState, mods);
-        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+        const approved = window.prepareCurrentFixtureRecapState(mods);
+
         const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+        window.activateFixtureRecapSnapshot(fixtureRecapSnapshot);
 
 
-        const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
+        const fleteMod = approved.allInRateGross;
         if (fleteMod !== undefined && fleteMod !== null) {
             const numFlete = Number(fleteMod);
             if (!isNaN(numFlete) && numFlete > 0) {
@@ -1503,8 +1504,8 @@ export async function generarFixtureRecapOpcionB() {
             }
         }
 
-        const loadMod = mods.loadRate ?? mods.laytimeLoad ?? mods.loadingRate;
-        const dischMod = mods.dischargeRate ?? mods.laytimeDisch ?? mods.dischargingRate ?? mods.laytime;
+        const loadMod = approved.loadRate;
+        const dischMod = approved.dischargeRate;
         if (loadMod !== undefined && loadMod !== null) {
             const numLoad = Number(loadMod);
             if (!isNaN(numLoad) && numLoad > 0) {
@@ -1535,25 +1536,6 @@ export async function generarFixtureRecapOpcionB() {
                         el.value = numDisch;
                     }
                 });
-            }
-        }
-
-        const clausulasMod = mods.clausulas ?? mods.specialClauses ?? mods.clausulasEspeciales;
-        if (clausulasMod) {
-            const strClausulas = String(clausulasMod);
-            if (typeof window !== 'undefined') {
-                if (window.dssFormState) {
-                    window.dssFormState.clausulas = strClausulas;
-                    window.dssFormState.specialClauses = strClausulas;
-                    window.dssFormState.clausulasEspeciales = strClausulas;
-                    window.dssFormState.clausulasEspecialesRecap = strClausulas;
-                }
-                if (window.dssBaseActualState) {
-                    window.dssBaseActualState.clausulas = strClausulas;
-                    window.dssBaseActualState.specialClauses = strClausulas;
-                    window.dssBaseActualState.clausulasEspecialesRecap = strClausulas;
-                }
-                window.dssInjectedRecapClauses = strClausulas;
             }
         }
 
