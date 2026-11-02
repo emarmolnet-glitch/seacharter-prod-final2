@@ -6,8 +6,10 @@
  * - HANDYSIZE: Handysize, MPP, Multi-Purpose, Bulk Carrier, Geared Breakbulk
  */
 export function resolveVesselStowageProfile(vesselType = '', vesselClass = '', shipProfile = '') {
-  const combined = `${vesselType} ${vesselClass} ${shipProfile}`.toLowerCase();
+  const combined = String(vesselType || shipProfile || vesselClass).toLowerCase();
+  if (/cement|pneumatic|neum[aá]tic/.test(combined)) return 'PNEUMATIC';
   if (
+    /roll[ -]?on/.test(combined) ||
     combined.includes('ro-ro') ||
     combined.includes('roro') ||
     combined.includes('ro-lo') ||
@@ -75,7 +77,20 @@ export function buildVoyageStowagePlan(voyageState = {}) {
   };
   let justification = [];
 
-  if (profile === 'RORO') {
+  if (profile === 'PNEUMATIC') {
+    holds = Array.from({ length: 4 }, (_, index) => ({
+      holdNumber: index + 1,
+      name: `Bodega Sellada ${index + 1}`,
+      totalWeightTons: cargoTons / 4,
+      totalVolumeCbm: cargoVolumeCbm / 4,
+      weightPercentage: cargoTons > 0 ? 25 : 0,
+      stowageTier: 'Bodega Sellada · Sistema Neumático',
+    }));
+    justification = [
+      'Cementero gearless: carga en bodegas selladas mediante sistema neumático, sin grúas de a bordo ni carga en cubierta.',
+      'Distribución simétrica de carga entre compartimentos sellados.',
+    ];
+  } else if (profile === 'RORO') {
     const weatherWeight = Math.round(cargoTons * 0.25 * 100) / 100;
     const mainWeight = Math.round(cargoTons * 0.50 * 100) / 100;
     const lowerWeight = Math.round(Math.max(0, cargoTons - weatherWeight - mainWeight) * 100) / 100;
@@ -185,7 +200,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
       metacentricHeightGmEstimatedM: 1.55,
     },
     vesselModel: {
-      type: vesselClass,
+      type: vesselType,
       profile,
       dwt,
     },

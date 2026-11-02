@@ -8,9 +8,9 @@ import React from 'react';
  * - 'HANDYSIZE': Handysize, MPP, Multi-Purpose, Bulk Carrier, Geared Breakbulk con 4 bodegas independientes y grúas de a bordo.
  */
 export function resolveVesselProfile(vesselType = '', title = '') {
-  const text = `${vesselType} ${title}`.toLowerCase();
+  const text = String(vesselType || title).toLowerCase();
   if (/cement|pneumatic|neum[aá]tic/.test(text)) return 'PNEUMATIC';
-  if (text.includes('ro-ro') || text.includes('roro') || text.includes('ro-lo') || text.includes('rolo') || text.includes('vehicle') || text.includes('car carrier')) {
+  if (text.includes('ro-ro') || text.includes('roro') || /roll[ -]?on/.test(text) || text.includes('ro-lo') || text.includes('rolo') || text.includes('vehicle') || text.includes('car carrier')) {
     return 'RORO';
   }
   if (text.includes('coaster') || text.includes('mini-bulker') || text.includes('minibulker') || text.includes('mini bulker') || text.includes('cabotage') || text.includes('cabotaje') || text.includes('costero')) {
@@ -159,7 +159,7 @@ export function VisualStowagePlan({
   const gm = Number(hydro.metacentricHeightGmEstimatedM || 1.55);
 
   const profileBadgeLabel = profile === 'PNEUMATIC'
-    ? 'PNEUMATIC CEMENT CARRIER (SEALED HOLDS)'
+    ? 'PNEUMATIC CEMENT CARRIER (GEARLESS · SEALED HOLDS)'
     : profile === 'COASTER'
     ? 'COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · GEARLESS)'
     : profile === 'RORO'
@@ -486,7 +486,7 @@ export function VisualStowagePlan({
                 const holdNum = hold.holdNumber || (idx + 1);
                 const holdTitle = profile === 'COASTER'
                   ? `Bodega Diáfana ${holdNum}`
-                  : `Bodega ${holdNum}`;
+                  : profile === 'PNEUMATIC' ? `Bodega Sellada ${holdNum}` : `Bodega ${holdNum}`;
 
                 return (
                   <g key={`hold-visual-${holdNum}`} className="cursor-default transition-all">

@@ -23,8 +23,8 @@ export default function VoyageExecutiveReportModal({
   const isPrintingRef = useRef(false);
 
   // Extraer estado del viaje desde props o desde window.State
-  const winState = typeof window !== 'undefined' ? window.State || {} : {};
-  const data = voyageData || winState || {};
+  // A supplied Recap is the complete report source; never merge live vessel defaults.
+  const data = voyageData ?? (typeof window !== 'undefined' ? window.State || {} : {});
 
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
@@ -65,7 +65,7 @@ export default function VoyageExecutiveReportModal({
 
   // Memoizar el plan de estiba para evitar re-cálculos o desmontajes innecesarios al alternar isClientMode
   const stowagePlan = useMemo(() => {
-    return data.stowagePlan || buildVoyageStowagePlan({
+    return (data.stowagePlan && data.stowagePlan.vesselModel?.profile === resolveVesselProfile(resolvedVesselType) ? data.stowagePlan : null) || buildVoyageStowagePlan({
       ...data,
       vesselType: resolvedVesselType,
       shipProfile,
