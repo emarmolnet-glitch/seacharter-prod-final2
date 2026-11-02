@@ -102,6 +102,36 @@
   }
 }
 
+.sea-assistant-fab.ai-thinking {
+  border-color: #2dd4bf !important;
+  animation: sca-thinking-breathe 1.6s ease-in-out infinite;
+}
+
+.sea-assistant-fab.ai-complete {
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.25), 0 10px 25px rgba(15, 23, 42, 0.45) !important;
+  animation: sca-calculation-ready 1s ease-out;
+}
+
+@keyframes sca-thinking-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes sca-calculation-ready {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.14); }
+  60% { transform: scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sea-assistant-fab.ai-thinking,
+  .sea-assistant-fab.ai-complete {
+    animation: none;
+    transition: none;
+  }
+}
+
 .sea-assistant-fab:focus-visible {
   outline: 3px solid rgba(45, 212, 191, 0.8);
   outline-offset: 3px;

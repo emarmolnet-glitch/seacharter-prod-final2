@@ -114,6 +114,9 @@ test('the master pipeline still returns the local financial result when optional
   const warnings = [];
   let localBatchCalls = 0;
   const context = {
+    document: { getElementById() { return null; } },
+    clearTimeout,
+    setTimeout,
     State: { breakEven: 321.5 },
     SeaCharterStore: { async batchAsync(task) { return task(); } },
     async validarYCalcularSeccion2() { return true; },
@@ -132,7 +135,7 @@ test('the master pipeline still returns the local financial result when optional
     console: { warn() {}, error() {} }
   };
 
-  vm.runInNewContext(`let isCalculatingMaster = false;\n${helperSource}\n${handlerSource}\nglobalThis.runMaster = handleMasterValidationAndCalculate;`, context);
+  vm.runInNewContext(`let isCalculatingMaster = false; let assistantCompletionTimer = null;\n${helperSource}\n${handlerSource}\nglobalThis.runMaster = handleMasterValidationAndCalculate;`, context);
   const result = await context.runMaster({ preventDefault() {} });
 
   assert.equal(localBatchCalls, 1);
