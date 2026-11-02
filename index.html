@@ -45409,15 +45409,42 @@ function scheduleReactiveEngine() {
         }
         window.generateAuditPDF = generateAuditPDF;
 
-        async function generateFixtureRecapPDF() {
+        async function generateFixtureRecapPDF(options = {}) {
             try {
                 await ensurePdfLibrariesLoaded();
                 if (typeof showToast === 'function') {
                     showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
                 }
 
-                const state = getDSSCurrentState();
-                const htmlString = buildFixtureRecapHTMLTemplate(state);
+                const state = { ...getDSSCurrentState() };
+                if (options.includeExecutiveReport) {
+                    Object.assign(state, window.dssFormState || {});
+                    const proposedFreight = window.dssInjectedRecapFreight;
+                    if (Number.isFinite(proposedFreight) && proposedFreight > 0) {
+                        Object.assign(state, { allInRateGross: proposedFreight, fleteUnitario: proposedFreight, fleteEstimado: proposedFreight });
+                    }
+                }
+                let htmlString = buildFixtureRecapHTMLTemplate(state);
+                if (options.includeExecutiveReport) {
+                    // Option B has already applied MADRE and run the existing synchronization.
+                    // Adapt names for the executive view without recalculating any financial metric.
+                    const operations = resolveFixtureRecapOperations(state);
+                    const voyage = {
+                        ...(typeof State !== 'undefined' ? State : {}),
+                        ...state,
+                        vessel: (typeof State !== 'undefined' && typeof State.vessel === 'object') ? State.vessel : state.vesselName,
+                        vesselName: state.vesselName,
+                        vesselType: operations.isPneumatic ? operations.vesselType : (state.vesselType || (typeof State !== 'undefined' ? State.vesselType : '') || operations.vesselType),
+                        cargo: state.cargoQty,
+                        cargoType: state.commodity,
+                        freightSell: state.fleteUnitario,
+                        totalDays: state.totalDays ?? ((typeof State !== 'undefined' ? State.totalDays : 0) || 0)
+                    };
+                    if (typeof window.buildFixtureExecutiveReportHTML !== 'function') {
+                        throw new Error('Executive report renderer is unavailable');
+                    }
+                    htmlString = `<div>${htmlString}${await window.buildFixtureExecutiveReportHTML(voyage)}</div>`;
+                }
                 const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
                 if (typeof html2pdf === 'function') {
@@ -45431,7 +45458,15 @@ function scheduleReactiveEngine() {
                     };
                     await html2pdf().from(htmlString).set(opt).save();
                 } else if (window.jspdf?.jsPDF || window.jsPDF) {
-                    await generateFixtureRecapJsPDDFallback(state, filename);
+                    if (options.includeExecutiveReport) {
+                        // Keep the schematic and appendix in the HTML fallback as well.
+                        const PDF = window.jspdf?.jsPDF || window.jsPDF;
+                        const pdf = new PDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                        await pdf.html(htmlString, { margin: 10, width: 190, windowWidth: 794, autoPaging: 'text' });
+                        pdf.save(filename);
+                    } else {
+                        await generateFixtureRecapJsPDDFallback(state, filename);
+                    }
                 } else {
                     alert('Librería PDF no disponible.');
                 }
@@ -45866,9 +45901,9 @@ function scheduleReactiveEngine() {
                 }
 
                 if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-                    await window.generateFixtureRecapPDF();
+                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true });
                 } else if (typeof generateFixtureRecapPDF === 'function') {
-                    await generateFixtureRecapPDF();
+                    await generateFixtureRecapPDF({ includeExecutiveReport: true });
                 } else {
                     console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
                 }

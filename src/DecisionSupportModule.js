@@ -1569,9 +1569,9 @@ export async function generarFixtureRecapOpcionB() {
         }
 
         if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-            await window.generateFixtureRecapPDF();
+            await window.generateFixtureRecapPDF({ includeExecutiveReport: true });
         } else if (typeof generateFixtureRecapPDF === 'function') {
-            await generateFixtureRecapPDF();
+            await generateFixtureRecapPDF({ includeExecutiveReport: true });
         } else {
             console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
         }
