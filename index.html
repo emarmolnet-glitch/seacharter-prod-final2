@@ -35031,15 +35031,23 @@ function createRouteAnchorElement(type) {
             }
         }
 
+        let assistantCompletionTimer = null;
+
         async function handleMasterValidationAndCalculate(event = null) {
             event?.preventDefault?.();
             if (isCalculatingMaster) return null;
+            const assistantButton = document.getElementById('sea-assistant-toggle');
+            clearTimeout(assistantCompletionTimer);
+            assistantButton?.classList.remove('ai-complete');
+            assistantButton?.classList.add('ai-thinking');
+            assistantButton?.setAttribute('aria-busy', 'true');
+            let calculationSucceeded = false;
             if (typeof window !== 'undefined') window.dossierSnapshotLocked = false;
 
             isCalculatingMaster = true;
-            setMasterCalculationLoading(true);
 
             try {
+                setMasterCalculationLoading(true);
                 const calculationResult = await SeaCharterStore.batchAsync(async () => {
                     await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
                     ensureSafeBunkerPrices({ deferEngine: true });
@@ -35079,6 +35087,7 @@ function createRouteAnchorElement(type) {
                         toggle?.click();
                     }
                 }
+                calculationSucceeded = true;
                 return calculationResult;
             } catch (error) {
                 console.error('Error en el cálculo maestro de la operación:', error);
@@ -35088,6 +35097,15 @@ function createRouteAnchorElement(type) {
                 return null;
             } finally {
                 isCalculatingMaster = false;
+                assistantButton?.classList.remove('ai-thinking');
+                assistantButton?.setAttribute('aria-busy', 'false');
+                if (calculationSucceeded && assistantButton) {
+                    assistantButton.classList.add('ai-complete');
+                    assistantCompletionTimer = setTimeout(() => {
+                        assistantButton.classList.remove('ai-complete');
+                        assistantCompletionTimer = null;
+                    }, 1000);
+                }
                 setMasterCalculationLoading(false);
             }
         }
