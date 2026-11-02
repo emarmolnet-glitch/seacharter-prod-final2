@@ -17,7 +17,7 @@ test('DSS panel header contains the secondary PDF document action buttons', () =
 
   assert.match(indexHtml, /id="btn-generate-fixture-recap-pdf"/, 'Fixture Recap button must exist in index.html');
   assert.match(indexHtml, /onclick="generateFixtureRecapPDF\(\)"/, 'Fixture Recap button must invoke generateFixtureRecapPDF()');
-  assert.match(indexHtml, /Generar Oferta \(Fixture Recap\)/, 'Fixture Recap button text label must be correct');
+  assert.match(indexHtml, /Imprimir Oferta \(Fixture Recap\)/, 'Fixture Recap button text label must be correct');
 });
 
 test('DSS PDF generation functions are defined and exposed on window in index.html', () => {
@@ -305,14 +305,14 @@ test('Option B exports the approved executive snapshot and ordinary recap still 
   const base = { cargoQty: 1000, fleteUnitario: 35, allInRateGross: 35 };
   const snapshot = Object.freeze({ state: Object.freeze({ freightSell: 48.70, netProfitOwner: 7654, cargoQty: 1000 }),
     html: '<main>COMMERCIAL</main>', executiveHTML: '<section>EXECUTIVE</section>' });
-  const run = new AsyncFunction('window', 'getDSSCurrentState', 'buildFixtureRecapHTMLTemplate', 'exportFixtureRecapInFrame', 'options',
+  const run = new AsyncFunction('window', 'getDSSCurrentState', 'buildFixtureRecapHTMLTemplate', 'unusedExporter', 'options',
     `${source}; await generateFixtureRecapPDF(options);`);
-  await run({}, () => base, () => { throw new Error('Approved HTML must be reused'); },
+  await run({ printFixtureRecap: html => { output = html; } }, () => base, () => { throw new Error('Approved HTML must be reused'); },
     async html => { output = html; }, { includeExecutiveReport: true, fixtureRecapSnapshot: snapshot });
   assert.ok(output.indexOf('COMMERCIAL') < output.indexOf('EXECUTIVE'));
   assert.equal(snapshot.state.freightSell, 48.70);
   assert.equal(base.fleteUnitario, 35);
-  await run({}, () => base, () => '<main>COMMERCIAL</main>', async html => { output = html; }, {});
+  await run({ printFixtureRecap: html => { output = html; } }, () => base, () => '<main>COMMERCIAL</main>', async html => { output = html; }, {});
   assert.equal(output, '<main>COMMERCIAL</main>');
 });
 

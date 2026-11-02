@@ -11,6 +11,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link rel="stylesheet" href="./src/dss-panel.css">
     <script src="/fixture-financial-snapshot.js"></script>
+    <script src="/fixture-native-print.js"></script>
 </head>
 <body class="bg-slate-900 text-sm text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
 
@@ -74,7 +75,7 @@
                 </button>
                 <button type="button" id="btn-generate-fixture-recap-pdf" onclick="generateFixtureRecapPDF()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-file-contract text-indigo-600"></i>
-                    <span>Generar Oferta (Fixture Recap)</span>
+                    <span>Imprimir Oferta (Fixture Recap)</span>
                 </button>
                 <button type="button" id="btn-auditoria-madre" onclick="solicitarAuditoriaMadre()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-teal-800 border border-teal-700/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-shield-halved text-teal-700"></i>
@@ -793,7 +794,7 @@
             <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
                 <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
                     <i class="fa-solid fa-file-contract text-teal-200"></i>
-                    <span>Generar Fixture Recap Estratégico (Opción B)</span>
+                    <span>Imprimir Fixture Recap Estratégico (Opción B)</span>
                 </button>
                 <p class="text-[11px] text-gray-500 text-center mt-2">
                     Aplica automáticamente las modificaciones acordadas (flete, cláusulas y laytime) y exporta el Recap PDF oficial.
@@ -3353,24 +3354,13 @@
                 const snapshot = options.fixtureRecapSnapshot || window.State?.fixtureRecapSnapshot || window.dssFormState?.fixtureRecapSnapshot || getDSSCurrentState().fixtureRecapSnapshot;
                 if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
                 const state = snapshot ? snapshot.state : getDSSCurrentState();
-                const htmlString = snapshot ? `<div>${snapshot.html}${options.includeExecutiveReport ? snapshot.executiveHTML : ''}</div>` : buildFixtureRecapHTMLTemplate(state);
-                const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
-
-                if (typeof html2pdf === 'function') {
-                    const opt = {
-                        margin:       10,
-                        filename:     filename,
-                        image:        { type: 'jpeg', quality: 0.98 },
-                        html2canvas:  { scale: 2, useCORS: true, logging: true },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-                    };
-                    await html2pdf().from(htmlString).set(opt).save();
-                } else {
-                    alert('Librería PDF no disponible.');
-                }
+                const htmlString = snapshot
+                    ? `<div>${snapshot.html}${options.includeExecutiveReport ? snapshot.executiveHTML : ''}</div>`
+                    : buildFixtureRecapHTMLTemplate(state);
+                window.printFixtureRecap(htmlString);
             } catch (err) {
-                console.error('Error al generar Fixture Recap PDF:', err);
+                console.error('Error al preparar la impresión del Fixture Recap:', err);
+                if (typeof showToast === 'function') showToast('No se pudo preparar la impresión del Fixture Recap');
             }
         }
         window.generateFixtureRecapPDF = generateFixtureRecapPDF;
@@ -3686,12 +3676,15 @@
         }
 
         async function generarFixtureRecapOpcionB() {
+            // Shared guard covers inline and module entry points, including store callbacks.
+            if (window.fixtureRecapOptionBPending) return;
+            window.fixtureRecapOptionBPending = true;
             try {
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
-        const approved = { ...(window.State || {}), ...(window.dssBaseActualState || {}), ...(window.getDSSCurrentState?.() || {}), ...(window.dssFormState || {}), ...mods };
-        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
-        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+                const approved = window.selectFixtureRecapState(window.State, window.dssBaseActualState, window.getDSSCurrentState?.(), window.dssFormState, mods);
+                approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+                const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
 
 
                 const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
@@ -3722,8 +3715,6 @@
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numFlete;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -3743,8 +3734,6 @@
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numLoad;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -3761,8 +3750,6 @@
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numDisch;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -3789,13 +3776,15 @@
 
                 if (typeof window !== 'undefined') {
                     if (typeof window.sincronizarFormularioDesdeEstado === 'function' && window.dssFormState) {
+                        await new Promise(resolve => setTimeout(resolve, 20));
                         window.sincronizarFormularioDesdeEstado(window.dssFormState);
                     }
                     if (typeof window.actualizarDesdeFormulario === 'function') {
+                        await new Promise(resolve => setTimeout(resolve, 20));
                         window.actualizarDesdeFormulario();
                     }
                     if (typeof window.showToast === 'function') {
-                        window.showToast('✅ Modificaciones de MADRE aplicadas en memoria. Generando Fixture Recap (Opción B)...', true);
+                        window.showToast('✅ Modificaciones de MADRE aplicadas en memoria. Preparando impresión del Fixture Recap (Opción B)...', true);
                     }
                 }
 
@@ -3809,8 +3798,10 @@
             } catch (err) {
                 console.error('Error al generar Fixture Recap Opción B:', err);
                 if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-                    window.showToast('❌ Error al generar Fixture Recap Opción B');
+                    window.showToast('❌ ' + (err?.message || 'Error al generar Fixture Recap Opción B'));
                 }
+            } finally {
+                window.fixtureRecapOptionBPending = false;
             }
         }
 

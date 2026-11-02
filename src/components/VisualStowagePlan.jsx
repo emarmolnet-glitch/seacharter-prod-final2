@@ -64,6 +64,7 @@ export function VisualStowagePlan({
   stowagePlan = null,
   vesselType = 'Handysize MPP 32.000 DWT',
   projectRef = '',
+  textOnly = false,
 }) {
   const profile = resolveVesselProfile(vesselType, stowagePlan?.vesselModel?.type || '');
 
@@ -181,7 +182,7 @@ export function VisualStowagePlan({
             UNIVERSAL STOWAGE ENGINE · SEACHARTER PRO
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold">
-            CORTE ESQUEMÁTICO 2D
+            {textOnly ? 'TECHNICAL STOWAGE DATA' : 'CORTE ESQUEMÁTICO 2D'}
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold uppercase">
             {profileBadgeLabel}
@@ -193,6 +194,19 @@ export function VisualStowagePlan({
         </div>
       </div>
 
+      {textOnly && <table>
+        <caption>Stowage allocation</caption>
+        <thead><tr><th scope="col">Compartment</th><th scope="col">Weight (MT)</th><th scope="col">Volume (m³)</th></tr></thead>
+        <tbody>
+          {displayHolds.map((hold, index) => <tr key={index}>
+            <td>{hold.name || `Hold ${index + 1}`}</td>
+            <td>{Number(hold.totalWeightTons || 0).toFixed(2)}</td>
+            <td>{Number(hold.totalVolumeCbm || 0).toFixed(2)}</td>
+          </tr>)}
+          <tr><td>Weather deck</td><td>{deckWeightTons.toFixed(2)}</td><td>{Number(deck.totalVolumeCbm || 0).toFixed(2)}</td></tr>
+        </tbody>
+      </table>}
+      {!textOnly && <>
       {/* Indicadores direccionales Proa / Popa en gris oscuro sobre fondo claro */}
       <div className="flex justify-between items-center text-[10px] font-mono font-bold tracking-widest text-gray-700 uppercase mb-2 px-2">
         <div className="flex items-center gap-1.5 text-gray-700">
@@ -696,6 +710,7 @@ export function VisualStowagePlan({
         </div>
       </div>
 
+      </>}
       {/* ==================================================================== */}
       {/* SECCIÓN OBLIGATORIA: TABLA DE VALIDACIÓN TÉCNICA E HIDRODINÁMICA   */}
       {/* ==================================================================== */}

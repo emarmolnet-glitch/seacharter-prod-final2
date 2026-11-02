@@ -9645,6 +9645,7 @@
     <link href="./market-contacts.css" rel="stylesheet">
     <link href="./dossiers.css" rel="stylesheet">
     <script src="/fixture-financial-snapshot.js"></script>
+    <script src="/fixture-native-print.js"></script>
 </head>
 <body class="theme-light bg-slate-900 h-screen flex flex-col overflow-hidden" data-app-ready="false" aria-busy="true">
 
@@ -12671,7 +12672,7 @@
                 </button>
                 <button type="button" id="btn-generate-fixture-recap-pdf" onclick="generateFixtureRecapPDF()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-file-contract text-indigo-600"></i>
-                    <span>Generar Oferta (Fixture Recap)</span>
+                    <span>Imprimir Oferta (Fixture Recap)</span>
                 </button>
                 <button type="button" id="btn-auditoria-madre" onclick="solicitarAuditoriaMadre()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-teal-800 border border-teal-700/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-shield-halved text-teal-700"></i>
@@ -45517,105 +45518,18 @@ function scheduleReactiveEngine() {
         }
         window.generateAuditPDF = generateAuditPDF;
 
-        async function exportFixtureRecapInFrame(htmlString, filename) {
-            const frame = document.createElement('iframe');
-            frame.title = 'Fixture Recap PDF';
-            frame.setAttribute('aria-hidden', 'true');
-            frame.tabIndex = -1;
-            // Keep layout measurable; display:none prevents canvas rendering.
-            frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none';
-            document.body.appendChild(frame);
-            let libraryTimeout;
-            try {
-                const pdfDocument = frame.contentDocument;
-                const pdfWindow = frame.contentWindow;
-                if (!pdfDocument || !pdfWindow) throw new Error('No se pudo crear el documento PDF aislado.');
-                pdfDocument.open();
-                pdfDocument.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fixture Recap</title></head><body><main id="fixture-pdf-content"></main></body></html>');
-                pdfDocument.close();
-                const style = pdfDocument.createElement('style');
-                // Local print styles only: no application CSS or UI enters this document.
-                style.textContent = `
-                    * { box-sizing: border-box; }
-                    html, body { margin: 0; padding: 0; background: white; color: #1e293b; font: 12px/1.45 Arial, sans-serif; }
-                    #fixture-pdf-content { width: 718px; }
-                    img, svg { max-width: 100%; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { padding: 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-                    h1, h2, h3, h4 { break-after: avoid; }
-                    .no-print, .print\\:hidden, button { display: none !important; }
-                    .grid { display: grid; gap: 12px; }
-                    .grid-cols-2, .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                    .grid-cols-3, .md\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-                    .fixture-executive-appendix { padding-top: 12px; }
-                `;
-                pdfDocument.head.appendChild(style);
-                const content = pdfDocument.getElementById('fixture-pdf-content');
-                content.innerHTML = htmlString;
-                // Loading the bundle in the iframe is essential: a parent-realm
-                // html2pdf would still append its overlay to the application's body.
-                await new Promise((resolve, reject) => {
-                    const script = pdfDocument.createElement('script');
-                    libraryTimeout = setTimeout(() => reject(new Error('Tiempo de espera agotado al cargar el motor PDF.')), 15000);
-                    script.onload = () => { clearTimeout(libraryTimeout); resolve(); };
-                    script.onerror = () => { clearTimeout(libraryTimeout); reject(new Error('No se pudo cargar el motor PDF.')); };
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                    pdfDocument.head.appendChild(script);
-                });
-                if (typeof pdfWindow.html2pdf !== 'function') throw new Error('Motor PDF no disponible.');
-                // Let the browser paint the generation notice before canvas work.
-                await new Promise(resolve => setTimeout(resolve, 0));
-                const pdf = await pdfWindow.html2pdf().set({
-                    margin: 10,
-                    filename,
-                    image: { type: 'jpeg', quality: 0.9 },
-                    html2canvas: { scale: 1, useCORS: true, logging: false },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                    pagebreak: { mode: ['css', 'legacy'] }
-                }).from(content).toPdf().get('pdf');
-                // Trigger download in the parent realm: removing the iframe must
-                // not cancel FileSaver timers owned by its window.
-                const downloadUrl = URL.createObjectURL(pdf.output('blob'));
-                const link = document.createElement('a');
-                try {
-                    link.href = downloadUrl;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                } finally {
-                    link.remove();
-                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-                }
-            } finally {
-                clearTimeout(libraryTimeout);
-                frame.remove();
-            }
-        }
-
         async function generateFixtureRecapPDF(options = {}) {
             try {
-                if (typeof showToast === 'function') {
-                    showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
-                }
-
                 const snapshot = options.fixtureRecapSnapshot || window.State?.fixtureRecapSnapshot || window.dssFormState?.fixtureRecapSnapshot || getDSSCurrentState().fixtureRecapSnapshot;
                 if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
-                const state = snapshot ? snapshot.state : { ...getDSSCurrentState() };
+                const state = snapshot ? snapshot.state : getDSSCurrentState();
                 const htmlString = snapshot
                     ? `<div>${snapshot.html}${options.includeExecutiveReport ? snapshot.executiveHTML : ''}</div>`
                     : buildFixtureRecapHTMLTemplate(state);
-                const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
-
-                await exportFixtureRecapInFrame(htmlString, filename);
-
-                if (typeof showToast === 'function') {
-                    showToast('✅ Oferta Comercial (Fixture Recap PDF) descargada');
-                }
+                window.printFixtureRecap(htmlString);
             } catch (err) {
-                console.error('Error al generar Fixture Recap PDF:', err);
-                if (typeof showToast === 'function') {
-                    showToast('❌ Error al generar Fixture Recap PDF');
-                }
+                console.error('Error al preparar la impresión del Fixture Recap:', err);
+                if (typeof showToast === 'function') showToast('No se pudo preparar la impresión del Fixture Recap');
             }
         }
         window.generateFixtureRecapPDF = generateFixtureRecapPDF;
@@ -45928,12 +45842,15 @@ function scheduleReactiveEngine() {
         }
 
         async function generarFixtureRecapOpcionB() {
+            // Shared guard covers inline and module entry points, including store callbacks.
+            if (window.fixtureRecapOptionBPending) return;
+            window.fixtureRecapOptionBPending = true;
             try {
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
-        const approved = { ...(window.State || {}), ...(window.dssBaseActualState || {}), ...(window.getDSSCurrentState?.() || {}), ...(window.dssFormState || {}), ...mods };
-        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
-        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+                const approved = window.selectFixtureRecapState(window.State, window.dssBaseActualState, window.getDSSCurrentState?.(), window.dssFormState, mods);
+                approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+                const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
 
 
                 const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
@@ -45964,8 +45881,6 @@ function scheduleReactiveEngine() {
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numFlete;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -45985,8 +45900,6 @@ function scheduleReactiveEngine() {
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numLoad;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -46003,8 +45916,6 @@ function scheduleReactiveEngine() {
                             const el = document.getElementById(id);
                             if (el) {
                                 el.value = numDisch;
-                                el.dispatchEvent(new Event('input', { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -46031,13 +45942,15 @@ function scheduleReactiveEngine() {
 
                 if (typeof window !== 'undefined') {
                     if (typeof window.sincronizarFormularioDesdeEstado === 'function' && window.dssFormState) {
+                        await new Promise(resolve => setTimeout(resolve, 20));
                         window.sincronizarFormularioDesdeEstado(window.dssFormState);
                     }
                     if (typeof window.actualizarDesdeFormulario === 'function') {
+                        await new Promise(resolve => setTimeout(resolve, 20));
                         window.actualizarDesdeFormulario();
                     }
                     if (typeof window.showToast === 'function') {
-                        window.showToast('✅ Modificaciones de MADRE aplicadas en memoria. Generando Fixture Recap (Opción B)...', true);
+                        window.showToast('✅ Modificaciones de MADRE aplicadas en memoria. Preparando impresión del Fixture Recap (Opción B)...', true);
                     }
                 }
 
@@ -46051,8 +45964,10 @@ function scheduleReactiveEngine() {
             } catch (err) {
                 console.error('Error al generar Fixture Recap Opción B:', err);
                 if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-                    window.showToast('❌ Error al generar Fixture Recap Opción B');
+                    window.showToast('❌ ' + (err?.message || 'Error al generar Fixture Recap Opción B'));
                 }
+            } finally {
+                window.fixtureRecapOptionBPending = false;
             }
         }
 
@@ -46248,7 +46163,7 @@ function scheduleReactiveEngine() {
                 }
 
                 if (typeof showToast === 'function') {
-                    showToast('✅ Condiciones definitivas fijadas correctamente. Generando Fixture Recap PDF...');
+                    showToast('✅ Condiciones definitivas fijadas correctamente. Preparando impresión del Fixture Recap...');
                 }
                 window.HeaderWorkflowActions?.markFinalConditionsSet?.();
 
