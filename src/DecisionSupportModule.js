@@ -1462,6 +1462,10 @@ export async function generarFixtureRecapOpcionB() {
     try {
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
+        const approved = { ...(window.State || {}), ...(window.dssBaseActualState || {}), ...(window.getDSSCurrentState?.() || {}), ...(window.dssFormState || {}), ...mods };
+        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+
 
         const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
         if (fleteMod !== undefined && fleteMod !== null) {
@@ -1569,9 +1573,9 @@ export async function generarFixtureRecapOpcionB() {
         }
 
         if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-            await window.generateFixtureRecapPDF({ includeExecutiveReport: true });
+            await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
         } else if (typeof generateFixtureRecapPDF === 'function') {
-            await generateFixtureRecapPDF({ includeExecutiveReport: true });
+            await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
         } else {
             console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
         }
