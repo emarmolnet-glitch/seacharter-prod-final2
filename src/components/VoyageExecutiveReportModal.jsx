@@ -56,7 +56,7 @@ export default function VoyageExecutiveReportModal({
   const costTotal = Number(data.costTotal || data.totalExpenses || (costBunkers + costOpex + costPda + costEts));
   const opexDaily = Number(data.opexDaily || data.opex || (totalDays > 0 ? costOpex / totalDays : 0));
 
-  const totalSaleAmount = freightSell * cargoTons;
+  const totalSaleAmount = data.fixtureFinancial ? data.fixtureFinancial.totalFreightGross : freightSell * cargoTons;
 
   // Resolver vesselType exacto (ej. Coaster, Minibulker, Handysize, Ro-Ro, Ro-Lo)
   const resolvedVesselType = reportVessel.type;

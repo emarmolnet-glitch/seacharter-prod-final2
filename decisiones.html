@@ -10,6 +10,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link rel="stylesheet" href="./src/dss-panel.css">
+    <script src="/fixture-financial-snapshot.js"></script>
 </head>
 <body class="bg-slate-900 text-sm text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
 
@@ -3134,9 +3135,9 @@
                 35
             );
 
-            const fleteTotal = rawFlete > 1000 ? rawFlete : rawFlete * cargoQty;
-            const allInRateGross = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
-            const cleanFleteTotal = fleteTotal.toLocaleString('en-US');
+            const fleteTotal = safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightGross : (rawFlete > 1000 ? rawFlete : rawFlete * cargoQty);
+            const allInRateGross = safeState.fixtureFinancial ? safeState.fixtureFinancial.unitRateText : (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
+            const cleanFleteTotal = safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightText : fleteTotal.toLocaleString('en-US');
 
             const rawDemurrage = Number(
                 safeState.demurrageRate ||
@@ -3347,10 +3348,12 @@
         }
         window.generateAuditPDF = generateAuditPDF;
 
-        async function generateFixtureRecapPDF() {
+        async function generateFixtureRecapPDF(options = {}) {
             try {
-                const state = getDSSCurrentState();
-                const htmlString = buildFixtureRecapHTMLTemplate(state);
+                const snapshot = options.fixtureRecapSnapshot || window.State?.fixtureRecapSnapshot || window.dssFormState?.fixtureRecapSnapshot || getDSSCurrentState().fixtureRecapSnapshot;
+                if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
+                const state = snapshot ? snapshot.state : getDSSCurrentState();
+                const htmlString = snapshot ? `<div>${snapshot.html}${options.includeExecutiveReport ? snapshot.executiveHTML : ''}</div>` : buildFixtureRecapHTMLTemplate(state);
                 const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
                 if (typeof html2pdf === 'function') {
@@ -3686,6 +3689,10 @@
             try {
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
+        const approved = { ...(window.State || {}), ...(window.dssBaseActualState || {}), ...(window.getDSSCurrentState?.() || {}), ...(window.dssFormState || {}), ...mods };
+        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+
 
                 const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
                 if (fleteMod !== undefined && fleteMod !== null) {
@@ -3793,9 +3800,9 @@
                 }
 
                 if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-                    await window.generateFixtureRecapPDF();
+                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
                 } else if (typeof generateFixtureRecapPDF === 'function') {
-                    await generateFixtureRecapPDF();
+                    await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
                 } else {
                     console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
                 }

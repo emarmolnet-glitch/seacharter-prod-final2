@@ -9642,6 +9642,7 @@
     <link href="./calculator_view.css" rel="stylesheet">
     <link href="./market-contacts.css" rel="stylesheet">
     <link href="./dossiers.css" rel="stylesheet">
+    <script src="/fixture-financial-snapshot.js"></script>
 </head>
 <body class="theme-light bg-slate-900 h-screen flex flex-col overflow-hidden" data-app-ready="false" aria-busy="true">
 
@@ -45155,9 +45156,9 @@ function scheduleReactiveEngine() {
                 35
             );
 
-            const fleteTotal = rawFlete > 1000 ? rawFlete : rawFlete * cargoQty;
-            const allInRateGross = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
-            const cleanFleteTotal = fleteTotal.toLocaleString('en-US');
+            const fleteTotal = safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightGross : (rawFlete > 1000 ? rawFlete : rawFlete * cargoQty);
+            const allInRateGross = safeState.fixtureFinancial ? safeState.fixtureFinancial.unitRateText : (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
+            const cleanFleteTotal = safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightText : fleteTotal.toLocaleString('en-US');
 
             const rawDemurrage = Number(
                 safeState.demurrageRate ||
@@ -45416,35 +45417,12 @@ function scheduleReactiveEngine() {
                     showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
                 }
 
-                const state = { ...getDSSCurrentState() };
-                if (options.includeExecutiveReport) {
-                    Object.assign(state, window.dssFormState || {});
-                    const proposedFreight = window.dssInjectedRecapFreight;
-                    if (Number.isFinite(proposedFreight) && proposedFreight > 0) {
-                        Object.assign(state, { allInRateGross: proposedFreight, fleteUnitario: proposedFreight, fleteEstimado: proposedFreight });
-                    }
-                }
-                let htmlString = buildFixtureRecapHTMLTemplate(state);
-                if (options.includeExecutiveReport) {
-                    // Option B has already applied MADRE and run the existing synchronization.
-                    // Adapt names for the executive view without recalculating any financial metric.
-                    const operations = resolveFixtureRecapOperations(state);
-                    const voyage = {
-                        ...(typeof State !== 'undefined' ? State : {}),
-                        ...state,
-                        vessel: (typeof State !== 'undefined' && typeof State.vessel === 'object') ? State.vessel : state.vesselName,
-                        vesselName: state.vesselName,
-                        vesselType: operations.isPneumatic ? operations.vesselType : (state.vesselType || (typeof State !== 'undefined' ? State.vesselType : '') || operations.vesselType),
-                        cargo: state.cargoQty,
-                        cargoType: state.commodity,
-                        freightSell: state.fleteUnitario,
-                        totalDays: state.totalDays ?? ((typeof State !== 'undefined' ? State.totalDays : 0) || 0)
-                    };
-                    if (typeof window.buildFixtureExecutiveReportHTML !== 'function') {
-                        throw new Error('Executive report renderer is unavailable');
-                    }
-                    htmlString = `<div>${htmlString}${await window.buildFixtureExecutiveReportHTML(voyage)}</div>`;
-                }
+                const snapshot = options.fixtureRecapSnapshot || window.State?.fixtureRecapSnapshot || window.dssFormState?.fixtureRecapSnapshot || getDSSCurrentState().fixtureRecapSnapshot;
+                if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
+                const state = snapshot ? snapshot.state : { ...getDSSCurrentState() };
+                const htmlString = snapshot
+                    ? `<div>${snapshot.html}${options.includeExecutiveReport ? snapshot.executiveHTML : ''}</div>`
+                    : buildFixtureRecapHTMLTemplate(state);
                 const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
                 if (typeof html2pdf === 'function') {
@@ -45794,6 +45772,10 @@ function scheduleReactiveEngine() {
             try {
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
+        const approved = { ...(window.State || {}), ...(window.dssBaseActualState || {}), ...(window.getDSSCurrentState?.() || {}), ...(window.dssFormState || {}), ...mods };
+        approved.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? approved.allInRateGross;
+        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+
 
                 const fleteMod = mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? mods.allInRateGross;
                 if (fleteMod !== undefined && fleteMod !== null) {
@@ -45901,9 +45883,9 @@ function scheduleReactiveEngine() {
                 }
 
                 if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true });
+                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
                 } else if (typeof generateFixtureRecapPDF === 'function') {
-                    await generateFixtureRecapPDF({ includeExecutiveReport: true });
+                    await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
                 } else {
                     console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
                 }
@@ -45960,7 +45942,7 @@ function scheduleReactiveEngine() {
                 const updatedActualCargoIntake = (activeDss.actualCargoIntake && Number(activeDss.actualCargoIntake) > 0) ? Number(activeDss.actualCargoIntake) : cargoQty;
 
                 // Calcular / obtener el Flete ALL-IN GROSS del DSS (incluye comisiones y recargos)
-                const allInResult = (typeof calculateAllInFreightGross === 'function')
+                const allInResult = (!activeDss.allInRateGross && typeof calculateAllInFreightGross === 'function')
                     ? calculateAllInFreightGross(activeDss)
                     : null;
                 const allInGrossFreight = Number(
@@ -45969,6 +45951,8 @@ function scheduleReactiveEngine() {
                     activeDss.fleteGross ||
                     updatedFreightSell
                 );
+
+                const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot({ ...activeDss, cargoQty, allInRateGross: allInGrossFreight }, 'definitive');
 
                 // 2. Reverse Sync: Sobrescribir globalState / State / SeaCharterStore
                 if (typeof State !== 'undefined' && State) {
@@ -46064,6 +46048,7 @@ function scheduleReactiveEngine() {
 
                 // 4. Persistencia en la Base de Datos (PUT /api/estimations/:id)
                 const estimationPayload = {
+                    fixtureRecapSnapshot,
                     estimationId: 'current',
                     pol: (typeof State !== 'undefined' ? State.pol : activeDss.pol) || activeDss.pol,
                     pod: (typeof State !== 'undefined' ? State.pod : activeDss.pod) || activeDss.pod,
@@ -46110,7 +46095,7 @@ function scheduleReactiveEngine() {
 
                 if (typeof generateFixtureRecapPDF === 'function') {
                     try {
-                        await generateFixtureRecapPDF();
+                        await generateFixtureRecapPDF({ fixtureRecapSnapshot });
                     } catch (pdfErr) {
                         console.warn('[fijarCondicionesDefinitivas] PDF generation notice:', pdfErr);
                     }
@@ -46174,6 +46159,7 @@ function scheduleReactiveEngine() {
 
                 const state = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : (dssFormState || {});
                 const snapshotPayload = {
+                    fixtureRecapSnapshot: state.fixtureRecapSnapshot || window.State?.fixtureRecapSnapshot,
                     estimationId: 'current',
                     type: type,
                     status: 'ACCEPTED',
@@ -46326,7 +46312,7 @@ function scheduleReactiveEngine() {
             const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : (Number(safeState.cargoQty) || 0);
             const formattedDwt = dwt.toLocaleString('en-US');
 
-            const freightPerMT = (safeState.fleteEstimado / (safeState.cargoQty || 1)).toFixed(2);
+            const freightPerMT = safeState.fixtureFinancial ? safeState.fixtureFinancial.unitRateText : (safeState.fleteEstimado / (safeState.cargoQty || 1)).toFixed(2);
             const recapText = [
                 '========================================================================',
                 `VALIDITY: 24 HOURS FROM ISSUANCE - DATE: ${new Date().toLocaleDateString('es-ES')}`,
@@ -46342,7 +46328,7 @@ function scheduleReactiveEngine() {
                 `- LAYCAN   : ${safeState.laycanDaysLeft !== undefined ? safeState.laycanDaysLeft : 10} DAYS NOTICE`,
                 '',
                 '2. FREIGHT & FINANCIALS:',
-                `- FREIGHT  : USD $${freightPerMT} / MT (LUMPSUM USD $${state.fleteEstimado.toLocaleString('en-US')}) FIOS`,
+                `- FREIGHT  : USD $${freightPerMT} / MT (LUMPSUM USD $${safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightText : state.fleteEstimado.toLocaleString('en-US')}) FIOS`,
                 `- TERMS    : FIOS (FREE IN AND OUT STOWED)`,
                 `- PAYMENT  : 100% PRE-PAYABLE UPON RELEASE OF BS/L`,
                 '',
