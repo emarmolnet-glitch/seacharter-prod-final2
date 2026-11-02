@@ -148,13 +148,11 @@ test('4. Inyección en contexto_ui hacia madre-chat: getCoreProUIContext integra
   assert.match(globalMadreDrawerSource, /triggerLaserScanEffect\(\)/);
 });
 
-test('5. Backend madre-chat procesa el escaneo estructurado y genera dictamen con los 10 bloques', () => {
-  // madre-chat.ts debe procesar peticiones de escaneo y reconocer contexto_ui con los 10 bloques
-  assert.match(madreChatSource, /lower\.includes\(['"]escan['"]\)/);
-  assert.match(madreChatSource, /bloque_1_derrota_puertos/);
+test('5. Backend madre-chat protege el escaneo remoto y usa métricas locales sin inventar una auditoría completa', () => {
+  assert.match(madreChatSource, /ui\.escaneo_estructurado\?\.bloques/);
   assert.match(madreChatSource, /bloque_10_simulador_negociacion_contraofertas/);
-  assert.match(madreChatSource, /escaneo_procesado:\s*Boolean\(escaneo\)/);
-  assert.match(madreChatSource, /bloques_auditados:\s*escaneo \? 10 : 0/);
+  assert.match(madreChatSource, /Promise\.race/);
+  assert.match(madreChatSource, /escaneo_procesado: false, bloques_auditados: 0/);
 });
 
 test('6. Ejecución funcional en entorno DOM: Disparo visual y extracción limpia de los 10 bloques', async () => {

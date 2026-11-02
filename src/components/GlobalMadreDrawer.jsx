@@ -234,7 +234,7 @@ export function capturarDomModuloActivo(moduloIdOpcional) {
 /**
  * Cerebro Central MADRE - Strategic Audit & Fixture Recap API Endpoint
  */
-export const MADRE_API_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
+export const MADRE_API_ENDPOINT = "/api/madre-chat";
 
 /**
  * Guion Ejecutivo de Carga Seca para voz neuronal de Madre
