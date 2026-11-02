@@ -296,37 +296,26 @@ test('jsPDF fallback applies pneumatic equipment and rates without crane clauses
   assert.doesNotMatch(text, /cranes?|grabs?|SWL|Geared|2,000/i);
 });
 
-test('Option B appends the executive snapshot with MADRE freight and preserves ordinary recap export', async () => {
+test('Option B exports the approved executive snapshot and ordinary recap still works', async () => {
   const start = indexHtml.indexOf('async function generateFixtureRecapPDF(options');
   const end = indexHtml.indexOf('window.generateFixtureRecapPDF =', start);
   const source = indexHtml.slice(start, end);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   let output;
-  let snapshot;
   const base = { cargoQty: 1000, fleteUnitario: 35, allInRateGross: 35 };
-  const state = { netProfitOwner: 7654, freightSell: 35 };
-  const win = {
-    dssFormState: { ...base, loadRate: 5000 },
-    dssInjectedRecapFreight: 48.70,
-    buildFixtureExecutiveReportHTML: voyage => {
-      snapshot = voyage;
-      return '<section>EXECUTIVE</section>';
-    }
-  };
-  const run = new AsyncFunction('resolveFixtureRecapOperations', 'window', 'State', 'getDSSCurrentState', 'ensurePdfLibrariesLoaded', 'buildFixtureRecapHTMLTemplate', 'html2pdf', 'options',
+  const snapshot = Object.freeze({ state: Object.freeze({ freightSell: 48.70, netProfitOwner: 7654, cargoQty: 1000 }),
+    html: '<main>COMMERCIAL</main>', executiveHTML: '<section>EXECUTIVE</section>' });
+  const run = new AsyncFunction('window', 'getDSSCurrentState', 'buildFixtureRecapHTMLTemplate', 'exportFixtureRecapInFrame', 'options',
     `${source}; await generateFixtureRecapPDF(options);`);
-  const worker = { from(html) { output = html; return this; }, set() { return this; }, async save() {} };
-  await run(() => ({ isPneumatic: true, vesselType: 'Pneumatic Cement Carrier' }), win, state, () => base, async () => {}, () => '<main>COMMERCIAL</main>', () => worker, { includeExecutiveReport: true });
-  assert.equal(snapshot.freightSell, 48.70);
-  assert.equal(snapshot.vesselType, 'Pneumatic Cement Carrier');
-  assert.equal(snapshot.netProfitOwner, 7654);
-  assert.equal(snapshot.cargo, 1000);
+  await run({}, () => base, () => { throw new Error('Approved HTML must be reused'); },
+    async html => { output = html; }, { includeExecutiveReport: true, fixtureRecapSnapshot: snapshot });
   assert.ok(output.indexOf('COMMERCIAL') < output.indexOf('EXECUTIVE'));
+  assert.equal(snapshot.state.freightSell, 48.70);
   assert.equal(base.fleteUnitario, 35);
-  assert.equal(state.freightSell, 35);
-  await run(() => ({ isPneumatic: true, vesselType: 'Pneumatic Cement Carrier' }), win, state, () => base, async () => {}, () => '<main>COMMERCIAL</main>', () => worker, {});
+  await run({}, () => base, () => '<main>COMMERCIAL</main>', async html => { output = html; }, {});
   assert.equal(output, '<main>COMMERCIAL</main>');
 });
+
 
 
 test('executive vessel binding supports policy objects and removes the generic cement-carrier name', () => {

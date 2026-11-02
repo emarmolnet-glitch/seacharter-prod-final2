@@ -7,8 +7,22 @@
         }
         return value;
     };
+    const withoutSnapshotHistory = (value, seen = new WeakMap()) => {
+        if (!value || typeof value !== 'object' || Object.prototype.toString.call(value) === '[object Date]') return value;
+        if (seen.has(value)) return seen.get(value);
+        const clean = Array.isArray(value) ? new Array(value.length) : {};
+        seen.set(value, clean);
+        for (const key of Object.keys(value)) {
+            // Do not visit history at all, even if it has getters or toJSON hooks.
+            if (key !== 'fixtureRecapSnapshot') clean[key] = withoutSnapshotHistory(value[key], seen);
+        }
+        return clean;
+    };
     window.captureFixtureFinancialSnapshot = async function (approvedState, option = 'definitive', includeExecutiveReport = false) {
-        const state = JSON.parse(JSON.stringify(approvedState));
+        // Work on a detached source so a failed save preserves the approved session.
+        const source = withoutSnapshotHistory(approvedState);
+        delete source.fixtureRecapSnapshot;
+        const state = JSON.parse(JSON.stringify(source));
         const rate = Number(state.allInRateGross);
         const quantity = Number(state.cargoQty);
         if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(quantity) || quantity <= 0) {

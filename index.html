@@ -19503,6 +19503,10 @@
             });
             } finally {
                 isRestoringAuditSession = wasRestoring;
+                const preferredTab = silent || restoring ? null
+                    : document.getElementById('view-decisiones')?.classList.contains('active-block') ? 'decisiones' : 'estimator';
+                const visibleTab = restoreWorkspaceVisibility(preferredTab);
+                if (visibleTab && typeof updateNavigationContext === 'function') updateNavigationContext(visibleTab);
             }
         }
         function resetTotalEstimation(options = {}) {
@@ -21700,9 +21704,10 @@ function createRouteAnchorElement(type) {
 
         // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', () => {
+            restoreWorkspaceVisibility();
             if (typeof renderNavbarModules === 'function') {
                 renderNavbarModules();
-                updateNavigationContext('map');
+                updateNavigationContext(getMountedContentModuleId() || 'estimator');
                 void loadAccountUserPreferences();
             }
             if (typeof window.detenerRadar === 'function') {
@@ -31625,6 +31630,24 @@ function createRouteAnchorElement(type) {
                     return null;
                 });
             return decisionSupportModulePromise;
+        }
+
+        // Restore the content independently of remote data and optional module hooks.
+        function restoreWorkspaceVisibility(preferredTab = null) {
+            const views = Array.from(document.querySelectorAll('.view-section'));
+            const activeView = views.find(view => view.classList.contains('active-block') || view.classList.contains('active-flex'));
+            const target = (preferredTab && document.getElementById(`view-${preferredTab}`))
+                || activeView || document.getElementById('view-estimator');
+            if (!target) return;
+            views.forEach(view => {
+                const selected = view === target;
+                view.classList.toggle('hidden', !selected);
+                view.classList.remove('active-block', 'active-flex');
+            });
+            target.classList.remove('hidden');
+            target.removeAttribute('hidden');
+            target.classList.add(target.id === 'view-auditor' ? 'active-flex' : 'active-block');
+            return target.id.replace('view-', '');
         }
 
         function switchTab(tabId) {
@@ -45494,9 +45517,83 @@ function scheduleReactiveEngine() {
         }
         window.generateAuditPDF = generateAuditPDF;
 
+        async function exportFixtureRecapInFrame(htmlString, filename) {
+            const frame = document.createElement('iframe');
+            frame.title = 'Fixture Recap PDF';
+            frame.setAttribute('aria-hidden', 'true');
+            frame.tabIndex = -1;
+            // Keep layout measurable; display:none prevents canvas rendering.
+            frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none';
+            document.body.appendChild(frame);
+            let libraryTimeout;
+            try {
+                const pdfDocument = frame.contentDocument;
+                const pdfWindow = frame.contentWindow;
+                if (!pdfDocument || !pdfWindow) throw new Error('No se pudo crear el documento PDF aislado.');
+                pdfDocument.open();
+                pdfDocument.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fixture Recap</title></head><body><main id="fixture-pdf-content"></main></body></html>');
+                pdfDocument.close();
+                const style = pdfDocument.createElement('style');
+                // Local print styles only: no application CSS or UI enters this document.
+                style.textContent = `
+                    * { box-sizing: border-box; }
+                    html, body { margin: 0; padding: 0; background: white; color: #1e293b; font: 12px/1.45 Arial, sans-serif; }
+                    #fixture-pdf-content { width: 718px; }
+                    img, svg { max-width: 100%; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { padding: 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+                    h1, h2, h3, h4 { break-after: avoid; }
+                    .no-print, .print\\:hidden, button { display: none !important; }
+                    .grid { display: grid; gap: 12px; }
+                    .grid-cols-2, .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                    .grid-cols-3, .md\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+                    .fixture-executive-appendix { padding-top: 12px; }
+                `;
+                pdfDocument.head.appendChild(style);
+                const content = pdfDocument.getElementById('fixture-pdf-content');
+                content.innerHTML = htmlString;
+                // Loading the bundle in the iframe is essential: a parent-realm
+                // html2pdf would still append its overlay to the application's body.
+                await new Promise((resolve, reject) => {
+                    const script = pdfDocument.createElement('script');
+                    libraryTimeout = setTimeout(() => reject(new Error('Tiempo de espera agotado al cargar el motor PDF.')), 15000);
+                    script.onload = () => { clearTimeout(libraryTimeout); resolve(); };
+                    script.onerror = () => { clearTimeout(libraryTimeout); reject(new Error('No se pudo cargar el motor PDF.')); };
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                    pdfDocument.head.appendChild(script);
+                });
+                if (typeof pdfWindow.html2pdf !== 'function') throw new Error('Motor PDF no disponible.');
+                // Let the browser paint the generation notice before canvas work.
+                await new Promise(resolve => setTimeout(resolve, 0));
+                const pdf = await pdfWindow.html2pdf().set({
+                    margin: 10,
+                    filename,
+                    image: { type: 'jpeg', quality: 0.9 },
+                    html2canvas: { scale: 1, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                }).from(content).toPdf().get('pdf');
+                // Trigger download in the parent realm: removing the iframe must
+                // not cancel FileSaver timers owned by its window.
+                const downloadUrl = URL.createObjectURL(pdf.output('blob'));
+                const link = document.createElement('a');
+                try {
+                    link.href = downloadUrl;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                } finally {
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+                }
+            } finally {
+                clearTimeout(libraryTimeout);
+                frame.remove();
+            }
+        }
+
         async function generateFixtureRecapPDF(options = {}) {
             try {
-                await ensurePdfLibrariesLoaded();
                 if (typeof showToast === 'function') {
                     showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
                 }
@@ -45509,29 +45606,7 @@ function scheduleReactiveEngine() {
                     : buildFixtureRecapHTMLTemplate(state);
                 const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
-                if (typeof html2pdf === 'function') {
-                    const opt = {
-                        margin:       10,
-                        filename:     filename,
-                        image:        { type: 'jpeg', quality: 0.98 },
-                        html2canvas:  { scale: 2, useCORS: true, logging: true },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-                    };
-                    await html2pdf().from(htmlString).set(opt).save();
-                } else if (window.jspdf?.jsPDF || window.jsPDF) {
-                    if (options.includeExecutiveReport) {
-                        // Keep the schematic and appendix in the HTML fallback as well.
-                        const PDF = window.jspdf?.jsPDF || window.jsPDF;
-                        const pdf = new PDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-                        await pdf.html(htmlString, { margin: 10, width: 190, windowWidth: 794, autoPaging: 'text' });
-                        pdf.save(filename);
-                    } else {
-                        await generateFixtureRecapJsPDDFallback(state, filename);
-                    }
-                } else {
-                    alert('Librería PDF no disponible.');
-                }
+                await exportFixtureRecapInFrame(htmlString, filename);
 
                 if (typeof showToast === 'function') {
                     showToast('✅ Oferta Comercial (Fixture Recap PDF) descargada');
@@ -69254,6 +69329,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         async function verifyDataBridgeConnection(event = null, options = {}) {
             event?.preventDefault?.();
             const error = document.getElementById('databridge-link-error');
+            const controller = new AbortController();
+            let timeoutId;
             setDataBridgeLinkPending(true);
             if (error) error.classList.add('hidden');
             try {
@@ -69263,25 +69340,33 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
                 if (dataBridgeToken) headers.Authorization = 'Bearer ' + dataBridgeToken;
                 const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
-                const response = await dataBridgeFetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
-                    method: 'POST',
-                    headers
+                // Bound both the request and body read, even if a transport ignores abort.
+                const deadline = new Promise((_, reject) => {
+                    timeoutId = setTimeout(() => {
+                        reject(new Error('La verificación de Data Bridge superó los 5 segundos.'));
+                        controller.abort();
+                    }, 5000);
                 });
-                let payload = null;
-                try {
-                    payload = await response.json();
-                } catch (parseError) {
-                    payload = null;
-                }
-                if (!response.ok) {
-                    throw new Error(payload?.error || payload?.message || `Error de conexión (${response.status})`);
-                }
-                const connected = payload?.status === 'connected' || payload?.success === true;
-                if (!connected) throw new Error('Data Bridge no confirmó el estado conectado.');
+                await Promise.race([
+                    (async () => {
+                        const response = await dataBridgeFetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
+                            method: 'POST',
+                            headers,
+                            signal: controller.signal
+                        });
+                        // Gateway error bodies can also stall or contain non-JSON HTML.
+                        if (!response.ok) throw new Error(`Error de conexión (${response.status})`);
+                        const payload = await response.json();
+                        const connected = payload?.status === 'connected' || payload?.success === true;
+                        if (!connected) throw new Error('Data Bridge no confirmó el estado conectado.');
+                    })(),
+                    deadline
+                ]);
                 setDataBridgeVerifiedConnection(true);
                 updateDataBridgeConnectionIndicator();
                 closeDataBridgeLinkModal();
                 if (options.silent !== true && typeof showToast === 'function') showToast('Enlace establecido correctamente');
+                return true;
             } catch (requestError) {
                 setDataBridgeVerifiedConnection(false);
                 updateDataBridgeConnectionIndicator();
@@ -69290,8 +69375,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     error.textContent = message;
                     error.classList.remove('hidden');
                 }
-                if (options.silent !== true && typeof showToast === 'function') showToast(`⚠️ ${message}`);
+                // Connection status must never invalidate the approved session snapshot.
+                if (options.silent !== true && typeof showToast === 'function') {
+                    showToast('⚠️ Data Bridge no disponible. Puedes continuar y exportar el Fixture Recap con el snapshot local de la sesión.');
+                }
+                return false;
             } finally {
+                clearTimeout(timeoutId);
                 setDataBridgeLinkPending(false);
             }
         }
