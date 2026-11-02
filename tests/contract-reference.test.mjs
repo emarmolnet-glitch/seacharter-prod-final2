@@ -123,7 +123,7 @@ test('fallback follows the maritime business format and persists immediately', (
   const { api, location, session } = loadUtility();
   const reference = api.getActiveContractRef();
 
-  assert.match(reference, /^RDM\/\d{4}-\d{4}$/);
+  assert.match(reference, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
   assert.equal(session.get('active_contract_ref'), reference);
   assert.equal(location.searchParams.get('ref'), reference);
 });
@@ -133,16 +133,18 @@ test('new estimation creates and persists a different temporary reference', () =
   const initialReference = api.getActiveContractRef();
   const nextReference = api.createNewReference();
 
-  assert.match(nextReference, /^RDM\/\d{4}-\d{4}$/);
+  assert.match(nextReference, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
   assert.notEqual(nextReference, initialReference);
   assert.equal(session.get('active_contract_ref'), nextReference);
   assert.equal(location.searchParams.get('ref'), nextReference);
 });
 
-test('new estimation advances the active reference sequence', () => {
+test('new estimation replaces a legacy reference with a fresh UUID', () => {
   const { api } = loadUtility({ sessionReference: 'RDM/2026-0042' });
 
-  assert.equal(api.createNewReference(), 'RDM/2026-0043');
+  const next = api.createNewReference();
+  assert.notEqual(next, 'RDM/2026-0042');
+  assert.match(next, /^RDM\/\d{4}-[0-9A-F-]{36}$/);
 });
 
 test('persists active session immediately to localStorage and emits via BroadcastChannel on active ref retrieval or change', () => {
@@ -194,7 +196,7 @@ test('all contractual modules consume the centralized reference', () => {
   assert.match(indexSource, /window\.ContractReference \|\| window\.ContractRefManager/);
   assert.match(indexSource, /\['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'\]/);
   assert.match(indexSource, /activeReference: window\.generateVoyageRef\?\.\(\) \|\| ''/);
-  assert.match(indexSource, /referenceManager\?\.createNewReference\?\.\(\)/);
+  assert.match(indexSource, /referenceManager\?\.createNewReference\?\.\(true\)/);
   assert.match(indexSource, /activeReference: nextActiveReference/);
   assert.doesNotMatch(indexSource, /RDM\/2026-0604|RDM\/GC\/2026-0727-XXXX/);
   assert.doesNotMatch(indexSource, /dynamicRefGC|dynamicRefASB|suffixGC|suffixASB/);
