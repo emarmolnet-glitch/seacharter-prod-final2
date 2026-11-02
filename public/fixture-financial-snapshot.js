@@ -49,6 +49,10 @@
         if (typeof value === 'number' && Number.isFinite(value)) return value;
         return undefined;
     };
+    const identityText = value => typeof value === 'string' && value.trim() ? value : undefined;
+    const defaultIdentity = (value, key) => key === 'vesselName'
+        ? /^MV GEARED BULKER(?:\s*\(Handysize\))?$/i.test(value.trim())
+        : /^(?:Handysize(?:\s+(?:MPP|Bulk Carrier))?(?:\s+[\d.,]+\s*DWT)?|Bulk Carrier)$/i.test(value.trim());
     window.selectFixtureRecapState = function (...sources) {
         const cleanState = {};
         for (const source of sources) {
@@ -58,14 +62,26 @@
                     raw = ownValue(raw, 'label') ?? ownValue(raw, 'value');
                 }
                 const value = primitive(raw, key);
-                if (value !== undefined) cleanState[key] = value;
+                if (key === 'vesselName' || key === 'vesselType') {
+                    const identity = identityText(value);
+                    // System defaults cannot replace an already selected contract identity.
+                    if (identity && (!cleanState[key] || !defaultIdentity(identity, key) || defaultIdentity(cleanState[key], key))) {
+                        cleanState[key] = identity;
+                    }
+                } else if (value !== undefined) cleanState[key] = value;
             }
             // Flatten only the three vessel identity fields; never retain its object.
             const vessel = ownValue(source, 'vessel');
             if (vessel && typeof vessel === 'object') {
                 for (const [key, target] of [['name', 'vesselName'], ['type', 'vesselType'], ['dwt', 'dwt']]) {
                     const value = primitive(ownValue(vessel, key), target);
-                    if (value !== undefined) cleanState[target] = value;
+                    if (target === 'vesselName' || target === 'vesselType') {
+                        // Nested identity is a fallback across ALL sources, not just this source.
+                        const identity = identityText(value);
+                        if (identity && (!cleanState[target] || (defaultIdentity(cleanState[target], target) && !defaultIdentity(identity, target)))) {
+                            cleanState[target] = identity;
+                        }
+                    } else if (value !== undefined && !primitive(ownValue(source, target), target)) cleanState[target] = value;
                 }
             }
         }
