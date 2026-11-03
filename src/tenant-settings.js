@@ -77,7 +77,7 @@ function render() {
     const label = document.createElement('label'); label.textContent = labelText;
     const input = document.createElement(key === 'role' ? 'select' : key === 'address' ? 'textarea' : 'input'); input.name = key;
     if (key === 'role') for (const [value, title] of Object.entries(roles)) input.add(new Option(title, value));
-    else input.type = key === 'email' ? 'email' : key === 'logo_url' ? 'url' : 'text';
+    else if (input.tagName === 'INPUT') input.type = key === 'email' ? 'email' : key === 'logo_url' ? 'url' : 'text';
     input.value = record[key] || (key === 'currency' ? 'EUR' : key === 'role' ? 'agent_pol' : '');
     input.required = ['company_name', 'bank_name', 'iban', 'beneficiary', 'currency'].includes(key); input.maxLength = 2000;
     if (key === 'currency') { input.maxLength = 3; input.pattern = '[A-Z]{3}'; }
