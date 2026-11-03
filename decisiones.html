@@ -726,83 +726,86 @@
             </div>
         </section>
 
-        <!-- NIVEL 2: PANEL LATERAL (OFFCANVAS) NATIVO UI - AUDITORÍA MADRE -->
-        <div id="madre-offcanvas-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[9998] hidden transition-opacity" onclick="cerrarAuditoriaMadreOffcanvas()"></div>
-        <aside id="madre-offcanvas-panel" class="fixed top-0 right-0 bottom-0 z-[9999] w-full max-w-xl md:max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out font-sans" aria-label="Auditoría Estratégica MADRE" role="dialog" aria-modal="true">
-            <!-- Offcanvas Header -->
-            <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-3">
-                    <span class="p-2.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-lg">
-                        <i class="fa-solid fa-shield-halved"></i>
-                    </span>
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900">Auditoría Estratégica MADRE</h3>
-                        <p class="text-xs text-gray-500">Dictamen Ejecutivo Corporativo & Propuesta de Optimización</p>
+        <!-- NIVEL 2: DOCUMENTO EJECUTIVO CENTRADO - AUDITORÍA MADRE -->
+        <div id="madre-offcanvas-backdrop" class="fixed inset-0 z-[9999] hidden overflow-y-auto bg-slate-50" onclick="cerrarAuditoriaMadreOffcanvas()">
+                    <div class="flex justify-center items-start w-full min-h-screen p-4 sm:p-6 lg:p-8">
+                <article id="madre-offcanvas-panel" class="w-full max-w-4xl min-w-0 bg-white shadow-xl rounded-xl mx-auto my-4 p-4 sm:p-8 flex flex-col font-sans" onclick="event.stopPropagation()" aria-label="Auditoría Estratégica MADRE" role="dialog" aria-modal="true">
+                    <!-- Encabezado del documento -->
+                    <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-lg">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900">Auditoría Estratégica MADRE</h3>
+                                <p class="text-xs text-gray-500">Dictamen Ejecutivo Corporativo & Propuesta de Optimización</p>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-cerrar-auditoria-offcanvas" onclick="cerrarAuditoriaMadreOffcanvas()" class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" aria-label="Cerrar panel">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </header>
+
+                    <!-- Cuerpo del informe -->
+                    <div id="madre-offcanvas-body" class="py-6 space-y-6 text-slate-900 bg-white break-words">
+                        <!-- Veredicto Banner -->
+                        <div id="madre-offcanvas-veredicto-container" class="p-4 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dictamen General</span>
+                                <div id="madre-offcanvas-veredicto-val" class="text-base font-bold text-slate-900 mt-0.5">--</div>
+                            </div>
+                            <div id="madre-offcanvas-veredicto-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-200 shadow-sm">
+                                --
+                            </div>
+                        </div>
+
+                        <!-- Reporte Estratégico -->
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-lines"></i>
+                                <span>Reporte Estratégico</span>
+                            </h4>
+                            <div id="madre-offcanvas-reporte" class="text-sm text-gray-800 leading-relaxed bg-white border border-gray-200 rounded-xl p-4 shadow-sm whitespace-pre-line">
+                                <!-- Se inyecta reporte_estrategico -->
+                            </div>
+                        </div>
+
+                        <!-- Variables Perjudiciales -->
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span>Variables Perjudiciales Identificadas</span>
+                            </h4>
+                            <div id="madre-offcanvas-variables" class="flex flex-wrap gap-2">
+                                <!-- Se inyectan badges rojas/naranjas -->
+                            </div>
+                        </div>
+
+                        <!-- Recomendaciones Estratégicas (Acción, Pro en verde, Contra en rojo) -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                                <span>Recomendaciones Estratégicas</span>
+                            </h4>
+                            <div id="madre-offcanvas-recomendaciones" class="space-y-3">
+                                <!-- Se inyectan recomendaciones -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Acciones del informe: Fixture Recap (Opción B) -->
+                    <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
+                        <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="fa-solid fa-file-contract text-teal-200"></i>
+                            <span>Imprimir Fixture Recap Estratégico (Opción B)</span>
+                        </button>
+                        <p class="text-[11px] text-gray-500 text-center mt-2">
+                            Aplica automáticamente las modificaciones acordadas (flete, cláusulas y laytime) y exporta el Recap PDF oficial.
+                        </p>
+                    </footer>
+                </article>
                     </div>
                 </div>
-                <button type="button" id="btn-cerrar-auditoria-offcanvas" onclick="cerrarAuditoriaMadreOffcanvas()" class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" aria-label="Cerrar panel">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </header>
-
-            <!-- Offcanvas Scrollable Body -->
-            <div id="madre-offcanvas-body" class="flex-1 overflow-y-auto p-6 space-y-6 text-slate-900 bg-white">
-                <!-- Veredicto Banner -->
-                <div id="madre-offcanvas-veredicto-container" class="p-4 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-between">
-                    <div>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dictamen General</span>
-                        <div id="madre-offcanvas-veredicto-val" class="text-base font-bold text-slate-900 mt-0.5">--</div>
-                    </div>
-                    <div id="madre-offcanvas-veredicto-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-200 shadow-sm">
-                        --
-                    </div>
-                </div>
-
-                <!-- Reporte Estratégico -->
-                <div class="space-y-2">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
-                        <i class="fa-solid fa-file-lines"></i>
-                        <span>Reporte Estratégico</span>
-                    </h4>
-                    <div id="madre-offcanvas-reporte" class="text-sm text-gray-800 leading-relaxed bg-white border border-gray-200 rounded-xl p-4 shadow-sm whitespace-pre-line">
-                        <!-- Se inyecta reporte_estrategico -->
-                    </div>
-                </div>
-
-                <!-- Variables Perjudiciales -->
-                <div class="space-y-2">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>Variables Perjudiciales Identificadas</span>
-                    </h4>
-                    <div id="madre-offcanvas-variables" class="flex flex-wrap gap-2">
-                        <!-- Se inyectan badges rojas/naranjas -->
-                    </div>
-                </div>
-
-                <!-- Recomendaciones Estratégicas (Acción, Pro en verde, Contra en rojo) -->
-                <div class="space-y-3">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrows-split-up-and-left"></i>
-                        <span>Recomendaciones Estratégicas</span>
-                    </h4>
-                    <div id="madre-offcanvas-recomendaciones" class="space-y-3">
-                        <!-- Se inyectan recomendaciones -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Offcanvas Footer: Botón Fixture Recap (Opción B) -->
-            <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
-                <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
-                    <i class="fa-solid fa-file-contract text-teal-200"></i>
-                    <span>Imprimir Fixture Recap Estratégico (Opción B)</span>
-                </button>
-                <p class="text-[11px] text-gray-500 text-center mt-2">
-                    Aplica automáticamente las modificaciones acordadas (flete, cláusulas y laytime) y exporta el Recap PDF oficial.
-                </p>
-            </footer>
-        </aside>
 
                 </div>
             </div>
@@ -3567,23 +3570,13 @@
         function abrirAuditoriaMadreOffcanvas() {
             if (typeof document === 'undefined') return;
             const backdrop = document.getElementById('madre-offcanvas-backdrop');
-            const panel = document.getElementById('madre-offcanvas-panel');
             if (backdrop) backdrop.classList.remove('hidden');
-            if (panel) {
-                panel.classList.remove('translate-x-full');
-                panel.classList.add('translate-x-0');
-            }
         }
 
         function cerrarAuditoriaMadreOffcanvas() {
             if (typeof document === 'undefined') return;
             const backdrop = document.getElementById('madre-offcanvas-backdrop');
-            const panel = document.getElementById('madre-offcanvas-panel');
             if (backdrop) backdrop.classList.add('hidden');
-            if (panel) {
-                panel.classList.add('translate-x-full');
-                panel.classList.remove('translate-x-0');
-            }
         }
 
         async function generarFixtureRecapOpcionB() {
