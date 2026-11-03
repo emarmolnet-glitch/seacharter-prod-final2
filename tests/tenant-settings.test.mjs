@@ -27,17 +27,22 @@ function harness(user = { id: 'tenant-a' }) {
 }
 const request = (path = '', method = 'GET', data, extraHeaders = {}) => new Request(`https://example.com/api/settings${path}`, { method, headers: { ...(data ? { 'Content-Type': 'application/json' } : {}), ...extraHeaders }, body: data ? JSON.stringify(data) : undefined });
 const contact = { role: 'owner', company_name: 'Naviera del Estrecho', address: 'Cádiz', email: 'ops@example.com', pic_name: 'Operaciones' };
-test('anonymous requests cannot read or write settings', async () => {
-  const { handler, calls } = harness(null);
-  for (const req of [request(), request('/contacts', 'POST', contact)]) assert.equal((await handler(req)).status, 401);
-  assert.equal(calls.length, 0);
+test('development bypass reads and writes without Identity, even when Identity fails', async () => {
+  for (const user of [null, new Error('Identity unavailable')]) {
+    const { handler, calls } = harness(user);
+    assert.equal((await handler(request())).status, 200);
+    const response = await handler(request('/contacts', 'POST', contact));
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).tenant_id, 'dev-tenant-bypass');
+    assert.equal(calls.filter(call => call.action === 'select').length, 3);
+  }
 });
 test('settings responses prevent caching on success and errors', async () => {
   for (const [user, path, status] of [
     [{ id: 'tenant-a' }, '', 200],
-    [null, '', 401],
+    [null, '', 200],
     [{ id: 'tenant-a' }, '/other', 404],
-    [new Error('Identity unavailable'), '', 500],
+    [new Error('Identity unavailable'), '', 200],
   ]) {
     const { handler } = harness(user);
     const response = await handler(request(path));
@@ -48,10 +53,10 @@ test('settings responses prevent caching on success and errors', async () => {
     assert.equal(response.headers.get('vary'), 'Cookie, Authorization');
   }
 });
-test('all settings queries are scoped to authenticated tenant', async () => {
+test('all settings queries are scoped to fixed development tenant', async () => {
   const { handler, calls } = harness();
   const response = await handler(request()); assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /no-store/);
-  assert.equal(calls.length, 3); for (const call of calls) assert.equal(call.condition.value, 'tenant-a');
+  assert.equal(calls.length, 3); for (const call of calls) assert.equal(call.condition.value, 'dev-tenant-bypass');
 });
 test('contact creation assigns tenant on server and rejects tenant overrides and invalid roles', async () => {
   const { handler, calls } = harness();
@@ -59,13 +64,13 @@ test('contact creation assigns tenant on server and rejects tenant overrides and
   assert.equal((await handler(request('/contacts', 'POST', { ...contact, role: 'admin' }))).status, 400);
   assert.equal(calls.length, 0);
   const response = await handler(request('/contacts', 'POST', contact)); assert.equal(response.status, 201);
-  assert.equal((await response.json()).tenant_id, 'tenant-a');
+  assert.equal((await response.json()).tenant_id, 'dev-tenant-bypass');
 });
 test('updates require matching tenant and record ID; foreign or missing records return 404', async () => {
   const { handler, calls } = harness(); const id = '340e13d1-63ce-4058-9cc6-5be069282884';
   assert.equal((await handler(request(`/contacts/${id}`, 'PUT', contact))).status, 404);
   const update = calls.find(c => c.action === 'update');
-  assert.equal(update.condition[0].value, 'tenant-a'); assert.equal(update.condition[1].value, id);
+  assert.equal(update.condition[0].value, 'dev-tenant-bypass'); assert.equal(update.condition[1].value, id);
 });
 test('invalid routes, IDs, origins, and malformed bank accounts are rejected', async () => {
   const { handler } = harness();
