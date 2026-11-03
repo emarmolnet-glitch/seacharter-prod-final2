@@ -11,17 +11,22 @@ const bankSchema = z.object({ bank_name: field.min(1), iban: field.min(1).max(34
 const contactSchema = z.object({ role: z.enum(['agent_pol', 'agent_pod', 'charterer', 'owner', 'broker']), company_name: field.min(1), address: field, email, pic_name: field }).strict();
 
 export default async (req: Request) => {
-  const respond = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie, Authorization' } });
-  const user = await getUser();
-  if (!user) return respond({ error: 'Inicia sesión para acceder a la configuración de tu empresa.' }, 401);
-  if (!['GET', 'POST', 'PUT'].includes(req.method)) return respond({ error: 'Método no permitido' }, 405);
-  if (req.method !== 'GET' && req.headers.get('origin') && req.headers.get('origin') !== new URL(req.url).origin) return respond({ error: 'Origen no permitido' }, 403);
-  const segments = new URL(req.url).pathname.split('/').filter(Boolean);
-  const offset = segments.indexOf('settings');
-  const resource = segments[offset + 1];
-  const id = segments[offset + 2];
-  if (segments.length > offset + 3 || (resource && !['profile', 'bank-accounts', 'contacts'].includes(resource))) return respond({ error: 'Ruta no encontrada' }, 404);
+  const respond = (data: unknown, status = 200) => Response.json(data, { status, headers: {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Vary': 'Cookie, Authorization',
+  } });
   try {
+    const user = await getUser();
+    if (!user) return respond({ error: 'Inicia sesión para acceder a la configuración de tu empresa.' }, 401);
+    if (!['GET', 'POST', 'PUT'].includes(req.method)) return respond({ error: 'Método no permitido' }, 405);
+    if (req.method !== 'GET' && req.headers.get('origin') && req.headers.get('origin') !== new URL(req.url).origin) return respond({ error: 'Origen no permitido' }, 403);
+    const segments = new URL(req.url).pathname.split('/').filter(Boolean);
+    const offset = segments.indexOf('settings');
+    const resource = segments[offset + 1];
+    const id = segments[offset + 2];
+    if (segments.length > offset + 3 || (resource && !['profile', 'bank-accounts', 'contacts'].includes(resource))) return respond({ error: 'Ruta no encontrada' }, 404);
     const db = drizzle();
     if (req.method === 'GET') {
       if (id) return respond({ error: 'Ruta no encontrada' }, 404);

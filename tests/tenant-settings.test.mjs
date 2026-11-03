@@ -17,7 +17,7 @@ function harness(user = { id: 'tenant-a' }) {
   };
   const module = { exports: {} };
   vm.runInNewContext(compiled, { module, exports: module.exports, Response, URL, require(name) {
-    if (name === '@netlify/identity') return { getUser: async () => user };
+    if (name === '@netlify/identity') return { getUser: async () => { if (user instanceof Error) throw user; return user; } };
     if (name === 'drizzle-orm/netlify-db') return { drizzle: () => db };
     if (name === 'drizzle-orm') return { eq: (column, value) => ({ column, value }), and: (...conditions) => conditions };
     if (name.includes('schema')) return tables;
@@ -31,6 +31,22 @@ test('anonymous requests cannot read or write settings', async () => {
   const { handler, calls } = harness(null);
   for (const req of [request(), request('/contacts', 'POST', contact)]) assert.equal((await handler(req)).status, 401);
   assert.equal(calls.length, 0);
+});
+test('settings responses prevent caching on success and errors', async () => {
+  for (const [user, path, status] of [
+    [{ id: 'tenant-a' }, '', 200],
+    [null, '', 401],
+    [{ id: 'tenant-a' }, '/other', 404],
+    [new Error('Identity unavailable'), '', 500],
+  ]) {
+    const { handler } = harness(user);
+    const response = await handler(request(path));
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    assert.equal(response.headers.get('pragma'), 'no-cache');
+    assert.equal(response.headers.get('expires'), '0');
+    assert.equal(response.headers.get('vary'), 'Cookie, Authorization');
+  }
 });
 test('all settings queries are scoped to authenticated tenant', async () => {
   const { handler, calls } = harness();
