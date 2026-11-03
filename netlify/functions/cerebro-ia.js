@@ -1,4 +1,5 @@
 import chatAssistant from "./chat-assistant.js";
+import { calcularDss } from "./_shared/dss-calculations.mjs";
 import { parseOperationalRate } from "./_shared/calculator-autofill-reasoning.mjs";
 
 export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
@@ -274,13 +275,13 @@ export default async function proxyRequest(request) {
                 promptText = extractPromptText(rawBody, contentType);
             }
 
-            // Si la petición proviene de DSS con current_module: "decisiones", responder con Auditoría Estratégica MADRE
+            // DSS: expose raw tool calculations only; MADRE owns the final report.
             if (contentType?.includes("application/json")) {
                 try {
                     const text = typeof rawBody === "string" ? rawBody : new TextDecoder().decode(rawBody);
                     const parsed = JSON.parse(text);
                     if (parsed?.current_module === "decisiones" || parsed?.currentModule === "decisiones") {
-                        const auditResponse = buildDssStrategicAuditResponse(parsed.contexto_ui || parsed.contexto || parsed);
+                        const auditResponse = calcularDss(parsed.contexto_ui || parsed.contexto || parsed);
                         return new Response(JSON.stringify(auditResponse), {
                             status: 200,
                             headers: {

@@ -75,3 +75,17 @@ Se confirmó que el código conservó la opción «MI EMPRESA», la resolución 
 El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama `agent-6ae9cf9966c`, con HTTP 500 (`internal error`). El registro no mostró un error SQL ni una excepción de compilación de la aplicación. La consulta de estado posterior confirmó que la rama no existía.
 
 Se revisó la configuración de Netlify y Drizzle; el directorio de migraciones coincidió con el cargado por el despliegue. Se confirmó que el documento centrado permaneció aplicado en ambas versiones de Decisiones. No se identificó una corrección de código sustentada por este error. Quedó pendiente recuperar el aprovisionamiento de ramas en la plataforma y reintentar el despliegue. No se ejecutaron comandos de compilación ni de despliegue manual.
+
+## Auditoría MADRE con LLM: 6aea2dfaae022000b874c963
+
+El despliegue de vista previa falló durante el aprovisionamiento de Netlify Database. La operación `createSiteDatabaseBranch` devolvió HTTP 500 (`internal error`) al solicitar la rama `agent-6aea2d760fe`. El registro enumeró las migraciones sin identificar una excepción SQL ni una compilación fallida del código de la aplicación.
+
+La consulta posterior `netlify db status` confirmó que la rama `agent-6aea2d760fe` no existía. Se revisó la configuración Drizzle: el directorio de salida coincidió con `netlify/database/migrations`, cargado por la plataforma. Los cambios de orquestación de MADRE no añadieron tablas ni migraciones. No se identificó una corrección del repositorio que resolviera el error interno de creación de rama; las correcciones de auditoría permanecieron aplicadas.
+
+Quedó pendiente recuperar el aprovisionamiento en la plataforma y reintentar el despliegue. No se ejecutó una compilación ni un despliegue manual, ni se confirmó la publicación de la auditoría MADRE en producción.
+
+## Reintento de Auditoría MADRE: 6aea2e2c5a80adaed1b85b12
+
+El nuevo despliegue volvió a fallar con HTTP 500 (`internal error`) en `createSiteDatabaseBranch`, al solicitar la misma rama `agent-6aea2d760fe`. La consulta posterior de estado volvió a indicar que la rama no existía. El registro completo no mostró un error SQL concreto ni la ejecución de la compilación de la aplicación.
+
+El nuevo intento confirmó la persistencia del bloqueo de aprovisionamiento, sin aportar una causa corregible desde el repositorio. Se conservaron la orquestación LLM de MADRE y las migraciones existentes. Quedó pendiente revisar los registros internos de la operación en Netlify, recuperar la creación de la rama y reintentar el despliegue. No se confirmó publicación en producción.

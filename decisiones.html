@@ -3384,21 +3384,28 @@
 
                 const contextoUi = {
                     ...currentDss,
-                    pol: getVal('input-pol') || currentDss.pol || 'Rotterdam',
-                    pod: getVal('input-pod') || currentDss.pod || 'Houston',
-                    cargoQty: Number(getVal('input-cargoQty') || currentDss.cargoQty || 30000),
-                    commodity: getVal('input-commodity') || currentDss.commodity || 'Siderúrgico / Carga General',
-                    loadRate: Number(getVal('input-loadRate') || getVal('rate-load') || currentDss.loadRate || 5000),
-                    dischargeRate: Number(getVal('input-dischargeRate') || getVal('rate-disch') || currentDss.dischargeRate || 2000),
-                    laycanDaysLeft: Number(getVal('input-laycanDaysLeft') || currentDss.laycanDaysLeft || 10),
-                    estimatedVoyageDays: Number(getVal('input-estimatedVoyageDays') || currentDss.estimatedVoyageDays || 8),
-                    fleteUnitario: Number(getVal('input-fleteUnitario') || getVal('freight-sell') || currentDss.fleteUnitario || 37.0),
-                    breakEvenUnitario: Number(getVal('input-breakEvenUnitario') || currentDss.breakEvenUnitario || currentDss.breakEven || 28.5),
+            cuaderno_bitacora: {
+                marketSnapshot: window.MarketIntelligenceHydration?.getSnapshot?.() || null,
+                freightBenchmarks: window.SeaCharterMarketIntelligencePanel?.getData?.() || null,
+                referenceData: window.SeaCharterMarketReferenceData || null,
+                aisFreightRates: window.aisMarketFreightRates || null,
+                capturedAt: new Date().toISOString()
+            },
+                    pol: getVal('input-pol') || currentDss.pol || '',
+                    pod: getVal('input-pod') || currentDss.pod || '',
+                    cargoQty: Number(getVal('input-cargoQty') || currentDss.cargoQty || 0),
+                    commodity: getVal('input-commodity') || currentDss.commodity || '',
+                    loadRate: Number(getVal('input-loadRate') || getVal('rate-load') || currentDss.loadRate || 0),
+                    dischargeRate: Number(getVal('input-dischargeRate') || getVal('rate-disch') || currentDss.dischargeRate || 0),
+                    laycanDaysLeft: Number(getVal('input-laycanDaysLeft') || currentDss.laycanDaysLeft || 0),
+                    estimatedVoyageDays: Number(getVal('input-estimatedVoyageDays') || currentDss.estimatedVoyageDays || 0),
+                    fleteUnitario: Number(getVal('input-fleteUnitario') || getVal('freight-sell') || currentDss.fleteUnitario || 0),
+                    breakEvenUnitario: Number(getVal('input-breakEvenUnitario') || currentDss.breakEvenUnitario || currentDss.breakEven || 0),
                     allInRateGross: Number((typeof window.calculateAllInFreightGross === 'function'
                         ? window.calculateAllInFreightGross({ ...currentDss, ...window.dssFormState }).allInRateGross
                         : window.dssFormState?.allInRateGross || currentDss.allInRateGross) || 0),
                     activeScenario: (typeof window !== 'undefined' && window.dssActiveScenario) || 'actual',
-                    vesselName: (typeof window !== 'undefined' && window.State?.vessel) || currentDss.vesselName || 'MV GEARED BULKER',
+                    vesselName: (typeof window !== 'undefined' && window.State?.vessel) || currentDss.vesselName || '',
                     jwlaRiskActive: Boolean(currentDss.jwlaRiskActive),
                     timestamp: new Date().toISOString()
                 };
@@ -3414,8 +3421,8 @@
                 let auditResult = null;
                 try {
                     const endpoint = (typeof window !== 'undefined' && typeof window.getApiUrl === 'function')
-                        ? window.getApiUrl('/api/cerebro-ia')
-                        : '/api/cerebro-ia';
+                        ? window.getApiUrl('/api/madre-chat')
+                        : '/api/madre-chat';
 
                     const response = await fetch(endpoint, {
                         method: 'POST',
@@ -3436,14 +3443,19 @@
                         }
                     }
                 } catch (fetchErr) {
-                    console.warn('[Auditoría MADRE] Petición remota no disponible; procediendo con auditoría algorítmica local:', fetchErr);
+                    throw new Error('MADRE no está disponible. Reintente la auditoría.', { cause: fetchErr });
                 }
 
                 if (!auditResult || auditResult.accion_ui !== 'renderizar_auditoria_dss') {
-                    auditResult = generarAuditoriaMadreFallback(contextoUi);
+                    throw new Error('MADRE no ha emitido un informe válido. Reintente la auditoría.');
                 }
 
-                if (auditResult && auditResult.accion_ui === 'renderizar_auditoria_dss') {
+                if (auditResult?.source !== 'madre-llm' || auditResult?.firmado_por !== 'MADRE' ||
+            !Number.isFinite(Number(auditResult.modificaciones_recap?.flete)) ||
+            Number(auditResult.modificaciones_recap.flete) < contextoUi.allInRateGross) {
+            throw new Error('Auditoría sin firma MADRE o sin protección ALL-IN válida.');
+        }
+        if (auditResult && auditResult.accion_ui === 'renderizar_auditoria_dss') {
                     renderizarAuditoriaDss(auditResult);
                     if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
                         window.showToast('✅ Auditoría Estratégica MADRE generada exitosamente');
@@ -3452,7 +3464,7 @@
             } catch (err) {
                 console.error('Error al solicitar Auditoría MADRE:', err);
                 if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-                    window.showToast('❌ Error al procesar Auditoría MADRE');
+                    window.showToast('❌ ' + (err.message || 'Error al procesar Auditoría MADRE'));
                 }
             } finally {
                 if (btn) {
