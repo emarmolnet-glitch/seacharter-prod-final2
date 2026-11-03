@@ -12,6 +12,7 @@
         shipProfile ship_profile vessel_type vessel_class vesselClass class shipClass
         designCategory design_category categoriaDiseno tipoBuque
         loadRate loadingRate ratePOL dischargeRate dischRate ratePOD
+        optimalDischargeRate ritmoDescargaOptimizado ritmo_descarga_optimizado dssFormState madreUltimaAuditoria
         loadingMethod methodPOL loading_method loadMethod
         productoEspecifico cargoProduct cargo_product bulk_category bulkCategory cargo_type
         freightTerms freightTerm terms cargoTerms charterPartyStandard
@@ -49,6 +50,24 @@
         if (typeof value === 'number' && Number.isFinite(value)) return value;
         return undefined;
     };
+    // Retain only report-consumed DSS values; never copy nested snapshots or live graphs.
+    const copyDssRates = source => {
+        const result = {};
+        for (const key of ['optimalDischargeRate', 'ritmoDescargaOptimizado', 'ritmo_descarga_optimizado', 'dischargeRate']) {
+            const value = primitive(ownValue(source, key), key);
+            if (value !== undefined) result[key] = value;
+        }
+        return result;
+    };
+    const reportValue = (raw, key) => {
+        if (raw && typeof raw === 'object') {
+            if (key === 'dssFormState') return copyDssRates(raw);
+            if (key === 'madreUltimaAuditoria') {
+                return { modificaciones_recap: copyDssRates(ownValue(raw, 'modificaciones_recap')) };
+            }
+        }
+        return primitive(raw, key);
+    };
     const identityText = value => typeof value === 'string' && value.trim() ? value : undefined;
     const defaultIdentity = (value, key) => key === 'vesselName'
         ? /^MV GEARED BULKER(?:\s*\(Handysize\))?$/i.test(value.trim())
@@ -61,7 +80,7 @@
                 if (labelFields.has(key) && raw && typeof raw === 'object') {
                     raw = ownValue(raw, 'label') ?? ownValue(raw, 'value');
                 }
-                const value = primitive(raw, key);
+                const value = reportValue(raw, key);
                 if (key === 'vesselName' || key === 'vesselType') {
                     const identity = identityText(value);
                     // System defaults cannot replace an already selected contract identity.
@@ -91,7 +110,7 @@
                 }
             }
         }
-        // Only the bounded primitive record is serialized, never a global source.
+        // Only the bounded report record is serialized, never a global source.
         if (JSON.stringify(cleanState).length > 32768) throw limitError();
         return cleanState;
     };
@@ -120,7 +139,8 @@
             else delete state[key];
         }
         if (state.cargoQty === undefined && state.cargo !== undefined) state.cargoQty = state.cargo;
-        if (state.dischargeRate === undefined && state.dischRate !== undefined) state.dischargeRate = state.dischRate;
+        const validDisch = [state.dischargeRate, state.dischRate, state.ratePOD].map(Number).find(v => Number.isFinite(v) && v > 0);
+        if (validDisch) state.dischargeRate = validDisch;
         if (typeof window.resolveFixtureRecapOperations === 'function') {
             state.selectedVesselType = state.vesselType;
             state.vesselType = window.resolveFixtureRecapOperations(state).vesselType;

@@ -28,7 +28,7 @@ export default function VoyageExecutiveReportModal({
 
   const audit = data.madreUltimaAuditoria || (typeof window !== 'undefined' ? window.madreUltimaAuditoria : null);
   const dss = data.dssFormState || (typeof window !== 'undefined' ? window.dssFormState : null);
-  const dischargeRate = Number(data.dischargeRate ?? data.dischRate ?? data.ratePOD);
+  const dischargeRate = [data.dischargeRate, data.dischRate, data.ratePOD].map(Number).find(value => Number.isFinite(value) && value > 0) || 0;
   const currentDss = typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function'
     ? window.getDSSCurrentState()
     : null;
