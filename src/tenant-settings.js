@@ -97,9 +97,29 @@ function render() {
   const signout = document.createElement('button'); signout.type = 'button'; signout.textContent = 'Cerrar sesión de empresa'; signout.style.marginTop = '20px'; signout.onclick = async () => { if (busy) return; await logout(); data = null; generation++; updateSelectors(); renderLogin(); notify('Sesión cerrada.'); }; panel.append(signout);
 }
 async function load() {
-  notify('Cargando configuración…'); body.replaceChildren();
+  notify('Cargando Modo Demo…'); body.replaceChildren();
+  // Flujo original desactivado temporalmente para revisar el modal en modo demo.
+  /*
   try { if (await refresh()) { editing = null; render(); notify(''); } }
   catch (error) { if (error.status === 401) { data = null; updateSelectors(); renderLogin(); notify(''); } else { notify(error.message, true); const retry = document.createElement('button'); retry.textContent = 'Reintentar'; retry.onclick = load; body.append(retry); } }
+  */
+
+  // Bypass temporal de autenticación
+  data = {
+    profile: { company_name: 'RODAHMAR (MODO DEMO)', nif: 'B00000000', address: 'Calle Lérida 118, Barcelona', email: 'demo@rodahmar.com', phone: '+34 600 000 000', logo_url: '' },
+    'bank-accounts': [
+      { id: 'demo-bank-1', bank_name: 'Banco Demo EUR', iban: 'ES99 0000 0000 0000 0000', swift: 'DEMOESMM', currency: 'EUR', beneficiary: 'Rodahmar Shipping' }
+    ],
+    contacts: [
+      { id: 'demo-contact-1', role: 'agent_pol', company_name: 'Agente POL Demo', address: 'Puerto de Arzew', email: 'ops@agente.dz', pic_name: 'Contacto Operaciones' },
+      { id: 'demo-contact-2', role: 'owner', company_name: 'Armador Demo', address: 'Atenas, Grecia', email: 'chartering@armador.gr', pic_name: 'Yannis' }
+    ]
+  };
+
+  updateSelectors();
+  editing = null;
+  render();
+  notify('');
 }
 document.getElementById('company-settings-open')?.addEventListener('click', () => { window.closeMobileSessionMenu?.(); modal.showModal(); load(); });
 document.addEventListener('change', e => {
