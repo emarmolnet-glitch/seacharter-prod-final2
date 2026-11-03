@@ -2742,7 +2742,22 @@
                 canonicalFinancials?.demurrage,
                 typeof State !== 'undefined' ? State.demurrage : null
             ].map(Number).find(value => Number.isFinite(value) && value > 0) || 31200;
-            return { ...canonicalFinancials, demurrageRate: calculatorDemurrage };
+            const globalState = window.State || {};
+            const dssState = window.dssFormState || (typeof dssFormState !== 'undefined' ? dssFormState : {}) || {};
+            const audit = canonicalFinancials?.madreUltimaAuditoria || window.madreUltimaAuditoria;
+            const optimalDischargeRate = [
+                canonicalFinancials?.optimalDischargeRate,
+                canonicalFinancials?.ritmoDescargaOptimizado,
+                canonicalFinancials?.ritmo_descarga_optimizado,
+                globalState.optimalDischargeRate,
+                globalState.ritmoDescargaOptimizado,
+                globalState.ritmo_descarga_optimizado,
+                audit?.modificaciones_recap?.dischargeRate,
+                dssState.optimalDischargeRate,
+                dssState.ritmoDescargaOptimizado,
+                dssState.ritmo_descarga_optimizado
+            ].map(Number).find(value => Number.isFinite(value) && value > 0) || 5200;
+            return { ...canonicalFinancials, demurrageRate: calculatorDemurrage, optimalDischargeRate, ritmoDescargaOptimizado: optimalDischargeRate };
         }
         window.getDSSCurrentState = getDSSCurrentState;
 
