@@ -2736,7 +2736,13 @@
 
 
         function getDSSCurrentState() {
-            return window.getCurrentFixtureRecapState();
+            const canonicalFinancials = window.getCurrentFixtureRecapState();
+            const calculatorDemurrage = [
+                parseFloat(document.getElementById('demurrage-rate')?.value),
+                canonicalFinancials?.demurrage,
+                typeof State !== 'undefined' ? State.demurrage : null
+            ].map(Number).find(value => Number.isFinite(value) && value > 0) || 31200;
+            return { ...canonicalFinancials, demurrageRate: calculatorDemurrage };
         }
         window.getDSSCurrentState = getDSSCurrentState;
 
@@ -3024,12 +3030,13 @@
             const allInRateGross = safeState.fixtureFinancial ? safeState.fixtureFinancial.unitRateText : (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
             const cleanFleteTotal = safeState.fixtureFinancial ? safeState.fixtureFinancial.totalFreightText : fleteTotal.toLocaleString('en-US');
 
-            const rawDemurrage = Number(
-                safeState.demurrageRate ||
-                safeState.demurrageRecomendado ||
-                safeState.demurrage ||
-                15000
-            );
+            const rawDemurrage = [
+                safeState.demurrageRate,
+                safeState.demurrageRecomendado,
+                typeof window !== 'undefined' ? window.dssInjectedRecapDemurrage : null,
+                safeState.demurrage,
+                typeof State !== 'undefined' ? State.demurrage : null
+            ].map(Number).find(value => Number.isFinite(value) && value > 0) || 31200;
             const demurrageRate = rawDemurrage.toLocaleString('en-US');
 
             const isJwcActive = Boolean(

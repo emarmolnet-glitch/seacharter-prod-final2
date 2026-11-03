@@ -135,7 +135,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.match(text, /3\. LAYTIME & OPERATIONS/, 'Section 3 header');
   assert.match(text, /LOADING RATE\s*:\s*5,000 METRIC TONS PER WEATHER WORKING DAY/, 'Load rate');
   assert.match(text, /DISDISCH RATE\s*:\s*TBA METRIC TONS/, 'Missing discharge rate remains TBA');
-  assert.match(text, /DEMURRAGE\s*:\s*USD 15,000 PER DAY/, 'Demurrage protection rate');
+  assert.match(text, /DEMURRAGE\s*:\s*USD 31,200 PER DAY/, 'Demurrage protection rate');
 
   // 4. SPECIAL CLAUSES
   assert.match(text, /4\. SPECIAL CLAUSES/, 'Section 4 header');
@@ -319,3 +319,30 @@ test('executive vessel binding supports policy objects and removes the generic c
   assert.equal(resolveReportVessel({ vessel, vesselName: 'MV GEARED BULKER', dwt: 32000 }).description,
     'MV TBN - Pneumatic Cement Carrier (Gearless / Sealed Holds) (28,750 DWT)');
 });
+
+for (const page of ['index.html', 'decisiones.html']) {
+  const source = readFileSync(new URL(`../${page}`, import.meta.url), 'utf8');
+  test(`${page}: DSS demurrage prefers the live calculator and rejects invalid rates`, () => {
+    const start = source.indexOf('function getDSSCurrentState()');
+    const end = source.indexOf('window.getDSSCurrentState =', start);
+    const getRate = new Function('window', 'document', 'State', `${source.slice(start, end)}; return getDSSCurrentState();`);
+    const current = { demurrage: 27000, pol: 'Bilbao' };
+    const win = { getCurrentFixtureRecapState: () => current };
+    for (const value of ['42000', '0', '', '-1', 'Infinity']) {
+      const result = getRate(win, { getElementById: () => ({ value }) }, { demurrage: 23000 });
+      assert.equal(result.demurrageRate, value === '42000' ? 42000 : 27000);
+      assert.equal(result.pol, 'Bilbao');
+    }
+    current.demurrage = '0';
+    assert.equal(getRate(win, { getElementById: () => null }, { demurrage: 23000 }).demurrageRate, 23000);
+    assert.equal(getRate(win, { getElementById: () => null }, {}).demurrageRate, 31200);
+  });
+  test(`${page}: Recap skips zero strings and uses positive demurrage fallbacks`, () => {
+    const start = source.indexOf('function resolveFixtureRecapOperations(');
+    const end = source.indexOf('window.buildFixtureRecapHTMLTemplate =', start);
+    const render = new Function('state', 'window', 'State', `${source.slice(start, end)}; return buildFixtureRecapHTMLTemplate({pol: 'Bilbao', pod: 'Lima', ...state});`);
+    assert.match(plainText(render({ demurrageRate: '0', demurrageRecomendado: 28000 }, {}, {})), /28,000/);
+    assert.match(plainText(render({ demurrageRate: '0' }, { dssInjectedRecapDemurrage: 29000 }, {})), /29,000/);
+    assert.match(plainText(render({ demurrageRate: '0', demurrage: -10 }, {}, {})), /31,200/);
+  });
+}
