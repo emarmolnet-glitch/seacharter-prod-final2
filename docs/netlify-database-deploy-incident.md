@@ -54,3 +54,17 @@ El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar 
 La corrección de settings quedó aplicada: se eliminaron los redirects manuales de `/api/settings` y `/api/settings/*`, se conservaron ambas rutas en `config.path` y se añadieron las cuatro cabeceras anticaché solicitadas a las respuestas del handler. Las ocho pruebas de settings pasaron, incluidas las comprobaciones para respuestas 200, 401, 404 y 500.
 
 Quedó pendiente revisar en Netlify la operación fallida para este despliegue, recuperar la creación de la rama y reintentar la publicación. La purga manual del 404 cacheado quedó pendiente tras publicar. No se identificó una modificación del repositorio que resolviera el error interno de la API.
+
+## Despliegue del perfil de empresa en GENCON: 6ae9ce1ffdbc99d1d74c5fe3
+
+El despliegue de vista previa falló durante el aprovisionamiento de Netlify Database. La operación `createSiteDatabaseBranch` devolvió HTTP 500 (`internal error`) al solicitar la rama `agent-6ae9cde89e0`. El registro enumeró las migraciones, pero no mostró una excepción SQL ni un error de compilación de la aplicación.
+
+Se revisaron la configuración de despliegue, las dependencias de Database y el directorio de migraciones configurado en Drizzle, que coincidió con el cargado por Netlify. La incorporación de «MI EMPRESA» a los cuatro selectores GENCON permaneció aplicada. No se identificó una corrección del repositorio sustentada por este error de API.
+
+Quedó pendiente recuperar la creación de ramas en Netlify Database y reintentar el despliegue desde la plataforma. No se ejecutó una compilación o despliegue manual ni se confirmó la publicación de este cambio.
+
+## Reintento del perfil GENCON: 6ae9ce3cc5d01c1494399feb
+
+El nuevo despliegue volvió a fallar al crear la misma rama `agent-6ae9cde89e0`. La operación `createSiteDatabaseBranch` devolvió HTTP 500 (`internal error`) durante el aprovisionamiento de Netlify Database. El registro no mostró ejecución de la compilación de la aplicación ni un error SQL concreto. Este intento confirmó la persistencia del bloqueo de plataforma, sin aportar una causa interna que pudiera corregirse desde el repositorio.
+
+Se confirmó que el código conservó la opción «MI EMPRESA», la resolución de `MY_PROFILE` desde el perfil y el filtrado de campos vacíos. La publicación continuó pendiente de recuperar la creación de ramas de Database y reintentar el despliegue. No se ejecutó una compilación o despliegue manual.

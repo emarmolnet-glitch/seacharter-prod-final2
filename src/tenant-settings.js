@@ -29,11 +29,15 @@ async function api(path = '', method = 'GET', values) {
 function updateSelectors() {
   for (const select of document.querySelectorAll('[data-tenant-select]')) {
     const kind = select.dataset.tenantSelect;
+    const hasProfile = kind !== 'bank-accounts' && Boolean(data?.profile?.company_name);
     const records = kind === 'bank-accounts' ? data?.['bank-accounts'] || [] : (data?.contacts || []).filter(c => c.role === kind);
     const previous = select.value;
-    select.replaceChildren(new Option(!data ? 'Abre Configuración de Empresa para iniciar sesión o reintentar' : records.length ? 'Seleccionar de mi empresa…' : 'Sin registros · Configuración de Empresa', ''));
+    select.replaceChildren(new Option(!data ? 'Abre Configuración de Empresa para iniciar sesión o reintentar' : records.length || hasProfile ? 'Seleccionar de mi empresa…' : 'Sin registros · Configuración de Empresa', ''));
+    if (hasProfile) {
+      select.add(new Option(`⭐ MI EMPRESA: ${data.profile.company_name}`, 'MY_PROFILE'));
+    }
     for (const row of records) select.add(new Option(kind === 'bank-accounts' ? `${row.bank_name} · ${row.currency} · ${row.iban.slice(-4)}` : row.company_name, row.id));
-    select.value = records.some(row => row.id === previous) ? previous : '';
+    select.value = (hasProfile && previous === 'MY_PROFILE') || records.some(row => row.id === previous) ? previous : '';
   }
 }
 async function refresh() {
@@ -106,7 +110,12 @@ document.getElementById('company-settings-open')?.addEventListener('click', () =
 document.addEventListener('change', e => {
   const select = e.target.closest('[data-tenant-select]'); if (!select || !data || !select.value) return;
   const kind = select.dataset.tenantSelect;
-  const row = (kind === 'bank-accounts' ? data['bank-accounts'] : data.contacts).find(r => r.id === select.value);
+  let row;
+  if (select.value === 'MY_PROFILE') {
+    row = data.profile;
+  } else {
+    row = (kind === 'bank-accounts' ? data['bank-accounts'] : data.contacts).find(r => r.id === select.value);
+  }
   if (!row) return;
   const set = (id, value) => { const element = document.getElementById(id); if (element) element.value = value; };
   if (kind === 'bank-accounts') set('gc-bank', `Banking details: ${row.bank_name}\nIBAN: ${row.iban}\nSWIFT: ${row.swift}\nBEN: ${row.beneficiary}`);
