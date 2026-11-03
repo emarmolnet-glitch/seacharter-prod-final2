@@ -46,3 +46,11 @@ El despliegue de vista previa `6ae98a86b0da812338d1e988` falló al solicitar la 
 La revisión confirmó que el selector conservó los nombres de los cinco campos DSS solicitados y que tanto el selector del estado actual como el modal resolvieron el primer alias de descarga finito y positivo. La configuración Drizzle mantuvo `netlify/database/migrations` como directorio de salida, coincidente con el directorio cargado por la plataforma. No se identificó un cambio de código o de configuración que corrigiera el HTTP 500; no se alteraron las correcciones DSS ni las migraciones para eludirlo.
 
 Quedó pendiente revisar los registros internos de creación de rama para este despliegue, recuperar el aprovisionamiento y reintentar la publicación. No se confirmó la publicación de estas correcciones en producción. Tras su publicación, la comprobación visual requiere una nueva Opción B, porque los snapshots anteriores conservan su HTML estático.
+
+## Despliegue de la corrección de settings: 6ae995c0e0e7be818995e995
+
+El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama `agent-6ae99591211`. Netlify devolvió HTTP 500 (`internal error`) durante el aprovisionamiento de Database. El registro recibido repetidamente correspondió al mismo intento; no acreditó nuevos despliegues ni un fallo SQL o de compilación.
+
+La corrección de settings quedó aplicada: se eliminaron los redirects manuales de `/api/settings` y `/api/settings/*`, se conservaron ambas rutas en `config.path` y se añadieron las cuatro cabeceras anticaché solicitadas a las respuestas del handler. Las ocho pruebas de settings pasaron, incluidas las comprobaciones para respuestas 200, 401, 404 y 500.
+
+Quedó pendiente revisar en Netlify la operación fallida para este despliegue, recuperar la creación de la rama y reintentar la publicación. La purga manual del 404 cacheado quedó pendiente tras publicar. No se identificó una modificación del repositorio que resolviera el error interno de la API.
