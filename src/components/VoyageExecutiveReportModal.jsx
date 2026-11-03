@@ -29,10 +29,18 @@ export default function VoyageExecutiveReportModal({
   const audit = data.madreUltimaAuditoria || (typeof window !== 'undefined' ? window.madreUltimaAuditoria : null);
   const dss = data.dssFormState || (typeof window !== 'undefined' ? window.dssFormState : null);
   const dischargeRate = Number(data.dischargeRate ?? data.dischRate ?? data.ratePOD);
+  const currentDss = typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function'
+    ? window.getDSSCurrentState()
+    : null;
   const optimalDischargeRate = [
     data.optimalDischargeRate,
+    data.ritmoDescargaOptimizado,
+    data.ritmo_descarga_optimizado,
     audit?.modificaciones_recap?.dischargeRate,
+    dss?.optimalDischargeRate,
     dss?.ritmoDescargaOptimizado,
+    dss?.ritmo_descarga_optimizado,
+    currentDss?.optimalDischargeRate,
   ].map(Number).find(value => Number.isFinite(value) && value > 0) || 5200;
 
   const reportVessel = resolveReportVessel(data);
@@ -479,6 +487,33 @@ export default function VoyageExecutiveReportModal({
               ))}
             </ul>
           </section>
+
+          {/* DSS Strategic Recommendation - justo después de executive-stipulated-clauses */}
+          {dischargeRate > 0 && optimalDischargeRate > dischargeRate && (
+            <section id="executive-dss-recommendation" className="mt-4 bg-slate-50 p-5 rounded-xl border border-blue-200 shadow-sm break-inside-avoid">
+              <div className="flex items-center gap-2 mb-3 border-b border-blue-200 pb-2">
+                <span className="text-blue-700 text-base">💡</span>
+                <h4 className="font-black text-blue-900 text-xs uppercase tracking-wider">DSS STRATEGIC RECOMMENDATION</h4>
+              </div>
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  Based on our Decision Support System (DSS) algorithmic analysis, the requested discharge rate generates a sub-optimal turnaround time, eroding profit margins and increasing demurrage exposure. We strongly advise adjusting the operational terms to the optimized target below:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono mt-1">
+                  <div className="bg-white p-3 border border-rose-200 rounded-lg shadow-sm">
+                    <span className="block text-slate-500 font-sans font-bold text-[10px] uppercase mb-1">Current Scenario</span>
+                    <span className="font-black text-rose-700 text-sm">{dischargeRate.toLocaleString()} MT/day</span>
+                    <span className="block text-rose-900 font-semibold mt-1 text-[10px]">Sub-optimal performance / High risk</span>
+                  </div>
+                  <div className="bg-emerald-50 p-3 border border-emerald-300 rounded-lg shadow-sm">
+                    <span className="block text-emerald-700 font-sans font-bold text-[10px] uppercase mb-1">Optimized Target</span>
+                    <span className="font-black text-emerald-700 text-sm">{optimalDischargeRate.toLocaleString()} MT/day</span>
+                    <span className="block text-emerald-900 font-semibold mt-1 text-[10px]">Maximizes TCE &amp; mitigates demurrage</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
         </div>
 

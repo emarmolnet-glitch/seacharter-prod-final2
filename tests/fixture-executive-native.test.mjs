@@ -182,3 +182,21 @@ test('native preview prints approved text and tables, preserves SVG and strips r
     assert.equal(await page.evaluate(() => document.querySelectorAll('[role="dialog"]').length), 0);
   } finally { await browser.close(); }
 });
+
+test('DSS strategic recommendation follows clauses and compares valid current rates with each optimized alias', () => {
+  for (const key of ['optimalDischargeRate', 'ritmoDescargaOptimizado', 'ritmo_descarga_optimizado']) {
+    const $ = load(renderToStaticMarkup(React.createElement(Report, {
+      voyageData: { dischargeRate: 2400, [key]: 6100 }, initialClientMode: true,
+    })));
+    assert.equal($('#executive-stipulated-clauses').next().attr('id'), 'executive-dss-recommendation');
+    const text = $('#executive-dss-recommendation').text();
+    assert.ok(text.includes(`${Number(2400).toLocaleString()} MT/day`));
+    assert.ok(text.includes(`${Number(6100).toLocaleString()} MT/day`));
+  }
+  for (const dischargeRate of [0, -1, 'invalid', 5200, 6000]) {
+    const $ = load(renderToStaticMarkup(React.createElement(Report, {
+      voyageData: { dischargeRate, optimalDischargeRate: 5200 },
+    })));
+    assert.equal($('#executive-dss-recommendation').length, 0);
+  }
+});
