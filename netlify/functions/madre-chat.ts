@@ -10,6 +10,21 @@ export const headers: Record<string, string> = {
 export const AI_TIMEOUT_MS = 10_000;
 const UPSTREAM = 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat';
 
+// This function proxies MADRE; pass the DSS directive to its remote prompt context.
+export const DIRECTIVA_DSS = "MANDATO CRÍTICO 4 (PROTECCIÓN ALL-IN): El 'Flete ALL-IN GROSS' proporcionado en el contexto ya incluye el recargo por reposicionamiento (lastre) y comisiones. Tienes ESTRICTAMENTE PROHIBIDO proponer una 'Opción B Estratégica' o flete sugerido que sea INFERIOR a ese Flete ALL-IN GROSS. Cualquier incremento para absorber congestión o riesgos operativos debe sumarse siempre por encima del Flete ALL-IN GROSS.";
+
+export function buildStrategicPayload(body: any) {
+  const ui = body?.contexto_ui || body?.contexto || body?.context || {};
+  const floor = Number(ui.allInRateGross);
+  if (!Number.isFinite(floor) || floor <= 0) return body;
+  const context = { ...ui, allInRateGross: floor, flete_all_in_gross_usd_mt: floor,
+    directiva_dss: DIRECTIVA_DSS };
+  const mandate = `${DIRECTIVA_DSS}\nFlete ALL-IN GROSS: USD ${floor.toFixed(2)}/MT (JWC, lastre y comisiones incluidos).`;
+  return { ...body, contexto_ui: context, contexto: context,
+    systemInstruction: [body.systemInstruction, mandate].filter(Boolean).join('\n'),
+    mensajeUsuario: [body.mensajeUsuario || body.mensaje || body.message || body.prompt, mandate].filter(Boolean).join('\n') };
+}
+
 export function buildLocalVerdict(body: any, reason: string) {
   const ui = body?.contexto_ui || body?.contexto || body?.context || {};
   const blocks = ui.escaneo_estructurado?.bloques || ui.modulos_1_a_10 || {};
@@ -53,7 +68,7 @@ export async function requestVerdict(body: any, fetchImpl = fetch, timeoutMs = A
     const remote = (async () => {
       const response = await fetchImpl(UPSTREAM, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(body), signal: controller.signal, redirect: 'error'
+        body: JSON.stringify(buildStrategicPayload(body)), signal: controller.signal, redirect: 'error'
       });
       if (!response.ok) throw new Error('upstream_unavailable');
       const data = await response.json();

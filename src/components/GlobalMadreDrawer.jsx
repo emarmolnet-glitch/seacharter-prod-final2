@@ -534,6 +534,7 @@ export function getCoreProUIContext() {
     vista_activa: "Core PRO - Panel y Mapa Operativo",
     vista_dinamica: vistaActivaActual,
     referenciaMadre: referenciaActiva, // <- VITAL PARA QUE NO FALLE NEON
+    allInRateGross: Number(window.dssFormState?.allInRateGross || window.getDSSCurrentState?.()?.allInRateGross || 0),
     parametros_activos: params,        // <- AQUÍ VAN LOS GASTOS DE PUERTO
     escaneo_estructurado: escaneoCompacto,
     modulos_1_a_10: escaneoCompacto?.bloques,

@@ -26,14 +26,15 @@ export function buildDssStrategicAuditResponse(contexto_ui = {}) {
         veredicto = "🔴 Desfavorable - Flete por debajo de Break-Even / Riesgo Operativo";
     }
 
-    const proposedFreight = Number((Math.max(flete * 1.08, breakEven * 1.18)).toFixed(2));
+    const allInFloor = Number(contexto_ui.allInRateGross) || 0;
+    const proposedFreight = Number(Math.max(Math.max(flete, allInFloor) * 1.08, breakEven * 1.18).toFixed(2));
     const proposedDischargeRate = Math.max(dischargeRate, 2500);
 
     return {
         success: true,
         accion_ui: "renderizar_auditoria_dss",
         veredicto_general: veredicto,
-        reporte_estrategico: `Auditoría Estratégica Ejecutiva MADRE para la operación ${pol} ➔ ${pod} (${cargoQty.toLocaleString('es-ES')} MT de ${commodity}).\n\nEl análisis financiero y operativo determina un Break-Even base de $${breakEven.toFixed(2)}/MT frente a un flete nominal de $${flete.toFixed(2)}/MT (Margen neto actual: ${marginPct.toFixed(1)}%).\n\nSe detecta un cuello de botella relevante en el ritmo de descarga (${dischargeRate.toLocaleString('es-ES')} MT/d) que dilata la permanencia en muelle frente a los días efectivos de mar. Asimismo, la ausencia de cláusulas específicas de congestión y régimen WWD SHINC traslada incertidumbre al armador. Se recomienda formalizar la Opción B estratégica, ajustando el flete a $${proposedFreight.toFixed(2)}/MT e implementando protecciones de plancha y laytime.`,
+        reporte_estrategico: `Auditoría Estratégica Ejecutiva MADRE para la operación ${pol} ➔ ${pod} (${cargoQty.toLocaleString('es-ES')} MT de ${commodity}).\n\nEl análisis financiero y operativo determina un Break-Even base de $${breakEven.toFixed(2)}/MT frente a un flete nominal de $${flete.toFixed(2)}/MT (Margen neto actual: ${marginPct.toFixed(1)}%). Flete ALL-IN GROSS: $${allInFloor.toFixed(2)}/MT (incluye JWC, lastre y comisiones); los incrementos estratégicos parten de este mínimo.\n\nSe detecta un cuello de botella relevante en el ritmo de descarga (${dischargeRate.toLocaleString('es-ES')} MT/d) que dilata la permanencia en muelle frente a los días efectivos de mar. Asimismo, la ausencia de cláusulas específicas de congestión y régimen WWD SHINC traslada incertidumbre al armador. Se recomienda formalizar la Opción B estratégica, ajustando el flete a $${proposedFreight.toFixed(2)}/MT e implementando protecciones de plancha y laytime.`,
         variables_perjudiciales: [
             `Ritmo de descarga reducido (${dischargeRate.toLocaleString('es-ES')} MT/d) incrementa Port Days y reduce TCE`,
             `Exposición a demoras en atraque por congestión sin cláusula Reachable on Arrival`,
