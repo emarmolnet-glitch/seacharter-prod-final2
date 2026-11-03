@@ -96,6 +96,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/settings"
+  to = "/.netlify/functions/settings"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/settings/*"
+  to = "/.netlify/functions/settings/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200

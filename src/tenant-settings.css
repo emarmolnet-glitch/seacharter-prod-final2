@@ -1,0 +1,21 @@
+#company-settings { width:min(900px,94vw); max-height:90vh; padding:0; color:#1e293b; border:1px solid #e2e8f0; border-radius:12px; background:white; box-shadow:0 24px 80px #0f172a44; }
+#company-settings::backdrop { background:#0f172a99; }
+#company-settings header { display:flex; align-items:center; justify-content:space-between; padding:24px; border-bottom:1px solid #e2e8f0; }
+#company-settings h2,#company-settings h3 { color:#1e3a8a; font-weight:900; text-transform:uppercase; }
+#company-settings nav { display:flex; gap:8px; padding:16px 24px; border-bottom:1px solid #e2e8f0; flex-wrap:wrap; }
+#company-settings button { padding:9px 14px; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer; }
+#company-settings button[aria-selected=true] { background:#eff6ff; color:#1e3a8a; border-color:#93c5fd; }
+#company-settings button:disabled { opacity:.5; cursor:wait; }
+#company-settings .settings-save { background:#059669; color:white; border:0; }
+#company-settings .settings-save:hover { background:#047857; }
+#company-settings .settings-content { padding:24px; }
+#company-settings .settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:16px 0; }
+#company-settings label { display:grid; gap:6px; color:#475569; font-size:12px; font-weight:700; text-transform:uppercase; }
+#company-settings input,#company-settings textarea,#company-settings select { width:100%; min-width:0; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; background:white; color:#1e293b; font-size:14px; font-weight:400; text-transform:none; }
+#company-settings :focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+#company-settings .settings-description { color:#475569; font-size:12px; font-weight:700; text-transform:uppercase; }
+#company-settings .settings-records { display:grid; gap:8px; margin:16px 0; }
+#company-settings .settings-records button { text-align:left; display:flex; justify-content:space-between; gap:12px; background:#f8fafc; }
+#company-settings [role=alert] { color:#b91c1c; }
+.tenant-gencon-select { width:100%; border:1px solid #e2e8f0; border-radius:8px; padding:6px; color:#1e3a8a; background:white; margin:4px 0; font-size:12px; }
+@media(max-width:600px) { #company-settings .settings-grid { grid-template-columns:1fr; } #company-settings header,#company-settings .settings-content { padding:16px; } }

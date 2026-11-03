@@ -9968,6 +9968,12 @@
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
+                            <button id="company-settings-open" type="button" class="tools-dropdown-action" title="Configuración de Empresa" aria-label="Configuración de Empresa">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 21V3h12v18M16 9h4v12M8 7h4M8 11h4M8 15h4M2 21h20"/></svg>
+                                <span>Configuración de Empresa</span>
+                            </button>
+                        </li>
+                        <li class="tools-dropdown-item">
                             <button id="load-session-btn" onclick="loadAuditSession()" class="tools-dropdown-action" title="Cargar Sesión" aria-label="Cargar Sesión">
                                 <svg class="header-utility-icon w-4 h-4 text-slate-600" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -13726,13 +13732,15 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="font-bold text-blue-600">Owners (Box 3)</label>
-                            <input type="text" id="gc-owner-name" class="w-full border rounded px-2 py-1 font-bold mb-1" value="RODAHMAR SHIPPING SL" oninput="syncGencon()">
-                            <textarea id="gc-owner-addr" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()">Calle Lérida 118, Barcelona</textarea>
+                            <select class="tenant-gencon-select" data-tenant-select="owner" aria-label="Seleccionar owner"><option value="">Cargando configuración…</option></select>
+                            <input type="text" id="gc-owner-name" class="w-full border rounded px-2 py-1 font-bold mb-1" value="" oninput="syncGencon()">
+                            <textarea id="gc-owner-addr" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()"></textarea>
                         </div>
                         <div>
                             <label class="font-bold text-blue-600">Charterers (Box 4)</label>
-                            <input type="text" id="gc-chart-name" class="w-full border rounded px-2 py-1 font-bold mb-1" value="NASHCO NATIONAL SHIPPING" oninput="syncGencon()">
-                            <textarea id="gc-chart-addr" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()">50BIS Rout de Constantine, Alger</textarea>
+                            <select class="tenant-gencon-select" data-tenant-select="charterer" aria-label="Seleccionar charterer"><option value="">Cargando configuración…</option></select>
+                            <input type="text" id="gc-chart-name" class="w-full border rounded px-2 py-1 font-bold mb-1" value="" oninput="syncGencon()">
+                            <textarea id="gc-chart-addr" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()"></textarea>
                         </div>
                     </div>
 
@@ -13861,26 +13869,16 @@
                         <div class="space-y-2">
                             <div class="flex justify-between items-center">
                                 <label class="font-bold text-xs uppercase text-slate-500">Agente Carga (Box 18)</label>
-                                <select class="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5 outline-none cursor-pointer" onchange="document.getElementById('gc-agent-load').value=this.value; syncGencon();">
-                                    <option value="" selected>-- Seleccionar --</option>
-                                    <option value="NASHCO AGENCE DE BEJAIA&#10;direc-bej@nashco.com.dz">NASHCO BEJAIA</option>
-                                    <option value="NASHCO AGENCE DE JIJEL&#10;djendjen@nashco.com.dz">NASHCO JIJEL</option>
-                                    <option value="To be Nominated (TBN)">TBN</option>
-                                </select>
+                                <select class="tenant-gencon-select" data-tenant-select="agent_pol" aria-label="Agente POL"><option value="">Cargando configuración…</option></select>
                             </div>
-                            <textarea id="gc-agent-load" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()">NASHCO AGENCE / direc@nashco.com.dz</textarea>
+                            <textarea id="gc-agent-load" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()"></textarea>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between items-center">
                                 <label class="font-bold text-xs uppercase text-slate-500">Agente Descarga (Box 19)</label>
-                                <select class="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5 outline-none cursor-pointer" onchange="document.getElementById('gc-agent-disch').value=this.value; syncGencon();">
-                                    <option value="" selected>-- Seleccionar --</option>
-                                    <option value="PTM IBERICA&#10;rui.azevedo@ptmiberica.com">PTM IBERICA</option>
-                                    <option value="NOATUM MARITIME&#10;lgoncalves@noatummaritime.com">NOATUM MARITIME</option>
-                                    <option value="To be Nominated (TBN)">TBN</option>
-                                </select>
+                                <select class="tenant-gencon-select" data-tenant-select="agent_pod" aria-label="Agente POD"><option value="">Cargando configuración…</option></select>
                             </div>
-                            <textarea id="gc-agent-disch" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()">PTM IBERICA / rui.azevedo@ptmiberica.com</textarea>
+                            <textarea id="gc-agent-disch" class="w-full border rounded px-2 py-1 text-xs" rows="2" oninput="syncGencon()"></textarea>
                         </div>
                     </div>
                     
@@ -13905,17 +13903,9 @@
                         <div class="space-y-2">
                             <div class="flex justify-between items-center">
                                 <label class="font-bold text-xs uppercase text-slate-500">Detalles Bancarios (Box 14)</label>
-                                <select class="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5 outline-none cursor-pointer" onchange="document.getElementById('gc-bank').value=this.value; syncGencon();">
-                                    <option value="" selected>-- Seleccionar Banco --</option>
-                                    <option value="Banking details: EUROS REVOLUT BANK UAB&#10;NIF: B44738847&#10;NIF Int.: ESB44738847&#10;Bank: REVOLUT BANK UAB&#10;IBAN: ES68 1583 0001 13 9315053143&#10;BIC: REVOESM2">EUROS REVOLUT</option>
-                                    <option value="Banking details: UNITED STATES DOLLAR REVOLUT BANK UAB&#10;NIF: B44738847&#10;NIF Int.: ESB44738847&#10;Bank: REVOLUT BANK UAB&#10;IBAN: ES68 1583 0001 13 9315053143&#10;BIC: REVOESM2&#10;BIC INTERMEDIARY: CHASGB2L">USD REVOLUT</option>
-                                    <option value="Banking details: UNITED STATES DOLLAR BANKINTER&#10;NIF: B44738847&#10;NIF Int.: ESB47738847&#10;Bank: BANKINTER&#10;IBAN: ES88 0128 0506 77 0140002074&#10;BIC: BKBKESMMXXX">USD BANKINTER</option>
-                                    <option value="Banking details: EUROS BANKINTER&#10;NIF: B44738847&#10;NIF Int.: ESB47738847&#10;Bank: BANKINTER&#10;IBAN: ES64 0128 0506 76 0100066976&#10;BIC: BKBKESMMXXX">EUROS BANKINTER</option>
-                                    <option value="Banking details: EUROS BBVA&#10;NIF: B44738847&#10;NIF Int.: ESB47738847&#10;Bank: BBVA&#10;IBAN: ES11 0182 5210 29 0202500074&#10;BIC: BBVAMMME">EUROS BBVA</option>
-                                    <option value="Banking details: UNITED STATES DOLLAR BBVA&#10;NIF: B44738847&#10;NIF Int.: ESB47738847&#10;Bank: BBVA&#10;IBAN: ES10 0182 5210 25 2010000034&#10;BIC: BBVAMMME">USD BBVA</option>
-                                </select>
+                                <select class="tenant-gencon-select" data-tenant-select="bank-accounts" aria-label="Cuenta bancaria"><option value="">Cargando configuración…</option></select>
                             </div>
-                            <textarea id="gc-bank" class="w-full border rounded px-2 py-1 text-xs mono bg-slate-50" rows="3" oninput="syncGencon()">Banking details: EUROS REVOLUT BANK UAB&#10;IBAN: ES68 1583 0001 13 9315053143&#10;BIC: REVOESM2</textarea>
+                            <textarea id="gc-bank" class="w-full border rounded px-2 py-1 text-xs mono bg-slate-50" rows="3" oninput="syncGencon()"></textarea>
                         </div>
                     </div>
 
@@ -75829,6 +75819,7 @@ window.actualizarGrabCapacityVisibility = function() {
       } catch (e) {}
     })();
   </script>
+<script type="module" src="/src/tenant-settings.js"></script>
 </body>
 </html>
 <!-- Phase 1 structural stabilization synchronization marker; no runtime effect. -->

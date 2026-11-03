@@ -17,6 +17,7 @@
     "@netlify/blobs": "^10.7.9",
     "@netlify/database": "^1.1.0",
     "@netlify/functions": "^2.6.0",
+    "@netlify/identity": "^1.2.0",
     "@sparticuz/chromium": "^147.0.0",
     "@turf/distance": "^7.3.0",
     "autoprefixer": "^10.4.18",
