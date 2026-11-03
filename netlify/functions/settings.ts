@@ -75,4 +75,3 @@ export default async (req: Request) => {
     return respond({ error: 'No se pudo acceder a la configuración. Inténtalo de nuevo.' }, 500);
   }
 };
-export const config = { path: ['/api/settings', '/api/settings/*'] };
