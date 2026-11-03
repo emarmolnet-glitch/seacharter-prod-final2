@@ -458,3 +458,33 @@ export const fixtureReferenceAliases = pgTable('fixture_reference_aliases', {
   legacyId: text('legacy_id').primaryKey(),
   reference: text('reference').notNull().unique(),
 });
+
+// Each authenticated Identity user owns one tenant profile.
+export const tenantContactRole = pgEnum('tenant_contact_role', ['agent_pol', 'agent_pod', 'charterer', 'owner', 'broker']);
+export const tenantProfiles = pgTable('tenant_profiles', {
+  id: text('id').primaryKey(),
+  company_name: text('company_name').notNull().default(''),
+  nif: text('nif').notNull().default(''),
+  address: text('address').notNull().default(''),
+  email: text('email').notNull().default(''),
+  phone: text('phone').notNull().default(''),
+  logo_url: text('logo_url').notNull().default(''),
+});
+export const tenantBankAccounts = pgTable('tenant_bank_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenant_id: text('tenant_id').notNull().references(() => tenantProfiles.id, { onDelete: 'cascade' }),
+  bank_name: text('bank_name').notNull(),
+  iban: text('iban').notNull(),
+  swift: text('swift').notNull().default(''),
+  currency: varchar('currency', { length: 3 }).notNull().default('EUR'),
+  beneficiary: text('beneficiary').notNull(),
+}, (table) => [index('tenant_bank_accounts_tenant_idx').on(table.tenant_id)]);
+export const tenantContacts = pgTable('tenant_contacts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenant_id: text('tenant_id').notNull().references(() => tenantProfiles.id, { onDelete: 'cascade' }),
+  role: tenantContactRole('role').notNull(),
+  company_name: text('company_name').notNull(),
+  address: text('address').notNull().default(''),
+  email: text('email').notNull().default(''),
+  pic_name: text('pic_name').notNull().default(''),
+}, (table) => [index('tenant_contacts_tenant_role_idx').on(table.tenant_id, table.role)]);

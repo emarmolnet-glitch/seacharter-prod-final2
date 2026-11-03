@@ -1,3 +1,5 @@
+/api/settings /.netlify/functions/settings 200!
+/api/settings/* /.netlify/functions/settings/:splat 200!
 /api/get-bunker-prices /.netlify/functions/get-bunker-prices 200!
 /api/dossiers /.netlify/functions/dossiers 200!
 /api/dossiers/* /.netlify/functions/dossiers/:splat 200!
