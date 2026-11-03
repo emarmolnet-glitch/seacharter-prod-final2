@@ -26,6 +26,15 @@ export default function VoyageExecutiveReportModal({
   // A supplied Recap is the complete report source; never merge live vessel defaults.
   const data = voyageData ?? (typeof window !== 'undefined' ? window.State || {} : {});
 
+  const audit = data.madreUltimaAuditoria || (typeof window !== 'undefined' ? window.madreUltimaAuditoria : null);
+  const dss = data.dssFormState || (typeof window !== 'undefined' ? window.dssFormState : null);
+  const dischargeRate = Number(data.dischargeRate ?? data.dischRate ?? data.ratePOD);
+  const optimalDischargeRate = [
+    data.optimalDischargeRate,
+    audit?.modificaciones_recap?.dischargeRate,
+    dss?.ritmoDescargaOptimizado,
+  ].map(Number).find(value => Number.isFinite(value) && value > 0) || 5200;
+
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
   const vesselClass = reportVessel.type;
@@ -347,6 +356,27 @@ export default function VoyageExecutiveReportModal({
                   </>
                 )}
               </ul>
+
+              {Number.isFinite(dischargeRate) && dischargeRate > 0 && dischargeRate < optimalDischargeRate && (
+                <section className="mt-4 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-900 shadow-sm flex flex-col gap-2 break-inside-avoid" aria-label="Strategic financial impact">
+                  <h5 className="font-black uppercase text-xs tracking-wider flex items-center gap-1.5">
+                    <i className="fa-solid fa-triangle-exclamation text-rose-700" aria-hidden="true"></i> STRATEGIC FINANCIAL IMPACT
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                    <div className="bg-white p-2 border border-rose-200 rounded">
+                      <span className="block text-slate-500 font-sans font-bold text-[10px] uppercase">Current Scenario</span>
+                      <span className="font-bold">{dischargeRate.toLocaleString('en-US')} MT/day</span>
+                      <span className="block text-rose-700 font-black mt-1">High Demurrage Risk</span>
+                    </div>
+                    <div className="bg-emerald-50 p-2 border border-emerald-300 rounded text-emerald-900">
+                      <span className="block text-emerald-700 font-sans font-bold text-[10px] uppercase">Optimized Proposal</span>
+                      <span className="font-bold">{optimalDischargeRate.toLocaleString('en-US')} MT/day</span>
+                      <span className="block font-black mt-1">Maximum TCE Margin</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] font-bold mt-1 text-rose-800">Slow discharge rates directly erode margins and trigger avoidable demurrage claims.</p>
+                </section>
+              )}
             </div>
           </div>
 
