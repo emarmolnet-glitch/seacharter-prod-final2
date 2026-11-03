@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { transformSync } from 'esbuild';
 const require = createRequire(import.meta.url);
-const source = readFileSync(new URL('../netlify/functions/settings.mts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../netlify/functions/settings.ts', import.meta.url), 'utf8');
 const compiled = transformSync(source, { loader: 'ts', format: 'cjs' }).code;
 function harness(user = { id: 'tenant-a' }) {
   const calls = [];

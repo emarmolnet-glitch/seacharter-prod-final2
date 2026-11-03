@@ -1,4 +1,16 @@
 [[redirects]]
+  from = "/api/settings"
+  to = "/.netlify/functions/settings"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/settings/*"
+  to = "/.netlify/functions/settings/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/databridge-port-tariff"
   to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
   status = 301
