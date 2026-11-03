@@ -68,3 +68,10 @@ Quedó pendiente recuperar la creación de ramas en Netlify Database y reintenta
 El nuevo despliegue volvió a fallar al crear la misma rama `agent-6ae9cde89e0`. La operación `createSiteDatabaseBranch` devolvió HTTP 500 (`internal error`) durante el aprovisionamiento de Netlify Database. El registro no mostró ejecución de la compilación de la aplicación ni un error SQL concreto. Este intento confirmó la persistencia del bloqueo de plataforma, sin aportar una causa interna que pudiera corregirse desde el repositorio.
 
 Se confirmó que el código conservó la opción «MI EMPRESA», la resolución de `MY_PROFILE` desde el perfil y el filtrado de campos vacíos. La publicación continuó pendiente de recuperar la creación de ramas de Database y reintentar el despliegue. No se ejecutó una compilación o despliegue manual.
+
+
+## Despliegue del documento ejecutivo centrado: 6ae9cfe8589ab57667017cbc
+
+El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama `agent-6ae9cf9966c`, con HTTP 500 (`internal error`). El registro no mostró un error SQL ni una excepción de compilación de la aplicación. La consulta de estado posterior confirmó que la rama no existía.
+
+Se revisó la configuración de Netlify y Drizzle; el directorio de migraciones coincidió con el cargado por el despliegue. Se confirmó que el documento centrado permaneció aplicado en ambas versiones de Decisiones. No se identificó una corrección de código sustentada por este error. Quedó pendiente recuperar el aprovisionamiento de ramas en la plataforma y reintentar el despliegue. No se ejecutaron comandos de compilación ni de despliegue manual.
