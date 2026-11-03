@@ -38,3 +38,11 @@ Se comprobó que el directorio de migraciones de Drizzle coincidía con `netlify
 El despliegue `6ae97e199bdc391975c16c79` volvió a recibir HTTP 500 (`internal error`) en `createSiteDatabaseBranch` al solicitar la rama `agent-6ae97dbae9c`. El registro completo confirmó que el proceso se detuvo durante el aprovisionamiento, antes de ejecutar `npm run build`. No incluyó una excepción de compilación ni un error SQL. La causa interna siguió sin estar disponible en el registro.
 
 Se verificó que `executive-dss-recommendation` continuaba inmediatamente después de `executive-stipulated-clauses` y que ambas páginas devolvían `optimalDischargeRate` y `ritmoDescargaOptimizado` en `getDSSCurrentState()`. El nuevo registro no justificó modificar el componente, las migraciones o la configuración de la base de datos. Quedó pendiente revisar la operación fallida en la plataforma y recuperar la creación de la rama antes de reintentar el despliegue.
+
+## Intento de corrección del selector DSS: 6ae98a86b0da812338d1e988
+
+El despliegue de vista previa `6ae98a86b0da812338d1e988` falló al solicitar la rama de base de datos `agent-6ae9838372c`. La operación `createSiteDatabaseBranch` devolvió HTTP 500 con mensaje `internal error` durante el aprovisionamiento. El registro facilitado no mostró ejecución de `npm run build`, una excepción JSX ni un error SQL; enumerar las migraciones no acreditó su aplicación.
+
+La revisión confirmó que el selector conservó los nombres de los cinco campos DSS solicitados y que tanto el selector del estado actual como el modal resolvieron el primer alias de descarga finito y positivo. La configuración Drizzle mantuvo `netlify/database/migrations` como directorio de salida, coincidente con el directorio cargado por la plataforma. No se identificó un cambio de código o de configuración que corrigiera el HTTP 500; no se alteraron las correcciones DSS ni las migraciones para eludirlo.
+
+Quedó pendiente revisar los registros internos de creación de rama para este despliegue, recuperar el aprovisionamiento y reintentar la publicación. No se confirmó la publicación de estas correcciones en producción. Tras su publicación, la comprobación visual requiere una nueva Opción B, porque los snapshots anteriores conservan su HTML estático.

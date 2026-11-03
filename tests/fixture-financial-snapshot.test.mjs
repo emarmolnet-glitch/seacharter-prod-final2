@@ -185,3 +185,42 @@ test('clean state retains the financial, operational and vessel fields consumed 
     assert.ok(JSON.stringify(snapshot.state).length < 2048);
   }
 });
+
+test('DSS targets and detached report objects survive capture and persistence', async () => {
+  const ctx = setup();
+  const audit = { modificaciones_recap: { dischargeRate: 6100 } };
+  const dss = { ritmoDescargaOptimizado: 6200 };
+  dss.fixtureRecapSnapshot = dss;
+  Object.defineProperty(dss, 'optimalDischargeRate', { get() { throw new Error('Do not invoke live getters'); } });
+  const input = { allInRateGross: 42, cargoQty: 5000, optimalDischargeRate: 6300,
+    ritmoDescargaOptimizado: 6400, ritmo_descarga_optimizado: 6500,
+    dssFormState: dss, madreUltimaAuditoria: audit };
+  ctx.window.buildFixtureExecutiveReportHTML = async state => {
+    assert.equal(state.optimalDischargeRate, 6300);
+    assert.equal(state.madreUltimaAuditoria.modificaciones_recap.dischargeRate, 6100);
+    assert.equal(state.dssFormState.ritmoDescargaOptimizado, 6200);
+    return 'DSS retained';
+  };
+  const snapshot = await ctx.window.captureFixtureFinancialSnapshot(input, 'B', true);
+  audit.modificaciones_recap.dischargeRate = 1;
+  dss.ritmoDescargaOptimizado = 2;
+  const saved = ctx.stored().estimation.fixtureRecapSnapshot;
+  assert.equal(saved.state.optimalDischargeRate, 6300);
+  assert.equal(saved.state.ritmoDescargaOptimizado, 6400);
+  assert.equal(saved.state.ritmo_descarga_optimizado, 6500);
+  assert.equal(saved.state.madreUltimaAuditoria.modificaciones_recap.dischargeRate, 6100);
+  assert.equal(saved.state.dssFormState.ritmoDescargaOptimizado, 6200);
+  assert.equal(saved.state.dssFormState.fixtureRecapSnapshot, undefined);
+  assert.ok(Object.isFrozen(snapshot.state.dssFormState));
+  assert.equal(Object.isFrozen(dss), false);
+});
+
+test('current Recap resolves positive discharge aliases despite zero or invalid primary values', () => {
+  for (const dischargeRate of [0, '', 'invalid', null, undefined, -1]) {
+    const ctx = setup();
+    ctx.window.State = { dischargeRate, dischRate: '2400', ratePOD: 3000 };
+    assert.equal(ctx.window.getCurrentFixtureRecapState().dischargeRate, 2400);
+    ctx.window.State.dischRate = 0;
+    assert.equal(ctx.window.getCurrentFixtureRecapState().dischargeRate, 3000);
+  }
+});

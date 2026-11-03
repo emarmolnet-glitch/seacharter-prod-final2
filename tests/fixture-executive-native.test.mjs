@@ -200,3 +200,16 @@ test('DSS strategic recommendation follows clauses and compares valid current ra
     assert.equal($('#executive-dss-recommendation').length, 0);
   }
 });
+
+test('DSS recommendation renders positive discharge aliases masked by zero or invalid values', () => {
+  for (const dischargeRate of [0, '', 'invalid', null, undefined, -1]) {
+    for (const alias of ['dischRate', 'ratePOD']) {
+      const $ = load(renderToStaticMarkup(React.createElement(Report, {
+        voyageData: { dischargeRate, [alias]: '2400', optimalDischargeRate: 6100 },
+        initialClientMode: true,
+      })));
+      assert.equal($('#executive-dss-recommendation').length, 1);
+      assert.ok($('#executive-dss-recommendation').text().includes(`${Number(2400).toLocaleString()} MT/day`));
+    }
+  }
+});
