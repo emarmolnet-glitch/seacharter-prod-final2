@@ -108,3 +108,9 @@ El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar 
 
 Se confirmó que todos los puntos de acceso de MADRE en el frontend (`src/components/GlobalMadreDrawer.jsx`, `src/DecisionSupportModule.js`, `decisiones.html`, `index.html`) apuntan a la URL absoluta de Data Bridge (`https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat`) y que se aplica la validación flexible de respuestas en todos los módulos.
 
+## Despliegue de conexión directa Google AI Studio para ai-legal-audit: 6aead17e58f37dc9551c73de
+
+El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama de base de datos `agent-6aeacb93943`. La plataforma Netlify devolvió HTTP 500 (`internal error`) durante el paso `Netlify Database setup` antes de ejecutar la compilación de la aplicación (`npm run build`). El error no se debe al código de la aplicación ni a las migraciones SQL.
+
+Se confirmó que la corrección en `netlify/functions/ai-legal-audit.ts` quedó aplicada correctamente: se eliminaron todas las referencias a `NETLIFY_AI_GATEWAY_URL` y `NETLIFY_AI_GATEWAY_KEY`, se enruta directamente a `https://generativelanguage.googleapis.com` utilizando `GEMINI_API_KEY` y el modelo `gemini-2.5-flash`, superando todas las pruebas de integración del backend. Queda pendiente la resolución del aprovisionamiento de ramas de vista previa en la infraestructura de la plataforma Netlify.
+
