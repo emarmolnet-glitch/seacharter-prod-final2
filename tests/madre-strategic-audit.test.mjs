@@ -296,7 +296,7 @@ test('8. GlobalMadreDrawer: Lógica completa de API madre-chat, auto-scroll y lo
   // Endpoint central Data Bridge o local madre-chat
   assert.match(
     globalMadreDrawerSource,
-    /export const MADRE_API_ENDPOINT = "\/api\/madre-chat"/,
+    /export const MADRE_API_ENDPOINT = "(?:https:\/\/calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions\/madre-chat|\/api\/madre-chat)"/,
     'Debe definir MADRE_API_ENDPOINT apuntando al endpoint de madre-chat'
   );
 

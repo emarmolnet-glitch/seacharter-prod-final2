@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-for (const file of ['src/DecisionSupportModule.js', 'decisiones.html']) {
+for (const file of ['src/DecisionSupportModule.js', 'decisiones.html', 'index.html']) {
   const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
   const start = source.indexOf('async function solicitarAuditoriaMadre');
   const fn = source.slice(start, source.lastIndexOf('}', source.indexOf('function renderizarAuditoriaDss', start)) + 1);

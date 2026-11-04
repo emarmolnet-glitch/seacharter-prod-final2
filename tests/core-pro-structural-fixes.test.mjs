@@ -45,7 +45,7 @@ test('live market rate wins over stored rates and invalid values preserve target
 
 test('scan sends local request with context and renders server reply without local replacement', () => {
   const drawer = read('../src/components/GlobalMadreDrawer.jsx');
-  assert.match(drawer, /MADRE_API_ENDPOINT = "\/api\/madre-chat"/);
+  assert.match(drawer, /MADRE_API_ENDPOINT = "(?:https:\/\/calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions\/madre-chat|\/api\/madre-chat)"/);
   assert.match(drawer, /current_module: "core_pro"/);
   assert.match(drawer, /contexto_ui: getCoreProUIContext\(\)/);
   const requestStart = drawer.indexOf('const response = await fetch(MADRE_API_ENDPOINT');
