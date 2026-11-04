@@ -45212,9 +45212,7 @@ function scheduleReactiveEngine() {
 
                 let auditResult = null;
                 try {
-                    const endpoint = (typeof window !== 'undefined' && typeof window.getApiUrl === 'function')
-                        ? window.getApiUrl('/api/databridge/madre-chat')
-                        : '/api/databridge/madre-chat';
+                    const endpoint = 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat';
 
                     const response = await fetch(endpoint, {
                         method: 'POST',
@@ -52947,8 +52945,7 @@ Example:
         }
 
         function getDataBridgeMasterReportEndpoint() {
-            const configuredEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || '').trim();
-            return configuredEndpoint || '/api/cerebro-ia';
+            return 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia';
         }
 
         function formatMasterReportMarkdownText(content) {
@@ -68110,10 +68107,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, VITE_ENV.VITE_DATA_BRIDGE_URL),
             DEFAULT_DATA_BRIDGE_FRONTEND_URL
         );
-        const DATA_BRIDGE_AI_ENDPOINT = resolveViteEnvValue(
-            VITE_ENV.VITE_DATA_BRIDGE_AI_URL,
-            '/api/cerebro-ia'
-        );
+        const DATA_BRIDGE_AI_ENDPOINT = 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia';
         window.SeaCharterDataBridgeAIEndpoint = DATA_BRIDGE_AI_ENDPOINT;
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
