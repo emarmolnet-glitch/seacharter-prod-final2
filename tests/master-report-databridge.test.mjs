@@ -17,9 +17,9 @@ test('Master Report payload uses the Data Bridge AI contract', () => {
   assert.match(payloadSource, /puerto_descarga: data\.operational\.pod/);
 });
 
-test('Master Report posts to the configurable cerebro-ia endpoint', () => {
-  assert.match(source, /VITE_DATA_BRIDGE_AI_URL/);
-  assert.match(source, /\/api\/cerebro-ia/);
+test('Master Report posts directly to the production Data Bridge cerebro-ia endpoint', () => {
+  assert.match(source, /return 'https:\/\/calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions\/cerebro-ia';/);
+  assert.doesNotMatch(source, /\/api\/(?:databridge\/)?(?:cerebro-ia|madre-chat)/);
 
   const start = source.indexOf('async function generarInformeMasterOnClick');
   const end = source.indexOf('async function generateMasterExecutiveReport', start);

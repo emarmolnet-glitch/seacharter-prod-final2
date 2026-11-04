@@ -1292,9 +1292,7 @@ export async function solicitarAuditoriaMadre() {
 
         let auditResult = null;
         try {
-            const endpoint = (typeof window !== 'undefined' && typeof window.getApiUrl === 'function')
-                ? window.getApiUrl('/api/databridge/madre-chat')
-                : '/api/databridge/madre-chat';
+            const endpoint = 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat';
 
             const response = await fetch(endpoint, {
                 method: 'POST',
