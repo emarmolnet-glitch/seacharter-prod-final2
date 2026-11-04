@@ -444,31 +444,22 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
   const apiKey = (typeof Netlify !== "undefined" && (
     Netlify.env?.get?.("GEMINI_API_KEY") ||
     Netlify.env?.get?.("GOOGLE_API_KEY") ||
-    Netlify.env?.get?.("GOOGLE_GENAI_API_KEY") ||
-    Netlify.env?.get?.("NETLIFY_AI_GATEWAY_KEY")
+    Netlify.env?.get?.("GOOGLE_GENAI_API_KEY")
   ))
     || process.env.GEMINI_API_KEY
     || process.env.GOOGLE_API_KEY
     || process.env.GOOGLE_GENAI_API_KEY
-    || process.env.NETLIFY_AI_GATEWAY_KEY
     || "";
 
-  const rawBaseUrl = (typeof Netlify !== "undefined" && (
-    Netlify.env?.get?.("GOOGLE_GEMINI_BASE_URL") ||
-    Netlify.env?.get?.("NETLIFY_AI_GATEWAY_URL")
-  ))
-    || process.env.GOOGLE_GEMINI_BASE_URL
-    || process.env.NETLIFY_AI_GATEWAY_URL
-    || "";
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY no configurada en las variables de entorno.");
+  }
 
-  const baseUrl = rawBaseUrl ? rawBaseUrl.trim().replace(/\/+$/, "") : undefined;
-  const requestOptions = baseUrl ? { baseUrl } : undefined;
+  const GOOGLE_AI_STUDIO_BASE_URL = "https://generativelanguage.googleapis.com";
+  const requestOptions = { baseUrl: GOOGLE_AI_STUDIO_BASE_URL };
 
   const defaultModel = "gemini-2.5-flash";
-  const gatewayModel = "gemini-3.5-flash";
-  const candidateModels = baseUrl
-    ? [gatewayModel, "gemini-3-flash-preview", defaultModel]
-    : [defaultModel, gatewayModel, "gemini-3-flash-preview"];
+  const candidateModels = [defaultModel];
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
