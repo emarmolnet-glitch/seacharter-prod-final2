@@ -89,3 +89,15 @@ Quedó pendiente recuperar el aprovisionamiento en la plataforma y reintentar el
 El nuevo despliegue volvió a fallar con HTTP 500 (`internal error`) en `createSiteDatabaseBranch`, al solicitar la misma rama `agent-6aea2d760fe`. La consulta posterior de estado volvió a indicar que la rama no existía. El registro completo no mostró un error SQL concreto ni la ejecución de la compilación de la aplicación.
 
 El nuevo intento confirmó la persistencia del bloqueo de aprovisionamiento, sin aportar una causa corregible desde el repositorio. Se conservaron la orquestación LLM de MADRE y las migraciones existentes. Quedó pendiente revisar los registros internos de la operación en Netlify, recuperar la creación de la rama y reintentar el despliegue. No se confirmó publicación en producción.
+
+## Validación flexible de auditoría MADRE: 6aeab0698b965841873e309a
+
+El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama `agent-6aeab026eab`, con HTTP 500 (`internal error`). La consulta posterior de `netlify db status` confirmó que esa rama no existía. El registro no identificó una excepción SQL ni un error de compilación de la aplicación.
+
+Se comprobó que la configuración Drizzle apuntó al mismo directorio de migraciones que cargó la plataforma. Las 18 pruebas de aceptación de auditoría pasaron en ambas implementaciones del frontend. No se identificó una corrección del repositorio sustentada por este error de aprovisionamiento. Quedó pendiente recuperar la creación de ramas en Netlify y reintentar el despliegue. No se ejecutaron builds ni despliegues manuales.
+
+## Reintento 6aeab08df4425951de07a744
+
+El despliegue volvió a fallar en `createSiteDatabaseBranch`, con HTTP 500 (`internal error`), al solicitar la rama `agent-6aeab026eab`. El registro completo mostró que el proceso se detuvo durante el aprovisionamiento de Database, antes de compilar la aplicación. No aportó un error SQL ni una causa corregible desde el repositorio.
+
+Se confirmó que ambas implementaciones del frontend conservaron la aceptación de auditorías por acción directa o dentro de `uiComandos`, sin el bloqueo por firma y origen. El siguiente paso quedó en la plataforma: revisar los registros internos de esta petición, recuperar la creación de la rama y reintentar el despliegue. No se confirmó publicación en producción.
