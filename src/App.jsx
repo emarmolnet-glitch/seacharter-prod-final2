@@ -203,6 +203,9 @@ export function executeImoHydration(imoValue) {
                   window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
                   window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
                 }
+                if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
+                  window.applyDataBridgePayloadToCalculator(payload);
+                }
                 if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
                   window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
                 }

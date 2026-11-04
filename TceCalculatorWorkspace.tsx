@@ -1314,9 +1314,51 @@ export function ReverseTceCalculator({
       ? Number(spotVal)
       : current.tceTarget;
 
+    const domOpex = typeof document !== 'undefined'
+      ? Number((document.getElementById('opex-daily') as HTMLInputElement)?.value)
+      : 0;
+    const stateOpex = typeof window !== 'undefined'
+      ? (Number((window as unknown as { State?: { opexDaily?: number; opex?: number } }).State?.opexDaily) || Number((window as unknown as { State?: { opexDaily?: number; opex?: number } }).State?.opex) || 0)
+      : 0;
+    const resolvedOpexDaily = Number.isFinite(Number(syncedCostData?.opexDaily)) && Number(syncedCostData?.opexDaily) > 0
+      ? Number(syncedCostData?.opexDaily)
+      : (stateOpex > 0 ? stateOpex : (domOpex > 0 ? domOpex : current.opexDaily));
+
+    const domPdaPol = typeof document !== 'undefined'
+      ? Number((document.getElementById('pda-pol') as HTMLInputElement)?.value)
+      : 0;
+    const domPdaPod = typeof document !== 'undefined'
+      ? Number((document.getElementById('pda-pod') as HTMLInputElement)?.value)
+      : 0;
+    const statePdaPol = typeof window !== 'undefined' ? (Number((window as unknown as { State?: { pdaPol?: number } }).State?.pdaPol) || 0) : 0;
+    const statePdaPod = typeof window !== 'undefined' ? (Number((window as unknown as { State?: { pdaPod?: number } }).State?.pdaPod) || 0) : 0;
+    const totalPda = (statePdaPol + statePdaPod > 0) ? (statePdaPol + statePdaPod) : (domPdaPol + domPdaPod);
+    const resolvedPortCosts = Number.isFinite(Number(syncedCostData?.portCosts)) && Number(syncedCostData?.portCosts) > 0
+      ? Number(syncedCostData?.portCosts)
+      : (totalPda > 0 ? totalPda : current.portCosts);
+
+    const domVlsfo = typeof document !== 'undefined' ? Number((document.getElementById('price-sea') as HTMLInputElement)?.value) : 0;
+    const domIfo = typeof document !== 'undefined' ? Number((document.getElementById('price-ifo') as HTMLInputElement)?.value) : 0;
+    const domMgo = typeof document !== 'undefined' ? Number((document.getElementById('price-port') as HTMLInputElement)?.value) : 0;
+
+    const resolvedVlsfo = Number.isFinite(Number(syncedCostData?.vlsfoPrice)) && Number(syncedCostData?.vlsfoPrice) > 0
+      ? Number(syncedCostData?.vlsfoPrice)
+      : (domVlsfo > 0 ? domVlsfo : current.vlsfoPrice);
+    const resolvedIfo = Number.isFinite(Number(syncedCostData?.ifoPrice)) && Number(syncedCostData?.ifoPrice) > 0
+      ? Number(syncedCostData?.ifoPrice)
+      : (domIfo > 0 ? domIfo : current.ifoPrice);
+    const resolvedMgo = Number.isFinite(Number(syncedCostData?.mgoPrice)) && Number(syncedCostData?.mgoPrice) > 0
+      ? Number(syncedCostData?.mgoPrice)
+      : (domMgo > 0 ? domMgo : current.mgoPrice);
+
     return {
       ...current,
       tceTarget: nextTceTarget,
+      opexDaily: resolvedOpexDaily,
+      portCosts: resolvedPortCosts,
+      vlsfoPrice: resolvedVlsfo,
+      ifoPrice: resolvedIfo,
+      mgoPrice: resolvedMgo,
       cargoVolume: Number.isFinite(Number(cargoVolume)) ? Number(cargoVolume) : current.cargoVolume,
       daysSea: Number((
         (Number.isFinite(Number(daysSea)) ? Number(daysSea) : current.daysSea) * strategy.daysSeaFactor
@@ -1345,16 +1387,20 @@ export function ReverseTceCalculator({
   const syncFromSectionData = () => {
     setValues((current) => getSyncedValues(current));
 
-    const vlsfoVal = Number(syncedVlsfo);
-    if (Number.isFinite(vlsfoVal)) {
+    const domVlsfo = typeof document !== 'undefined' ? Number((document.getElementById('price-sea') as HTMLInputElement)?.value) : 0;
+    const domIfo = typeof document !== 'undefined' ? Number((document.getElementById('price-ifo') as HTMLInputElement)?.value) : 0;
+    const domMgo = typeof document !== 'undefined' ? Number((document.getElementById('price-port') as HTMLInputElement)?.value) : 0;
+
+    const vlsfoVal = Number(syncedVlsfo) > 0 ? Number(syncedVlsfo) : (domVlsfo > 0 ? domVlsfo : 0);
+    if (Number.isFinite(vlsfoVal) && vlsfoVal > 0) {
       setVlsfoPrice((prev) => (prev !== vlsfoVal ? vlsfoVal : prev));
     }
-    const ifoVal = Number(syncedIfo);
-    if (Number.isFinite(ifoVal)) {
+    const ifoVal = Number(syncedIfo) > 0 ? Number(syncedIfo) : (domIfo > 0 ? domIfo : 0);
+    if (Number.isFinite(ifoVal) && ifoVal > 0) {
       setIfoPrice((prev) => (prev !== ifoVal ? ifoVal : prev));
     }
-    const mgoVal = Number(syncedMgo);
-    if (Number.isFinite(mgoVal)) {
+    const mgoVal = Number(syncedMgo) > 0 ? Number(syncedMgo) : (domMgo > 0 ? domMgo : 0);
+    if (Number.isFinite(mgoVal) && mgoVal > 0) {
       setMgoPrice((prev) => (prev !== mgoVal ? mgoVal : prev));
     }
   };
@@ -1592,6 +1638,9 @@ export function ReverseTceCalculator({
 
   const fetchMarketBunkers = async () => {
     if (isFetchingBunker) {
+      return;
+    }
+    if (typeof document !== 'undefined' && document.getElementById('price-sea')?.dataset?.dataBridgeLocked === 'true') {
       return;
     }
 
@@ -2273,8 +2322,16 @@ export function CostPlusCalculator({
     const routeCargoVolume = safeNumber(cargoVolume);
     const routeBunkerCost = safeNumber(syncedBunkerCost);
     const routeTotalCosts = safeNumber(syncedTotalCosts);
-    const routeDailyOpex = safeNumber(syncedOpexDaily);
-    const routePortCostsVal = safeNumber(syncedPortCosts);
+    const domOpex = typeof document !== 'undefined' ? Number((document.getElementById('opex-daily') as HTMLInputElement)?.value) : 0;
+    const stateOpex = typeof window !== 'undefined' ? (Number((window as unknown as { State?: { opexDaily?: number; opex?: number } }).State?.opexDaily) || Number((window as unknown as { State?: { opexDaily?: number; opex?: number } }).State?.opex) || 0) : 0;
+    const routeDailyOpex = safeNumber(syncedOpexDaily) > 0 ? safeNumber(syncedOpexDaily) : (stateOpex > 0 ? stateOpex : (domOpex > 0 ? domOpex : 0));
+
+    const domPdaPol = typeof document !== 'undefined' ? Number((document.getElementById('pda-pol') as HTMLInputElement)?.value) : 0;
+    const domPdaPod = typeof document !== 'undefined' ? Number((document.getElementById('pda-pod') as HTMLInputElement)?.value) : 0;
+    const statePdaPol = typeof window !== 'undefined' ? (Number((window as unknown as { State?: { pdaPol?: number } }).State?.pdaPol) || 0) : 0;
+    const statePdaPod = typeof window !== 'undefined' ? (Number((window as unknown as { State?: { pdaPod?: number } }).State?.pdaPod) || 0) : 0;
+    const totalPda = (statePdaPol + statePdaPod > 0) ? (statePdaPol + statePdaPod) : (domPdaPol + domPdaPod);
+    const routePortCostsVal = safeNumber(syncedPortCosts) > 0 ? safeNumber(syncedPortCosts) : (totalPda > 0 ? totalPda : 0);
     const syncedTotalDaysVal = routeDaysSea + routeDaysPort > 0 ? routeDaysSea + routeDaysPort : routeTotalDays;
     const routePortCosts = routePortCostsVal > 0
       ? routePortCostsVal
@@ -2822,6 +2879,11 @@ export default function TceCalculatorWorkspace({
         const patchFn = (window as unknown as { patchSection2Vessel?: (v: Record<string, unknown>) => void }).patchSection2Vessel;
         if (typeof patchFn === 'function') {
           patchFn(vessel);
+        }
+
+        // Inyectar datos maestros de DataBridge en la calculadora (OPEX, PDA, Búnkers)
+        if (typeof (window as unknown as { applyDataBridgePayloadToCalculator?: (p: unknown) => boolean }).applyDataBridgePayloadToCalculator === 'function') {
+          (window as unknown as { applyDataBridgePayloadToCalculator: (p: unknown) => boolean }).applyDataBridgePayloadToCalculator(payload);
         }
 
         if (typeof window !== 'undefined') {
