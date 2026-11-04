@@ -106,8 +106,8 @@ for (const file of ['src/DecisionSupportModule.js', 'index.html', 'decisiones.ht
     const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
     const start = text.indexOf('async function solicitarAuditoriaMadre');
     const fn = text.slice(start, text.indexOf('function renderizarAuditoriaDss', start));
-    assert.match(fn, /\/api\/databridge\/madre-chat/);
-    assert.doesNotMatch(fn, /\/api\/cerebro-ia|generarAuditoriaMadreFallback\(/);
+    assert.match(fn, /https:\/\/calm-shortbread-55bcfc\.netlify\.app\/\.netlify\/functions\/madre-chat/);
+    assert.doesNotMatch(fn, /\/api\/(?:databridge\/)?(?:cerebro-ia|madre-chat)|generarAuditoriaMadreFallback\(/);
     assert.match(fn, /cuaderno_bitacora/);
   });
 }

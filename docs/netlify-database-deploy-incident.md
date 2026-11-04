@@ -101,3 +101,10 @@ Se comprobó que la configuración Drizzle apuntó al mismo directorio de migrac
 El despliegue volvió a fallar en `createSiteDatabaseBranch`, con HTTP 500 (`internal error`), al solicitar la rama `agent-6aeab026eab`. El registro completo mostró que el proceso se detuvo durante el aprovisionamiento de Database, antes de compilar la aplicación. No aportó un error SQL ni una causa corregible desde el repositorio.
 
 Se confirmó que ambas implementaciones del frontend conservaron la aceptación de auditorías por acción directa o dentro de `uiComandos`, sin el bloqueo por firma y origen. El siguiente paso quedó en la plataforma: revisar los registros internos de esta petición, recuperar la creación de la rama y reintentar el despliegue. No se confirmó publicación en producción.
+
+## Despliegue de URL absoluta Data Bridge para madre-chat: 6aeac427ccfed7076b03071e
+
+El despliegue de vista previa falló en `createSiteDatabaseBranch` al solicitar la rama `agent-6aeac2fc9c1`, con HTTP 500 (`internal error`). El fallo se produjo durante el aprovisionamiento de Netlify Database, antes de ejecutar la compilación de la aplicación. El registro no contiene un error SQL ni una falla en el código de la aplicación.
+
+Se confirmó que todos los puntos de acceso de MADRE en el frontend (`src/components/GlobalMadreDrawer.jsx`, `src/DecisionSupportModule.js`, `decisiones.html`, `index.html`) apuntan a la URL absoluta de Data Bridge (`https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat`) y que se aplica la validación flexible de respuestas en todos los módulos.
+
