@@ -441,11 +441,34 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
     ? await getRealTimePortContext(portName)
     : "";
 
-  const apiKey = (typeof Netlify !== "undefined" && (Netlify.env?.get?.("GEMINI_API_KEY") || Netlify.env?.get?.("GOOGLE_API_KEY") || Netlify.env?.get?.("GOOGLE_GENAI_API_KEY")))
+  const apiKey = (typeof Netlify !== "undefined" && (
+    Netlify.env?.get?.("GEMINI_API_KEY") ||
+    Netlify.env?.get?.("GOOGLE_API_KEY") ||
+    Netlify.env?.get?.("GOOGLE_GENAI_API_KEY") ||
+    Netlify.env?.get?.("NETLIFY_AI_GATEWAY_KEY")
+  ))
     || process.env.GEMINI_API_KEY
     || process.env.GOOGLE_API_KEY
     || process.env.GOOGLE_GENAI_API_KEY
+    || process.env.NETLIFY_AI_GATEWAY_KEY
     || "";
+
+  const rawBaseUrl = (typeof Netlify !== "undefined" && (
+    Netlify.env?.get?.("GOOGLE_GEMINI_BASE_URL") ||
+    Netlify.env?.get?.("NETLIFY_AI_GATEWAY_URL")
+  ))
+    || process.env.GOOGLE_GEMINI_BASE_URL
+    || process.env.NETLIFY_AI_GATEWAY_URL
+    || "";
+
+  const baseUrl = rawBaseUrl ? rawBaseUrl.trim().replace(/\/+$/, "") : undefined;
+  const requestOptions = baseUrl ? { baseUrl } : undefined;
+
+  const defaultModel = "gemini-2.5-flash";
+  const gatewayModel = "gemini-3.5-flash";
+  const candidateModels = baseUrl
+    ? [gatewayModel, "gemini-3-flash-preview", defaultModel]
+    : [defaultModel, gatewayModel, "gemini-3-flash-preview"];
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -462,15 +485,30 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
         initialUserContent: prompt,
       };
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction,
-    generationConfig: {
-      ...(jsonOnly ? { responseMimeType: "application/json" } : {}),
-      maxOutputTokens: 8192,
-      temperature: 0.1,
-    },
-  });
+  async function generateContentWithFallback(contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>) {
+    let lastError: unknown;
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction,
+          generationConfig: {
+            ...(jsonOnly ? { responseMimeType: "application/json" } : {}),
+            maxOutputTokens: 8192,
+            temperature: 0.1,
+          },
+        }, requestOptions);
+
+        const result = await model.generateContent({ contents });
+        const generatedText = result.response?.text?.() || "";
+        if (generatedText) return generatedText;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[ai-legal-audit] Model ${modelName} failed, attempting fallback:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+    throw lastError;
+  }
 
   let text = "";
   const contentsHistory: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [
@@ -479,8 +517,7 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
 
   for (let attempt = 0; attempt < (isStrictAudit ? 2 : 1); attempt += 1) {
     await onProgress?.(attempt === 0 ? 30 : 80);
-    const result = await model.generateContent({ contents: contentsHistory });
-    text = result.response?.text?.() || "";
+    text = await generateContentWithFallback(contentsHistory);
 
     if (!isStrictAudit) break;
     const parsed = parseLegalAuditResult(text);
@@ -543,7 +580,11 @@ export default async (req: Request) => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ task_id: report.id }),
       });
-      if (!workerResponse.ok) throw new Error("No se pudo iniciar el procesamiento en segundo plano.");
+      if (!workerResponse.ok) {
+        const errorText = await workerResponse.text().catch(() => "");
+        console.error(`[ai-legal-audit] Failed to trigger background worker: HTTP ${workerResponse.status} ${errorText}`);
+        throw new Error("No se pudo iniciar el procesamiento en segundo plano.");
+      }
       return responseJson({
         task_id: report.id,
         status: "PENDING",
@@ -551,11 +592,13 @@ export default async (req: Request) => {
         status_url: `/api/syncPull/${report.id}`,
       }, 202);
     } catch (error) {
+      console.error("[ai-legal-audit] Worker dispatch error:", error);
       const message = error instanceof Error ? error.message : "No se pudo completar la inferencia en backend.";
       await failIaReport(report.id, message);
       throw error;
     }
   } catch (error) {
+    console.error("[ai-legal-audit] Error handling request:", error);
     const typedError = error as Error & { code?: string };
     const message = typedError.message || "No se pudo completar la inferencia en backend.";
     if (typedError.code === "AUDIT_GATE_BLOCKED") {

@@ -23,6 +23,7 @@ export default async (req: Request) => {
     await completeIaReport(task.id, result);
     return new Response("OK", { status: 200 });
   } catch (error) {
+    console.error("[process-legal-audit-background] Task processing failed:", error);
     const message = error instanceof Error && error.message
       ? error.message
       : "No se pudo completar la auditoría legal.";
