@@ -794,7 +794,9 @@
             fallbacks.grab_capacity_cbm = estimated;
         }
 
-        if (dwt > 0 && (toNumber(effectiveState.opex_fijo_diario) <= 0 || isTbnVesselName(effectiveState.nombre_buque))) {
+        const opexEl = typeof document !== 'undefined' ? document.getElementById('opex-daily') : null;
+        const isOpexLocked = opexEl?.dataset?.dataBridgeLocked === 'true' || Boolean(root.State?.opexLocked);
+        if (!isOpexLocked && dwt > 0 && (toNumber(effectiveState.opex_fijo_diario) <= 0 || (isTbnVesselName(effectiveState.nombre_buque) && toNumber(effectiveState.opex_fijo_diario) <= 0))) {
             const estimated = estimateDailyOpexByDwt(dwt);
             if (estimated > 0) {
                 effectiveState.opex_fijo_diario = estimated;
@@ -1552,6 +1554,9 @@
         readPossiblyEstimatedNumber(id) {
             const element = this.el(id);
             if (!element) return 0;
+            if (element.dataset.dataBridgeLocked === 'true' || (id === 'opex-daily' && root.State?.opexLocked)) {
+                return toNumber(element.value);
+            }
             return element.dataset.autoEstimated === 'true' ? 0 : toNumber(element.value);
         }
 
@@ -1718,6 +1723,13 @@
             Object.entries(mapping).forEach(([key, config]) => {
                 const input = this.el(config.id);
                 if (!input) return;
+                if (key === 'opex_fijo_diario' && (input.dataset.dataBridgeLocked === 'true' || root.State?.opexLocked)) {
+                    input.readOnly = false;
+                    delete input.dataset.autoEstimated;
+                    input.classList.remove('bg-white', 'border-sky-400', 'text-blue-700');
+                    input.title = '';
+                    return;
+                }
                 const isEstimated = usedKeys.includes(key);
                 if (isEstimated) {
                     this.isWriting = true;

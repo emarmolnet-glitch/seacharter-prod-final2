@@ -36043,6 +36043,11 @@ function createRouteAnchorElement(type) {
 	        }
 
 	        function debouncedAutoFillPDA(type, showNotification = false, delay = 450) {
+                const pdaInputCheck = typeof document !== 'undefined' ? document.getElementById(`pda-${type}`) : null;
+                if (pdaInputCheck?.dataset?.dataBridgeLocked === 'true' || window.State?.[type === 'pol' ? 'pdaPolLocked' : 'pdaPodLocked']) {
+                    setPdaCalculationStatus(type, 'official');
+                    return;
+                }
                 const sessionEpoch = window.calculatorSessionEpoch;
 	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
 	                ? window.autoFillPdaDebounceTimers
@@ -36206,6 +36211,11 @@ function createRouteAnchorElement(type) {
         window.schedulePdaEstimationPersistence = schedulePdaEstimationPersistence;
 
         async function autoFillPDA(type, showNotification = true, options = {}) {
+            const pdaInputCheck = typeof document !== 'undefined' ? document.getElementById(`pda-${type}`) : null;
+            if (pdaInputCheck?.dataset?.dataBridgeLocked === 'true' || window.State?.[type === 'pol' ? 'pdaPolLocked' : 'pdaPodLocked']) {
+                setPdaCalculationStatus(type, 'official');
+                return;
+            }
 	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
 	                ? window.autoFillPdaDebounceTimers
 	                : null;
@@ -37057,6 +37067,131 @@ function createRouteAnchorElement(type) {
             updateSection2LocalState('vessel-has-scrubber', null);
         }
 
+        function applyDataBridgePayloadToCalculator(payload) {
+            if (!payload || typeof payload !== 'object') return false;
+            const vessel = payload.vessel || (Array.isArray(payload.vessels) && payload.vessels.length === 1 ? payload.vessels[0] : null) || {};
+
+            // 1. OPEX Fijo Diario: Asignar obligatoriamente y bloquear cualquier función que intente bajarlo a valores por defecto (ej. 4800)
+            const rawOpex = payload.opexDaily ?? payload.opex_daily ?? payload.daily_opex ?? payload.dailyOpex ?? payload.opex
+                ?? vessel.opexDaily ?? vessel.opex_daily ?? vessel.daily_opex ?? vessel.dailyOpex ?? vessel.opex;
+            const opexVal = Number(rawOpex);
+            if (Number.isFinite(opexVal) && opexVal > 0) {
+                const opexInput = document.getElementById('opex-daily');
+                if (opexInput) {
+                    opexInput.value = String(Math.round(opexVal));
+                    opexInput.dataset.dataBridgeLocked = 'true';
+                    opexInput.dataset.userOverride = 'true';
+                    delete opexInput.dataset.autoEstimated;
+                    opexInput.readOnly = false;
+                    markDataBridgeHydratedField(opexInput);
+                    opexInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) {
+                    State.opex = opexVal;
+                    State.opexDaily = opexVal;
+                    State.opexLocked = true;
+                }
+                const costPlusOpex = document.getElementById('cost-plus-daily-opex');
+                if (costPlusOpex) {
+                    costPlusOpex.value = String(Math.round(opexVal));
+                    costPlusOpex.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+
+            // 2. PDA POL & POD: Inyectar valores exactos y desactivar estimación algorítmica
+            const rawPdaPol = payload.pda_pol ?? payload.pdaPol ?? payload.pda_pol_usd ?? vessel.pda_pol ?? vessel.pdaPol ?? vessel.pda_pol_usd;
+            const rawPdaPod = payload.pda_pod ?? payload.pdaPod ?? payload.pda_pod_usd ?? vessel.pda_pod ?? vessel.pdaPod ?? vessel.pda_pod_usd;
+            const pdaPolVal = Number(rawPdaPol);
+            const pdaPodVal = Number(rawPdaPod);
+
+            if (Number.isFinite(pdaPolVal) && pdaPolVal > 0) {
+                const polInput = document.getElementById('pda-pol');
+                if (polInput) {
+                    polInput.value = String(Math.round(pdaPolVal));
+                    polInput.dataset.basePda = String(pdaPolVal);
+                    polInput.dataset.dataBridgeLocked = 'true';
+                    polInput.dataset.calculationMode = 'official';
+                    markDataBridgeHydratedField(polInput);
+                    polInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) {
+                    State.pdaPol = pdaPolVal;
+                    State.basePdaPol = pdaPolVal;
+                    State.pdaPolLocked = true;
+                }
+                setPdaCalculationStatus('pol', 'official');
+            }
+
+            if (Number.isFinite(pdaPodVal) && pdaPodVal > 0) {
+                const podInput = document.getElementById('pda-pod');
+                if (podInput) {
+                    podInput.value = String(Math.round(pdaPodVal));
+                    podInput.dataset.basePda = String(pdaPodVal);
+                    podInput.dataset.dataBridgeLocked = 'true';
+                    podInput.dataset.calculationMode = 'official';
+                    markDataBridgeHydratedField(podInput);
+                    podInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) {
+                    State.pdaPod = pdaPodVal;
+                    State.basePdaPod = pdaPodVal;
+                    State.pdaPodLocked = true;
+                }
+                setPdaCalculationStatus('pod', 'official');
+            }
+
+            // 3. Precios Búnkers (VLSFO, IFO, MGO): Mapear precios exactos sin márgenes ocultos (+%)
+            const rawVlsfo = payload.vlsfo ?? payload.vlsfoPrice ?? payload.price_sea ?? payload.priceSea ?? payload.bunker_vlsfo
+                ?? payload.bunkers?.vlsfo ?? payload.fuels?.vlsfo ?? vessel.vlsfo ?? vessel.vlsfoPrice ?? vessel.price_sea ?? vessel.priceSea;
+            const rawIfo = payload.ifo ?? payload.ifo380 ?? payload.hsfo ?? payload.ifoPrice ?? payload.price_ifo ?? payload.priceIfo ?? payload.bunker_ifo
+                ?? payload.bunkers?.ifo380 ?? payload.bunkers?.hsfo ?? payload.fuels?.ifo380 ?? vessel.ifo ?? vessel.ifo380 ?? vessel.hsfo ?? vessel.ifoPrice;
+            const rawMgo = payload.mgo ?? payload.lsmgo ?? payload.mgoPrice ?? payload.price_port ?? payload.pricePort ?? payload.bunker_mgo
+                ?? payload.bunkers?.mgo ?? payload.fuels?.mgo ?? vessel.mgo ?? vessel.lsmgo ?? vessel.mgoPrice ?? vessel.price_port ?? vessel.pricePort;
+
+            const vlsfoVal = Number(rawVlsfo);
+            const ifoVal = Number(rawIfo);
+            const mgoVal = Number(rawMgo);
+
+            if (Number.isFinite(vlsfoVal) && vlsfoVal > 0) {
+                const seaInput = document.getElementById('price-sea');
+                if (seaInput) {
+                    seaInput.value = vlsfoVal.toFixed(2);
+                    seaInput.dataset.dataBridgeLocked = 'true';
+                    seaInput.dataset.userOverride = 'false';
+                    markDataBridgeHydratedField(seaInput);
+                    seaInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) State.priceSea = vlsfoVal;
+            }
+
+            if (Number.isFinite(ifoVal) && ifoVal > 0) {
+                const ifoInput = document.getElementById('price-ifo');
+                if (ifoInput) {
+                    ifoInput.value = ifoVal.toFixed(2);
+                    ifoInput.dataset.dataBridgeLocked = 'true';
+                    ifoInput.dataset.userOverride = 'false';
+                    markDataBridgeHydratedField(ifoInput);
+                    ifoInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) State.priceIfo = ifoVal;
+            }
+
+            if (Number.isFinite(mgoVal) && mgoVal > 0) {
+                const portInput = document.getElementById('price-port');
+                if (portInput) {
+                    portInput.value = mgoVal.toFixed(2);
+                    portInput.dataset.dataBridgeLocked = 'true';
+                    portInput.dataset.userOverride = 'false';
+                    markDataBridgeHydratedField(portInput);
+                    portInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (window.State) State.pricePort = mgoVal;
+            }
+
+            return true;
+        }
+        window.applyDataBridgePayloadToCalculator = applyDataBridgePayloadToCalculator;
+
         function applyDataBridgeHydrationToCalculator(rawVessel, selectedVessel = {}) {
             clearDataBridgeHydrationFeedback();
             const profileVessel = normalizeCalculatorStoreVessel(rawVessel) || {};
@@ -37091,6 +37226,11 @@ function createRouteAnchorElement(type) {
                 setDataBridgeHydratedValue('cons-sea', vessel.cons_sea, { ...clearMissing, numeric: true }),
                 setDataBridgeHydratedValue('cons-port', vessel.cons_port, { ...clearMissing, numeric: true }),
             ];
+            applyDataBridgePayloadToCalculator(mergedVessel);
+            if (document.getElementById('opex-daily')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
+            if (document.getElementById('pda-pol')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
+            if (document.getElementById('pda-pod')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
+            if (document.getElementById('price-sea')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
             if (vessel.has_scrubber !== null && vessel.has_scrubber !== undefined && typeof setVesselScrubber === 'function') {
                 setVesselScrubber(vessel.has_scrubber, false);
                 markDataBridgeHydratedField(document.getElementById('vessel-has-scrubber-yes')?.closest('[role="radiogroup"]'));
@@ -37190,6 +37330,9 @@ function createRouteAnchorElement(type) {
 
         function patchSection2Vessel(vesselData, options = {}) {
             if (!vesselData || typeof vesselData !== 'object') return null;
+            if (typeof applyDataBridgePayloadToCalculator === 'function') {
+                applyDataBridgePayloadToCalculator(vesselData);
+            }
             const raw = vesselData;
             const name = String(raw.name || raw.vesselName || raw.vessel_name || raw.vessel || raw.nombre || '').trim();
             const imo = String(raw.imo || raw.imo_number || raw.imoNumber || raw.numero_imo || '').replace(/\D/g, '');
@@ -68204,6 +68347,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                     // 2. ACTUALIZACIÓN PARCIAL (PATCH DEL ESTADO): Inyección quirúrgica sin reset
                     const payload = event.data.payload || {};
+                    if (typeof applyDataBridgePayloadToCalculator === 'function') {
+                        applyDataBridgePayloadToCalculator(payload);
+                    }
                     const vessels = payload.vessels || event.data.candidates || [];
                     const singleVessel = payload.vessel || (Array.isArray(vessels) && vessels.length === 1 ? vessels[0] : null) || (event.data.vessel || null);
 
@@ -68236,6 +68382,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             referenceManager.setInjectionLock?.(true);
                             referenceManager.setActiveContractRef(ref);
                             setTimeout(() => referenceManager.setInjectionLock?.(false), 200);
+                        }
+
+                        const payload = data.payload || data;
+                        if (typeof applyDataBridgePayloadToCalculator === 'function') {
+                            applyDataBridgePayloadToCalculator(payload);
                         }
 
                         const vessel = data.vessel || data.payload?.vessel || (Array.isArray(data.payload?.vessels) && data.payload.vessels.length === 1 ? data.payload.vessels[0] : null);
