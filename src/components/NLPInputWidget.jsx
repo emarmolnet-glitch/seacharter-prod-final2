@@ -299,6 +299,13 @@ function getCargoHandlingProfile(category, product, specification) {
       shipEfficientCapacity: 4500,
     };
   }
+  if ((cargo.includes("cemento") || cargo.includes("cement")) && !cargo.includes("big bag")) {
+    return {
+      shipMethod: "bombas_neumaticas",
+      portMethod: "bombas_neumaticas",
+      shipEfficientCapacity: 8000,
+    };
+  }
   if (
     cargo.includes("acero")
     || cargo.includes("steel")

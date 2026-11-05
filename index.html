@@ -10674,7 +10674,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-type', this.value); handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits();">
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-type', this.value); handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits(); if (typeof autoSelectCementCarrierDischargeMethod === 'function') autoSelectCementCarrierDischargeMethod();">
                                     <option value="" selected>Selecciona una categoría</option>
                                     <option value="Minerales y Construcción">Minerales y Construcción</option>
                                     <option value="Biomasa y Combustibles Sólidos">Biomasa y Combustibles Sólidos</option>
@@ -10685,7 +10685,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-product" class="text-action-required flex items-center min-h-[24px]">Producto Específico</label>
-                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-product', this.value); applySelectedCargoProduct(true);">
+                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-product', this.value); applySelectedCargoProduct(true); if (typeof autoSelectCementCarrierDischargeMethod === 'function') autoSelectCementCarrierDischargeMethod();">
                                     <option value="" selected>Selecciona una mercancía</option>
                                     <option value="Cemento a granel">Cemento a granel</option>
                                     <option value="Clínker">Clínker</option>
@@ -34159,6 +34159,9 @@ function createRouteAnchorElement(type) {
             if (sfInput && product) sfInput.value = product.sf.toFixed(2);
             autoAdjustSF();
             actualizarCamposTipoCarga();
+            if (typeof autoSelectCementCarrierDischargeMethod === 'function') {
+                autoSelectCementCarrierDischargeMethod();
+            }
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions();
             } else {
@@ -64351,6 +64354,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'Hierro/Acero/Piezas': 1200,
             'Hierro/Acero - Grúa Barco': 1200,
             'Hierro/Acero - Grúa Portuaria': 1500,
+            'Camión Tolva': 'custom',
             'Semirremolque Neumático': 'custom'
         });
         const METHOD_LABEL_BY_VALUE = Object.freeze({
@@ -64572,6 +64576,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 displayEl.textContent = (vClass && vClass !== 'Desconocido' && vClass !== 'Unknown')
                     ? `Clasificado como: ${displayClass}`
                     : '';
+            }
+            if (typeof autoSelectCementCarrierDischargeMethod === 'function') {
+                autoSelectCementCarrierDischargeMethod();
             }
             return vClass;
         }
@@ -64957,7 +64964,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (isCraneMethod(label)) {
                 calcularRitmoGrua(side);
             }
-            if (methodValue === 'camion_tolva' && typeof actualizarModuloCamionTolva === 'function') {
+            if (typeof actualizarModuloCamionTolva === 'function') {
                 actualizarModuloCamionTolva();
             }
         }
@@ -65546,7 +65553,129 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarPDADinamica(side);
         }
 
+        /**
+         * LÓGICA DE AUTO-SELECCIÓN DE DESCARGA PARA CEMENT CARRIERS
+         * Cuando la categoría de carga es "Cemento" (o similares a granel neumático) o el buque
+         * actúa como un "Cement Carrier", el MÉTODO DESCARGA POD cambia automáticamente
+         * y se fija por defecto en "Bombas Neumáticas".
+         * Oculta los inputs de capacidad de camiones en el bloque de descarga (POD) y
+         * muestra los ritmos propios del bombeo del barco (8,000 TM/d, Turn Time 10h),
+         * ya que no se necesitan camiones para descargar un Cement Carrier.
+         */
+        function autoSelectCementCarrierDischargeMethod(options = {}) {
+            const { force = false } = options;
+            const categoryEl = document.getElementById('cargo-type');
+            const productEl = document.getElementById('cargo-product');
+            const podMethodEl = document.getElementById('metodo_descarga_pod');
+            if (!podMethodEl) return false;
+
+            const categoryVal = String(categoryEl?.value || window.State?.cargoType || '').trim().toLowerCase();
+            const productVal = String(productEl?.value || window.State?.cargoProduct || window.State?.productoEspecifico || '').trim().toLowerCase();
+            const manualVal = String(document.getElementById('cargo-type-manual')?.value || '').trim().toLowerCase();
+            const badgeEl = document.getElementById('vessel-badge');
+            const badgeText = String(badgeEl?.innerText || '').trim().toLowerCase();
+            const vClass = String(typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : (window.State?.class || window.State?.vesselType || '')).trim().toLowerCase();
+            const specialty = String(document.getElementById('gc-add-specialty')?.value || '').trim().toLowerCase();
+            const purpose = String(document.getElementById('gc-add-purpose')?.value || '').trim().toLowerCase();
+
+            // Excluir sacos o pallets envasados a menos que se declare explícitamente granel neumático
+            const isPackagedBag = (productVal.includes('big bag') || categoryVal.includes('big bag') || productVal.includes('palet') || categoryVal.includes('palet')) && !productVal.includes('granel');
+
+            const isCementCargo = !isPackagedBag && (
+                productVal.includes('cemento') ||
+                productVal.includes('cement') ||
+                categoryVal.includes('cemento') ||
+                categoryVal.includes('cement') ||
+                productVal.includes('granel neumático') ||
+                productVal.includes('granel neumatico') ||
+                categoryVal.includes('granel neumático') ||
+                categoryVal.includes('granel neumatico') ||
+                manualVal.includes('cemento')
+            );
+
+            const isCementCarrier = badgeText.includes('cement') ||
+                vClass.includes('cement') ||
+                specialty.includes('cement') ||
+                purpose.includes('cement') ||
+                (typeof window.SeaCharterVoyageCostEngine?.getVesselTypeDisplayLabel === 'function' &&
+                 String(window.SeaCharterVoyageCostEngine.getVesselTypeDisplayLabel(vClass)).toLowerCase().includes('cement'));
+
+            if (!isCementCargo && !isCementCarrier) {
+                return false;
+            }
+
+            // Cambiar método POD automáticamente a Bombas Neumáticas
+            if (!Array.from(podMethodEl.options).some(o => o.value === 'bombas_neumaticas')) {
+                const opt = document.createElement('option');
+                opt.value = 'bombas_neumaticas';
+                opt.textContent = 'Bombas Neumáticas';
+                podMethodEl.appendChild(opt);
+            }
+
+            const previousMethod = podMethodEl.value;
+            podMethodEl.value = 'bombas_neumaticas';
+
+            if (typeof updateSection2LocalState === 'function') {
+                updateSection2LocalState('metodo_descarga_pod', 'bombas_neumaticas');
+            }
+            if (window.State) {
+                window.State.dischargeMethod = 'Bombas Neumáticas';
+                window.State.metodo_descarga_pod = 'bombas_neumaticas';
+            }
+
+            // Desactivar overrides manuales residuales del módulo de camiones en POD
+            const rateDischInput = document.getElementById('rate-disch');
+            if (rateDischInput) {
+                delete rateDischInput.dataset.manualOverride;
+                rateDischInput.dataset.autoMetodoDescarga = 'bombas_neumaticas';
+            }
+            if (typeof setRitmoManualIndicator === 'function') {
+                setRitmoManualIndicator('pod', false);
+            }
+
+            // Ocultar inputs de capacidad de camiones en el bloque de descarga (POD) y deshabilitarlos
+            const moduloPod = document.getElementById('modulo-camion-tolva-pod');
+            if (moduloPod) {
+                moduloPod.classList.add('hidden');
+                moduloPod.setAttribute('aria-hidden', 'true');
+                ['capacidad-mt', 'slots', 'tiempo-ciclo-min'].forEach((field) => {
+                    const input = document.getElementById(`camion-tolva-pod-${field}`);
+                    if (input) input.disabled = true;
+                });
+            }
+            if (typeof actualizarModuloCamionTolva === 'function') {
+                actualizarModuloCamionTolva({ rerun: false });
+            }
+
+            // Renderizar pills actualizadas de descarga POD para reflejar Bombas Neumáticas
+            if (typeof renderMethodPills === 'function') {
+                renderMethodPills('pod');
+            }
+
+            // Aplicar ritmos propios de bombeo del buque (8,000 TM/d y 10h turn time)
+            if (typeof applyMethodAndProductConditions === 'function') {
+                applyMethodAndProductConditions('pod');
+            } else if (typeof handlePortMethodChange === 'function') {
+                handlePortMethodChange('pod');
+            }
+
+            if (rateDischInput && (!rateDischInput.value || rateDischInput.value === '0' || previousMethod === 'camion_tolva')) {
+                rateDischInput.value = '8000';
+                if (window.State) window.State.dischRate = 8000;
+            }
+
+            if (typeof recalcularDiasPuerto === 'function') {
+                recalcularDiasPuerto('pod');
+            }
+
+            return true;
+        }
+        if (typeof window !== 'undefined') {
+            window.autoSelectCementCarrierDischargeMethod = autoSelectCementCarrierDischargeMethod;
+        }
+
         function onCargoCategoryChange() {
+            autoSelectCementCarrierDischargeMethod();
             ['pol', 'pod'].forEach((side) => {
                 validarCompatibilidadMetodo(side);
                 renderMethodPills(side);
@@ -65660,6 +65789,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 applyMethodAndProductConditions(side);
             } else if (typeof recalcularDiasPuerto === 'function') {
                 recalcularDiasPuerto(side);
+            }
+            if (typeof actualizarModuloCamionTolva === 'function') {
+                actualizarModuloCamionTolva({ rerun: false });
             }
             if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         }
@@ -66960,6 +67092,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.renderDerivacionGrua = renderDerivacionGrua;
             window.onCargoCategoryChange = onCargoCategoryChange;
             window.handleCargoCategoryChange = handleCargoCategoryChange;
+            window.autoSelectCementCarrierDischargeMethod = autoSelectCementCarrierDischargeMethod;
             window.GENCON_CONDITION_OPTIONS = GENCON_CONDITION_OPTIONS;
             window.GENCON_LAYTIME_OPTIONS = GENCON_LAYTIME_OPTIONS;
             window.LAYTIME_CONTINUOUS_TERMS = LAYTIME_CONTINUOUS_TERMS;
@@ -71289,6 +71422,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
                     if (typeof window.runEngine === 'function') window.runEngine();
                     else if (typeof window.actualizarResumenFinanciero === 'function') window.actualizarResumenFinanciero();
+                });
+            }
+
+            const cargoTypeSelect = document.getElementById('cargo-type');
+            if (cargoTypeSelect) {
+                cargoTypeSelect.addEventListener('change', () => {
+                    if (typeof window.autoSelectCementCarrierDischargeMethod === 'function') {
+                        window.autoSelectCementCarrierDischargeMethod();
+                    }
+                });
+            }
+
+            const cargoProductSelect = document.getElementById('cargo-product');
+            if (cargoProductSelect) {
+                cargoProductSelect.addEventListener('change', () => {
+                    if (typeof window.autoSelectCementCarrierDischargeMethod === 'function') {
+                        window.autoSelectCementCarrierDischargeMethod();
+                    }
                 });
             }
         }
