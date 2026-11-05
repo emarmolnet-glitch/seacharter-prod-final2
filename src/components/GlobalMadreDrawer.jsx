@@ -365,15 +365,12 @@ async function playNeuralMotherVoice(textToSpeak, playback = {}) {
 
     if (!response.ok) throw new Error('Error en DataBridge TTS');
 
-    const contentType = response.headers.get("content-type") || response.headers.get("Content-Type");
+    const contentType = response.headers?.get ? (response.headers.get("content-type") || response.headers.get("Content-Type")) : null;
     if (contentType && contentType.includes("application/json")) {
-        const data = await response.json();
-        if (data.fallback_to_browser) {
-            const utterance = new SpeechSynthesisUtterance(data.text_to_speak);
-            utterance.lang = 'es-ES';
-            window.speechSynthesis.speak(utterance);
-            return; // Finaliza la ejecución aquí para no procesar el blob
-        }
+      const data = await response.json();
+      if (data.fallback_to_browser) {
+        return; // Fallback no compatible con entorno Web Audio estricto
+      }
     }
 
     const arrayBuffer = await response.arrayBuffer();
@@ -429,7 +426,6 @@ export function getCoreProUIContext() {
       const pVal = parseInt((portfolioEl.textContent || "").replace(/[^0-9]/g, ""), 10);
       if (Number.isFinite(pVal) && pVal > 0) params.totalPortfolio = pVal;
     }
-    }
 
     // --- NUEVO: 2. Rescatar la Referencia del Expediente (RDM/...) ---
     // Escaneamos la pantalla buscando el formato RDM/XXXX-XXXX
@@ -445,7 +441,7 @@ export function getCoreProUIContext() {
       if (match) referenciaActiva = match[0];
     }
 
-   // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
+    // --- NUEVO: 3. Rescatar las PDA POL y PDA POD ---
     const pdaPolInput = typeof document.getElementById === 'function' ? document.getElementById('pda-pol') : null;
     const pdaPodInput = typeof document.getElementById === 'function' ? document.getElementById('pda-pod') : null;
 
@@ -466,6 +462,7 @@ export function getCoreProUIContext() {
     if (params.pda_pol || params.pda_pod) {
       vistaActivaActual = "Core PRO - Calculadora de Bunkers y PDAs";
     }
+  }
 
   // --- NUEVO: 5. Escaneo Estructurado Bloque por Bloque (Módulos 1 al 10) ---
   let escaneoCompacto = null;
@@ -534,7 +531,7 @@ export function getCoreProUIContext() {
     vista_activa: "Core PRO - Panel y Mapa Operativo",
     vista_dinamica: vistaActivaActual,
     referenciaMadre: referenciaActiva, // <- VITAL PARA QUE NO FALLE NEON
-    allInRateGross: Number(window.dssFormState?.allInRateGross || window.getDSSCurrentState?.()?.allInRateGross || 0),
+    allInRateGross: Number(typeof window !== 'undefined' ? (window.dssFormState?.allInRateGross || window.getDSSCurrentState?.()?.allInRateGross || 0) : 0),
     parametros_activos: params,        // <- AQUÍ VAN LOS GASTOS DE PUERTO
     escaneo_estructurado: escaneoCompacto,
     modulos_1_a_10: escaneoCompacto?.bloques,
@@ -553,6 +550,62 @@ export function getCoreProUIContext() {
   };
 }
 
+/**
+ * Arquitectura "Dos Tiempos" para MADRE:
+ * - Fase 1: Digerir y validar el contexto_ui estructurado en backend sin bloquear la respuesta.
+ * - Fase 2: Ejecutar el análisis profundo o veredicto estratégico con la sesión consolidada.
+ */
+async function ejecutarEscaneoDosTiempos(basePayload) {
+  const endpoint = typeof MADRE_API_ENDPOINT !== 'undefined'
+    ? MADRE_API_ENDPOINT
+    : "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat";
+
+  // Fase 1: Envío preliminar para digerir y validar el contexto operativo
+  const payloadFase1 = {
+    ...basePayload,
+    fase: 1
+  };
+
+  const responseFase1 = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(payloadFase1),
+  });
+
+  if (!responseFase1.ok) {
+    throw new Error(`Error HTTP en Fase 1: ${responseFase1.status}`);
+  }
+
+  const dataFase1 = await responseFase1.json().catch(() => ({}));
+  const sessionId = dataFase1?.session_id || dataFase1?.referenciaMadre || basePayload?.session_id || 'REF-MADRE-ACTIVA';
+
+  // Fase 2: Petición de generación/veredicto consolidado
+  const payloadFase2 = {
+    ...basePayload,
+    fase: 2,
+    session_id: sessionId,
+    referenciaMadre: dataFase1?.referenciaMadre || sessionId
+  };
+
+  const responseFase2 = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(payloadFase2),
+  });
+
+  if (!responseFase2.ok) {
+    throw new Error(`Error HTTP en Fase 2: ${responseFase2.status}`);
+  }
+
+  return await responseFase2.json().catch(() => ({}));
+}
+
 if (typeof window !== 'undefined') {
   window.SEACHARTER_DOM_DICTIONARY = SEACHARTER_DOM_DICTIONARY;
   window.capturarDomModuloActivo = capturarDomModuloActivo;
@@ -565,6 +618,7 @@ if (typeof window !== 'undefined') {
   window.extraerDatosEstructuradosCorePro = extraerDatosEstructuradosCorePro;
   window.compactPayload = compactPayload;
   window.ejecutarEscaneoCompleto = ejecutarEscaneoCompleto;
+  window.ejecutarEscaneoDosTiempos = ejecutarEscaneoDosTiempos;
   window.buildMotherExecutiveScript = buildMotherExecutiveScript;
   window.playNeuralMotherVoice = playNeuralMotherVoice;
 }
@@ -815,13 +869,38 @@ export function GlobalMadreDrawer({
     setInputValue('');
     setIsLoading(true);
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const projectRef = urlParams.get('ref') || window.location.hash.match(/ref=([^&]+)/)?.[1] || "RDM/2026-TBN";
-
     // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual
     if (SCAN_COMMAND_REGEX.test(queryText)) {
       triggerLaserScanEffect();
+      const pendingMessage = typeof getScanPendingMessage === 'function'
+        ? getScanPendingMessage(typeof window !== 'undefined' ? window.State : {})
+        : null;
+      if (pendingMessage) {
+        const pendingAssistantMessage = {
+          id: Date.now() + 1,
+          sender: 'assistant',
+          role: 'assistant',
+          text: pendingMessage,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, pendingAssistantMessage]);
+        setIsLoading(false);
+        (async () => {
+          try {
+            if (voiceRequestVersion !== playbackVersionRef.current) return;
+            await speakText(pendingMessage, typeof window !== 'undefined' ? window.State : {});
+          } catch (voiceErr) {
+            console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
+          }
+        })();
+        return;
+      }
     }
+
+    const isScanCommand = SCAN_COMMAND_REGEX.test(queryText);
+
+    const urlParams = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search) : { get: () => null };
+    const projectRef = (urlParams.get && urlParams.get('ref')) || (typeof window !== 'undefined' && window.location?.hash?.match(/ref=([^&]+)/)?.[1]) || "RDM/2026-TBN";
 
     // Clean the history to satisfy Gemini API requirements
     let cleanHistory = messages
@@ -836,8 +915,12 @@ export function GlobalMadreDrawer({
       cleanHistory.shift();
     }
 
-    const moduloActualDetectado = capturarDomModuloActivo()?.modulo_actual || "calculadora";
-    const capturaDOM = capturarDomModuloActivo(moduloActualDetectado);
+    const moduloActualDetectado = typeof capturarDomModuloActivo === 'function'
+      ? (capturarDomModuloActivo()?.modulo_actual || "calculadora")
+      : "calculadora";
+    const capturaDOM = typeof capturarDomModuloActivo === 'function'
+      ? capturarDomModuloActivo(moduloActualDetectado)
+      : null;
 
     const payload = {
       suite: "SeaCharter Core PRO",
@@ -866,28 +949,56 @@ export function GlobalMadreDrawer({
     };
 
     try {
-      const response = await fetch(MADRE_API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
       let data = {};
-      try {
-        data = await response.json();
-      } catch (jsonErr) {
-        console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
-      }
 
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
+      if (isScanCommand) {
+        // Opción A: Enrutar por arquitectura "Dos Tiempos" (Fase 1 digestión de contexto -> Fase 2 análisis)
+        if (typeof ejecutarEscaneoDosTiempos === 'function') {
+          data = await ejecutarEscaneoDosTiempos(payload);
+        } else {
+          const responseFase1 = await fetch(MADRE_API_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ ...payload, fase: 1 }),
+          });
+          const dataFase1 = await responseFase1.json().catch(() => ({}));
+          const sessionId = dataFase1?.session_id || dataFase1?.referenciaMadre || 'REF-MADRE-ACTIVA';
+          const responseFase2 = await fetch(MADRE_API_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ ...payload, fase: 2, session_id: sessionId }),
+          });
+          data = await responseFase2.json().catch(() => ({}));
+        }
+      } else {
+        // Opción B: Chat Ligero / Conversacional (Bypass de Contexto Pesado con is_conversational: true)
+        payload.is_conversational = true;
+
+        const response = await fetch(MADRE_API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        try {
+          data = await response.json();
+        } catch (jsonErr) {
+          console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
+        }
+
+        if (!response.ok) {
+          throw new Error(`Error HTTP: ${response.status}`);
+        }
       }
 
       // Mostrar el resultado real del servidor, también para el escaneo.
-      const finalReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response;
+      let finalReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response;
+      if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
+        finalReply = buildMotherExecutiveScript(stateForVoice);
+      }
       if (typeof finalReply !== 'string' || !finalReply.trim()) {
         throw new Error('MADRE no devolvió una respuesta válida.');
       }
@@ -948,16 +1059,17 @@ export function GlobalMadreDrawer({
         className="fixed bottom-4 right-4 z-[9999] w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col text-gray-800 overflow-hidden"
       >
         {/* HEADER A PRUEBA DE CONFLICTOS CSS */}
-        <div className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex flex-row justify-between items-center select-none w-full overflow-hidden gap-4">
+        <header className="drag-handle cursor-move bg-white border-b border-gray-100 p-3 flex justify-between items-center select-none w-full overflow-hidden gap-4">
           
           <div className="flex flex-row items-center gap-2 shrink-0 pointer-events-none">
             <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full shadow-sm shrink-0" />
-            <span className="font-bold text-sm text-gray-800 whitespace-nowrap">MADRE</span>
+            <span className="font-bold text-sm text-gray-800">MADRE</span>
           </div>
 
           <div className="madre-header-controls flex flex-row items-center justify-end gap-1.5 shrink-0">
             <button 
               type="button" 
+              id="btn-madre-scan-screen"
               onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} 
               className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-xs font-semibold flex flex-row items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
               title="Escanear Pantalla"
@@ -976,20 +1088,20 @@ export function GlobalMadreDrawer({
             </button>
           </div>
           
-        </div>
+        </header>
 
         {/* CUERPO DEL CHAT LIMPIO */}
         <div className="overflow-y-auto max-h-[60vh] min-h-[300px] bg-gray-50 p-4 flex flex-col gap-3">
           {messages.map((m) => (
             <div key={m.id} className={`flex flex-col w-full ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium p-3 rounded-xl shadow-sm border ${m.sender === 'user' ? 'bg-blue-50 border-blue-100 text-gray-800' : m.isError ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border-gray-200 text-gray-800'}`}>
+              <div className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium p-3 rounded-xl shadow-sm border ${m.sender === 'user' ? 'bg-blue-50 border border-blue-100 text-gray-800' : m.isError ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border border-gray-200 text-gray-800'}`}>
                 {m.text}
               </div>
             </div>
           ))}
           {isLoading && (
             <div className="text-xs text-teal-700 font-medium animate-pulse flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping"></span> Procesando...
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping"></span> Procesando audio y respuesta...
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -1023,6 +1135,7 @@ export {
   hasOperationalInputData,
   PENDING_OPERATION_MESSAGE,
   ejecutarEscaneoCompleto,
+  ejecutarEscaneoDosTiempos,
   buildMotherExecutiveScript,
   playNeuralMotherVoice
 };
