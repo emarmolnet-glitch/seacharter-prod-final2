@@ -122,6 +122,7 @@
                 'executive-net-results-column': 'native-offer',
                 'executive-visual-stowage-section': 'native-stowage',
                 'executive-stipulated-clauses': 'native-clauses',
+                'executive-madre-recap': 'native-clauses',
             };
             for (const [id, className] of Object.entries(blocks)) {
                 template.content.querySelectorAll(`[id="${id}"]`).forEach(node => node.classList.add(className));

@@ -12,7 +12,7 @@
         shipProfile ship_profile vessel_type vessel_class vesselClass class shipClass
         designCategory design_category categoriaDiseno tipoBuque
         loadRate loadingRate ratePOL dischargeRate dischRate ratePOD
-        optimalDischargeRate ritmoDescargaOptimizado ritmo_descarga_optimizado dssFormState madreUltimaAuditoria
+        optimalDischargeRate ritmoDescargaOptimizado ritmo_descarga_optimizado dssFormState madreUltimaAuditoria reporte_estrategico reporteEstrategico
         loadingMethod methodPOL loading_method loadMethod
         productoEspecifico cargoProduct cargo_product bulk_category bulkCategory cargo_type
         freightTerms freightTerm terms cargoTerms charterPartyStandard
@@ -29,7 +29,7 @@
     `.trim().split(/\s+/);
     const dateFields = new Set(['cancellingDate', 'etaDate', 'laycanStart', 'laycanEnd']);
     const labelFields = new Set(['productoEspecifico', 'cargoProduct', 'cargo_product', 'loadingMethod', 'methodPOL', 'loading_method', 'loadMethod']);
-    const clauseFields = new Set(['clausulas', 'specialClauses', 'clausulasEspeciales', 'clausulasEspecialesRecap']);
+    const clauseFields = new Set(['clausulas', 'specialClauses', 'clausulasEspeciales', 'clausulasEspecialesRecap', 'reporte_estrategico', 'reporteEstrategico']);
     const ownValue = (source, key) => {
         if (!source || typeof source !== 'object') return undefined;
         const descriptor = Object.getOwnPropertyDescriptor(source, key);
@@ -63,7 +63,12 @@
         if (raw && typeof raw === 'object') {
             if (key === 'dssFormState') return copyDssRates(raw);
             if (key === 'madreUltimaAuditoria') {
-                return { modificaciones_recap: copyDssRates(ownValue(raw, 'modificaciones_recap')) };
+                const result = { modificaciones_recap: copyDssRates(ownValue(raw, 'modificaciones_recap')) };
+                const rep = primitive(ownValue(raw, 'reporte_estrategico'), 'reporte_estrategico')
+                    || primitive(ownValue(raw, 'reporteEstrategico'), 'reporteEstrategico')
+                    || primitive(ownValue(raw, 'respuesta'), 'respuesta');
+                if (rep) result.reporte_estrategico = rep;
+                return result;
             }
         }
         return primitive(raw, key);
@@ -134,7 +139,7 @@
         const state = window.selectFixtureRecapState(active || current);
         // Vessel identity and equipment belong to the current estimation, not a DSS scenario.
         const identity = window.selectFixtureRecapState(current);
-        for (const key of ['pol', 'pod', 'loadRate', 'dischargeRate', 'ratePOL', 'ratePOD', 'dischRate', 'vesselType', 'vesselName', 'vessel', 'vessel_type', 'tipoBuque', 'shipProfile', 'ship_profile', 'class', 'vesselClass', 'vessel_class', 'shipClass', 'designCategory', 'design_category', 'categoriaDiseno', 'loadingMethod', 'methodPOL', 'loading_method', 'loadMethod', 'productoEspecifico', 'cargoProduct', 'cargo_product', 'commodity', 'cargoType', 'specialClauses', 'clausulas', 'clausulasEspeciales', 'clausulasEspecialesRecap']) {
+        for (const key of ['pol', 'pod', 'loadRate', 'dischargeRate', 'ratePOL', 'ratePOD', 'dischRate', 'vesselType', 'vesselName', 'vessel', 'vessel_type', 'tipoBuque', 'shipProfile', 'ship_profile', 'class', 'vesselClass', 'vessel_class', 'shipClass', 'designCategory', 'design_category', 'categoriaDiseno', 'loadingMethod', 'methodPOL', 'loading_method', 'loadMethod', 'productoEspecifico', 'cargoProduct', 'cargo_product', 'commodity', 'cargoType', 'specialClauses', 'clausulas', 'clausulasEspeciales', 'clausulasEspecialesRecap', 'madreUltimaAuditoria', 'reporte_estrategico', 'reporteEstrategico']) {
             if (identity[key] !== undefined) state[key] = identity[key];
             else delete state[key];
         }
@@ -152,7 +157,7 @@
         const state = window.getCurrentFixtureRecapState();
         const mods = window.selectFixtureRecapState(modifications);
         // Audit suggestions cannot change identity, route, cargo or equipment.
-        for (const key of ['allInRateGross', 'fleteUnitario', 'freightRate', 'demurrageRate', 'laycanDaysLeft']) {
+        for (const key of ['allInRateGross', 'fleteUnitario', 'freightRate', 'demurrageRate', 'laycanDaysLeft', 'reporte_estrategico', 'reporteEstrategico', 'madreUltimaAuditoria']) {
             if (mods[key] !== undefined) state[key] = mods[key];
         }
         state.allInRateGross = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? mods.freightRate ?? state.allInRateGross;

@@ -1471,7 +1471,14 @@ export async function generarFixtureRecapOpcionB() {
     try {
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
-        const approved = window.prepareCurrentFixtureRecapState(mods);
+        const rep = audit?.reporte_estrategico || mods?.reporte_estrategico || audit?.respuesta;
+        const approved = window.prepareCurrentFixtureRecapState({
+            ...mods,
+            ...(audit ? { madreUltimaAuditoria: audit } : {}),
+            ...(rep ? { reporte_estrategico: rep } : {})
+        });
+        if (audit && !approved.madreUltimaAuditoria) approved.madreUltimaAuditoria = audit;
+        if (rep && !approved.reporte_estrategico) approved.reporte_estrategico = rep;
 
         const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
         window.activateFixtureRecapSnapshot(fixtureRecapSnapshot);
