@@ -1469,19 +1469,40 @@ export async function generarFixtureRecapOpcionB() {
     if (window.fixtureRecapOptionBPending) return;
     window.fixtureRecapOptionBPending = true;
     try {
+        let fixtureRecapSnapshot = null;
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
         const rep = audit?.reporte_estrategico || mods?.reporte_estrategico || audit?.respuesta;
-        const approved = window.prepareCurrentFixtureRecapState({
-            ...mods,
-            ...(audit ? { madreUltimaAuditoria: audit } : {}),
-            ...(rep ? { reporte_estrategico: rep } : {})
-        });
+        const approved = typeof window.prepareCurrentFixtureRecapState === 'function'
+            ? window.prepareCurrentFixtureRecapState({
+                ...mods,
+                ...(audit ? { madreUltimaAuditoria: audit } : {}),
+                ...(rep ? { reporte_estrategico: rep } : {})
+            })
+            : {
+                ...mods,
+                allInRateGross: mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario,
+                ...(audit ? { madreUltimaAuditoria: audit } : {}),
+                ...(rep ? { reporte_estrategico: rep } : {})
+            };
         if (audit && !approved.madreUltimaAuditoria) approved.madreUltimaAuditoria = audit;
         if (rep && !approved.reporte_estrategico) approved.reporte_estrategico = rep;
 
-        const fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
-        window.activateFixtureRecapSnapshot(fixtureRecapSnapshot);
+        if (typeof window.captureFixtureFinancialSnapshot === 'function') {
+            fixtureRecapSnapshot = await window.captureFixtureFinancialSnapshot(approved, 'B', true);
+            if (typeof window.activateFixtureRecapSnapshot === 'function') {
+                window.activateFixtureRecapSnapshot(fixtureRecapSnapshot);
+            }
+        }
+
+        const clausulasMod = approved.clausulas || mods.clausulas;
+        if (clausulasMod) {
+            if (typeof window !== 'undefined') {
+                if (window.dssFormState) window.dssFormState.clausulas = clausulasMod;
+                if (window.dssBaseActualState) window.dssBaseActualState.clausulas = clausulasMod;
+                window.dssInjectedRecapClauses = clausulasMod;
+            }
+        }
 
 
         const fleteMod = approved.allInRateGross;
