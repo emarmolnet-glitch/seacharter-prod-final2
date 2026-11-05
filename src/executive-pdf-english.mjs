@@ -80,8 +80,8 @@ export function translateExecutivePDF(report) {
   const walker = report.ownerDocument.createTreeWalker(report, 4);
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    // Contract clauses are already supplied in English by the clause matrix.
-    if (node.parentElement?.closest('#executive-clauses-list')) continue;
+    // Contract clauses and MADRE strategic audit are already supplied in English.
+    if (node.parentElement?.closest('#executive-clauses-list, #executive-madre-recap-content')) continue;
     for (const [source, target] of orderedLabels) node.nodeValue = node.nodeValue.split(source).join(target);
   }
   const title = report.querySelector('#executive-clauses-title');

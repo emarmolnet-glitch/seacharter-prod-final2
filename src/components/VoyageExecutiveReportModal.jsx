@@ -43,6 +43,27 @@ export default function VoyageExecutiveReportModal({
     currentDss?.optimalDischargeRate,
   ].map(Number).find(value => Number.isFinite(value) && value > 0) || 5200;
 
+  const madreReporteEstrategico = [
+    data.reporte_estrategico,
+    data.reporteEstrategico,
+    audit?.reporte_estrategico,
+    audit?.reporteEstrategico,
+    audit?.modificaciones_recap?.reporte_estrategico,
+    audit?.modificaciones_recap?.reporteEstrategico,
+    audit?.modificaciones_recap?.recap,
+    audit?.modificaciones_recap?.recapTexto,
+    data.modificaciones_recap?.reporte_estrategico,
+    typeof audit?.modificaciones_recap === 'string' ? audit.modificaciones_recap : null,
+    typeof data.modificaciones_recap === 'string' ? data.modificaciones_recap : null,
+    audit?.respuesta,
+    data.respuesta,
+    typeof window !== 'undefined' ? window.madreUltimaAuditoria?.reporte_estrategico : null,
+    typeof window !== 'undefined' ? window.madreUltimaAuditoria?.modificaciones_recap?.reporte_estrategico : null,
+    typeof window !== 'undefined' ? window.madreUltimaAuditoria?.respuesta : null,
+    typeof window !== 'undefined' ? window.State?.reporte_estrategico : null,
+    typeof window !== 'undefined' ? window.State?.madreUltimaAuditoria?.reporte_estrategico : null,
+  ].find(val => typeof val === 'string' && val.trim().length > 0) || null;
+
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
   const vesselClass = reportVessel.type;
@@ -511,6 +532,22 @@ export default function VoyageExecutiveReportModal({
                     <span className="block text-emerald-900 font-semibold mt-1 text-[10px]">Maximizes TCE &amp; mitigates demurrage</span>
                   </div>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {/* 6. MADRE STRATEGIC AUDIT & FIXTURE RECAP */}
+          {madreReporteEstrategico && (
+            <section id="executive-madre-recap" className="mt-4 bg-slate-50 p-5 rounded-xl border border-teal-200 shadow-sm break-inside-avoid">
+              <div className="flex items-center gap-2 mb-3 border-b border-teal-200 pb-2">
+                <span className="w-1.5 h-3.5 bg-teal-800 rounded-xs inline-block"></span>
+                <span className="text-teal-700 text-base">🛡️</span>
+                <h4 id="executive-madre-recap-title" className="font-black text-teal-900 text-xs uppercase tracking-wider">
+                  MADRE STRATEGIC AUDIT &amp; FIXTURE RECAP
+                </h4>
+              </div>
+              <div id="executive-madre-recap-content" className="text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-line bg-white p-4 rounded-lg border border-slate-200 shadow-inner">
+                {madreReporteEstrategico}
               </div>
             </section>
           )}
