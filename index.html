@@ -65666,10 +65666,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 handlePortMethodChange('pod');
             }
 
-            if (rateDischInput && (!rateDischInput.value || rateDischInput.value === '0' || previousMethod === 'camion_tolva')) {
-                rateDischInput.value = '8000';
-                if (window.State) window.State.dischRate = 8000;
-            }
+            // BLINDAJE: Solo forzar los 8000 del cementero si la IA no ha bloqueado el campo manualmente
+if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rateDischInput.value || rateDischInput.value === '0' || previousMethod === 'camion_tolva')) {
+    rateDischInput.value = '8000';
+    if (window.State) {
+        window.State.dischRate = 8000;
+        window.State.dischargeRate = 8000;
+    }
+}
 
             if (typeof recalcularDiasPuerto === 'function') {
                 recalcularDiasPuerto('pod');
