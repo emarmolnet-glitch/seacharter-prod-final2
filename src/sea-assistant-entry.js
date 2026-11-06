@@ -705,10 +705,22 @@ function normalizeDataBridgeAssistantResponse(payload) {
       ? { ...rawAction, payload: actionPayload }
       : rawAction;
 
-  if (!effectiveAction && projectCargoCandidate) {
-    effectiveAction = { action: 'update_fields', payload: { ...(actionPayload || {}), projectCargo: projectCargoCandidate } };
-  } else if (effectiveAction && projectCargoCandidate && effectiveAction.payload && !effectiveAction.payload.projectCargo) {
-    effectiveAction.payload.projectCargo = projectCargoCandidate;
+  const ritmoCargaCandidate = payload?.ritmo_carga ?? payload?.data?.ritmo_carga ?? payload?.payload?.ritmo_carga ?? payload?.data?.payload?.ritmo_carga ?? payload?.loading_rate ?? payload?.loadingRate;
+  const ritmoDescargaCandidate = payload?.ritmo_descarga ?? payload?.data?.ritmo_descarga ?? payload?.payload?.ritmo_descarga ?? payload?.data?.payload?.ritmo_descarga ?? payload?.discharge_rate ?? payload?.dischargeRate;
+
+  if (!effectiveAction && (projectCargoCandidate || ritmoCargaCandidate || ritmoDescargaCandidate)) {
+    effectiveAction = { action: 'update_fields', payload: { ...(actionPayload || {}) } };
+  }
+  if (effectiveAction && effectiveAction.payload) {
+    if (projectCargoCandidate && !effectiveAction.payload.projectCargo) {
+      effectiveAction.payload.projectCargo = projectCargoCandidate;
+    }
+    if (ritmoCargaCandidate && !effectiveAction.payload.ritmo_carga) {
+      effectiveAction.payload.ritmo_carga = ritmoCargaCandidate;
+    }
+    if (ritmoDescargaCandidate && !effectiveAction.payload.ritmo_descarga) {
+      effectiveAction.payload.ritmo_descarga = ritmoDescargaCandidate;
+    }
   }
 
   if (payload?.accion_ui === "renderizar_auditoria_dss" || payload?.data?.accion_ui === "renderizar_auditoria_dss") {
@@ -977,6 +989,24 @@ async function executeActionableAiUpdateFields(actionObj) {
         
         if (!p || typeof p !== 'object' || Object.keys(p).length === 0) return false;
 
+        const explicitLoadingRate = Number(p.ritmo_carga ?? p.loadingRate ?? p.loadRate ?? p.loading_rate ?? p.ratePOL ?? actionObj.ritmo_carga ?? actionObj.loadingRate);
+        const explicitDischargeRate = Number(p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate ?? p.discharge_rate ?? p.ratePOD ?? actionObj.ritmo_descarga ?? actionObj.dischargeRate);
+
+        if (Number.isFinite(explicitLoadingRate) && explicitLoadingRate > 0) {
+            p.ritmo_carga = explicitLoadingRate;
+            p.loadingRate = explicitLoadingRate;
+            p.loadRate = explicitLoadingRate;
+            p.loading_rate = explicitLoadingRate;
+            p.ratePOL = explicitLoadingRate;
+        }
+        if (Number.isFinite(explicitDischargeRate) && explicitDischargeRate > 0) {
+            p.ritmo_descarga = explicitDischargeRate;
+            p.dischargeRate = explicitDischargeRate;
+            p.dischRate = explicitDischargeRate;
+            p.discharge_rate = explicitDischargeRate;
+            p.ratePOD = explicitDischargeRate;
+        }
+
         // --- ESCUDO FRONTEND: AUTO-BUSCADOR DE BUQUE VÍA IA ---
         const imoDetectado = p.imo || p.imo_number || p.imoNumber || p.selectedVessel?.imo || p.selectedVessel?.imo_number || p.vessel?.imo || p.vessel?.imo_number;
 
@@ -1038,14 +1068,21 @@ async function executeActionableAiUpdateFields(actionObj) {
                 elements.forEach((input) => {
                     if (input.id === "rate-load" || input.id === "rate-disch") {
                         const side = input.id === "rate-disch" ? "pod" : "pol";
-                        window.setRitmoMode?.("auto", side, { commit: true, deferCalculations: true });
-                        input.readOnly = true;
+                        window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
+                        input.readOnly = false;
                         input.disabled = false;
-                        input.setAttribute("readonly", "readonly");
+                        input.removeAttribute("readonly");
                         input.removeAttribute("disabled");
-                        input.dataset.manualOverride = "false";
-                        input.dataset.draftCalcMode = "auto";
-                        if (side === "pod") input.dataset.podCalcMode = "auto";
+                        input.dataset.manualOverride = "true";
+                        input.dataset.draftCalcMode = "manual";
+                        if (side === "pod") {
+                            input.dataset.podCalcMode = "manual";
+                            delete input.dataset.autoMetodoDescarga;
+                        }
+                        if (window.State) {
+                            window.State[`ritmoMode_${side}`] = "manual";
+                            if (side === "pol") window.State.ritmoMode = "manual";
+                        }
                     }
 
                     if (input.tagName === 'SELECT') {
@@ -1093,9 +1130,9 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
         updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
         updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
-        updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate ?? p.loadRate);
-        updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
-        if (Number(p.loadingRate ?? p.loadRate) > 0 || Number(p.dischargeRate) > 0) {
+        updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.ritmo_carga ?? p.loadingRate ?? p.loadRate);
+        updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate);
+        if (Number(p.ritmo_carga ?? p.loadingRate ?? p.loadRate) > 0 || Number(p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate) > 0) {
             window.forceRefreshCalculations?.();
         }
 
@@ -1268,16 +1305,16 @@ async function executeActionableAiUpdateFields(actionObj) {
             } : {}),
         };
         const tonnage = Number(p.tonnage);
-        const loadingRate = Number(p.loadingRate);
-        const dischargeRate = Number(p.dischargeRate);
+        const loadingRate = Number(p.ritmo_carga ?? p.loadingRate ?? p.loadRate ?? p.loading_rate ?? p.ratePOL);
+        const dischargeRate = Number(p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate ?? p.discharge_rate ?? p.ratePOD);
         if (Number.isFinite(tonnage) && tonnage > 0) {
             Object.assign(routeState, { tonnage, cargo: tonnage, cargoQty: tonnage, cargoQuantity: tonnage });
         }
         if (Number.isFinite(loadingRate) && loadingRate > 0) {
-            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual" });
+            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual", ritmo_carga: loadingRate });
         }
         if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual" });
+            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual", ritmo_descarga: dischargeRate });
         }
         if (hasProjectCargoData) {
             Object.assign(routeState, {
@@ -1321,6 +1358,61 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         }
 
+        // 🛡️ Blindaje de ritmos operativos frente a presets de equipo automáticos (ej. Bombas Neumáticas)
+        if (Number.isFinite(loadingRate) && loadingRate > 0) {
+            window.setRitmoMode?.("manual", "pol", { commit: true, deferCalculations: true });
+            if (window.State) {
+                window.State.ritmoMode = "manual";
+                window.State.ritmoMode_pol = "manual";
+                window.State.loadRate = loadingRate;
+                window.State.ratePOL = loadingRate;
+                window.State.ritmoRealPol = loadingRate;
+            }
+            updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], loadingRate);
+            const loadInput = document.getElementById("rate-load");
+            if (loadInput) {
+                loadInput.value = String(loadingRate);
+                loadInput.readOnly = false;
+                loadInput.disabled = false;
+                loadInput.removeAttribute("readonly");
+                loadInput.removeAttribute("disabled");
+                loadInput.dataset.manualOverride = "true";
+                loadInput.dataset.draftCalcMode = "manual";
+            }
+        }
+        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+            window.setRitmoMode?.("manual", "pod", { commit: true, deferCalculations: true });
+            if (window.State) {
+                window.State.ritmoMode_pod = "manual";
+                window.State.podCalcMode = "manual";
+                window.State.dischRate = dischargeRate;
+                window.State.dischargeRate = dischargeRate;
+                window.State.ratePOD = dischargeRate;
+                window.State.ritmoRealPod = dischargeRate;
+            }
+            updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], dischargeRate);
+            const dischInput = document.getElementById("rate-disch");
+            if (dischInput) {
+                dischInput.value = String(dischargeRate);
+                dischInput.readOnly = false;
+                dischInput.disabled = false;
+                dischInput.removeAttribute("readonly");
+                dischInput.removeAttribute("disabled");
+                dischInput.dataset.manualOverride = "true";
+                dischInput.dataset.draftCalcMode = "manual";
+                dischInput.dataset.podCalcMode = "manual";
+                delete dischInput.dataset.autoMetodoDescarga;
+            }
+        }
+        if (typeof window.setRitmoManualIndicator === "function") {
+            if (Number.isFinite(loadingRate) && loadingRate > 0) window.setRitmoManualIndicator("pol", true);
+            if (Number.isFinite(dischargeRate) && dischargeRate > 0) window.setRitmoManualIndicator("pod", true);
+        }
+        if ((Number.isFinite(loadingRate) && loadingRate > 0) || (Number.isFinite(dischargeRate) && dischargeRate > 0)) {
+            window.recalcularDiasPuerto?.();
+            window.forceRefreshCalculations?.();
+        }
+
         if (selectedRoutePorts) {
             if (typeof window.injectVoyageScenario !== 'function' || typeof window.finalizeAssistantVoyageInjection !== 'function') {
                 throw new Error('El motor de inyección de viaje todavía no está disponible.');
@@ -1335,15 +1427,25 @@ async function executeActionableAiUpdateFields(actionObj) {
                 cargo_qty: Number(p.tonnage ?? p.cargo_qty ?? p.cargoQty) || 0,
                 laydays: p.laydayStart ?? p.laydays,
                 cancelling: p.cancelling,
-                loading_rate: Number(p.loadingRate ?? p.loading_rate) || 0,
-                discharge_rate: Number(p.dischargeRate ?? p.discharge_rate) || 0,
+                loading_rate: Number(loadingRate || p.loadingRate || p.loading_rate) || 0,
+                discharge_rate: Number(dischargeRate || p.dischargeRate || p.discharge_rate) || 0,
+                ratePOL: Number(loadingRate || p.ratePOL) || 0,
+                ratePOD: Number(dischargeRate || p.ratePOD) || 0,
+                loadRate: Number(loadingRate || p.loadRate) || 0,
+                dischRate: Number(dischargeRate || p.dischRate) || 0,
+                ritmo_carga: Number(loadingRate || p.ritmo_carga) || 0,
+                ritmo_descarga: Number(dischargeRate || p.ritmo_descarga) || 0,
+                ritmoMode: "manual",
+                ritmoMode_pol: "manual",
+                ritmoMode_pod: "manual",
+                podCalcMode: "manual",
             };
             const injectionResult = window.injectVoyageScenario(validatedScenario, { deferFinalActions: true });
             await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
         }
 
         if (!isMapView) {
-            if (p.loadingRate || p.dischargeRate) window.recalcularDiasPuerto?.();
+            if (p.ritmo_carga || p.ritmo_descarga || p.loadingRate || p.dischargeRate) window.recalcularDiasPuerto?.();
         }
         
         console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
