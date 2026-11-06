@@ -915,6 +915,70 @@ async function selectActionableAiWpiRoute(pol, pod) {
   return { pol: selectedPol, pod: selectedPod };
 }
 
+export function unlockAndStabilizePodInputs(explicitDischargeRate) {
+  const podSelectors = [
+    "#rate-disch",
+    "#discharge-rate",
+    "#gc-laytime-disch-val",
+    "#input-dischargeRate",
+    "#disch-rate",
+    "#rate-discharge",
+    "#input-dischRate",
+    '[name="rate-disch"]',
+    '[name="discharge-rate"]',
+    ".rate-disch",
+    ".discharge-rate"
+  ];
+
+  const elements = new Set();
+  podSelectors.forEach((sel) => {
+    try {
+      document.querySelectorAll(sel).forEach((el) => elements.add(el));
+    } catch (_) {}
+  });
+
+  const numRate = Number(explicitDischargeRate);
+  const isValidRate = Number.isFinite(numRate) && numRate > 0;
+
+  elements.forEach((input) => {
+    if (!input) return;
+    input.readOnly = false;
+    input.disabled = false;
+    input.removeAttribute("readonly");
+    input.removeAttribute("disabled");
+    input.setAttribute("aria-readonly", "false");
+    input.dataset.manualOverride = "true";
+    input.dataset.draftCalcMode = "manual";
+    input.dataset.podCalcMode = "manual";
+    delete input.dataset.autoMetodoDescarga;
+    delete input.dataset.autoCalculo;
+    delete input.dataset.autoMetodo;
+    delete input.dataset.frozen;
+    delete input.dataset.calculoAutomatico;
+    if (isValidRate) {
+      input.value = String(numRate);
+    }
+  });
+
+  if (typeof window !== "undefined") {
+    window.setRitmoMode?.("manual", "pod", { commit: true, deferCalculations: true });
+    if (typeof window.setRitmoManualIndicator === "function") {
+      window.setRitmoManualIndicator("pod", true);
+    }
+    if (window.State) {
+      window.State.ritmoMode_pod = "manual";
+      window.State.podCalcMode = "manual";
+      if (isValidRate) {
+        window.State.dischRate = numRate;
+        window.State.dischargeRate = numRate;
+        window.State.ratePOD = numRate;
+        window.State.ritmoRealPod = numRate;
+        window.State.ritmo_descarga = numRate;
+      }
+    }
+  }
+}
+
 function executeActionableAiUpdate(action) {
   if (action?.action !== "update_field") return false;
   const numericValue = Number(action.value);
@@ -923,22 +987,34 @@ function executeActionableAiUpdate(action) {
   const field = findActionableAiField(action.field);
   if (!field) return false;
 
-  if (field.id === "rate-load" || field.id === "rate-disch") {
-    const side = field.id === "rate-disch" ? "pod" : "pol";
+  const isPodField = field.id === "rate-disch" || field.id === "discharge-rate" || field.id === "gc-laytime-disch-val" || field.id === "input-dischargeRate";
+  const isPolField = field.id === "rate-load" || field.id === "loading-rate" || field.id === "gc-laytime-load-val" || field.id === "load-rate";
+
+  if (isPolField || isPodField) {
+    const side = isPodField ? "pod" : "pol";
     window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
     field.readOnly = false;
     field.disabled = false;
     field.removeAttribute("readonly");
     field.removeAttribute("disabled");
+    field.setAttribute("aria-readonly", "false");
     field.dataset.manualOverride = "true";
     field.dataset.draftCalcMode = "manual";
-    if (side === "pod") field.dataset.podCalcMode = "manual";
+    if (side === "pod") {
+      field.dataset.podCalcMode = "manual";
+      delete field.dataset.autoMetodoDescarga;
+      delete field.dataset.autoCalculo;
+      delete field.dataset.autoMetodo;
+      delete field.dataset.frozen;
+      delete field.dataset.calculoAutomatico;
+      unlockAndStabilizePodInputs(numericValue);
+    }
   }
 
   field.value = String(numericValue);
   field.dispatchEvent(new Event("input", { bubbles: true }));
   field.dispatchEvent(new Event("change", { bubbles: true }));
-  if (field.id === "rate-load" || field.id === "rate-disch") window.recalcularDiasPuerto?.();
+  if (field.id === "rate-load" || field.id === "rate-disch" || isPodField || isPolField) window.recalcularDiasPuerto?.();
   window.runEngine?.();
   window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
     detail: { field: normalizeActionFieldName(action.field), value: numericValue, inputId: field.id },
@@ -1066,21 +1142,29 @@ async function executeActionableAiUpdateFields(actionObj) {
                     return;
                 }
                 elements.forEach((input) => {
-                    if (input.id === "rate-load" || input.id === "rate-disch") {
-                        const side = input.id === "rate-disch" ? "pod" : "pol";
+                    const isPodInput = input.id === "rate-disch" || input.id === "discharge-rate" || input.id === "gc-laytime-disch-val" || input.id === "input-dischargeRate" || input.name === "rate-disch" || input.name === "discharge-rate";
+                    const isPolInput = input.id === "rate-load" || input.id === "loading-rate" || input.id === "gc-laytime-load-val" || input.id === "load-rate" || input.name === "rate-load" || input.name === "loading-rate";
+                    if (isPolInput || isPodInput) {
+                        const side = isPodInput ? "pod" : "pol";
                         window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
                         input.readOnly = false;
                         input.disabled = false;
                         input.removeAttribute("readonly");
                         input.removeAttribute("disabled");
+                        input.setAttribute("aria-readonly", "false");
                         input.dataset.manualOverride = "true";
                         input.dataset.draftCalcMode = "manual";
                         if (side === "pod") {
                             input.dataset.podCalcMode = "manual";
                             delete input.dataset.autoMetodoDescarga;
+                            delete input.dataset.autoCalculo;
+                            delete input.dataset.autoMetodo;
+                            delete input.dataset.frozen;
+                            delete input.dataset.calculoAutomatico;
                         }
                         if (window.State) {
                             window.State[`ritmoMode_${side}`] = "manual";
+                            if (side === "pod") window.State.podCalcMode = "manual";
                             if (side === "pol") window.State.ritmoMode = "manual";
                         }
                     }
@@ -1285,6 +1369,11 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         }
 
+        // Estabilización inmediata de POD tras selectores de equipo y pills
+        if (Number.isFinite(explicitDischargeRate) && explicitDischargeRate > 0) {
+            unlockAndStabilizePodInputs(explicitDischargeRate);
+        }
+
         // 3. SINCRONIZACIÓN DE ESTADO GLOBAL
         const routeState = {
             ...(p.pol ? { pol: p.pol } : {}),
@@ -1381,16 +1470,8 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         }
         if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            window.setRitmoMode?.("manual", "pod", { commit: true, deferCalculations: true });
-            if (window.State) {
-                window.State.ritmoMode_pod = "manual";
-                window.State.podCalcMode = "manual";
-                window.State.dischRate = dischargeRate;
-                window.State.dischargeRate = dischargeRate;
-                window.State.ratePOD = dischargeRate;
-                window.State.ritmoRealPod = dischargeRate;
-            }
-            updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], dischargeRate);
+            unlockAndStabilizePodInputs(dischargeRate);
+            updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "input-dischargeRate"], dischargeRate);
             const dischInput = document.getElementById("rate-disch");
             if (dischInput) {
                 dischInput.value = String(dischargeRate);
@@ -1398,10 +1479,15 @@ async function executeActionableAiUpdateFields(actionObj) {
                 dischInput.disabled = false;
                 dischInput.removeAttribute("readonly");
                 dischInput.removeAttribute("disabled");
+                dischInput.setAttribute("aria-readonly", "false");
                 dischInput.dataset.manualOverride = "true";
                 dischInput.dataset.draftCalcMode = "manual";
                 dischInput.dataset.podCalcMode = "manual";
                 delete dischInput.dataset.autoMetodoDescarga;
+                delete dischInput.dataset.autoCalculo;
+                delete dischInput.dataset.autoMetodo;
+                delete dischInput.dataset.frozen;
+                delete dischInput.dataset.calculoAutomatico;
             }
         }
         if (typeof window.setRitmoManualIndicator === "function") {
@@ -3074,7 +3160,30 @@ export const AsistenteCore = {
   updateAiUI,
 };
 
+if (typeof document !== "undefined") {
+  const handleUserPodRateInteraction = (event) => {
+    const target = event.target;
+    if (!target) return;
+    const isPodInput = target.id === "rate-disch" ||
+                       target.id === "discharge-rate" ||
+                       target.id === "gc-laytime-disch-val" ||
+                       target.id === "input-dischargeRate" ||
+                       target.name === "rate-disch" ||
+                       target.name === "discharge-rate";
+    if (!isPodInput) return;
+    const rawVal = target.value;
+    const num = parseFloat(String(rawVal).replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(num) && num > 0) {
+      unlockAndStabilizePodInputs(num);
+    }
+  };
+
+  document.addEventListener("input", handleUserPodRateInteraction, true);
+  document.addEventListener("change", handleUserPodRateInteraction, true);
+}
+
 if (typeof window !== "undefined") {
+  window.unlockAndStabilizePodInputs = unlockAndStabilizePodInputs;
   window.AsistenteCore = AsistenteCore;
 }
 

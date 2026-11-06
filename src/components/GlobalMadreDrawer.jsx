@@ -523,6 +523,87 @@ export function getCoreProUIContext() {
   const moduloActual = detectarModuloActual();
   const capturaDOM = capturarDomModuloActivo(moduloActual);
 
+  const getSafeVal = (sel) => {
+    if (typeof document === 'undefined') return '';
+    try {
+      if (typeof document.querySelector === 'function') {
+        const el = document.querySelector(sel);
+        return el ? (el.value || el.textContent || '') : '';
+      }
+      if (typeof document.getElementById === 'function' && sel.startsWith('#')) {
+        const el = document.getElementById(sel.slice(1));
+        return el ? (el.value || el.textContent || '') : '';
+      }
+    } catch (_) {}
+    return '';
+  };
+
+  const getSafeNum = (sel) => {
+    const raw = getSafeVal(sel);
+    if (!raw) return 0;
+    const n = parseFloat(String(raw).replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const cleanPol = String(
+    escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol ||
+    getSafeVal('#port-pol') ||
+    getSafeVal('#input-pol') ||
+    getSafeVal('#map-port-pol') ||
+    getSafeVal('#exec-pol') ||
+    getSafeVal('#tracking-input-pol') ||
+    (typeof window !== 'undefined' ? (window.State?.pol || window.dssFormState?.pol) : '') ||
+    ''
+  ).trim();
+
+  const cleanPod = String(
+    escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod ||
+    getSafeVal('#port-pod') ||
+    getSafeVal('#input-pod') ||
+    getSafeVal('#map-port-pod') ||
+    getSafeVal('#exec-pod') ||
+    getSafeVal('#tracking-input-pod') ||
+    (typeof window !== 'undefined' ? (window.State?.pod || window.dssFormState?.pod) : '') ||
+    ''
+  ).trim();
+
+  const cleanCargo = Number(
+    escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga ||
+    params.cargoQty ||
+    getSafeNum('#cargo-qty') ||
+    getSafeNum('#exec-cargo-qty') ||
+    (typeof window !== 'undefined' ? (window.State?.cargoQty ?? window.State?.cargo_qty ?? window.State?.cargo) : 0) ||
+    0
+  );
+
+  const cleanLoadRate = Number(
+    escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_carga_tpd ||
+    getSafeNum('#rate-load') ||
+    getSafeNum('#loading-rate') ||
+    getSafeNum('#gc-laytime-load-val') ||
+    (typeof window !== 'undefined' ? (window.State?.loadRate ?? window.State?.ratePOL ?? window.State?.ritmo_carga ?? window.State?.ritmoRealPol) : 0) ||
+    0
+  );
+
+  const cleanDischargeRate = Number(
+    escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_descarga_tpd ||
+    getSafeNum('#rate-disch') ||
+    getSafeNum('#discharge-rate') ||
+    getSafeNum('#gc-laytime-disch-val') ||
+    getSafeNum('#input-dischargeRate') ||
+    (typeof window !== 'undefined' ? (window.State?.dischargeRate ?? window.State?.dischRate ?? window.State?.ratePOD ?? window.State?.ritmo_descarga ?? window.State?.ritmoRealPod) : 0) ||
+    0
+  );
+
+  const cleanCommodity = String(
+    escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.commodity ||
+    getSafeVal('#cargo-product') ||
+    getSafeVal('#cargo-type') ||
+    getSafeVal('#input-commodity') ||
+    (typeof window !== 'undefined' ? (window.State?.cargoProduct || window.State?.cargoType || window.State?.commodity) : '') ||
+    ''
+  ).trim();
+
   // Se lo enviamos TODO a MADRE
   return {
     suite: "SeaCharter Core PRO",
@@ -538,16 +619,92 @@ export function getCoreProUIContext() {
     resumen_operativo: escaneoCompacto?.resumen,
     captura_dom: capturaDOM,
     elementos_visibles: capturaDOM?.elementos_visibles,
-    pol: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pol || '',
-    pod: escaneoCompacto?.bloques?.bloque_1_derrota_puertos?.pod || '',
-    cargoQty: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.toneladas_carga || 0,
-    commodity: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.commodity || '',
-    breakEvenUnitario: escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt || 0,
+    pol: cleanPol,
+    pod: cleanPod,
+    port_pol: cleanPol,
+    port_pod: cleanPod,
+    cargoQty: cleanCargo,
+    tonnage: cleanCargo,
+    cargo_qty: cleanCargo,
+    commodity: cleanCommodity,
+    cargoType: cleanCommodity,
+    breakEvenUnitario: escaneoCompacto?.bloques?.bloque_6_resumen_operacion_costes?.break_even_usd_mt || params.breakEven || 0,
     fleteUnitario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.flete_venta_fletador_mt || escaneoCompacto?.bloques?.bloque_7_analisis_fletes_riesgos?.flete_venta_sugerido_mt || 0,
-    loadRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_carga_tpd || 0,
-    dischargeRate: escaneoCompacto?.bloques?.bloque_2_buque_carga_limpieza?.ritmo_descarga_tpd || 0,
+    loadRate: cleanLoadRate,
+    loading_rate: cleanLoadRate,
+    ratePOL: cleanLoadRate,
+    ritmo_carga: cleanLoadRate,
+    ritmo_carga_tpd: cleanLoadRate,
+    dischargeRate: cleanDischargeRate,
+    discharge_rate: cleanDischargeRate,
+    ratePOD: cleanDischargeRate,
+    ritmo_descarga: cleanDischargeRate,
+    ritmo_descarga_tpd: cleanDischargeRate,
     tceDiario: escaneoCompacto?.bloques?.bloque_10_simulador_negociacion_contraofertas?.tce_obtenido_usd_dia || 0
   };
+}
+
+/**
+ * Formatea y procesa el veredicto comercial y operativo unificado de MADRE
+ */
+function formatMotherVerdict(data, fallbackState = {}) {
+  if (!data || typeof data !== 'object') {
+    return buildMotherExecutiveScript(fallbackState);
+  }
+
+  const veredictoGeneral = (data.veredicto_general || data.veredicto || data.dictamen || '').trim();
+  const reporteEstrategico = (data.reporte_estrategico || data.informe || data.reporte || '').trim();
+  const rawReply = (data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response || '').trim();
+
+  if (!veredictoGeneral && !reporteEstrategico && !rawReply) {
+    return buildMotherExecutiveScript(fallbackState);
+  }
+
+  const parts = [];
+
+  // 1. Veredicto Comercial / Operativo Unificado
+  if (veredictoGeneral) {
+    parts.push(`### Veredicto Comercial y Operativo: ${veredictoGeneral}`);
+  }
+
+  // 2. Reporte Estratégico o Respuesta Principal
+  if (reporteEstrategico) {
+    parts.push(reporteEstrategico);
+  } else if (rawReply && !rawReply.includes(veredictoGeneral)) {
+    parts.push(rawReply);
+  }
+
+  // 3. Variables Perjudiciales / Cuellos de Botella Detectados (13 Hijas)
+  if (Array.isArray(data.variables_perjudiciales) && data.variables_perjudiciales.length > 0) {
+    const varsText = data.variables_perjudiciales
+      .filter(v => typeof v === 'string' && v.trim().length > 0)
+      .map(v => `• ${v.trim()}`)
+      .join('\n');
+    if (varsText) {
+      parts.push(`**Variables Críticas Detectadas:**\n${varsText}`);
+    }
+  }
+
+  // 4. Recomendaciones Operativas y Comerciales
+  if (Array.isArray(data.recomendaciones) && data.recomendaciones.length > 0) {
+    const recs = data.recomendaciones
+      .filter(r => r && typeof r === 'object')
+      .map(r => {
+        const itemParts = [];
+        if (r.accion) itemParts.push(`**Acción:** ${r.accion}`);
+        if (r.pro) itemParts.push(`*Ventaja:* ${r.pro}`);
+        if (r.contra) itemParts.push(`*Riesgo evitado:* ${r.contra}`);
+        return itemParts.join(' ');
+      })
+      .filter(Boolean)
+      .join('\n');
+    if (recs) {
+      parts.push(`**Recomendaciones de Optimización:**\n${recs}`);
+    }
+  }
+
+  const result = parts.filter(Boolean).join('\n\n').trim();
+  return result || rawReply || buildMotherExecutiveScript(fallbackState);
 }
 
 /**
@@ -620,6 +777,7 @@ if (typeof window !== 'undefined') {
   window.ejecutarEscaneoCompleto = ejecutarEscaneoCompleto;
   window.ejecutarEscaneoDosTiempos = ejecutarEscaneoDosTiempos;
   window.buildMotherExecutiveScript = buildMotherExecutiveScript;
+  window.formatMotherVerdict = formatMotherVerdict;
   window.playNeuralMotherVoice = playNeuralMotherVoice;
 }
 
@@ -941,6 +1099,45 @@ export function GlobalMadreDrawer({
     };
 
     const contextoUI = payload.contexto_ui || {};
+    payload.pol = contextoUI.pol || '';
+    payload.pod = contextoUI.pod || '';
+    payload.port_pol = contextoUI.pol || '';
+    payload.port_pod = contextoUI.pod || '';
+    payload.cargoQty = contextoUI.cargoQty || 0;
+    payload.tonnage = contextoUI.cargoQty || 0;
+    payload.cargo_qty = contextoUI.cargoQty || 0;
+    payload.loadRate = contextoUI.loadRate || 0;
+    payload.loading_rate = contextoUI.loadRate || 0;
+    payload.ratePOL = contextoUI.loadRate || 0;
+    payload.ritmo_carga = contextoUI.loadRate || 0;
+    payload.dischargeRate = contextoUI.dischargeRate || 0;
+    payload.discharge_rate = contextoUI.dischargeRate || 0;
+    payload.ratePOD = contextoUI.dischargeRate || 0;
+    payload.ritmo_descarga = contextoUI.dischargeRate || 0;
+    payload.commodity = contextoUI.commodity || '';
+    payload.cargoType = contextoUI.commodity || '';
+    payload.viaje = {
+      pol: contextoUI.pol || '',
+      pod: contextoUI.pod || '',
+      tonnage: contextoUI.cargoQty || 0,
+      cargoQty: contextoUI.cargoQty || 0,
+      loadingRate: contextoUI.loadRate || 0,
+      loadRate: contextoUI.loadRate || 0,
+      ritmo_carga: contextoUI.loadRate || 0,
+      dischargeRate: contextoUI.dischargeRate || 0,
+      ritmo_descarga: contextoUI.dischargeRate || 0,
+      ratePOL: contextoUI.loadRate || 0,
+      ratePOD: contextoUI.dischargeRate || 0,
+      commodity: contextoUI.commodity || ''
+    };
+    if (payload.context) {
+      payload.context.pol = contextoUI.pol || '';
+      payload.context.pod = contextoUI.pod || '';
+      payload.context.cargoQty = contextoUI.cargoQty || 0;
+      payload.context.loadRate = contextoUI.loadRate || 0;
+      payload.context.dischargeRate = contextoUI.dischargeRate || 0;
+    }
+
     const stateForVoice = {
       ...(typeof window !== 'undefined' ? window.State : {}),
       breakEven: contextoUI.parametros_activos?.breakEven || contextoUI.breakEvenUnitario || 0,
@@ -994,10 +1191,15 @@ export function GlobalMadreDrawer({
         }
       }
 
-      // Mostrar el resultado real del servidor, también para el escaneo.
-      let finalReply = data.respuesta || data.reply || data.texto_preformateado || data.message || data.text || data.response;
+      // Mostrar el resultado real del servidor, procesando el veredicto comercial y operativo unificado
+      let finalReply = formatMotherVerdict(data, stateForVoice);
+      if (typeof window !== 'undefined' && data && (data.veredicto_general || data.reporte_estrategico)) {
+        window.madreUltimaAuditoria = data;
+      }
       if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
-        finalReply = buildMotherExecutiveScript(stateForVoice);
+        if (!finalReply || finalReply.trim() === '') {
+          finalReply = buildMotherExecutiveScript(stateForVoice);
+        }
       }
       if (typeof finalReply !== 'string' || !finalReply.trim()) {
         throw new Error('MADRE no devolvió una respuesta válida.');
@@ -1137,6 +1339,7 @@ export {
   ejecutarEscaneoCompleto,
   ejecutarEscaneoDosTiempos,
   buildMotherExecutiveScript,
+  formatMotherVerdict,
   playNeuralMotherVoice
 };
 
