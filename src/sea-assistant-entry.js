@@ -1093,40 +1093,21 @@ async function executeActionableAiUpdateFields(actionObj) {
                              (typeof document.querySelector === 'function' ? (document.querySelector('input[name="imo"]') || document.querySelector('input[name="imo_number"]') || document.querySelector('input[name="vessel_imo"]')) : null); 
             
             if (imoInput) {
-                // 1. Escribimos el número en la casilla
+                // 1. Escribimos el número y avisamos al DOM (React/Vue)
                 imoInput.value = cleanImo;
-                
-                // 2. Avisar al sistema (y a React/Vue si aplica) de que el texto ha cambiado
                 imoInput.dispatchEvent(new Event('input', { bubbles: true }));
                 imoInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-                // 3. Simular la pulsación de la tecla Enter para que el buscador arranque
-                imoInput.dispatchEvent(new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    bubbles: true
-                }));
-                imoInput.dispatchEvent(new Event('blur', { bubbles: true }));
-
-                // 4. Alternativa/Complemento: Si hay un botón de búsqueda específico junto al input del IMO, simula el clic directamente:
-                const searchBtn = document.getElementById('btn-vessel-specs-real-2') ||
-                                  document.getElementById('header-vessel-search-btn') ||
-                                  document.getElementById('btn-ais-vessel-search');
-                if (searchBtn && typeof searchBtn.click === 'function') {
-                    searchBtn.click();
-                }
             }
 
-            // Opción A (Recomendada): Disparo directo de la función interna de búsqueda de SeaCharter
+            // 2. Disparo directo programático (Una sola llamada a la BD)
             if (typeof window !== 'undefined' && typeof window.handleManualVesselUpdate === 'function') {
                 window.handleManualVesselUpdate('imo', cleanImo);
-            }
-            const fetchFn = (typeof window !== 'undefined' && (window.fetchVesselByImo || window.fetchVesselSpecs)) ||
-                            (typeof fetchVesselByImo === 'function' ? fetchVesselByImo : null);
-            if (typeof fetchFn === 'function' && /^\d{7}$/.test(cleanImo)) {
-                void fetchFn(cleanImo);
+            } else {
+                const fetchFn = (typeof window !== 'undefined' && (window.fetchVesselByImo || window.fetchVesselSpecs)) ||
+                                (typeof fetchVesselByImo === 'function' ? fetchVesselByImo : null);
+                if (typeof fetchFn === 'function' && /^\d{7}$/.test(cleanImo)) {
+                    void fetchFn(cleanImo);
+                }
             }
         }
         // --------------------------------------------------------
@@ -1469,26 +1450,35 @@ async function executeActionableAiUpdateFields(actionObj) {
                 loadInput.dataset.draftCalcMode = "manual";
             }
         }
-        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            unlockAndStabilizePodInputs(dischargeRate);
-            updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "input-dischargeRate"], dischargeRate);
-            const dischInput = document.getElementById("rate-disch");
-            if (dischInput) {
-                dischInput.value = String(dischargeRate);
-                dischInput.readOnly = false;
-                dischInput.disabled = false;
-                dischInput.removeAttribute("readonly");
-                dischInput.removeAttribute("disabled");
-                dischInput.setAttribute("aria-readonly", "false");
-                dischInput.dataset.manualOverride = "true";
-                dischInput.dataset.draftCalcMode = "manual";
-                dischInput.dataset.podCalcMode = "manual";
-                delete dischInput.dataset.autoMetodoDescarga;
-                delete dischInput.dataset.autoCalculo;
-                delete dischInput.dataset.autoMetodo;
-                delete dischInput.dataset.frozen;
-                delete dischInput.dataset.calculoAutomatico;
-            }
+       if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+            setTimeout(() => {
+                unlockAndStabilizePodInputs(dischargeRate);
+                updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "input-dischargeRate"], dischargeRate);
+                const dischInput = document.getElementById("rate-disch");
+                if (dischInput) {
+                    dischInput.value = String(dischargeRate);
+                    dischInput.readOnly = false;
+                    dischInput.disabled = false;
+                    dischInput.removeAttribute("readonly");
+                    dischInput.removeAttribute("disabled");
+                    dischInput.setAttribute("aria-readonly", "false");
+                    dischInput.dataset.manualOverride = "true";
+                    dischInput.dataset.draftCalcMode = "manual";
+                    dischInput.dataset.podCalcMode = "manual";
+                    delete dischInput.dataset.autoMetodoDescarga;
+                    delete dischInput.dataset.autoCalculo;
+                    delete dischInput.dataset.autoMetodo;
+                    delete dischInput.dataset.frozen;
+                    delete dischInput.dataset.calculoAutomatico;
+                    
+                    // Forzar la actualización visual en React tras el retraso
+                    dischInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    dischInput.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+                
+                // Recalcular para que el resumen refleje los 1440 en lugar de los 8000
+                window.recalcularDiasPuerto?.();
+            }, 150);
         }
         if (typeof window.setRitmoManualIndicator === "function") {
             if (Number.isFinite(loadingRate) && loadingRate > 0) window.setRitmoManualIndicator("pol", true);
