@@ -128,7 +128,13 @@ class BrokerModeManagerClass {
   }
 
   set hasBaseCalculation(val) {
-    this.setHasBaseCalculation(val);
+    this._hasBaseCalculation = Boolean(val);
+    if (typeof window !== "undefined") {
+      window.__hasCerebroBaseCalculation = Boolean(val);
+    }
+    if (val && !this._calculoBase) {
+      this.captureCurrentCalculoBase();
+    }
   }
 
   get feedbackMessage() {
@@ -191,14 +197,19 @@ class BrokerModeManagerClass {
     return false;
   }
 
-  setHasBaseCalculation(val) {
-    this._hasBaseCalculation = Boolean(val);
-    if (typeof window !== "undefined") {
-      window.__hasCerebroBaseCalculation = Boolean(val);
+  setHasBaseCalculation(value) {
+    this.hasBaseCalculation = value;
+    if (value === true && typeof document !== 'undefined') {
+      // Mostrar la sugerencia en cuanto Cerebro.ia termina el cálculo inicial
+      const banner = document.getElementById('asistente-core-broker-banner');
+      if (banner) {
+          banner.classList.remove('hidden');
+          // Añadir un pequeño efecto de entrada
+          banner.classList.add('translate-y-2');
+          setTimeout(() => banner.classList.remove('translate-y-2'), 50);
+      }
     }
-    if (val && !this._calculoBase) {
-      this.captureCurrentCalculoBase();
-    }
+    this.notifySubscribers();
   }
 
   /**
@@ -472,6 +483,10 @@ class BrokerModeManagerClass {
         });
       } catch (_) {}
     });
+  }
+
+  notifySubscribers() {
+    this._notifyStateChange();
   }
 }
 

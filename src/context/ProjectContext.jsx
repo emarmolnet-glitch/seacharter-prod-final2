@@ -29,9 +29,19 @@ export function ProjectProvider({ children, initialRef = '' }) {
   activeRefRef.current = activeProjectRef;
 
   const isSyncingRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   const generateNewProjectRef = useCallback(() => {
-    return generateRandomProjectRef();
+    try {
+      if (retryCountRef.current >= maxRetries) {
+        return '';
+      }
+      retryCountRef.current += 1;
+      return generateRandomProjectRef() || '';
+    } catch (_) {
+      return '';
+    }
   }, []);
 
   const setActiveProjectRef = useCallback((newRef) => {
@@ -146,9 +156,19 @@ export function ProjectProvider({ children, initialRef = '' }) {
       return;
     }
 
+    if (retryCountRef.current >= maxRetries) {
+      setActiveProjectRef('');
+      return;
+    }
+    retryCountRef.current += 1;
+
     // Auto-generar nueva referencia única
-    const newRef = generateRandomProjectRef();
-    setActiveProjectRef(newRef);
+    try {
+      const newRef = generateRandomProjectRef();
+      setActiveProjectRef(newRef || '');
+    } catch (_) {
+      setActiveProjectRef('');
+    }
   }, []); // Strictly empty dependency array []
 
   // Exponer utilidades globales y escuchar cambios externos sin crear bucles

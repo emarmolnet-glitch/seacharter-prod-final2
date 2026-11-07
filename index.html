@@ -720,6 +720,8 @@
             const getCurrentReference = function() {
                 return activeCachedReference || readUrlReference() || readSessionReference() || '';
             };
+            let fallbackGenerationAttempts = 0;
+            const MAX_FALLBACK_ATTEMPTS = 3;
             const getActiveContractRef = function() {
                 if (activeCachedReference) {
                     return activeCachedReference;
@@ -738,6 +740,10 @@
                     writeSharedActiveSession(fromSession);
                     return fromSession;
                 }
+                if (fallbackGenerationAttempts >= MAX_FALLBACK_ATTEMPTS) {
+                    return '';
+                }
+                fallbackGenerationAttempts++;
                 const newRef = generateVoyageRef();
                 activeCachedReference = newRef;
                 writeSessionReference(newRef);
@@ -747,6 +753,9 @@
             };
             const setActiveContractRef = function(reference) {
                 const normalized = normalizeReference(reference);
+                if (normalized) {
+                    fallbackGenerationAttempts = 0;
+                }
                 if (!normalized) return getActiveContractRef();
                 const currentRef = getCurrentReference();
                 if (currentRef === normalized) {
@@ -17102,17 +17111,19 @@
         </div>
 
     <!-- ASISTENTE CORE: MODO BROKER BANNER -->
-    <aside id="asistente-core-broker-banner" class="hidden fixed top-4 right-4 z-[9990] max-w-lg rounded-xl border border-indigo-400/40 bg-slate-900/95 p-4 text-xs text-slate-100 shadow-2xl backdrop-blur-md transition-all duration-300" role="status" aria-live="polite">
+    <aside id="asistente-core-broker-banner" class="hidden fixed top-24 right-8 z-[50] max-w-[400px] rounded-xl border border-blue-200 bg-white p-4 shadow-xl transition-all duration-300 transform" role="status" aria-live="polite">
         <div class="flex items-start gap-3">
-            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600/30 text-base text-indigo-400">🤖</div>
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-base text-blue-600 border border-blue-100 shadow-sm">🤖</div>
             <div class="flex-1 pr-2">
-                <div class="mb-1 flex items-center gap-2">
-                    <span class="font-mono text-[10px] font-black uppercase tracking-wider text-indigo-400">Asistente Core</span>
-                    <span class="rounded bg-indigo-500/20 px-1.5 py-0.2 text-[9px] font-bold text-indigo-300">Modo Experto</span>
+                <div class="mb-2 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-xs uppercase tracking-wide text-slate-700">Asistente Core</span>
+                        <span class="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold text-indigo-700 uppercase tracking-wider">Modo Experto</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('asistente-core-broker-banner').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition p-1 rounded-md hover:bg-slate-100" aria-label="Cerrar notificación"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <p class="broker-banner-text text-[11.5px] leading-relaxed text-slate-200">Modo Broker activado. Si eres profesional y conoces los datos de tus barcos, tales como DWT, GT, LOA, BEAM, AÑO, CONSUMOS DE COMBUSTIBLES, PDA'S, puedes ajustar los parámetros necesarios en cualquier módulo y pulsar el boton 'Validar especificaciones / Calcular' para recalcular el TCE.</p>
+                <p class="broker-banner-text text-xs leading-relaxed text-slate-600 font-medium">Modo Broker activado. Si eres profesional y conoces los datos de tus barcos, tales como DWT, GT, LOA, BEAM, AÑO, CONSUMOS DE COMBUSTIBLES, PDA'S, puedes ajustar los parámetros necesarios en cualquier módulo y pulsar el boton 'Validar especificaciones / Calcular' para recalcular el TCE.</p>
             </div>
-            <button type="button" onclick="document.getElementById('asistente-core-broker-banner').classList.add('hidden')" class="text-slate-400 hover:text-white transition p-1" aria-label="Cerrar notificación">✕</button>
         </div>
     </aside>
 

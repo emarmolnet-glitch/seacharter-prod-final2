@@ -434,6 +434,9 @@
         return normalized;
     }
 
+    let fallbackGenerationAttempts = 0;
+    const MAX_FALLBACK_ATTEMPTS = 3;
+
     function getActiveContractRef() {
         const fromUrl = readUrlReference();
         if (fromUrl) {
@@ -453,6 +456,10 @@
         if (activeCachedReference) {
             return activeCachedReference;
         }
+        if (fallbackGenerationAttempts >= MAX_FALLBACK_ATTEMPTS) {
+            return '';
+        }
+        fallbackGenerationAttempts++;
         const generated = generateVoyageRef();
         activeCachedReference = generated;
         return persistReference(generated, false);
@@ -460,6 +467,9 @@
 
     function setActiveContractRef(reference) {
         const normalized = normalizeReference(reference);
+        if (normalized) {
+            fallbackGenerationAttempts = 0;
+        }
         if (!normalized) return getActiveContractRef();
         const currentRef = getCurrentReference();
         if (currentRef === normalized) {
@@ -500,6 +510,7 @@
     }
 
     function createNewReference(force = false) {
+        fallbackGenerationAttempts = 0;
         if (isInjectionLocked && !force) {
             return getActiveContractRef();
         }

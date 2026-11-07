@@ -30,8 +30,12 @@ function payloadTooLarge() {
 
 export default async (req: Request) => {
   if (req.method === "GET") {
-    const rows = await fetchFleetRows();
-    return Response.json({ success: true, session_sync: rows }, { headers });
+    try {
+      const rows = await fetchFleetRows();
+      return Response.json({ success: true, session_sync: rows }, { headers });
+    } catch {
+      return Response.json({ success: true, session_sync: [], fallback: true }, { status: 200 });
+    }
   }
 
   if (req.method !== "POST") {
