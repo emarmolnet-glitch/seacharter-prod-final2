@@ -129,6 +129,14 @@
             .global-splash__progress::after { animation-duration: 3s; }
         }
     </style>
+    <style>
+        .broker-modified { border-color: #6366f1 !important; background-color: #eef2ff !important; transition: all 0.3s ease; }
+        .broker-pulse { animation: pulse-broker 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important; }
+        @keyframes pulse-broker {
+            0%, 100% { opacity: 1; border-color: #4f46e5; box-shadow: 0 0 10px #4f46e5; }
+            50% { opacity: .7; border-color: transparent; box-shadow: none; }
+        }
+    </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -17120,7 +17128,7 @@
                         <span class="font-bold text-xs uppercase tracking-wide text-slate-700">Asistente Core</span>
                         <span class="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold text-indigo-700 uppercase tracking-wider">Modo Experto</span>
                     </div>
-                    <button type="button" onclick="document.getElementById('asistente-core-broker-banner').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition p-1 rounded-md hover:bg-slate-100" aria-label="Cerrar notificación"><i class="fa-solid fa-xmark"></i></button>
+                    <button type="button" onclick="window.sessionStorage.setItem('brokerBannerClosed', 'true'); document.getElementById('asistente-core-broker-banner').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition p-1 rounded-md hover:bg-slate-100" aria-label="Cerrar notificación"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <p class="broker-banner-text text-xs leading-relaxed text-slate-600 font-medium">Modo Broker activado. Si eres profesional y conoces los datos de tus barcos, tales como DWT, GT, LOA, BEAM, AÑO, CONSUMOS DE COMBUSTIBLES, PDA'S, puedes ajustar los parámetros necesarios en cualquier módulo y pulsar el boton 'Validar especificaciones / Calcular' para recalcular el TCE.</p>
             </div>

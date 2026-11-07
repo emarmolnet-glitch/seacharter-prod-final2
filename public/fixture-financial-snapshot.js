@@ -143,6 +143,40 @@
             if (identity[key] !== undefined) state[key] = identity[key];
             else delete state[key];
         }
+
+        // Leer directamente los valores activos del DOM para métodos y ritmos operativos (realidad viva)
+        if (typeof document !== 'undefined') {
+            const activeLoadMethodPill = document.querySelector('#pills_metodo_carga .method-pill-active, #pills_metodo_carga [aria-pressed="true"], #pills_metodo_carga [data-active="true"]');
+            const selectLoadEl = document.getElementById('metodo_carga');
+            const activeLoadMethod = activeLoadMethodPill?.textContent?.trim() || selectLoadEl?.selectedOptions?.[0]?.textContent?.trim() || selectLoadEl?.value;
+            if (activeLoadMethod) {
+                state.loadingMethod = activeLoadMethod;
+                state.methodPOL = activeLoadMethod;
+                state.loading_method = activeLoadMethod;
+                state.loadMethod = activeLoadMethod;
+            }
+
+            const activeDischMethodPill = document.querySelector('#pills_metodo_descarga .method-pill-active, #pills_metodo_descarga [aria-pressed="true"], #pills_metodo_descarga [data-active="true"]');
+            const selectDischEl = document.getElementById('metodo_descarga_pod');
+            const activeDischMethod = activeDischMethodPill?.textContent?.trim() || selectDischEl?.selectedOptions?.[0]?.textContent?.trim() || selectDischEl?.value;
+            if (activeDischMethod) {
+                state.dischargeMethod = activeDischMethod;
+                state.methodPOD = activeDischMethod;
+                state.discharge_method = activeDischMethod;
+            }
+
+            const domLoadRate = parseFloat(document.getElementById('rate-load')?.value || document.getElementById('input-loadRate')?.value);
+            if (Number.isFinite(domLoadRate) && domLoadRate > 0) {
+                state.loadRate = domLoadRate;
+                state.ratePOL = domLoadRate;
+            }
+
+            const domDischRate = parseFloat(document.getElementById('rate-disch')?.value || document.getElementById('input-dischargeRate')?.value);
+            if (Number.isFinite(domDischRate) && domDischRate > 0) {
+                state.dischargeRate = domDischRate;
+                state.ratePOD = domDischRate;
+            }
+        }
         if (state.cargoQty === undefined && state.cargo !== undefined) state.cargoQty = state.cargo;
         const validDisch = [state.dischargeRate, state.dischRate, state.ratePOD].map(Number).find(v => Number.isFinite(v) && v > 0);
         if (validDisch) state.dischargeRate = validDisch;
