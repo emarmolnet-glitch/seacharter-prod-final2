@@ -1450,35 +1450,29 @@ async function executeActionableAiUpdateFields(actionObj) {
                 loadInput.dataset.draftCalcMode = "manual";
             }
         }
-       if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
+        if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
             setTimeout(() => {
-                unlockAndStabilizePodInputs(dischargeRate);
-                updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "input-dischargeRate"], dischargeRate);
-                const dischInput = document.getElementById("rate-disch");
+                const dischInput = document.getElementById("rate-disch") || document.querySelector('[name="rate-disch"]');
                 if (dischInput) {
                     dischInput.value = String(dischargeRate);
-                    dischInput.readOnly = false;
-                    dischInput.disabled = false;
-                    dischInput.removeAttribute("readonly");
-                    dischInput.removeAttribute("disabled");
-                    dischInput.setAttribute("aria-readonly", "false");
                     dischInput.dataset.manualOverride = "true";
-                    dischInput.dataset.draftCalcMode = "manual";
                     dischInput.dataset.podCalcMode = "manual";
-                    delete dischInput.dataset.autoMetodoDescarga;
-                    delete dischInput.dataset.autoCalculo;
-                    delete dischInput.dataset.autoMetodo;
-                    delete dischInput.dataset.frozen;
-                    delete dischInput.dataset.calculoAutomatico;
-                    
-                    // Forzar la actualización visual en React tras el retraso
+                    const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+                    if (nativeSet) nativeSet.call(dischInput, String(dischargeRate));
                     dischInput.dispatchEvent(new Event("input", { bubbles: true }));
                     dischInput.dispatchEvent(new Event("change", { bubbles: true }));
                 }
                 
-                // Recalcular para que el resumen refleje los 1440 en lugar de los 8000
+                const podState = {
+                    ritmoMode_pod: "manual", podCalcMode: "manual",
+                    dischRate: dischargeRate, dischargeRate: dischargeRate, ratePOD: dischargeRate
+                };
+
+                if (window.State) Object.assign(window.State, podState);
+                if (window.SeaCharterStore?.set) window.SeaCharterStore.set(podState, { force: true });
+                
                 window.recalcularDiasPuerto?.();
-            }, 150);
+            }, 300);
         }
         if (typeof window.setRitmoManualIndicator === "function") {
             if (Number.isFinite(loadingRate) && loadingRate > 0) window.setRitmoManualIndicator("pol", true);

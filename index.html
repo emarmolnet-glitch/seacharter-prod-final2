@@ -65570,14 +65570,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
          * ya que no se necesitan camiones para descargar un Cement Carrier.
          */
         function autoSelectCementCarrierDischargeMethod(options = {}) {
+            const productEl = document.getElementById('cargo-product');
+            const productVal = productEl ? productEl.value.toLowerCase() : '';
+            if (productVal.includes('big bag') || productVal.includes('saco') || productVal.includes('palet')) return false;
+
+            const rateDischInput = document.getElementById('rate-disch') || document.querySelector('[name="rate-disch"]');
+            if (rateDischInput && (rateDischInput.dataset.manualOverride === "true" || window.State?.podCalcMode === "manual")) return false;
+
             const { force = false } = options;
             const categoryEl = document.getElementById('cargo-type');
-            const productEl = document.getElementById('cargo-product');
             const podMethodEl = document.getElementById('metodo_descarga_pod');
             if (!podMethodEl) return false;
 
             const categoryVal = String(categoryEl?.value || window.State?.cargoType || '').trim().toLowerCase();
-            const productVal = String(productEl?.value || window.State?.cargoProduct || window.State?.productoEspecifico || '').trim().toLowerCase();
             const manualVal = String(document.getElementById('cargo-type-manual')?.value || '').trim().toLowerCase();
             const badgeEl = document.getElementById('vessel-badge');
             const badgeText = String(badgeEl?.innerText || '').trim().toLowerCase();
@@ -65631,7 +65636,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             // Desactivar overrides manuales residuales del módulo de camiones en POD
-            const rateDischInput = document.getElementById('rate-disch');
             if (rateDischInput) {
                 delete rateDischInput.dataset.manualOverride;
                 rateDischInput.dataset.autoMetodoDescarga = 'bombas_neumaticas';

@@ -40,7 +40,7 @@ test('autoSelectCementCarrierDischargeMethod switches POD from Semirremolque Neu
     { value: 'camion_tolva', text: 'Semirremolque Neumático' }
   ];
   const rateDischEl = element('rate-disch', '5184');
-  rateDischEl.dataset = { manualOverride: 'true', autoMetodoDescarga: 'camion_tolva' };
+  rateDischEl.dataset = { autoMetodoDescarga: 'camion_tolva' };
   const moduloPodEl = element('modulo-camion-tolva-pod');
   moduloPodEl.hidden = false;
   element('camion-tolva-pod-capacidad-mt', '27');
@@ -208,4 +208,29 @@ test('cargo-type and cargo-product onchange handlers trigger autoSelectCementCar
 
   assert.match(cargoTypeMatch[1], /autoSelectCementCarrierDischargeMethod/);
   assert.match(cargoProductMatch[1], /autoSelectCementCarrierDischargeMethod/);
+});
+
+test('autoSelectCementCarrierDischargeMethod blocks execution when manualOverride is true or podCalcMode is manual', () => {
+  const elements = new Map();
+  const element = (id, value = '') => {
+    const el = { id, value, dataset: {}, classList: { add: () => {}, remove: () => {} } };
+    elements.set(id, el);
+    return el;
+  };
+
+  element('cargo-type', 'Minerales y Construcción');
+  element('cargo-product', 'Cemento a granel');
+  const rateDischEl = element('rate-disch', '1440');
+  rateDischEl.dataset = { manualOverride: 'true' };
+
+  const context = {
+    window: { State: { podCalcMode: 'manual' } },
+    document: { getElementById: (id) => elements.get(id) || null, querySelector: (sel) => null }
+  };
+
+  const fnMatch = indexSource.match(/function autoSelectCementCarrierDischargeMethod\([\s\S]*?\n        \}/);
+  vm.runInNewContext(`${fnMatch[0]}; window.autoSelectCementCarrierDischargeMethod = autoSelectCementCarrierDischargeMethod;`, context);
+  const result = context.window.autoSelectCementCarrierDischargeMethod();
+
+  assert.equal(result, false, 'Must block execution when manualOverride or podCalcMode is manual');
 });
