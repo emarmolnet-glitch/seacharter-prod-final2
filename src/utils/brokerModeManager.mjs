@@ -200,13 +200,15 @@ class BrokerModeManagerClass {
   setHasBaseCalculation(value) {
     this.hasBaseCalculation = value;
     if (value === true && typeof document !== 'undefined') {
-      // Mostrar la sugerencia en cuanto Cerebro.ia termina el cálculo inicial
-      const banner = document.getElementById('asistente-core-broker-banner');
-      if (banner) {
-          banner.classList.remove('hidden');
-          // Añadir un pequeño efecto de entrada
-          banner.classList.add('translate-y-2');
-          setTimeout(() => banner.classList.remove('translate-y-2'), 50);
+      if (!window.sessionStorage.getItem('brokerBannerClosed')) {
+        // Mostrar la sugerencia en cuanto Cerebro.ia termina el cálculo inicial
+        const banner = document.getElementById('asistente-core-broker-banner');
+        if (banner) {
+            banner.classList.remove('hidden');
+            // Añadir un pequeño efecto de entrada
+            banner.classList.add('translate-y-2');
+            setTimeout(() => banner.classList.remove('translate-y-2'), 50);
+        }
       }
     }
     this.notifySubscribers();
@@ -296,13 +298,15 @@ class BrokerModeManagerClass {
     }
 
     // 2. Banner in Asistente Core / Header
-    const banner = document.getElementById("asistente-core-broker-banner");
-    if (banner) {
-      banner.classList.remove("hidden");
-      banner.style.display = "flex";
-      const textEl = banner.querySelector(".broker-banner-text") || banner;
-      if (textEl && textEl !== banner) {
-        textEl.textContent = BROKER_MODE_ACTIVATED_MESSAGE;
+    if (typeof window === 'undefined' || !window.sessionStorage?.getItem('brokerBannerClosed')) {
+      const banner = document.getElementById("asistente-core-broker-banner");
+      if (banner) {
+        banner.classList.remove("hidden");
+        banner.style.display = "flex";
+        const textEl = banner.querySelector(".broker-banner-text") || banner;
+        if (textEl && textEl !== banner) {
+          textEl.textContent = BROKER_MODE_ACTIVATED_MESSAGE;
+        }
       }
     }
 
@@ -324,8 +328,8 @@ class BrokerModeManagerClass {
     this._feedbackMessage = BROKER_MODE_APPLIED_FEEDBACK;
 
     if (typeof document !== 'undefined') {
-      const btnCalcular = document.querySelector('button[onclick*="handleMasterValidationAndCalculate"]') || document.querySelector('button[onclick*="calcular"]') || document.getElementById('btn-calcular');
-      if (btnCalcular) btnCalcular.classList.remove('animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400');
+      const buttons = document.querySelectorAll('#btn-validate-section2-executive, #btn-validate-section2');
+      buttons.forEach(btn => btn.classList.remove('broker-pulse', 'animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400'));
     }
 
     if (typeof window === "undefined") return;
@@ -439,13 +443,16 @@ class BrokerModeManagerClass {
 
     if (typeof document !== 'undefined') {
       // 1. Resaltar el input modificado
-      const el = document.getElementById(inputData.id);
-      if (el) el.classList.add('border-indigo-500', 'border-2', 'bg-indigo-50');
+      const el = (target && target.classList) ? target : document.getElementById(inputData?.id);
+      if (el && el.classList) {
+        el.classList.add('broker-modified', 'border-indigo-500', 'border-2', 'bg-indigo-50');
+      }
 
       // 2. Llamar la atención sobre el botón de calcular
-      // Busca el botón que lanza handleMasterValidationAndCalculate o contiene la palabra Calcular
-      const btnCalcular = document.querySelector('button[onclick*="handleMasterValidationAndCalculate"]') || document.querySelector('button[onclick*="calcular"]') || document.getElementById('btn-calcular');
-      if (btnCalcular) btnCalcular.classList.add('animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400');
+      const btnsCalcular = document.querySelectorAll('#btn-validate-section2-executive, #btn-validate-section2');
+      btnsCalcular.forEach(btn => {
+        btn.classList.add('broker-pulse', 'animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400');
+      });
     }
   }
 

@@ -231,8 +231,10 @@ export function extractStructuredCoreProData() {
   const b2_has_scrubber = safeGetChecked('#vessel-has-scrubber-yes', false);
   const b2_rate_load = safeGetNumber('#rate-load', safeGetNumber('#exec-load-rate', 0));
   const b2_rate_disch = safeGetNumber('#rate-disch', safeGetNumber('#exec-disch-rate', 0));
-  const b2_load_method = safeGetText('#metodo_carga', 'Grúas del Buque (Ship Cranes)');
-  const b2_disch_method = safeGetText('#metodo_descarga', 'Medios de Tierra (Shore Cranes)');
+  const activeLoadPill = safeQuery('#pills_metodo_carga .method-pill-active, #pills_metodo_carga [aria-pressed="true"], #pills_metodo_carga [data-active="true"]');
+  const b2_load_method = (activeLoadPill ? activeLoadPill.textContent.trim() : null) || safeQuery('#metodo_carga')?.selectedOptions?.[0]?.textContent?.trim() || safeGetText('#metodo_carga', 'Grúas del Buque (Ship Cranes)');
+  const activeDischPill = safeQuery('#pills_metodo_descarga .method-pill-active, #pills_metodo_descarga [aria-pressed="true"], #pills_metodo_descarga [data-active="true"]');
+  const b2_disch_method = (activeDischPill ? activeDischPill.textContent.trim() : null) || safeQuery('#metodo_descarga_pod')?.selectedOptions?.[0]?.textContent?.trim() || safeGetText('#metodo_descarga_pod', safeGetText('#metodo_descarga', 'Medios de Tierra (Shore Cranes)'));
   const b2_stevedoring_terms = safeGetText('#terms-stevedoring', 'FIOS - Free In and Out Stowed');
   const b2_cleaning = safeGetText('#vessel-hold-cleaning', 'Grain Clean / Holds inspected and passed prior loading');
 
