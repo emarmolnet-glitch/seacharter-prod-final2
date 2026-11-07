@@ -6680,7 +6680,7 @@ export function ForwarderWorkspace() {
 
             <div
               id="report-actions-center-toolbar"
-              className="fixed bottom-[2rem] left-1/2 -translate-x-1/2 flex items-center justify-center gap-4 z-[999] print:hidden select-none"
+              className="fixed bottom-6 right-8 flex items-center gap-4 z-[9999] print:hidden select-none"
               style={{
                 position: 'fixed',
                 bottom: '2rem',

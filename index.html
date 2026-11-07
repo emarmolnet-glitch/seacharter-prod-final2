@@ -11476,6 +11476,12 @@
                             <h2 id="summary-header-title" data-i18n="calc_summary_title" class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-pie mr-2"></i> 6. RESUMEN DE OPERACIÓN</h2>
                         </div>
 
+                        <!-- Feedback de Modo Broker Gestionado por Asistente Core -->
+                        <div id="broker-mode-results-feedback" data-testid="broker-mode-results-feedback" class="hidden mb-3 rounded-lg border border-teal-500/40 bg-teal-950/80 p-3 text-xs font-semibold text-teal-200 shadow-sm flex items-center gap-2" role="status" aria-live="polite">
+                            <span class="text-base text-teal-400">🤖</span>
+                            <span class="broker-mode-feedback-message">Modo Broker aplicado con éxito. Delta de margen actualizado.</span>
+                        </div>
+
                         <div class="flex justify-between items-center mb-1 text-sm mono">
                             <span id="label-days-mar-port" class="text-[#334155] font-bold">Días Mar + Puerto + Margen Clima:</span>
                             <span id="res-days-total" class="font-bold text-[#1E3A8A] text-base">0.00</span>
@@ -12536,6 +12542,12 @@
                                 <i class="fa-solid fa-comments-dollar mr-2 text-cyan-600"></i> 10. SIMULADOR DE NEGOCIACIÓN Y CONTRAOFERTAS
                             </h2>
                             <span class="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-cyan-700">Fletador</span>
+                        </div>
+
+                        <!-- Feedback de Modo Broker Gestionado por Asistente Core -->
+                        <div id="broker-mode-negotiation-feedback" data-testid="broker-mode-negotiation-feedback" class="hidden mb-3 rounded-lg border border-teal-500/40 bg-teal-950/80 p-3 text-xs font-semibold text-teal-200 shadow-sm flex items-center gap-2" role="status" aria-live="polite">
+                            <span class="text-base text-teal-400">🤖</span>
+                            <span class="broker-mode-feedback-message">Modo Broker aplicado con éxito. Delta de margen actualizado.</span>
                         </div>
 
                         <p class="mb-4 max-w-3xl text-xs font-semibold leading-relaxed text-slate-600">Compara la petición del armador con tu contraoferta y mide el ahorro potencial sin cruzar el coste operativo mínimo del viaje.</p>
@@ -17088,6 +17100,21 @@
 
             </div>
         </div>
+
+    <!-- ASISTENTE CORE: MODO BROKER BANNER -->
+    <aside id="asistente-core-broker-banner" class="hidden fixed top-4 right-4 z-[9990] max-w-lg rounded-xl border border-indigo-400/40 bg-slate-900/95 p-4 text-xs text-slate-100 shadow-2xl backdrop-blur-md transition-all duration-300" role="status" aria-live="polite">
+        <div class="flex items-start gap-3">
+            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600/30 text-base text-indigo-400">🤖</div>
+            <div class="flex-1 pr-2">
+                <div class="mb-1 flex items-center gap-2">
+                    <span class="font-mono text-[10px] font-black uppercase tracking-wider text-indigo-400">Asistente Core</span>
+                    <span class="rounded bg-indigo-500/20 px-1.5 py-0.2 text-[9px] font-bold text-indigo-300">Modo Experto</span>
+                </div>
+                <p class="broker-banner-text text-[11.5px] leading-relaxed text-slate-200">Modo Broker activado. Si eres profesional y conoces los datos de tus barcos, tales como DWT, GT, LOA, BEAM, AÑO, CONSUMOS DE COMBUSTIBLES, PDA'S, puedes ajustar los parámetros necesarios en cualquier módulo y pulsar el boton 'Validar especificaciones / Calcular' para recalcular el TCE.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('asistente-core-broker-banner').classList.add('hidden')" class="text-slate-400 hover:text-white transition p-1" aria-label="Cerrar notificación">✕</button>
+        </div>
+    </aside>
 
     <!-- TOAST NOTIFICATION -->
     <div id="toast" class="fixed right-4 md:right-6 max-w-[min(42rem,calc(100vw-2rem))] bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[200] flex items-start gap-2 text-xs leading-relaxed" role="status" aria-live="polite">
@@ -35073,6 +35100,22 @@ function createRouteAnchorElement(type) {
                     }
                 }
                 calculationSucceeded = true;
+                if (typeof window !== 'undefined') {
+                    if (window.BrokerModeManager) {
+                        window.BrokerModeManager.setHasBaseCalculation(true);
+                        if (window.BrokerModeManager.getIsBrokerMode()) {
+                            window.BrokerModeManager.notifyBrokerModeApplied();
+                        }
+                    } else if (window.isBrokerMode) {
+                        const m6 = document.getElementById('broker-mode-results-feedback');
+                        if (m6) { m6.classList.remove('hidden'); m6.style.display = 'flex'; }
+                        const m10 = document.getElementById('broker-mode-negotiation-feedback');
+                        if (m10) { m10.classList.remove('hidden'); m10.style.display = 'flex'; }
+                        if (typeof window.agregarMensajeAsistente === 'function') {
+                            window.agregarMensajeAsistente('Modo Broker aplicado con éxito. Delta de margen actualizado.', { aiType: 'local' });
+                        }
+                    }
+                }
                 return calculationResult;
             } catch (error) {
                 console.error('Error en el cálculo maestro de la operación:', error);

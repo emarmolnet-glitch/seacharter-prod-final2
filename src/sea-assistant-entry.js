@@ -5,6 +5,11 @@ import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 import { getApiUrl } from "./utils/apiConfig.js";
 import { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP } from "./utils/speechVoiceHelper.js";
+import {
+  BrokerModeManager,
+  BROKER_MODE_ACTIVATED_MESSAGE,
+  BROKER_MODE_APPLIED_FEEDBACK,
+} from "./utils/brokerModeManager.js";
 
 export { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP };
 
@@ -1519,6 +1524,13 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
         
         console.log("✅ [Cerebro.ia/update_fields] Inyección completada", p);
+
+        if (typeof BrokerModeManager !== "undefined") {
+            BrokerModeManager.setHasBaseCalculation(true);
+            if (BrokerModeManager.getIsBrokerMode()) {
+                BrokerModeManager.notifyBrokerModeApplied();
+            }
+        }
         
         return true;
     } catch (error) {
@@ -2810,6 +2822,12 @@ const fileInput = root.querySelector("#sca-file-input");
       const isSuccessfulCalculation = isCalculatorUpdate && (!actionResult || actionResult.error !== true);
 
       if (wasCerebro && isSuccessfulCalculation) {
+        if (typeof BrokerModeManager !== "undefined") {
+          BrokerModeManager.setHasBaseCalculation(true);
+          if (BrokerModeManager.getIsBrokerMode()) {
+            BrokerModeManager.notifyBrokerModeApplied();
+          }
+        }
         setActiveAgent("core");
         const availability = await evaluateVesselAvailability({ action, actionResult, response });
         if (availability.hasViableVessels === false || availability.vesselsCount === 0 || availability.status === "empty" || availability.status === "null") {
@@ -3142,7 +3160,16 @@ export const AsistenteCore = {
   isNoVesselsError,
   setActiveAgent,
   updateAiUI,
+  isBrokerMode: () => BrokerModeManager.getIsBrokerMode(),
+  setIsBrokerMode: (val) => BrokerModeManager.setIsBrokerMode(val),
+  getCalculoBase: () => BrokerModeManager.getCalculoBase(),
+  activateBrokerMode: (reason) => BrokerModeManager.activateBrokerMode(reason),
+  notifyBrokerModeApplied: (opts) => BrokerModeManager.notifyBrokerModeApplied(opts),
 };
+
+if (typeof document !== "undefined") {
+  BrokerModeManager.attachUniversalInputListeners(document);
+}
 
 if (typeof document !== "undefined") {
   const handleUserPodRateInteraction = (event) => {

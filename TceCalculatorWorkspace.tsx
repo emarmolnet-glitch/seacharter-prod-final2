@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { voyageStore } from './src/stores/voyage-store.js';
 import { getApiUrl } from './src/utils/apiConfig.js';
 import {
+  BrokerModeManager,
+  BROKER_MODE_ACTIVATED_MESSAGE,
+  BROKER_MODE_APPLIED_FEEDBACK,
+} from './src/utils/brokerModeManager.js';
+import {
   useDataBridgeSpotConnection,
   getMarketSpeedVesselClass,
   extractTheoreticalSpotTce,
@@ -1523,6 +1528,8 @@ export function ReverseTceCalculator({
   const results = useMemo(() => calculateReverseTceResults(values), [values, renderRefreshTick]);
 
   const updateValue = (key: keyof ReverseCalculatorState, nextValue: string) => {
+    BrokerModeManager.handleInputInteraction({ id: `reverse-${key}`, name: key, value: nextValue });
+
     if (isSyncEnabled && SYNCED_REVERSE_FIELDS.has(key)) {
       return;
     }
@@ -1540,6 +1547,8 @@ export function ReverseTceCalculator({
   };
 
   const updateBunkerPrice = (key: 'vlsfoPrice' | 'ifoPrice' | 'mgoPrice', nextValue: string) => {
+    BrokerModeManager.handleInputInteraction({ id: `reverse-${key}`, name: key, value: nextValue });
+
     if (isSyncEnabled) {
       return;
     }
@@ -2387,6 +2396,8 @@ export function CostPlusCalculator({
   }, [routeSyncData]);
 
   const updateNumber = (key: CostPlusNumericField, nextValue: string) => {
+    BrokerModeManager.handleInputInteraction({ id: `cost-plus-${key}`, name: key, value: nextValue });
+
     setValues((current) => ({
       ...current,
       [key]: nextValue === '' ? '' : Number(nextValue),
@@ -2734,9 +2745,24 @@ export default function TceCalculatorWorkspace({
 }: ReverseTceCalculatorProps) {
   const [isReverseMode, setIsReverseMode] = useState(false);
   const [calculationRefreshSignal, setCalculationRefreshSignal] = useState(0);
+  const [isBrokerMode, setIsBrokerMode] = useState(() => BrokerModeManager.getIsBrokerMode());
+  const [calculoBase, setCalculoBase] = useState<Record<string, unknown> | null>(() => BrokerModeManager.getCalculoBase());
+  const [brokerFeedback, setBrokerFeedback] = useState<string | null>(() => BrokerModeManager.feedbackMessage);
+
+  useEffect(() => {
+    const unsub = BrokerModeManager.subscribe((state) => {
+      setIsBrokerMode(state.isBrokerMode);
+      setCalculoBase(state.calculoBase as Record<string, unknown> | null);
+      setBrokerFeedback(state.feedbackMessage);
+    });
+    return unsub;
+  }, []);
 
   const forceRefresh = () => {
     setCalculationRefreshSignal((current) => current + 1);
+    if (isBrokerMode) {
+      BrokerModeManager.notifyBrokerModeApplied();
+    }
   };
 
   const selectMode = (nextIsReverseMode: boolean) => {
@@ -3032,6 +3058,30 @@ export default function TceCalculatorWorkspace({
   return (
     <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
       <FleetIntelligenceLibraryPanel />
+
+      {/* Modo Broker Banner & Feedback Indicator */}
+      {isBrokerMode && (
+        <div
+          id="workspace-broker-mode-banner"
+          data-testid="workspace-broker-mode-banner"
+          className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/90 p-3 text-xs text-indigo-950 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base text-indigo-600">🤖</span>
+            <span className="font-bold text-indigo-900">
+              Modo Broker Activo
+            </span>
+            <span className="rounded bg-indigo-200/80 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-indigo-800">
+              Modo Experto
+            </span>
+          </div>
+          {brokerFeedback && (
+            <span className="font-bold text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-md border border-emerald-300">
+              {brokerFeedback}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
         <div
