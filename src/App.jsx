@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
-import GlobalMadreDrawer, {
+import {
+  default as GlobalMadreDrawer,
   SEACHARTER_DOM_DICTIONARY,
   capturarDomModuloActivo,
   detectarModuloActual,
@@ -655,6 +656,19 @@ export function useHeaderVisibility(defaultVisible = true) {
 
 import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
 
+export default function App(props) {
+  const [isMadreOpen, setIsMadreOpen] = useState(false);
+
+  return (
+    <HashRouter>
+      <ProjectProvider>
+        <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
+        <AppLayout {...props} isMadreOpen={isMadreOpen} setIsMadreOpen={setIsMadreOpen} />
+      </ProjectProvider>
+    </HashRouter>
+  );
+}
+
 export function AppLayout({ children }) {
   const [currentView, setCurrentView] = useState(() => (typeof window !== 'undefined' ? window.currentView || '' : ''));
   const { isHeaderVisible } = useHeaderVisibility(true);
@@ -691,19 +705,6 @@ export function AppLayout({ children }) {
         children
       )}
     </div>
-  );
-}
-
-export default function App(props) {
-  const [isMadreOpen, setIsMadreOpen] = useState(false);
-
-  return (
-    <HashRouter>
-      <ProjectProvider>
-        <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
-        <AppLayout {...props} isMadreOpen={isMadreOpen} setIsMadreOpen={setIsMadreOpen} />
-      </ProjectProvider>
-    </HashRouter>
   );
 }
 
