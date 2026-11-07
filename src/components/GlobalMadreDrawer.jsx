@@ -1027,35 +1027,48 @@ export function GlobalMadreDrawer({
     setInputValue('');
     setIsLoading(true);
 
-    // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual
-    if (SCAN_COMMAND_REGEX.test(queryText)) {
+    // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual y ejecuta escaneo
+    const isScanCommand = SCAN_COMMAND_REGEX.test(queryText);
+
+    let scanData = null;
+    if (isScanCommand) {
       triggerLaserScanEffect();
-      const pendingMessage = typeof getScanPendingMessage === 'function'
-        ? getScanPendingMessage(typeof window !== 'undefined' ? window.State : {})
-        : null;
-      if (pendingMessage) {
-        const pendingAssistantMessage = {
-          id: Date.now() + 1,
-          sender: 'assistant',
-          role: 'assistant',
-          text: pendingMessage,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, pendingAssistantMessage]);
-        setIsLoading(false);
-        (async () => {
-          try {
-            if (voiceRequestVersion !== playbackVersionRef.current) return;
-            await speakText(pendingMessage, typeof window !== 'undefined' ? window.State : {});
-          } catch (voiceErr) {
-            console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
-          }
-        })();
-        return;
+      try {
+        if (typeof window !== 'undefined' && typeof window.ejecutarEscaneoCompleto === 'function') {
+          scanData = await window.ejecutarEscaneoCompleto();
+        } else if (typeof ejecutarEscaneoCompleto === 'function') {
+          scanData = await ejecutarEscaneoCompleto();
+        }
+      } catch (scanErr) {
+        console.warn('[MADRE Scan] Error al ejecutar escaneo completo:', scanErr);
+      }
+
+      if (!hasOperationalInputData()) {
+        const pendingMessage = typeof getScanPendingMessage === 'function'
+          ? getScanPendingMessage(typeof window !== 'undefined' ? window.State : {})
+          : PENDING_OPERATION_MESSAGE;
+        if (pendingMessage) {
+          const pendingAssistantMessage = {
+            id: Date.now() + 1,
+            sender: 'assistant',
+            role: 'assistant',
+            text: pendingMessage,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages((prev) => [...prev, pendingAssistantMessage]);
+          setIsLoading(false);
+          (async () => {
+            try {
+              if (voiceRequestVersion !== playbackVersionRef.current) return;
+              await speakText(pendingMessage, typeof window !== 'undefined' ? window.State : {});
+            } catch (voiceErr) {
+              console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
+            }
+          })();
+          return;
+        }
       }
     }
-
-    const isScanCommand = SCAN_COMMAND_REGEX.test(queryText);
 
     const urlParams = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search) : { get: () => null };
     const projectRef = (urlParams.get && urlParams.get('ref')) || (typeof window !== 'undefined' && window.location?.hash?.match(/ref=([^&]+)/)?.[1]) || "RDM/2026-TBN";
@@ -1138,11 +1151,158 @@ export function GlobalMadreDrawer({
       payload.context.dischargeRate = contextoUI.dischargeRate || 0;
     }
 
+    // Inyección directa del resultado del escáner en tiempo real (sobrescribe datos viejos/congelados)
+    if (scanData && scanData.datos) {
+      payload.contexto_ui = payload.contexto_ui || {};
+      payload.contexto_ui.escaneo_estructurado = scanData.datos;
+      payload.contexto_ui.modulos_1_a_10 = scanData.datos.bloques || payload.contexto_ui.modulos_1_a_10;
+      payload.contexto_ui.resumen_operativo = scanData.datos.resumen || payload.contexto_ui.resumen_operativo;
+
+      const b1 = scanData.datos.bloques?.bloque_1_derrota_puertos;
+      const b2 = scanData.datos.bloques?.bloque_2_buque_carga_limpieza;
+      const b6 = scanData.datos.bloques?.bloque_6_resumen_operacion_costes;
+      const b10 = scanData.datos.bloques?.bloque_10_simulador_negociacion_contraofertas;
+
+      // 1. Variable clave: cargoQty
+      if (b2?.toneladas_carga != null && Number(b2.toneladas_carga) > 0) {
+        const qty = Number(b2.toneladas_carga);
+        payload.cargoQty = qty;
+        payload.tonnage = qty;
+        payload.cargo_qty = qty;
+        payload.contexto_ui.cargoQty = qty;
+        payload.contexto_ui.tonnage = qty;
+        payload.contexto_ui.cargo_qty = qty;
+        if (!payload.contexto_ui.parametros_activos) payload.contexto_ui.parametros_activos = {};
+        payload.contexto_ui.parametros_activos.cargoQty = qty;
+        if (payload.context) payload.context.cargoQty = qty;
+        if (payload.viaje) {
+          payload.viaje.cargoQty = qty;
+          payload.viaje.tonnage = qty;
+        }
+      }
+
+      // 2. Variable clave: mercancia / commodity
+      const mercancia = b2?.commodity || b2?.categoria_carga;
+      if (mercancia) {
+        payload.commodity = mercancia;
+        payload.mercancia = mercancia;
+        payload.cargoType = mercancia;
+        payload.contexto_ui.commodity = mercancia;
+        payload.contexto_ui.mercancia = mercancia;
+        payload.contexto_ui.cargoType = mercancia;
+        if (payload.context) {
+          payload.context.commodity = mercancia;
+          payload.context.mercancia = mercancia;
+        }
+        if (payload.viaje) {
+          payload.viaje.commodity = mercancia;
+          payload.viaje.cargoType = mercancia;
+        }
+      }
+
+      // 3. Variable clave: métodos operativos
+      const metodoCarga = b2?.metodo_carga;
+      const metodoDescarga = b2?.metodo_descarga;
+      if (metodoCarga) {
+        payload.metodo_carga = metodoCarga;
+        payload.contexto_ui.metodo_carga = metodoCarga;
+      }
+      if (metodoDescarga) {
+        payload.metodo_descarga = metodoDescarga;
+        payload.contexto_ui.metodo_descarga = metodoDescarga;
+      }
+      payload.metodos_operativos = {
+        metodo_carga: metodoCarga || payload.metodo_carga || '',
+        metodo_descarga: metodoDescarga || payload.metodo_descarga || ''
+      };
+      payload.contexto_ui.metodos_operativos = payload.metodos_operativos;
+
+      if (b2?.ritmo_carga_tpd != null && Number(b2.ritmo_carga_tpd) > 0) {
+        const rc = Number(b2.ritmo_carga_tpd);
+        payload.loadRate = rc;
+        payload.loading_rate = rc;
+        payload.ratePOL = rc;
+        payload.ritmo_carga = rc;
+        payload.ritmo_carga_tpd = rc;
+        payload.contexto_ui.loadRate = rc;
+        payload.contexto_ui.loading_rate = rc;
+        payload.contexto_ui.ratePOL = rc;
+        payload.contexto_ui.ritmo_carga = rc;
+        payload.contexto_ui.ritmo_carga_tpd = rc;
+        if (payload.viaje) {
+          payload.viaje.loadRate = rc;
+          payload.viaje.loadingRate = rc;
+          payload.viaje.ratePOL = rc;
+          payload.viaje.ritmo_carga = rc;
+        }
+        if (payload.context) payload.context.loadRate = rc;
+      }
+
+      if (b2?.ritmo_descarga_tpd != null && Number(b2.ritmo_descarga_tpd) > 0) {
+        const rd = Number(b2.ritmo_descarga_tpd);
+        payload.dischargeRate = rd;
+        payload.discharge_rate = rd;
+        payload.ratePOD = rd;
+        payload.ritmo_descarga = rd;
+        payload.ritmo_descarga_tpd = rd;
+        payload.contexto_ui.dischargeRate = rd;
+        payload.contexto_ui.discharge_rate = rd;
+        payload.contexto_ui.ratePOD = rd;
+        payload.contexto_ui.ritmo_descarga = rd;
+        payload.contexto_ui.ritmo_descarga_tpd = rd;
+        if (payload.viaje) {
+          payload.viaje.dischargeRate = rd;
+          payload.viaje.ratePOD = rd;
+          payload.viaje.ritmo_descarga = rd;
+        }
+        if (payload.context) payload.context.dischargeRate = rd;
+      }
+
+      // Puertos y derrotas
+      if (b1?.pol) {
+        payload.pol = b1.pol;
+        payload.port_pol = b1.pol;
+        payload.contexto_ui.pol = b1.pol;
+        payload.contexto_ui.port_pol = b1.pol;
+        if (payload.context) payload.context.pol = b1.pol;
+        if (payload.viaje) payload.viaje.pol = b1.pol;
+      }
+      if (b1?.pod) {
+        payload.pod = b1.pod;
+        payload.port_pod = b1.pod;
+        payload.contexto_ui.pod = b1.pod;
+        payload.contexto_ui.port_pod = b1.pod;
+        if (payload.context) payload.context.pod = b1.pod;
+        if (payload.viaje) payload.viaje.pod = b1.pod;
+      }
+
+      // Break-even y flete
+      if (b6?.break_even_usd_mt != null && Number(b6.break_even_usd_mt) > 0) {
+        const be = Number(b6.break_even_usd_mt);
+        payload.breakEven = be;
+        payload.breakEvenUnitario = be;
+        payload.contexto_ui.breakEvenUnitario = be;
+        if (!payload.contexto_ui.parametros_activos) payload.contexto_ui.parametros_activos = {};
+        payload.contexto_ui.parametros_activos.breakEven = be;
+      }
+      if (b10?.flete_venta_fletador_mt != null && Number(b10.flete_venta_fletador_mt) > 0) {
+        const fv = Number(b10.flete_venta_fletador_mt);
+        payload.fleteUnitario = fv;
+        payload.contexto_ui.fleteUnitario = fv;
+      }
+      if (b10?.tce_obtenido_usd_dia != null) {
+        const tce = Number(b10.tce_obtenido_usd_dia);
+        payload.tceDiario = tce;
+        payload.contexto_ui.tceDiario = tce;
+      }
+    }
+
     const stateForVoice = {
       ...(typeof window !== 'undefined' ? window.State : {}),
-      breakEven: contextoUI.parametros_activos?.breakEven || contextoUI.breakEvenUnitario || 0,
-      cargoQty: contextoUI.parametros_activos?.cargoQty || contextoUI.cargoQty || 0,
-      demurrageRate: contextoUI.parametros_activos?.demurrageRate || 0
+      breakEven: payload.contexto_ui?.parametros_activos?.breakEven || payload.contexto_ui?.breakEvenUnitario || payload.breakEven || 0,
+      cargoQty: payload.contexto_ui?.parametros_activos?.cargoQty || payload.contexto_ui?.cargoQty || payload.cargoQty || 0,
+      demurrageRate: payload.contexto_ui?.parametros_activos?.demurrageRate || 0,
+      commodity: payload.commodity || payload.contexto_ui?.commodity || ''
     };
 
     try {
@@ -1252,6 +1412,13 @@ export function GlobalMadreDrawer({
     await handleSendMessage(queryText);
   };
 
+  const handleScan = async (e) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    await handleSubmit(e, "Escanear y auditar pantalla Core PRO");
+  };
+
   if (!isMadreOpen) return null;
 
   return (
@@ -1272,7 +1439,7 @@ export function GlobalMadreDrawer({
             <button 
               type="button" 
               id="btn-madre-scan-screen"
-              onClick={(e) => { triggerLaserScanEffect(); if (typeof handleSubmit === 'function') handleSubmit(e, "Escanear y auditar pantalla Core PRO"); }} 
+              onClick={handleScan} 
               className="text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-md px-2 py-1 text-xs font-semibold flex flex-row items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
               title="Escanear Pantalla"
             >

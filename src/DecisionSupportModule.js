@@ -1290,6 +1290,33 @@ export async function solicitarAuditoriaMadre() {
             mensaje: "Auditoría Estratégica MADRE para el escenario actual de toma de decisiones."
         };
 
+        if (typeof window !== 'undefined' && typeof window.ejecutarEscaneoCompleto === 'function') {
+            try {
+                const scanData = await window.ejecutarEscaneoCompleto();
+                if (scanData && scanData.datos) {
+                    payload.contexto_ui.escaneo_estructurado = scanData.datos;
+                    payload.contexto.escaneo_estructurado = scanData.datos;
+                    const b2 = scanData.datos.bloques?.bloque_2_buque_carga_limpieza;
+                    if (b2?.toneladas_carga) {
+                        const qty = Number(b2.toneladas_carga);
+                        payload.contexto_ui.cargoQty = qty;
+                        payload.contexto.cargoQty = qty;
+                    }
+                    if (b2?.commodity || b2?.categoria_carga) {
+                        const com = b2.commodity || b2.categoria_carga;
+                        payload.contexto_ui.commodity = com;
+                        payload.contexto.commodity = com;
+                    }
+                    if (b2?.metodo_carga) {
+                        payload.contexto_ui.metodo_carga = b2.metodo_carga;
+                    }
+                    if (b2?.metodo_descarga) {
+                        payload.contexto_ui.metodo_descarga = b2.metodo_descarga;
+                    }
+                }
+            } catch (_) {}
+        }
+
         let auditResult = null;
         try {
             const endpoint = 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-chat';
