@@ -312,6 +312,11 @@ class BrokerModeManagerClass {
   notifyBrokerModeApplied(options = {}) {
     this._feedbackMessage = BROKER_MODE_APPLIED_FEEDBACK;
 
+    if (typeof document !== 'undefined') {
+      const btnCalcular = document.querySelector('button[onclick*="handleMasterValidationAndCalculate"]') || document.querySelector('button[onclick*="calcular"]') || document.getElementById('btn-calcular');
+      if (btnCalcular) btnCalcular.classList.remove('animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400');
+    }
+
     if (typeof window === "undefined") return;
 
     // 1. Show in Module 6 (Resumen de Operación) results panel
@@ -396,7 +401,7 @@ class BrokerModeManagerClass {
   /**
    * Handles user interaction with any input element.
    */
-  handleInputInteraction(eventOrTarget) {
+  handleInputInteraction(inputData) {
     if (typeof window !== "undefined") {
       if (
         window.__AI_INJECTION_IN_PROGRESS__ ||
@@ -407,14 +412,29 @@ class BrokerModeManagerClass {
       }
     }
 
-    const target = eventOrTarget?.target || eventOrTarget;
+    const target = inputData?.target || inputData;
     if (!this.isTargetKeyInput(target)) {
       return;
+    }
+
+    if (inputData && !inputData.id && target?.id) {
+      inputData = target;
     }
 
     // If base calculation exists and broker mode is not active, activate!
     if (this.getHasBaseCalculation() && !this._isBrokerMode) {
       this.activateBrokerMode(target.id || target.name || "input_interaction");
+    }
+
+    if (typeof document !== 'undefined') {
+      // 1. Resaltar el input modificado
+      const el = document.getElementById(inputData.id);
+      if (el) el.classList.add('border-indigo-500', 'border-2', 'bg-indigo-50');
+
+      // 2. Llamar la atención sobre el botón de calcular
+      // Busca el botón que lanza handleMasterValidationAndCalculate o contiene la palabra Calcular
+      const btnCalcular = document.querySelector('button[onclick*="handleMasterValidationAndCalculate"]') || document.querySelector('button[onclick*="calcular"]') || document.getElementById('btn-calcular');
+      if (btnCalcular) btnCalcular.classList.add('animate-pulse', 'shadow-lg', 'shadow-indigo-500/50', 'ring-2', 'ring-indigo-400');
     }
   }
 
