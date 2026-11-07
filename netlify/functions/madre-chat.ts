@@ -18,13 +18,11 @@ export function buildStrategicPayload(body: any) {
   const floor = Number(ui.allInRateGross);
   if (!Number.isFinite(floor) || floor <= 0) return body;
   
-  // LA VACUNA CONTRA EL SPANGLISH:
+  // INYECCIÓN DE IDIOMA EN EL PAYLOAD
   const reglaIdioma = "DIRECTIVA SUPREMA: ERES UN ASISTENTE 100% HISPANOHABLANTE. TODA TU RESPUESTA, AUDITORÍA Y FIXTURE RECAP DEBEN REDACTARSE EN ESPAÑOL NEUTRO. NO USES INGLÉS SALVO SIGLAS CANÓNICAS (EJ. DWT, ETA).";
   
   const context = { ...ui, allInRateGross: floor, flete_all_in_gross_usd_mt: floor,
     directiva_dss: DIRECTIVA_DSS };
-  
-  // Pegamos la regla de idioma al mandato para que viaje hasta Data Bridge
   const mandate = `${reglaIdioma}\n\n${DIRECTIVA_DSS}\nFlete ALL-IN GROSS: USD ${floor.toFixed(2)}/MT (JWC, lastre y comisiones incluidos).`;
   
   return { ...body, contexto_ui: context, contexto: context,
