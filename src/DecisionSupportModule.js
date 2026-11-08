@@ -59,6 +59,10 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                             <i class="fa-solid fa-file-contract text-indigo-600"></i>
                             <span>Imprimir Oferta (Fixture Recap)</span>
                         </button>
+                        <button type="button" id="btn-generate-loi-word" onclick="handleDownloadLOI()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+                            <i class="fa-solid fa-file-word text-blue-600"></i>
+                            <span>Generar LOI (Word)</span>
+                        </button>
                         <button type="button" id="btn-auditoria-madre" onclick="solicitarAuditoriaMadre()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-teal-800 border border-teal-700/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                             <i class="fa-solid fa-shield-halved text-teal-700"></i>
                             <span>Auditoría MADRE</span>
@@ -1631,6 +1635,86 @@ export async function generarFixtureRecapOpcionB() {
     }
 }
 
+export async function handleDownloadLOI() {
+    try {
+        const currentDss = (typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function')
+            ? window.getDSSCurrentState()
+            : ((typeof window !== 'undefined' && (window.dssFormState || window.dssBaseActualState)) || {});
+
+        const getVal = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.value : '');
+        const getText = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.textContent : '');
+
+        const pol = (getVal('input-pol') || currentDss.pol || getText('summary-pol') || 'Rotterdam').trim();
+        const pod = (getVal('input-pod') || currentDss.pod || getText('summary-pod') || 'Houston').trim();
+        const mercancia = (getVal('input-commodity') || currentDss.commodity || currentDss.mercancia || currentDss.cargo || getText('summary-commodity') || 'Carga General').trim();
+
+        const response = await fetch('/.netlify/functions/generate-loi', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                pol,
+                pod,
+                mercancia,
+                POL: pol,
+                POD: pod,
+                Mercancía: mercancia
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error en el servidor: ${response.status} ${response.statusText}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        let blob;
+
+        if (contentType.includes('application/json')) {
+            const data = await response.json();
+            const b64 = data.body || data.b64 || data.data;
+            const binaryStr = atob(b64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        } else {
+            const rawBlob = await response.blob();
+            const preview = await rawBlob.slice(0, 32).text();
+            if (preview.startsWith('UEsDB') || (!preview.startsWith('PK') && /^[A-Za-z0-9+/=]+$/.test(preview.trim()))) {
+                const fullText = await rawBlob.text();
+                const binaryStr = atob(fullText.trim());
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+                blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            } else {
+                blob = rawBlob;
+            }
+        }
+
+        const safePol = pol.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POL';
+        const safePod = pod.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POD';
+        const fileName = `LOI_${safePol}_${safePod}.docx`;
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+        console.error('Error al generar LOI:', err);
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+            window.showToast('❌ Error al generar LOI: ' + (err?.message || 'Error desconocido'));
+        }
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.solicitarAuditoriaMadre = solicitarAuditoriaMadre;
     window.renderizarAuditoriaDss = renderizarAuditoriaDss;
@@ -1638,5 +1722,6 @@ if (typeof window !== 'undefined') {
     window.cerrarAuditoriaMadreOffcanvas = cerrarAuditoriaMadreOffcanvas;
     window.generarFixtureRecapOpcionB = generarFixtureRecapOpcionB;
     window.generarAuditoriaMadreFallback = generarAuditoriaMadreFallback;
+    window.handleDownloadLOI = handleDownloadLOI;
 }
 

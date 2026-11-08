@@ -21,6 +21,7 @@
     "@turf/distance": "^7.3.0",
     "autoprefixer": "^10.4.18",
     "cheerio": "^1.2.0",
+    "docx": "^9.15.3",
     "dompurify": "^3.4.13",
     "drizzle-kit": "^1.0.0-beta.22",
     "drizzle-orm": "^1.0.0-beta.22",
