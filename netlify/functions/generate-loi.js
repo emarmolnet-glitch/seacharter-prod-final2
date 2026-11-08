@@ -1,5 +1,6 @@
 const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
 const { Pool } = require('pg');
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // <-- NUEVA IMPORTACIÓN DE IA
 
 if (typeof Packer.toBase64 !== 'function') {
   Packer.toBase64 = async (doc) => {
@@ -74,7 +75,9 @@ const handler = async (event, context) => {
   const pol = body.pol || body.POL || 'Rotterdam';
   const pod = body.pod || body.POD || 'Houston';
   const mercancia = body.mercancia || body.Mercancía || body.commodity || 'Carga General';
+  const tipo_loi = body.tipo_loi || 'Delivery without original B/L'; // <-- CAPTURAMOS EL DESPLEGABLE
 
+  // 1. Extraemos la base legal de Neon
   let texto_clausula = '';
   try {
     const dbPool = getPool();
@@ -92,6 +95,40 @@ const handler = async (event, context) => {
     texto_clausula = 'Letter of Indemnity for discharge of bulk cargo without production of original Bills of Lading at port of destination, holding Owners harmless from any claims or maritime liens.';
   }
 
+  // 2. Cerebro.ia redacta el documento legal (NUEVO BLOQUE)
+  let textoRedactadoPorIA = '';
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("API KEY de Gemini no configurada");
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
+    
+    const prompt = `Actúa como un abogado marítimo experto en P&I Clubs. 
+Redacta el texto completo y formal de una Letter of Indemnity (LOI) para el caso específico: "${tipo_loi}". 
+Utiliza como base legal este fragmento de nuestra base de datos: "${texto_clausula}". 
+Datos operativos del viaje: 
+- Puerto de Carga (POL): ${pol}
+- Puerto de Descarga (POD): ${pod}
+- Mercancía: ${mercancia}
+
+Instrucciones de formato: 
+- Genera el documento con la estructura clásica y formal de los P&I Clubs (To: The Owners / Date / Dear Sirs / In consideration of... etc.).
+- Incluye espacios en blanco tipo [INSERTAR DATOS] si falta información clave (como el nombre del armador o fecha exacta del BL).
+- Devuelve SOLO el texto del documento, sin markdown (sin asteriscos ni comillas de bloque), listo para imprimir como párrafos en Word.`;
+
+    const aiResult = await model.generateContent(prompt);
+    textoRedactadoPorIA = aiResult.response.text();
+    
+    // Limpiamos posible markdown residual
+    textoRedactadoPorIA = textoRedactadoPorIA.replace(/\*\*/g, '').replace(/```/g, '').trim();
+
+  } catch (aiErr) {
+    console.error('Error generando redacción con IA:', aiErr);
+    textoRedactadoPorIA = `[ERROR DE IA - MOSTRANDO TEXTO CRUDO]\n\nPOL: ${pol}\nPOD: ${pod}\nMERCANCÍA: ${mercancia}\n\nCLÁUSULA: ${texto_clausula}`;
+  }
+
+  // 3. Empaquetado del documento Word
   const doc = new Document({
     sections: [
       {
@@ -100,35 +137,18 @@ const handler = async (event, context) => {
           new Paragraph({
             text: 'LETTER OF INDEMNITY (LOI)',
             heading: HeadingLevel.TITLE,
+            alignment: "center",
           }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Puerto de Carga (POL): ', bold: true }),
-              new TextRun(String(pol)),
-            ],
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Puerto de Descarga (POD): ', bold: true }),
-              new TextRun(String(pod)),
-            ],
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Mercancía: ', bold: true }),
-              new TextRun(String(mercancia)),
-            ],
-          }),
-          new Paragraph({ text: '' }),
-          new Paragraph({
-            text: 'CLÁUSULA LEGAL (LOI)',
-            heading: HeadingLevel.HEADING_2,
-          }),
-          new Paragraph({
-            children: [
-              new TextRun(String(texto_clausula)),
-            ],
-          }),
+          new Paragraph({ text: '' }), // Espaciador
+          
+          // Mapeamos cada línea devuelta por la IA como un párrafo justificado en el Word
+          ...textoRedactadoPorIA.split('\n').map(line => {
+            return new Paragraph({
+              text: line.trim(),
+              alignment: "both", // Justificado
+              spacing: { after: 120 } // Espaciado entre párrafos
+            });
+          })
         ],
       },
     ],
@@ -141,7 +161,7 @@ const handler = async (event, context) => {
     isBase64Encoded: true,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': 'attachment; filename="LOI.docx"'
+      'Content-Disposition': `attachment; filename="LOI_${pol.replace(/[^a-zA-Z0-9]/g, '')}_${pod.replace(/[^a-zA-Z0-9]/g, '')}.docx"`
     },
     body: b64
   };
