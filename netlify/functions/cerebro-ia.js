@@ -133,40 +133,65 @@ export function applyPackagingOverride(responseObj, promptText = "") {
     const hasPackaging = PACKAGING_REGEX.test(combinedText);
     if (!hasPackaging) return responseObj;
 
-    // Sobrescribir la Clasificación "A Granel": Si la expresión regular detecta un envase, el código debe
-    // interceptar y bloquear cualquier asignación por defecto a "granel" (Bulk). Debe forzar que la categoría
-    // de la carga cambie a "Minerales y Construcción" (o la genérica aplicable) y el producto específico a
-    // "Big Bags (Minerales/Cemento)" o el equivalente en tu base de datos de estados.
+  // Interceptar y configurar el envase correctamente sin destruir la mercancía detectada
     const overrideEntity = (obj) => {
         if (!obj || typeof obj !== "object") return;
 
-        // Categoría forzada
-        obj.category = "Minerales y Construcción";
-        obj.cargoCategory = "Minerales y Construcción";
-        obj.cargo_category = "Minerales y Construcción";
-        obj.categoriaCarga = "Minerales y Construcción";
+        // Detectar si el usuario pidió palets o big bags usando el promptText en minúsculas
+        const isPallet = /(palet)/i.test(promptLower);
+        const isBigBag = /(big\s*bag|saco)/i.test(promptLower);
 
-        // Producto específico forzado
-        obj.product = "Big Bags (Minerales/Cemento)";
-        obj.cargoProduct = "Big Bags (Minerales/Cemento)";
-        obj.cargo_product = "Big Bags (Minerales/Cemento)";
-        obj.productoEspecifico = "Big Bags (Minerales/Cemento)";
-        obj.productSpecific = "Big Bags (Minerales/Cemento)";
+        // Si la IA no ha definido categoría, ponemos un genérico en lugar de forzar cemento
+        if (!obj.category) obj.category = "Carga Unitizada / Envasada";
+        if (!obj.cargoCategory) obj.cargoCategory = obj.category;
+        
+        // Especificación de Carga (100 = Otros N/A) si la IA lo dejó vacío
+        if (!obj.cargoSpecification) {
+            obj.cargoSpecification = "100";
+            obj.cargo_specification = "100";
+            obj.especificacionCargaId = "100";
+        }
 
-        // Especificación contractual forzada
-        obj.cargoSpecification = "10";
-        obj.cargo_specification = "10";
-        obj.especificacionCargaId = "10";
+        if (isPallet) {
+            // Envase forzado a Palets
+            obj.packingType = "Paletizado";
+            obj.packaging = "Palets";
+            obj.packageType = "Palets";
+            obj.tipoEmpaque = "Palets";
+            
+            obj.isBulk = false;
+            obj.is_bulk = false;
+            obj.isGranel = false;
+            obj.isBigBags = false;
 
-        // Envase forzado
-        obj.packingType = "Big Bags";
-        obj.packaging = "Big Bags";
-        obj.packageType = "Big Bags";
-        obj.tipoEmpaque = "Big Bags";
+            // Métodos de carga para Palets
+            obj.loadingMethod = "Paletizado - Grúa Barco";
+            obj.dischargeMethod = "Paletizado - Grúa Barco";
+            obj.methodPOL = "paletizado_barco";
+            obj.methodPOD = "paletizado_barco";
+            
+        } else if (isBigBag) {
+            // Envase forzado a Big Bags
+            obj.packingType = "Big Bags";
+            obj.packaging = "Big Bags";
+            obj.packageType = "Big Bags";
+            obj.tipoEmpaque = "Big Bags";
 
-        // Tipo de carga
-        obj.cargoType = "Minerales y Construcción";
-        obj.cargo_type = "Big Bags (Minerales/Cemento)";
+            obj.isBulk = false;
+            obj.is_bulk = false;
+            obj.isGranel = false;
+            obj.isBigBags = true;
+
+            // Métodos de carga para Big Bags
+            if (!obj.loadingMethod || /cuchara|grab|bulk|granel/i.test(obj.loadingMethod)) {
+                obj.loadingMethod = "Big Bags - Grúa Barco";
+            }
+            if (!obj.dischargeMethod || /cuchara|grab|bulk|granel/i.test(obj.dischargeMethod)) {
+                obj.dischargeMethod = "Big Bags - Grúa Barco";
+            }
+            obj.methodPOL = "big_bags_barco";
+            obj.methodPOD = "big_bags_barco";
+        }
 
         // Interceptar y bloquear cualquier asignación por defecto a "granel" (Bulk)
         if (obj.vesselType && /bulk/i.test(obj.vesselType)) {
@@ -175,18 +200,6 @@ export function applyPackagingOverride(responseObj, promptText = "") {
         if (obj.selectedVessel && obj.selectedVessel.vesselType && /bulk/i.test(obj.selectedVessel.vesselType)) {
             obj.selectedVessel.vesselType = "General Cargo (Geared Breakbulk)";
         }
-        if (!obj.loadingMethod || /cuchara|grab|bulk|granel/i.test(obj.loadingMethod)) {
-            obj.loadingMethod = "Big Bags - Grúa Barco";
-        }
-        if (!obj.dischargeMethod || /cuchara|grab|bulk|granel/i.test(obj.dischargeMethod)) {
-            obj.dischargeMethod = "Big Bags - Grúa Barco";
-        }
-        obj.methodPOL = "big_bags_barco";
-        obj.methodPOD = "big_bags_barco";
-        obj.isBulk = false;
-        obj.is_bulk = false;
-        obj.isGranel = false;
-        obj.isBigBags = true;
     };
 
     if (actionPayload && typeof actionPayload === "object") {
@@ -199,7 +212,6 @@ export function applyPackagingOverride(responseObj, promptText = "") {
 
     return responseObj;
 }
-
 export default async function proxyRequest(request) {
     // 🔴 ESTA ES LA URL REAL DE TU BACKEND (DATA BRIDGE)
     const BACKEND_URL = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
