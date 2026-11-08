@@ -79,10 +79,20 @@
                     <i class="fa-solid fa-file-contract text-indigo-600"></i>
                     <span>Imprimir Oferta (Fixture Recap)</span>
                 </button>
-                <button type="button" id="btn-generate-loi-word" onclick="handleDownloadLOI()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
-                    <i class="fa-solid fa-file-word text-blue-600"></i>
-                    <span>Generar LOI (Word)</span>
-                </button>
+                <!-- INICIO: Desplegable de Cartas de Indemnización (LOIs) -->
+<div class="flex items-center gap-2">
+    <select id="select-tipo-loi" class="px-2 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer transition-all">
+        <option value="Delivery without original B/L">LOI: Sin B/L original</option>
+        <option value="Delivery at a different port">LOI: Diferente puerto</option>
+        <option value="Delivery at different port AND without original B/L">LOI: Diferente puerto y sin B/L</option>
+        <option value="Clean B/L for damaged cargo">LOI: Clean B/L (Protesta)</option>
+    </select>
+    <button type="button" onclick="handleDownloadLOI()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+        <i class="fa-solid fa-file-word text-blue-600"></i>
+        <span>Generar Word</span>
+    </button>
+</div>
+<!-- FIN: Desplegable de LOIs -->
                 <button type="button" id="btn-auditoria-madre" onclick="solicitarAuditoriaMadre()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-teal-800 border border-teal-700/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                     <i class="fa-solid fa-shield-halved text-teal-700"></i>
                     <span>Auditoría MADRE</span>
@@ -3295,6 +3305,7 @@
                 const pol = (getVal('input-pol') || currentDss.pol || getText('summary-pol') || 'Rotterdam').trim();
                 const pod = (getVal('input-pod') || currentDss.pod || getText('summary-pod') || 'Houston').trim();
                 const mercancia = (getVal('input-commodity') || currentDss.commodity || currentDss.mercancia || currentDss.cargo || getText('summary-commodity') || 'Carga General').trim();
+                const tipoLoi = (getVal('select-tipo-loi') || 'Delivery without original B/L');
 
                 const response = await fetch('/.netlify/functions/generate-loi', {
                     method: 'POST',
@@ -3305,6 +3316,7 @@
                         pol,
                         pod,
                         mercancia,
+                        tipo_loi: tipoLoi,
                         POL: pol,
                         POD: pod,
                         Mercancía: mercancia
