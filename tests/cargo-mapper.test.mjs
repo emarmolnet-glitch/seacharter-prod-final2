@@ -238,3 +238,49 @@ test("retains exact UI machinery literals regardless of user casing or accents",
     assert.equal(payload.methodPOD, expected, input);
   });
 });
+
+test("strict cargo taxonomy mapping rules: pallet/wood, vehicles/breakbulk, biomass, steel, bulk and unknown", () => {
+  // 1. Palets / Madera / Sacos / Big Bags -> Carga Unitizada / Envasada
+  const woodPallets = normalizeNlpVoyagePayload({ cargo_type: "Madera en palets" });
+  assert.equal(woodPallets.cargo_category, "Carga Unitizada / Envasada");
+  assert.equal(woodPallets.packaging, "Palets");
+  assert.equal(woodPallets.cargo_specification, "50");
+  assert.equal(woodPallets.methodPOL, "paletizado_barco");
+
+  // 2. Coches / Maquinaria / Piezas Sueltas / Eólicos -> Carga de Proyecto (Breakbulk)
+  const cars = normalizeNlpVoyagePayload({ cargo_type: "Coches" });
+  assert.equal(cars.cargo_category, "Carga de Proyecto (Breakbulk)");
+  assert.equal(cars.packaging, "Breakbulk");
+  assert.equal(cars.cargo_specification, "90");
+  assert.equal(cars.methodPOL, "hierro_acero_barco");
+
+  const windTurbines = normalizeNlpVoyagePayload({ cargo_type: "Aerogeneradores y palas eólicas" });
+  assert.equal(windTurbines.cargo_category, "Carga de Proyecto (Breakbulk)");
+  assert.equal(windTurbines.packaging, "Breakbulk");
+  assert.equal(windTurbines.cargo_specification, "90");
+
+  // 3. Biomasa / Astillas -> Biomasa y Combustibles Sólidos
+  const biomass = normalizeNlpVoyagePayload({ cargo_type: "Astillas de biomasa" });
+  assert.equal(biomass.cargo_category, "Biomasa y Combustibles Sólidos");
+  assert.equal(biomass.cargo_product, "Biomasa (Grignon, Astillas, Pellets)");
+  assert.equal(biomass.cargo_specification, "50");
+
+  // 4. Acero / Bobinas / Chatarra -> Carga Siderúrgica y Metales
+  const steelCoils = normalizeNlpVoyagePayload({ cargo_type: "Bobinas de acero" });
+  assert.equal(steelCoils.cargo_category, "Carga Siderúrgica y Metales");
+  assert.equal(steelCoils.cargo_product, "Bobinas de Acero (Steel Coils)");
+  assert.equal(steelCoils.cargo_specification, "20");
+  assert.equal(steelCoils.methodPOL, "hierro_acero_barco");
+
+  // 5. Granel (Bulk) -> respeta categoría original y packaging = A granel
+  const fertilizerBulk = normalizeNlpVoyagePayload({ cargo_type: "Fertilizantes a granel", cargo_category: "Fertilizantes" });
+  assert.notEqual(fertilizerBulk.cargo_category, "Minerales y Construcción");
+  assert.equal(fertilizerBulk.cargo_specification, "30");
+  assert.equal(fertilizerBulk.packaging, "A granel");
+
+  // 6. Unknown cargo -> specification 100, no fallback to Minerales y Construcción, product intact
+  const unknownCargo = normalizeNlpVoyagePayload({ cargo_type: "Polímeros sintéticos en sacos" });
+  assert.equal(unknownCargo.cargo_category, "Carga Unitizada / Envasada");
+  assert.equal(unknownCargo.cargo_product, "Polímeros sintéticos en sacos");
+  assert.notEqual(unknownCargo.cargo_product, "Big Bags (Minerales/Cemento)");
+});
