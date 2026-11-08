@@ -34182,18 +34182,28 @@ function createRouteAnchorElement(type) {
             const categoryEl = document.getElementById('cargo-type');
             if (!categoryEl) return;
             const normalized = String(category || '').toLowerCase();
-            let resolvedCategory = cargoDictionary[category] ? category : 'Minerales y Construcción';
+            let resolvedCategory = cargoDictionary[category] ? category : '';
             let resolvedProduct = product;
             if (!cargoDictionary[category]) {
-                if (normalized.includes('cemento') || normalized.includes('yeso') || normalized.includes('clinker') || normalized.includes('clínker')) resolvedCategory = 'Minerales y Construcción';
-                if (normalized.includes('combustible') || normalized.includes('carbon') || normalized.includes('carbón') || normalized.includes('biomasa')) resolvedCategory = 'Biomasa y Combustibles Sólidos';
-                if (normalized.includes('acero') || normalized.includes('hierro')) resolvedCategory = 'Carga Siderúrgica y Metales';
-                if (normalized.includes('big bag') || normalized.includes('palet') || normalized.includes('unitizada')) resolvedCategory = 'Carga Unitizada / Envasada';
-                if (normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk')) resolvedCategory = 'Carga de Proyecto (Breakbulk)';
-                if (!resolvedProduct && normalized.includes('big bag')) resolvedProduct = 'Big Bags (Minerales/Cemento)';
+                if (normalized.includes('coche') || normalized.includes('vehiculo') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk') || normalized.includes('eolico')) {
+                    resolvedCategory = 'Carga de Proyecto (Breakbulk)';
+                } else if (normalized.includes('acero') || normalized.includes('hierro') || normalized.includes('bobina') || normalized.includes('chatarra') || normalized.includes('metal')) {
+                    resolvedCategory = 'Carga Siderúrgica y Metales';
+                } else if (normalized.includes('combustible') || normalized.includes('carbon') || normalized.includes('carbón') || normalized.includes('biomasa') || normalized.includes('astilla')) {
+                    resolvedCategory = 'Biomasa y Combustibles Sólidos';
+                } else if (normalized.includes('palet') || normalized.includes('madera') || normalized.includes('saco') || normalized.includes('big bag') || normalized.includes('unitizada')) {
+                    resolvedCategory = 'Carga Unitizada / Envasada';
+                } else if (normalized.includes('cemento') || normalized.includes('yeso') || normalized.includes('clinker') || normalized.includes('clínker') || normalized.includes('mineral')) {
+                    resolvedCategory = 'Minerales y Construcción';
+                } else {
+                    resolvedCategory = categoryEl.value || 'Carga Unitizada / Envasada';
+                }
+
+                if (!resolvedProduct && (normalized.includes('coche') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('breakbulk'))) resolvedProduct = 'Piezas Especiales / Maquinaria';
+                if (!resolvedProduct && (normalized.includes('acero') || normalized.includes('bobina'))) resolvedProduct = 'Bobinas de Acero (Steel Coils)';
+                if (!resolvedProduct && (normalized.includes('biomasa') || normalized.includes('astilla'))) resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
                 if (!resolvedProduct && normalized.includes('palet')) resolvedProduct = 'Carga Paletizada';
-                if (!resolvedProduct && normalized.includes('acero')) resolvedProduct = 'Bobinas de Acero (Steel Coils)';
-                if (!resolvedProduct && normalized.includes('proyecto')) resolvedProduct = 'Piezas Especiales / Maquinaria';
+                if (!resolvedProduct && normalized.includes('big bag')) resolvedProduct = (normalized.includes('cemento') || normalized.includes('mineral')) ? 'Big Bags (Minerales/Cemento)' : 'Big Bags';
             }
             if (resolvedProduct === "Grignon d'olive (Biomasa)") resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
             if (resolvedProduct === 'Big Bags (Jumbo Bags - Minerales/Cemento)') resolvedProduct = 'Big Bags (Minerales/Cemento)';

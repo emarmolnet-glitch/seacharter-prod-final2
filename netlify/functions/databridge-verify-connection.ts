@@ -109,10 +109,15 @@ export default async (req: Request) => {
     }
 
     return Response.json(payload && typeof payload === "object" ? payload : { success: true }, { headers });
-  } catch {
-    return Response.json(
-      { success: false, error: "No se pudo verificar la conexión con Data Bridge." },
-      { status: 502, headers },
+  } catch (error: unknown) {
+    const isAbort = error instanceof Error && error.name === "AbortError";
+    const errorMessage = isAbort
+      ? "La verificación con Data Bridge excedió el tiempo límite (timeout)."
+      : "No se pudo verificar la conexión con Data Bridge.";
+
+    return new Response(
+      JSON.stringify({ success: false, error: errorMessage }),
+      { status: 500, headers },
     );
   }
 };

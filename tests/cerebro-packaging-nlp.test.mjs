@@ -188,3 +188,47 @@ test("sea-assistant-entry.js intercepts packaging and forces Minerales y Constru
   assert.match(assistantSource, /p\.cargoSpecification\s*=\s*"10"/);
   assert.match(assistantSource, /const\s+isGranel\s*=\s*!hasEnvase/);
 });
+
+test("applyPackagingOverride respects real commodities (Madera en palets, Coches, Bobinas de acero, Fertilizantes a granel)", () => {
+  // 1. Madera en palets
+  const woodResponse = applyPackagingOverride({
+    payload: { cargo_type: "Madera", product: "Madera en palets" }
+  }, "Transportar madera en palets de Valencia a Casablanca");
+  assert.equal(woodResponse.payload.category, "Carga Unitizada / Envasada");
+  assert.equal(woodResponse.payload.packaging, "Palets");
+  assert.equal(woodResponse.payload.cargoSpecification, "50");
+  assert.notEqual(woodResponse.payload.category, "Minerales y Construcción");
+
+  // 2. Coches
+  const carsResponse = applyPackagingOverride({
+    payload: { cargo_type: "Coches", product: "Coches nuevos" }
+  }, "Cargar 200 coches de Santander a Veracruz");
+  assert.equal(carsResponse.payload.category, "Carga de Proyecto (Breakbulk)");
+  assert.equal(carsResponse.payload.packaging, "Breakbulk");
+  assert.equal(carsResponse.payload.cargoSpecification, "90");
+  assert.equal(carsResponse.payload.product, "Coches nuevos");
+
+  // 3. Bobinas de acero
+  const steelResponse = applyPackagingOverride({
+    payload: { cargo_type: "Bobinas de acero", product: "Bobinas de acero laminado" }
+  }, "15000 mt de bobinas de acero");
+  assert.equal(steelResponse.payload.category, "Carga Siderúrgica y Metales");
+  assert.equal(steelResponse.payload.cargoSpecification, "20");
+  assert.equal(steelResponse.payload.methodPOL, "hierro_acero_barco");
+
+  // 4. Fertilizantes a granel
+  const fertilizerResponse = applyPackagingOverride({
+    payload: { cargo_type: "Fertilizantes a granel", category: "Fertilizantes", isBulk: true }
+  }, "25000 mt urea fertilizantes a granel");
+  assert.notEqual(fertilizerResponse.payload.category, "Minerales y Construcción");
+  assert.equal(fertilizerResponse.payload.packaging, "A granel");
+  assert.equal(fertilizerResponse.payload.cargoSpecification, "30");
+
+  // 5. Carga no reconocida
+  const unknownResponse = applyPackagingOverride({
+    payload: { cargo_type: "Polímeros sintéticos", product: "Polímeros sintéticos" }
+  }, "5000 mt de polímeros sintéticos");
+  assert.equal(unknownResponse.payload.cargoSpecification, "100");
+  assert.notEqual(unknownResponse.payload.category, "Minerales y Construcción");
+  assert.equal(unknownResponse.payload.product, "Polímeros sintéticos");
+});

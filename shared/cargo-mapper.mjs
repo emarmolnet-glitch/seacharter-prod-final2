@@ -82,22 +82,27 @@ const CARGO_FAMILIES = Object.freeze([
     especificacionCargaId: "10",
   }),
   Object.freeze({
-    aliases: ["acero", "steel", "hierro", "bobinas", "coils", "chatarra", "scrap", "varilla", "billets", "tubos", "pipes"],
+    aliases: ["acero", "steel", "hierro", "bobinas", "coils", "chatarra", "scrap", "varilla", "billets", "tubos", "pipes", "perfiles", "alambron", "palanquilla"],
     categoriaCarga: "Carga Siderúrgica y Metales",
     especificacionCargaId: "20",
   }),
   Object.freeze({
-    aliases: ["biomasa", "biomass", "pellet", "pellets", "astilla", "astillas", "wood chips", "grignon"],
+    aliases: ["biomasa", "biomass", "pellet", "pellets", "astilla", "astillas", "wood chips", "grignon", "orujo"],
     categoriaCarga: "Biomasa y Combustibles Sólidos",
     especificacionCargaId: "50",
   }),
   Object.freeze({
-    aliases: ["trigo", "wheat", "maiz", "corn", "cebada", "soja", "soybeans", "grano", "grain"],
+    aliases: ["madera", "maderas", "wood", "timber", "lumber", "tableros", "pasta de madera", "forestal", "forestales"],
+    categoriaCarga: "Carga Unitizada / Envasada",
+    especificacionCargaId: "50",
+  }),
+  Object.freeze({
+    aliases: ["trigo", "wheat", "maiz", "corn", "cebada", "soja", "soybeans", "grano", "granos", "grain", "cereal", "cereales", "agricola"],
     categoriaCarga: "",
     especificacionCargaId: "60",
   }),
   Object.freeze({
-    aliases: ["fertilizante", "fertilizer", "urea", "npk", "fosfato", "nitrato", "potasa"],
+    aliases: ["fertilizante", "fertilizantes", "fertilizer", "fertilizers", "urea", "npk", "fosfato", "nitrato", "potasa", "abono", "abonos"],
     categoriaCarga: "",
     especificacionCargaId: "30",
   }),
@@ -107,7 +112,7 @@ const CARGO_FAMILIES = Object.freeze([
     especificacionCargaId: "40",
   }),
   Object.freeze({
-    aliases: ["carbon mineral", "coal", "combustible", "fuel", "petroleo", "oil", "diesel", "gasoleo"],
+    aliases: ["carbon mineral", "coal", "carbon", "carbon bituminoso", "antracita", "coque", "combustible", "fuel", "petroleo", "oil", "diesel", "gasoleo"],
     categoriaCarga: "Biomasa y Combustibles Sólidos",
     especificacionCargaId: "70",
   }),
@@ -117,7 +122,7 @@ const CARGO_FAMILIES = Object.freeze([
     especificacionCargaId: "80",
   }),
   Object.freeze({
-    aliases: ["maquinaria", "machinery", "vehiculos", "piezas", "piezas de proyecto", "aerogeneradores"],
+    aliases: ["coche", "coches", "auto", "autos", "automovil", "automoviles", "vehiculo", "vehiculos", "cars", "vehicles", "camion", "camiones", "maquinaria", "machinery", "piezas", "piezas sueltas", "piezas de proyecto", "piezas especiales", "aerogeneradores", "eolicos", "transformador", "transformadores", "yate", "yates", "project cargo", "breakbulk"],
     categoriaCarga: "Carga de Proyecto (Breakbulk)",
     especificacionCargaId: "90",
   }),
@@ -169,8 +174,8 @@ function includesAlias(normalizedText, alias) {
 }
 
 function selectCargoProduct(normalizedCargo, specificationId, hasBigBags) {
-  if (hasBigBags) return "Big Bags (Minerales/Cemento)";
   if (specificationId === "10") {
+    if (hasBigBags) return "Big Bags (Minerales/Cemento)";
     if (includesAlias(normalizedCargo, "clinker")) return "Clínker";
     if (includesAlias(normalizedCargo, "yeso") || includesAlias(normalizedCargo, "gypsum")) return "Yeso";
     return "Cemento a granel";
@@ -180,9 +185,17 @@ function selectCargoProduct(normalizedCargo, specificationId, hasBigBags) {
     if (["hierro", "chatarra", "scrap"].some((alias) => includesAlias(normalizedCargo, alias))) return "Hierro / Chatarra";
     return "Bobinas de Acero (Steel Coils)";
   }
-  if (specificationId === "50") return "Biomasa (Grignon, Astillas, Pellets)";
-  if (specificationId === "70" && (includesAlias(normalizedCargo, "carbon mineral") || includesAlias(normalizedCargo, "coal"))) return "Carbón mineral";
+  if (specificationId === "50") {
+    if (["palet", "pallet", "madera", "wood"].some((alias) => includesAlias(normalizedCargo, alias))) return "Carga Paletizada";
+    return "Biomasa (Grignon, Astillas, Pellets)";
+  }
+  if (specificationId === "70" && (includesAlias(normalizedCargo, "carbon mineral") || includesAlias(normalizedCargo, "coal") || includesAlias(normalizedCargo, "carbon"))) return "Carbón mineral";
   if (specificationId === "90") return "Piezas Especiales / Maquinaria";
+  if (hasBigBags) {
+    if (["cemento", "clinker", "yeso", "mineral"].some((alias) => includesAlias(normalizedCargo, alias))) {
+      return "Big Bags (Minerales/Cemento)";
+    }
+  }
   return "";
 }
 
@@ -201,34 +214,98 @@ export function mapCargoDescription(value) {
   const normalizedCargo = normalizeLookupText(rawCargo);
   const promptLower = rawCargo.toLowerCase();
 
-  // Detección del material
+  const isPallet = /\b(palet|palets|pallet|pallets|paletizad[ao]|paletizado|paletizada)\b/i.test(promptLower) || /\b(palet|palets|pallet|pallets|paletizad)\b/.test(normalizedCargo);
+  const isBigBag = /\b(big\s*bags?|bigbags?|jumbo\s*bags?|sacos?|bagged|slings?|envasad[ao])\b/i.test(promptLower) || /\b(big\s*bags?|bigbags?|jumbo\s*bags?|sacos?|bagged|slings?|envasad)\b/.test(normalizedCargo);
+  const hasPackaging = isPallet || isBigBag || PACKAGING_REGEX.test(promptLower) || PACKAGING_REGEX.test(normalizedCargo);
+  const isBulk = /\b(granel|bulk)\b/i.test(promptLower) || /\b(granel|bulk)\b/.test(normalizedCargo);
+
+  const isBreakbulkOrProject = /\b(coche|coches|auto|autos|automovil|automoviles|vehiculo|vehiculos|cars?|vehicles?|camion|camiones|trucks?|maquinaria|machinery|equipos?|equipment|piezas?\s*(sueltas?|especiales?|de\s*proyecto)?|spare\s*parts?|eolico|eolicos|aerogenerador|aerogeneradores|wind\s*turbines?|palas?\s*(eolicas?)?|blades?|transformador|transformadores|yate|yates|yacht|yachts?|breakbulk|heavy\s*lift|carga\s*de\s*proyecto)\b/i.test(promptLower) || /\b(coche|coches|auto|autos|automovil|automoviles|vehiculo|vehiculos|cars|vehicles|camion|camiones|trucks|maquinaria|machinery|equipos|equipment|piezas|aerogenerador|aerogeneradores|eolico|eolicos|breakbulk)\b/.test(normalizedCargo);
+
+  const isSteelOrMetals = /\b(acero|steel|bobinas?|coils?|tubos?|pipes?|tuberia|chatarra|scrap|hierro|iron|varillas?|rebar|billets?|palanquilla|perfiles|aluminio|aluminum|aluminium|siderurgic[ao]s?)\b/i.test(promptLower) || /\b(acero|steel|bobinas?|coils?|tubos?|pipes?|chatarra|scrap|hierro|iron|aluminio|aluminum|aluminium)\b/.test(normalizedCargo);
+
+  const isBiomassOrSolidFuel = /\b(biomasa|biomass|astillas?|wood\s*chips?|pellets?|grignon|orujo|carbon(\s*mineral)?|coal|coque|coke)\b/i.test(promptLower) || /\b(biomasa|biomass|astillas?|pellets?|grignon|carbon|coal)\b/.test(normalizedCargo);
+
+  const isCementOrMineral = /\b(cemento|cement|clinker|clinquer|yeso|gypsum|cal|lime|cenizas|slag)\b/i.test(promptLower) || /\b(cemento|cement|clinker|clinquer|yeso|gypsum|cal|lime|cenizas|slag)\b/.test(normalizedCargo);
+
+  const isWoodOrTimber = /\b(madera|maderas|wood|timber|lumber|tableros|pasta\s*de\s*madera)\b/i.test(promptLower) || /\b(madera|wood|timber|lumber|tableros)\b/.test(normalizedCargo);
+
+  const isFertilizer = /\b(fertilizante|fertilizantes|fertilizer|fertilizers|urea|npk|fosfato|nitrato|potasa|abono|abonos)\b/i.test(promptLower) || /\b(fertilizante|fertilizantes|fertilizer|urea|npk|fosfato|nitrato|potasa|abono)\b/.test(normalizedCargo);
+
+  const isGrainOrAgri = /\b(trigo|wheat|maiz|corn|cebada|soja|soybeans|grano|granos|grain|cereal|cereales|agricola)\b/i.test(promptLower) || /\b(trigo|wheat|maiz|corn|cebada|soja|grano|granos|grain|cereal|cereales)\b/.test(normalizedCargo);
+
   const family = CARGO_FAMILIES.find((candidate) => candidate.aliases.some((alias) => includesAlias(normalizedCargo, alias)));
 
-  // Inyectar Regex de Prioridad de Envase: Inmediatamente después de detectar el material, evalúa el prompt original (texto en minúsculas)
-  const hasPackaging = PACKAGING_REGEX.test(promptLower) || PACKAGING_REGEX.test(normalizedCargo);
-  const hasBigBags = hasPackaging || /\bbig\s*bags?\b/.test(normalizedCargo);
+  let categoriaCarga = "";
+  let especificacionCargaId = "100";
+  let productoEspecifico = "";
+  let packaging = isBulk ? "A granel" : "";
+  let packingType = isBulk ? "A granel" : "";
 
-  // Sobrescribir la Clasificación "A Granel": Si la expresión regular detecta un envase, el código debe interceptar y bloquear cualquier asignación por defecto a "granel" (Bulk).
-  // Debe forzar que la categoría de la carga cambie a "Minerales y Construcción" (o la genérica aplicable) y el producto específico a "Big Bags (Minerales/Cemento)" o el equivalente en tu base de datos de estados.
-  const specificationId = family?.especificacionCargaId || (hasBigBags ? "10" : "100");
-
-  const categoriaCarga = family?.categoriaCarga || (hasBigBags ? "Carga Unitizada / Envasada" : "");
-
-  let productoEspecifico = selectCargoProduct(normalizedCargo, specificationId, hasBigBags);
-  if (hasPackaging) {
-    if (!productoEspecifico || /granel|bulk/i.test(productoEspecifico) || specificationId === "10") {
-      productoEspecifico = "Big Bags (Minerales/Cemento)";
-    }
+  if (isBreakbulkOrProject) {
+    categoriaCarga = "Carga de Proyecto (Breakbulk)";
+    especificacionCargaId = "90";
+    packaging = "Breakbulk";
+    packingType = "Breakbulk";
+    productoEspecifico = "Piezas Especiales / Maquinaria";
+  } else if (isSteelOrMetals) {
+    categoriaCarga = "Carga Siderúrgica y Metales";
+    especificacionCargaId = (normalizedCargo.includes("aluminio") || normalizedCargo.includes("aluminum")) ? "40" : "20";
+    packaging = isBulk ? "A granel" : "Breakbulk";
+    packingType = packaging;
+    productoEspecifico = selectCargoProduct(normalizedCargo, especificacionCargaId, false);
+  } else if (isBiomassOrSolidFuel) {
+    categoriaCarga = "Biomasa y Combustibles Sólidos";
+    especificacionCargaId = (normalizedCargo.includes("carbon") || normalizedCargo.includes("coal")) ? "70" : "50";
+    packaging = isPallet ? "Palets" : isBigBag ? "Big Bags" : "A granel";
+    packingType = packaging;
+    productoEspecifico = selectCargoProduct(normalizedCargo, especificacionCargaId, false);
+  } else if (isCementOrMineral) {
+    categoriaCarga = "Minerales y Construcción";
+    especificacionCargaId = "10";
+    packaging = isBigBag ? "Big Bags" : isPallet ? "Palets" : "A granel";
+    packingType = packaging === "Palets" ? "Paletizado" : packaging;
+    productoEspecifico = hasPackaging ? "Big Bags (Minerales/Cemento)" : selectCargoProduct(normalizedCargo, "10", false);
+  } else if (isPallet || isWoodOrTimber || isBigBag) {
+    categoriaCarga = "Carga Unitizada / Envasada";
+    especificacionCargaId = isWoodOrTimber ? "50" : isFertilizer ? "30" : isGrainOrAgri ? "60" : family?.especificacionCargaId || (rawCargo.toLowerCase() === "big bags" ? "10" : "100");
+    packaging = isPallet ? "Palets" : "Big Bags";
+    packingType = isPallet ? "Paletizado" : "Big Bags";
+    productoEspecifico = isPallet ? "Carga Paletizada" : (rawCargo.toLowerCase() === "big bags" ? "Big Bags (Minerales/Cemento)" : "");
+  } else if (family) {
+    categoriaCarga = family.categoriaCarga || "";
+    especificacionCargaId = family.especificacionCargaId || "100";
+    packaging = isBulk ? "A granel" : isPallet ? "Palets" : isBigBag ? "Big Bags" : "";
+    packingType = packaging === "Palets" ? "Paletizado" : packaging;
+    productoEspecifico = selectCargoProduct(normalizedCargo, especificacionCargaId, isBigBag);
+  } else {
+    // Desconocido
+    especificacionCargaId = "100";
+    categoriaCarga = isPallet || isBigBag ? "Carga Unitizada / Envasada" : "";
+    packaging = isPallet ? "Palets" : isBigBag ? "Big Bags" : isBulk ? "A granel" : "";
+    packingType = packaging === "Palets" ? "Paletizado" : packaging;
+    productoEspecifico = "";
   }
 
-  return {
+  const effectiveHasBigBags = isBigBag || packaging === "Big Bags";
+
+  const result = {
     categoriaCarga,
     productoEspecifico,
-    especificacionCarga: CARGO_SPECIFICATIONS[specificationId],
-    especificacionCargaId: specificationId,
-    hasBigBags,
+    especificacionCarga: CARGO_SPECIFICATIONS[especificacionCargaId] || CARGO_SPECIFICATIONS["100"],
+    especificacionCargaId,
+    hasBigBags: effectiveHasBigBags,
     rawCargo,
   };
+
+  Object.defineProperties(result, {
+    packaging: { value: packaging, enumerable: false, writable: true, configurable: true },
+    packingType: { value: packingType, enumerable: false, writable: true, configurable: true },
+    isBulk: { value: isBulk, enumerable: false, writable: true, configurable: true },
+    hasPackaging: { value: hasPackaging, enumerable: false, writable: true, configurable: true },
+    isCementOrMineral: { value: isCementOrMineral, enumerable: false, writable: true, configurable: true },
+  });
+
+  return result;
 }
 
 export function normalizeCargoMethod(value) {
@@ -336,34 +413,40 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
   const hasProjectCargo = Boolean(source.projectCargo || source.project_cargo || source.payload?.projectCargo || unitWeightMT > 0 || length > 0 || width > 0 || height > 0);
 
   const hasMappedFamily = mappedCargo.especificacionCargaId !== "100";
-  const specificationId = hasDetectedPackaging
-    ? (mappedCargo.especificacionCargaId && mappedCargo.especificacionCargaId !== "100" ? mappedCargo.especificacionCargaId : "10")
-    : (hasMappedFamily
-      ? mappedCargo.especificacionCargaId
-      : CARGO_SPECIFICATION_IDS.includes(explicitSpecification)
-        ? explicitSpecification
-        : hasProjectCargo
-          ? "90"
-          : mappedCargo.especificacionCargaId);
-  const cargoCategory = hasDetectedPackaging
-    ? (mappedCargo.categoriaCarga || "Minerales y Construcción")
-    : ((hasMappedFamily && mappedCargo.categoriaCarga) || explicitCategory || (hasProjectCargo && specificationId === "90" ? "Carga de Proyecto (Breakbulk)" : mappedCargo.categoriaCarga));
-  let cargoProduct = hasDetectedPackaging
-    ? "Big Bags (Minerales/Cemento)"
-    : (mappedCargo.hasBigBags || (hasMappedFamily && mappedCargo.productoEspecifico)
-      ? mappedCargo.productoEspecifico
-      : explicitProduct || (hasProjectCargo && specificationId === "90" ? (cargoDescription || "Piezas Especiales / Maquinaria") : mappedCargo.productoEspecifico));
-  if (hasDetectedPackaging && (!cargoProduct || /granel|bulk/i.test(cargoProduct))) {
-    cargoProduct = "Big Bags (Minerales/Cemento)";
+  const specificationId = hasMappedFamily
+    ? mappedCargo.especificacionCargaId
+    : (CARGO_SPECIFICATION_IDS.includes(explicitSpecification)
+      ? explicitSpecification
+      : (hasProjectCargo ? "90" : mappedCargo.especificacionCargaId));
+
+  const cargoCategory = mappedCargo.categoriaCarga
+    || explicitCategory
+    || (hasProjectCargo && specificationId === "90" ? "Carga de Proyecto (Breakbulk)" : "");
+
+  let cargoProduct = mappedCargo.productoEspecifico
+    || explicitProduct
+    || (hasProjectCargo && specificationId === "90" ? (cargoDescription || "Piezas Especiales / Maquinaria") : "")
+    || (hasDetectedPackaging && mappedCargo.isCementOrMineral ? "Big Bags (Minerales/Cemento)" : "");
+
+  if (!cargoProduct && cargoDescription) {
+    cargoProduct = cargoDescription;
   }
+
   const validatedCargo = validateCargoHierarchy(cargoCategory, cargoProduct, cargoSource);
-  const defaultPackagingMethod = hasDetectedPackaging
-    ? (/(palet|pallet)/i.test(cargoSource) ? "paletizado_barco" : "big_bags_barco")
-    : "";
+  const resolvedCategory = validatedCargo.categoriaCarga || cargoCategory;
+  const resolvedProduct = validatedCargo.productoEspecifico || cargoProduct || cargoDescription;
+
+  const resolvedPackaging = mappedCargo.packaging
+    || (rawPackaging ? (/(palet|pallet)/i.test(rawPackaging) ? "Palets" : /(big\s*bag|saco)/i.test(rawPackaging) ? "Big Bags" : rawPackaging) : (hasDetectedPackaging ? (/(palet|pallet)/i.test(cargoSource) ? "Palets" : "Big Bags") : ""));
+
+  const defaultPackagingMethod = resolvedPackaging === "Palets"
+    ? "paletizado_barco"
+    : (resolvedPackaging === "Big Bags" ? "big_bags_barco" : "");
+
   const methodPOL = explicitMethodPOL || inferCargoMethod(
     cargoDescription,
-    validatedCargo.categoriaCarga,
-    validatedCargo.productoEspecifico,
+    resolvedCategory,
+    resolvedProduct,
     specificationId,
   ) || defaultPackagingMethod;
   const methodPOD = normalizeCargoMethod(source.methodPOD ?? source.discharge_method ?? source.dischargeMethod ?? source.unloadingMethod) || methodPOL;
@@ -387,7 +470,7 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
 
   return {
     ...source,
-    ...(cargoDescription ? { cargo_type: hasDetectedPackaging && (!cargoDescription || /granel|bulk/i.test(cargoDescription)) ? "Big Bags (Minerales/Cemento)" : cargoDescription } : {}),
+    ...(cargoDescription ? { cargo_type: hasDetectedPackaging && (!cargoDescription || /granel|bulk/i.test(cargoDescription)) && mappedCargo.isCementOrMineral ? "Big Bags (Minerales/Cemento)" : cargoDescription } : {}),
     ...(normalizedProjectCargo ? {
       projectCargo: normalizedProjectCargo,
       pesoUnitario: unitWeightMT,
@@ -401,16 +484,16 @@ export function normalizeNlpVoyagePayload(payload = {}, sourceText = "") {
       handlingMode,
       projectHandlingMode: handlingMode,
     } : {}),
-    cargo_category: validatedCargo.categoriaCarga,
-    cargo_product: validatedCargo.productoEspecifico,
+    cargo_category: resolvedCategory,
+    cargo_product: resolvedProduct,
     cargo_specification: specificationId,
-    categoriaCarga: validatedCargo.categoriaCarga,
-    productoEspecifico: validatedCargo.productoEspecifico,
-    productSpecific: validatedCargo.productoEspecifico,
-    cargoCategory: validatedCargo.categoriaCarga,
-    cargoProduct: validatedCargo.productoEspecifico,
-    packaging: hasDetectedPackaging ? "Big Bags" : (source.packaging || ""),
-    packingType: hasDetectedPackaging ? "Big Bags" : (source.packingType || ""),
+    categoriaCarga: resolvedCategory,
+    productoEspecifico: resolvedProduct,
+    productSpecific: resolvedProduct,
+    cargoCategory: resolvedCategory,
+    cargoProduct: resolvedProduct,
+    packaging: resolvedPackaging || (source.packaging || ""),
+    packingType: resolvedPackaging === "Palets" ? "Paletizado" : (resolvedPackaging || source.packingType || ""),
     hasPackaging: hasDetectedPackaging,
     especificacionCarga: CARGO_SPECIFICATIONS[specificationId] || CARGO_SPECIFICATIONS["100"],
     especificacionCargaId: specificationId,

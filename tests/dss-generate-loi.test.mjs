@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import test from 'node:test';
 import mammoth from 'mammoth';
 
@@ -36,31 +36,43 @@ test('DSS: handleDownloadLOI is defined and exported on window', () => {
 });
 
 test('Backend: netlify/functions/generate-loi.js generates valid Word document and queries Neon', async () => {
-  const { handler } = await import('../netlify/functions/generate-loi.js');
-  
-  const payload = {
-    pol: 'Antwerp',
-    pod: 'Veracruz',
-    mercancia: 'Clinker de Cemento'
-  };
+  const functionSource = readFileSync(new URL('../netlify/functions/generate-loi.js', import.meta.url), 'utf8');
+  const tempPath = new URL('./.temp-generate-loi.mjs', import.meta.url);
+  writeFileSync(tempPath, functionSource, 'utf8');
 
-  const response = await handler({
-    httpMethod: 'POST',
-    body: JSON.stringify(payload)
-  });
+  try {
+    const { default: defaultHandler, handler: namedHandler } = await import(tempPath.href);
+    const handler = namedHandler || defaultHandler;
+    
+    const payload = {
+      pol: 'Antwerp',
+      pod: 'Veracruz',
+      mercancia: 'Clinker de Cemento'
+    };
 
-  assert.equal(response.statusCode, 200, 'Must return status 200');
-  assert.equal(response.isBase64Encoded, true, 'Must return isBase64Encoded: true');
-  assert.equal(response.headers['Content-Type'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  assert.equal(response.headers['Content-Disposition'], 'attachment; filename="LOI.docx"');
-  assert.ok(response.body && typeof response.body === 'string' && response.body.length > 100, 'Body must be base64 string');
+    const response = await handler({
+      httpMethod: 'POST',
+      body: JSON.stringify(payload)
+    });
 
-  const buf = Buffer.from(response.body, 'base64');
-  const extracted = await mammoth.extractRawText({ buffer: buf });
-  const text = extracted.value;
+    assert.equal(response.statusCode, 200, 'Must return status 200');
+    assert.equal(response.isBase64Encoded, true, 'Must return isBase64Encoded: true');
+    assert.equal(response.headers['Content-Type'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    assert.equal(response.headers['Content-Disposition'], 'attachment; filename="LOI.docx"');
+    assert.ok(response.body && typeof response.body === 'string' && response.body.length > 100, 'Body must be base64 string');
 
-  assert.match(text, /Antwerp/, 'Document must contain received POL');
-  assert.match(text, /Veracruz/, 'Document must contain received POD');
-  assert.match(text, /Clinker de Cemento/, 'Document must contain received Mercancía');
-  assert.match(text, /Letter of Indemnity/i, 'Document must contain LOI clause from Neon or fallback');
+    const buf = Buffer.from(response.body, 'base64');
+    const extracted = await mammoth.extractRawText({ buffer: buf });
+    const text = extracted.value;
+
+    assert.match(text, /Antwerp/, 'Document must contain received POL');
+    assert.match(text, /Veracruz/, 'Document must contain received POD');
+    assert.match(text, /Clinker de Cemento/, 'Document must contain received Mercancía');
+    assert.match(text, /Letter of Indemnity/i, 'Document must contain LOI clause from Neon or fallback');
+  } finally {
+    try {
+      unlinkSync(tempPath);
+    } catch (_) {}
+  }
 });
+
