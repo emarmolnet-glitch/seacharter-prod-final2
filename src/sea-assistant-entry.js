@@ -1060,7 +1060,7 @@ const TAXONOMY_TRANSLATION_DICTIONARY = [
         podCode: "big_bags_barco"
     },
     {
-        matcher: /palet|pallet|paletizado/i,
+        matcher: /palet|palets|pallet|pallets|paletizad[ao]|paletizado|paletizada/i,
         category: "Carga Unitizada / Envasada",
         product: "Carga Paletizada",
         loadingMethod: "Paletizado - Grúa Barco",
@@ -1069,7 +1069,7 @@ const TAXONOMY_TRANSLATION_DICTIONARY = [
         podCode: "paletizado_barco"
     },
     {
-        matcher: /break[ _-]?proyecto|maquinaria|piezas?\s*especiales?/i,
+        matcher: /break[ _-]?bulk|piezas?\s*(sueltas?|especiales?|de\s*proyecto)|heavy\s*lift|carga\s*de\s*proyecto|aerogenerador|transformador|yate/i,
         category: "Carga de Proyecto (Breakbulk)",
         product: "Piezas Especiales / Maquinaria",
         loadingMethod: "Hierro/Acero - Grúa Barco",
@@ -1089,21 +1089,36 @@ const TAXONOMY_TRANSLATION_DICTIONARY = [
 ];
 
 function applyTaxonomyDictionary(promptText = "", payload = {}) {
-    const rawText = String(promptText + " " + (payload.product || "") + " " + (payload.cargo_type || "")).toLowerCase();
+    const rawText = String(promptText + " " + (payload.product || "") + " " + (payload.cargo_type || "") + " " + (payload.category || "") + " " + (payload.mercancia || "")).toLowerCase();
     
-    let matchRule = TAXONOMY_TRANSLATION_DICTIONARY.find(rule => rule.matcher.test(rawText));
+    // Regla absoluta: Si el texto contiene big bag, saco, jumbo o palet, la categoría DEBE ser obligatoriamente "Carga Unitizada / Envasada"
+    let matchRule = null;
+    if (/big\s*bags?|bigbags?|jumbo\s*bags?|jumbo|sacos?|ensacado|bagged|slings?/i.test(rawText)) {
+        matchRule = TAXONOMY_TRANSLATION_DICTIONARY[0];
+    } else if (/palet|palets|pallet|pallets|paletizad[ao]|paletizado|paletizada/i.test(rawText)) {
+        matchRule = TAXONOMY_TRANSLATION_DICTIONARY[1];
+    } else {
+        matchRule = TAXONOMY_TRANSLATION_DICTIONARY.find(rule => rule.matcher.test(rawText));
+    }
     
     // Fallback por defecto si no hay cerco de envase explícito pero menciona cemento de forma ambigua
     if (!matchRule && /cemento|clinker/i.test(rawText)) {
         // Si no dice explícitamente granel, por seguridad revisamos si hay envase en el payload
-        if (/big\s*bag|saco|palet/i.test(JSON.stringify(payload))) {
+        if (/big\s*bag|saco|palet|jumbo/i.test(JSON.stringify(payload))) {
             matchRule = TAXONOMY_TRANSLATION_DICTIONARY[0]; // Big Bags
         } else {
             matchRule = TAXONOMY_TRANSLATION_DICTIONARY[3]; // Granel por defecto
         }
     }
     
-    if (!matchRule) return;
+    if (!matchRule) return null;
+
+    if (payload && typeof payload === 'object') {
+        payload.category = matchRule.category;
+        payload.cargo_type = matchRule.category;
+        payload.cargoCategory = matchRule.category;
+        payload.product = matchRule.product;
+    }
 
     // Aplicación atómica directa en el DOM sin bucles asíncronos rotos
     const catEl = document.getElementById('cargo-type');
@@ -1124,6 +1139,12 @@ function applyTaxonomyDictionary(promptText = "", payload = {}) {
     
     window.renderMethodPills?.('pol');
     window.renderMethodPills?.('pod');
+    return matchRule;
+}
+
+if (typeof window !== 'undefined') {
+    window.TAXONOMY_TRANSLATION_DICTIONARY = TAXONOMY_TRANSLATION_DICTIONARY;
+    window.applyTaxonomyDictionary = applyTaxonomyDictionary;
 }
 
 async function executeActionableAiUpdateFields(actionObj) {
@@ -1156,6 +1177,7 @@ async function executeActionableAiUpdateFields(actionObj) {
             p.loadRate = explicitLoadingRate;
             p.loading_rate = explicitLoadingRate;
             p.ratePOL = explicitLoadingRate;
+            if (typeof window !== 'undefined') window.isAiInjectedRate = true;
         }
         if (Number.isFinite(explicitDischargeRate) && explicitDischargeRate > 0) {
             p.ritmo_descarga = explicitDischargeRate;
@@ -1163,6 +1185,7 @@ async function executeActionableAiUpdateFields(actionObj) {
             p.dischRate = explicitDischargeRate;
             p.discharge_rate = explicitDischargeRate;
             p.ratePOD = explicitDischargeRate;
+            if (typeof window !== 'undefined') window.isAiInjectedRate = true;
         }
 
         // --- ESCUDO FRONTEND: AUTO-BUSCADOR DE BUQUE VÍA IA ---
@@ -1209,16 +1232,15 @@ async function executeActionableAiUpdateFields(actionObj) {
                     const isPolInput = input.id === "rate-load" || input.id === "loading-rate" || input.id === "gc-laytime-load-val" || input.id === "load-rate" || input.name === "rate-load" || input.name === "loading-rate";
                     if (isPolInput || isPodInput) {
                         const side = isPodInput ? "pod" : "pol";
-                        window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
-                        input.readOnly = false;
+                        window.isAiInjectedRate = true;
+                        window.setRitmoMode?.("auto", side, { commit: true, deferCalculations: true });
+                        input.readOnly = true;
                         input.disabled = false;
-                        input.removeAttribute("readonly");
-                        input.removeAttribute("disabled");
-                        input.setAttribute("aria-readonly", "false");
-                        input.dataset.manualOverride = "true";
-                        input.dataset.draftCalcMode = "manual";
+                        input.dataset.manualOverride = "false";
+                        input.dataset.draftCalcMode = "auto";
+                        input.dataset.aiInjected = "true";
                         if (side === "pod") {
-                            input.dataset.podCalcMode = "manual";
+                            input.dataset.podCalcMode = "auto";
                             delete input.dataset.autoMetodoDescarga;
                             delete input.dataset.autoCalculo;
                             delete input.dataset.autoMetodo;
@@ -1226,9 +1248,9 @@ async function executeActionableAiUpdateFields(actionObj) {
                             delete input.dataset.calculoAutomatico;
                         }
                         if (window.State) {
-                            window.State[`ritmoMode_${side}`] = "manual";
-                            if (side === "pod") window.State.podCalcMode = "manual";
-                            if (side === "pol") window.State.ritmoMode = "manual";
+                            window.State[`ritmoMode_${side}`] = "auto";
+                            if (side === "pod") window.State.podCalcMode = "auto";
+                            if (side === "pol") window.State.ritmoMode = "auto";
                         }
                     }
 
@@ -1280,6 +1302,7 @@ async function executeActionableAiUpdateFields(actionObj) {
         updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.ritmo_carga ?? p.loadingRate ?? p.loadRate);
         updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate);
         if (Number(p.ritmo_carga ?? p.loadingRate ?? p.loadRate) > 0 || Number(p.ritmo_descarga ?? p.dischargeRate ?? p.dischRate) > 0) {
+            if (typeof window !== 'undefined') window.isAiInjectedRate = true;
             window.forceRefreshCalculations?.();
         }
 
@@ -1331,13 +1354,13 @@ async function executeActionableAiUpdateFields(actionObj) {
 
         const extractedProductName = String(p.product || p.cargoProduct || p.productoEspecifico || p.productSpecific || p.cargo_type || p.cargoType || p.mercancia || "").trim();
 
-        const isPallet = /\b(palet|palets|pallet|pallets|paletizad[ao]|paletizado|paletizada)\b/.test(combinedClues);
-        const isBigBag = /\b(big\s*bags?|bigbags?|jumbo\s*bags?|sacos?|bagged|slings?|envasad[ao])\b/.test(combinedClues);
-        const isBreakbulk = /\b(coche|coches|auto|autos|automovil|automoviles|vehiculo|vehiculos|cars?|vehicles?|camion|camiones|trucks?|maquinaria|machinery|equipos?|equipment|piezas?\s*(sueltas?|especiales?|de\s*proyecto)?|spare\s*parts?|eolico|eolicos|aerogenerador|aerogeneradores|wind\s*turbines?|palas?\s*(eolicas?)?|blades?|transformador|transformadores|yate|yates|yacht|yachts?|breakbulk|heavy\s*lift|carga\s*de\s*proyecto)\b/.test(combinedClues);
-        const isSteel = /\b(acero|steel|bobinas?|coils?|tubos?|pipes?|tuberia|chatarra|scrap|hierro|iron|varillas?|rebar|billets?|palanquilla|perfiles|aluminio|aluminum|aluminium|siderurgic[ao]s?)\b/.test(combinedClues);
-        const isBiomass = /\b(biomasa|biomass|astillas?|wood\s*chips?|pellets?|grignon|orujo|carbon(\s*mineral)?|coal|coque|coke)\b/.test(combinedClues);
+        const isPallet = /\b(palet|palets|pallet|pallets|paletizad[ao]|paletizado|paletizada)\b/i.test(combinedClues);
+        const isBigBag = /\b(big\s*bags?|bigbags?|jumbo\s*bags?|jumbo|sacos?|ensacado|bagged|slings?|envasad[ao])\b/i.test(combinedClues);
+        const isBreakbulk = !isBigBag && !isPallet && /\b(coche|coches|automovil|automoviles|vehiculo|vehiculos|cars?|vehicles?|camion|camiones|trucks?|maquinaria|machinery|equipos?|equipment|piezas?\s*(sueltas?|especiales?|de\s*proyecto)?|spare\s*parts?|eolico|eolicos|aerogenerador|aerogeneradores|wind\s*turbines?|palas?\s*(eolicas?)?|blades?|transformador|transformadores|yate|yates|yacht|yachts?|breakbulk|heavy\s*lift|carga\s*de\s*proyecto)\b/.test(combinedClues);
+        const isSteel = !isBigBag && !isPallet && /\b(acero|steel|bobinas?|coils?|tubos?|pipes?|tuberia|chatarra|scrap|hierro|iron|varillas?|rebar|billets?|palanquilla|perfiles|aluminio|aluminum|aluminium|siderurgic[ao]s?)\b/.test(combinedClues);
+        const isBiomass = !isBigBag && !isPallet && /\b(biomasa|biomass|astillas?|wood\s*chips?|pellets?|grignon|orujo|carbon(\s*mineral)?|coal|coque|coke)\b/.test(combinedClues);
         const isCementOrMineral = /\b(cemento|cement|clinker|clinquer|yeso|gypsum|cal|lime|cenizas|slag)\b/.test(combinedClues);
-        const isWood = /\b(madera|maderas|wood|timber|lumber|tableros|pasta\s*de\s*madera)\b/.test(combinedClues);
+        const isWood = !isBigBag && !isPallet && /\b(madera|maderas|wood|timber|lumber|tableros|pasta\s*de\s*madera)\b/.test(combinedClues);
         const isFertilizer = /\b(fertilizante|fertilizantes|fertilizer|fertilizers|urea|npk|fosfato|nitrato|potasa|abono|abonos)\b/.test(combinedClues);
         const isGrain = /\b(trigo|wheat|maiz|corn|cebada|soja|soybeans|grano|granos|grain|cereal|cereales|agricola)\b/.test(combinedClues);
 
@@ -1353,7 +1376,21 @@ async function executeActionableAiUpdateFields(actionObj) {
         let resolvedLoadingMethod = "";
         let resolvedDischargeMethod = "";
 
-        if (hasExplicitBackendCargo) {
+        const hasUnitizedPackagingClue = isBigBag || isPallet || /\b(big\s*bags?|bigbags?|jumbo\s*bags?|jumbo|sacos?|ensacado|bagged|slings?|palet|palets|pallet|pallets)\b/i.test(combinedClues + " " + extractedProductName + " " + explicitCategory + " " + explicitProduct + " " + explicitPackaging);
+
+        if (hasUnitizedPackagingClue) {
+            resolvedCategory = "Carga Unitizada / Envasada";
+            resolvedPackaging = isPallet ? "Palets" : "Big Bags";
+            resolvedPackingType = isPallet ? "Paletizado" : "Big Bags";
+            resolvedSpecification = "100";
+            resolvedProduct = isPallet ? "Carga Paletizada" : "Big Bags (Minerales/Cemento)";
+            resolvedIsBulk = false;
+            resolvedIsBigBags = !isPallet;
+            resolvedMethodPOL = isPallet ? "paletizado_barco" : "big_bags_barco";
+            resolvedMethodPOD = resolvedMethodPOL;
+            resolvedLoadingMethod = isPallet ? "Paletizado - Grúa Barco" : "Big Bags - Grúa Barco";
+            resolvedDischargeMethod = resolvedLoadingMethod;
+        } else if (hasExplicitBackendCargo) {
             resolvedCategory = explicitCategory;
             resolvedProduct = explicitProduct;
             resolvedPackaging = explicitPackaging;
@@ -1468,10 +1505,10 @@ async function executeActionableAiUpdateFields(actionObj) {
                 resolvedDischargeMethod = "Big Bags - Grúa Barco";
             }
         } else if (isCementOrMineral && hasEnvase) {
-            p.category = "Minerales y Construcción";
-            p.product = "Big Bags (Minerales/Cemento)";
+            p.category = "Carga Unitizada / Envasada";
+            p.product = isPallet ? "Carga Paletizada" : "Big Bags (Minerales/Cemento)";
             p.cargoSpecification = "10";
-            resolvedCategory = "Minerales y Construcción";
+            resolvedCategory = "Carga Unitizada / Envasada";
             resolvedSpecification = "10";
             resolvedPackaging = isPallet ? "Palets" : "Big Bags";
             resolvedPackingType = isPallet ? "Paletizado" : "Big Bags";
@@ -1488,8 +1525,8 @@ async function executeActionableAiUpdateFields(actionObj) {
             resolvedPackingType = isPallet ? "Paletizado" : "Big Bags";
             resolvedSpecification = isWood ? "50" : isFertilizer ? "30" : isGrain ? "60" : "100";
             resolvedProduct = isPallet
-                ? (extractedProductName || "Carga Paletizada")
-                : (extractedProductName || "Big Bags");
+                ? "Carga Paletizada"
+                : (isWood ? "Madera en Paquetes" : "Big Bags (Minerales/Cemento)");
             resolvedIsBulk = false;
             resolvedIsBigBags = resolvedPackaging === "Big Bags";
             resolvedMethodPOL = isPallet ? "paletizado_barco" : "big_bags_barco";
@@ -1604,20 +1641,36 @@ async function executeActionableAiUpdateFields(actionObj) {
             }
         };
 
-        let family = 'general';
-        if (resolvedIsBigBags || resolvedPackaging === 'Big Bags' || resolvedProduct === 'Big Bags (Minerales/Cemento)') family = 'bigbags';
-        else if (resolvedPackaging === 'Palets' || resolvedProduct === 'Carga Paletizada') family = 'paletizado';
-        else if (hasEnvase) family = isPallet ? 'paletizado' : 'bigbags';
-        else if (resolvedIsBulk || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
-        else if (isPallet || cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
-        else if (isBigBag || cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags';
-        else if (isBreakbulk || cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) family = 'proyecto';
+        // 2b. INYECCIÓN DETERMINISTA DE TAXONOMÍA DE CARGA (PRIMERO CATEGORÍA Y PRODUCTO)
+        const appliedTaxonomy = applyTaxonomyDictionary(combinedClues || p.cargo_type || p.cargoType || p.mercancia || "", p);
+        if (appliedTaxonomy) {
+            resolvedCategory = appliedTaxonomy.category;
+            resolvedProduct = appliedTaxonomy.product;
+        }
 
-        clickMethodPill(methodLoadLower, family);
-        if (methodDischLower !== methodLoadLower) clickMethodPill(methodDischLower, family);
+        // Blindaje estricto de Big Bags y Palets
+        if (/big\s*bags?|jumbo|sacos?|ensacado/i.test(combinedClues || resolvedProduct || resolvedPackaging || "")) {
+            resolvedCategory = "Carga Unitizada / Envasada";
+            resolvedProduct = "Big Bags (Minerales/Cemento)";
+            resolvedPackaging = "Big Bags";
+            resolvedPackingType = "Big Bags";
+            resolvedIsBigBags = true;
+            resolvedIsBulk = false;
+        } else if (/palet|pallet/i.test(combinedClues || resolvedProduct || resolvedPackaging || "")) {
+            resolvedCategory = "Carga Unitizada / Envasada";
+            resolvedProduct = "Carga Paletizada";
+            resolvedPackaging = "Palets";
+            resolvedPackingType = "Paletizado";
+            resolvedIsBigBags = false;
+            resolvedIsBulk = false;
+        }
 
-        // 2b. INYECCIÓN DETERMINISTA DE TAXONOMÍA DE CARGA Y MÉTODOS
-        applyTaxonomyDictionary(combinedClues || p.cargo_type || p.cargoType || p.mercancia || "", p);
+        // Actualizar primero en el DOM la jerarquía completa de categoría (#cargo-type) y producto (#cargo-product)
+        if (typeof window.replaceCargoHierarchySelection === 'function' && resolvedCategory && resolvedProduct) {
+            window.replaceCargoHierarchySelection(resolvedCategory, resolvedProduct);
+        } else if (typeof window.restoreCargoSelection === 'function' && resolvedCategory && resolvedProduct) {
+            window.restoreCargoSelection(resolvedCategory, resolvedProduct, resolvedPackaging);
+        }
 
         const selects = document.querySelectorAll('select');
         selects.forEach(sel => {
@@ -1660,9 +1713,18 @@ async function executeActionableAiUpdateFields(actionObj) {
             gcAddPackingEl.dispatchEvent(packingEv);
         }
 
-        if (typeof window.replaceCargoHierarchySelection === 'function' && resolvedCategory && resolvedProduct) {
-            window.replaceCargoHierarchySelection(resolvedCategory, resolvedProduct);
-        }
+        // Una vez sincronizados por completo los selectores de categoría y producto, ejecutar pills de métodos
+        let family = 'general';
+        if (resolvedIsBigBags || resolvedPackaging === 'Big Bags' || resolvedProduct === 'Big Bags (Minerales/Cemento)') family = 'bigbags';
+        else if (resolvedPackaging === 'Palets' || resolvedProduct === 'Carga Paletizada') family = 'paletizado';
+        else if (hasEnvase) family = isPallet ? 'paletizado' : 'bigbags';
+        else if (resolvedIsBulk || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
+        else if (isPallet || cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
+        else if (isBigBag || cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags';
+        else if (isBreakbulk || cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) family = 'proyecto';
+
+        clickMethodPill(methodLoadLower, family);
+        if (methodDischLower !== methodLoadLower) clickMethodPill(methodDischLower, family);
 
         // Estabilización inmediata de POD tras selectores de equipo y pills
         if (Number.isFinite(explicitDischargeRate) && explicitDischargeRate > 0) {
@@ -1695,10 +1757,10 @@ async function executeActionableAiUpdateFields(actionObj) {
             Object.assign(routeState, { tonnage, cargo: tonnage, cargoQty: tonnage, cargoQuantity: tonnage });
         }
         if (Number.isFinite(loadingRate) && loadingRate > 0) {
-            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "manual", ritmoMode_pol: "manual", ritmo_carga: loadingRate });
+            Object.assign(routeState, { loadRate: loadingRate, ratePOL: loadingRate, ritmoRealPol: loadingRate, ritmoMode: "auto", ritmoMode_pol: "auto", ritmo_carga: loadingRate });
         }
         if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "manual", podCalcMode: "manual", ritmo_descarga: dischargeRate });
+            Object.assign(routeState, { dischargeRate, dischRate: dischargeRate, ratePOD: dischargeRate, ritmoRealPod: dischargeRate, ritmoMode_pod: "auto", podCalcMode: "auto", ritmo_descarga: dischargeRate });
         }
         if (hasProjectCargoData) {
             Object.assign(routeState, {
@@ -1744,53 +1806,68 @@ async function executeActionableAiUpdateFields(actionObj) {
 
         // 🛡️ Blindaje de ritmos operativos frente a presets de equipo automáticos (ej. Bombas Neumáticas)
         if (Number.isFinite(loadingRate) && loadingRate > 0) {
-            window.setRitmoMode?.("manual", "pol", { commit: true, deferCalculations: true });
+            if (typeof window !== 'undefined') {
+                window.isAiInjectedRate = true;
+                window.craneInputsManuallyTouched_pol = false;
+            }
+            window.setRitmoMode?.("auto", "pol", { commit: true, deferCalculations: true });
             if (window.State) {
-                window.State.ritmoMode = "manual";
-                window.State.ritmoMode_pol = "manual";
+                window.State.ritmoMode = "auto";
+                window.State.ritmoMode_pol = "auto";
                 window.State.loadRate = loadingRate;
                 window.State.ratePOL = loadingRate;
                 window.State.ritmoRealPol = loadingRate;
+                window.State.tpdAutoSombraPol = loadingRate;
             }
             updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], loadingRate);
             const loadInput = document.getElementById("rate-load");
             if (loadInput) {
                 loadInput.value = String(loadingRate);
-                loadInput.readOnly = false;
-                loadInput.disabled = false;
-                loadInput.removeAttribute("readonly");
-                loadInput.removeAttribute("disabled");
-                loadInput.dataset.manualOverride = "true";
-                loadInput.dataset.draftCalcMode = "manual";
+                loadInput.readOnly = true;
+                loadInput.dataset.manualOverride = "false";
+                loadInput.dataset.draftCalcMode = "auto";
+                loadInput.dataset.aiInjected = "true";
+            }
+            if (typeof window.section2LocalState === "object") {
+                window.section2LocalState.rateStandard_pol = loadingRate;
+                window.section2LocalState.ritmoMode_pol = "auto";
             }
         }
         if (Number.isFinite(dischargeRate) && dischargeRate > 0) {
-            setTimeout(() => {
-                const dischInput = document.getElementById("rate-disch") || document.querySelector('[name="rate-disch"]');
-                if (dischInput) {
-                    dischInput.value = String(dischargeRate);
-                    dischInput.dataset.manualOverride = "true";
-                    dischInput.dataset.podCalcMode = "manual";
-                    const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-                    if (nativeSet) nativeSet.call(dischInput, String(dischargeRate));
-                    dischInput.dispatchEvent(new Event("input", { bubbles: true }));
-                    dischInput.dispatchEvent(new Event("change", { bubbles: true }));
-                }
-                
-                const podState = {
-                    ritmoMode_pod: "manual", podCalcMode: "manual",
-                    dischRate: dischargeRate, dischargeRate: dischargeRate, ratePOD: dischargeRate
-                };
-
-                if (window.State) Object.assign(window.State, podState);
-                if (window.SeaCharterStore?.set) window.SeaCharterStore.set(podState, { force: true });
-                
-                window.recalcularDiasPuerto?.();
-            }, 300);
+            if (typeof window !== 'undefined') {
+                window.isAiInjectedRate = true;
+                window.craneInputsManuallyTouched_pod = false;
+            }
+            window.setRitmoMode?.("auto", "pod", { commit: true, deferCalculations: true });
+            updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], dischargeRate);
+            const dischInput = document.getElementById("rate-disch") || document.querySelector('[name="rate-disch"]');
+            if (dischInput) {
+                dischInput.value = String(dischargeRate);
+                dischInput.readOnly = true;
+                dischInput.dataset.manualOverride = "false";
+                dischInput.dataset.podCalcMode = "auto";
+                dischInput.dataset.draftCalcMode = "auto";
+                dischInput.dataset.aiInjected = "true";
+                const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+                if (nativeSet) nativeSet.call(dischInput, String(dischargeRate));
+                dischInput.dispatchEvent(new Event("input", { bubbles: true }));
+                dischInput.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            const podState = {
+                ritmoMode_pod: "auto", podCalcMode: "auto",
+                dischRate: dischargeRate, dischargeRate: dischargeRate, ratePOD: dischargeRate,
+                ritmoRealPod: dischargeRate, tpdAutoSombraPod: dischargeRate
+            };
+            if (window.State) Object.assign(window.State, podState);
+            if (window.SeaCharterStore?.set) window.SeaCharterStore.set(podState, { force: true });
+            if (typeof window.section2LocalState === "object") {
+                window.section2LocalState.rateStandard_pod = dischargeRate;
+                window.section2LocalState.ritmoMode_pod = "auto";
+            }
         }
         if (typeof window.setRitmoManualIndicator === "function") {
-            if (Number.isFinite(loadingRate) && loadingRate > 0) window.setRitmoManualIndicator("pol", true);
-            if (Number.isFinite(dischargeRate) && dischargeRate > 0) window.setRitmoManualIndicator("pod", true);
+            if (Number.isFinite(loadingRate) && loadingRate > 0) window.setRitmoManualIndicator("pol", false);
+            if (Number.isFinite(dischargeRate) && dischargeRate > 0) window.setRitmoManualIndicator("pod", false);
         }
         if ((Number.isFinite(loadingRate) && loadingRate > 0) || (Number.isFinite(dischargeRate) && dischargeRate > 0)) {
             window.recalcularDiasPuerto?.();
@@ -1809,6 +1886,27 @@ async function executeActionableAiUpdateFields(actionObj) {
                 pol_port: selectedRoutePorts.pol,
                 pod_port: selectedRoutePorts.pod,
                 cargo_qty: Number(p.tonnage ?? p.cargo_qty ?? p.cargoQty) || 0,
+                cargo_category: resolvedCategory,
+                cargoCategory: resolvedCategory,
+                categoriaCarga: resolvedCategory,
+                category: resolvedCategory,
+                cargo_product: resolvedProduct,
+                cargoProduct: resolvedProduct,
+                productoEspecifico: resolvedProduct,
+                product: resolvedProduct,
+                cargo_type: resolvedProduct || resolvedCategory,
+                cargoType: resolvedCategory,
+                cargo_specification: resolvedSpecification,
+                cargoSpecification: resolvedSpecification,
+                especificacionCargaId: resolvedSpecification,
+                packaging: resolvedPackaging,
+                packingType: resolvedPackingType,
+                methodPOL: resolvedMethodPOL,
+                methodPOD: resolvedMethodPOD,
+                loading_method: resolvedLoadingMethod,
+                discharge_method: resolvedDischargeMethod,
+                loadingMethod: resolvedLoadingMethod,
+                dischargeMethod: resolvedDischargeMethod,
                 laydays: p.laydayStart ?? p.laydays,
                 cancelling: p.cancelling,
                 loading_rate: Number(loadingRate || p.loadingRate || p.loading_rate) || 0,
@@ -1819,10 +1917,10 @@ async function executeActionableAiUpdateFields(actionObj) {
                 dischRate: Number(dischargeRate || p.dischRate) || 0,
                 ritmo_carga: Number(loadingRate || p.ritmo_carga) || 0,
                 ritmo_descarga: Number(dischargeRate || p.ritmo_descarga) || 0,
-                ritmoMode: "manual",
-                ritmoMode_pol: "manual",
-                ritmoMode_pod: "manual",
-                podCalcMode: "manual",
+                ritmoMode: "auto",
+                ritmoMode_pol: "auto",
+                ritmoMode_pod: "auto",
+                podCalcMode: "auto",
             };
             const injectionResult = window.injectVoyageScenario(validatedScenario, { deferFinalActions: true });
             await window.finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
