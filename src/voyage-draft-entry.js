@@ -56,8 +56,15 @@ function replaceOperationalMethod(side, method) {
 }
 
 function replaceCargoHierarchySelection(category, product) {
-    const normalizedCategory = String(category || '').trim();
-    const normalizedProduct = String(product || '').trim();
+    let normalizedCategory = String(category || '').trim();
+    let normalizedProduct = String(product || '').trim();
+    if (/big\s*bags?|jumbo|sacos?|ensacado/i.test(normalizedCategory + ' ' + normalizedProduct)) {
+        normalizedCategory = 'Carga Unitizada / Envasada';
+        normalizedProduct = 'Big Bags (Minerales/Cemento)';
+    } else if (/palet|pallet/i.test(normalizedCategory + ' ' + normalizedProduct)) {
+        normalizedCategory = 'Carga Unitizada / Envasada';
+        normalizedProduct = 'Carga Paletizada';
+    }
     if (!normalizedCategory || !normalizedProduct) return false;
     const stateValues = {
         cargoCategory: normalizedCategory,
@@ -311,9 +318,17 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     const cargoType = shouldApplyCargoType
         ? String(scenario.cargo_type || scenario.cargoType || '').trim()
         : String(previousDraft.cargo?.description || '').trim();
-    const cargoCategory = String(scenario.cargo_category || scenario.categoriaCarga || '').trim();
-    const cargoProduct = String(scenario.cargo_product || scenario.productoEspecifico || cargoType).trim();
+    let cargoCategory = String(scenario.cargo_category || scenario.cargoCategory || scenario.category || scenario.categoriaCarga || '').trim();
+    let cargoProduct = String(scenario.cargo_product || scenario.cargoProduct || scenario.product || scenario.productoEspecifico || cargoType).trim();
     const cargoSpecification = String(scenario.cargo_specification || scenario.especificacionCargaId || '100').trim();
+
+    if (/big\s*bags?|bigbags?|jumbo|sacos?|ensacado/i.test(`${cargoType} ${cargoProduct} ${cargoCategory} ${scenario.packaging || ''} ${scenario.packingType || ''}`)) {
+        cargoCategory = 'Carga Unitizada / Envasada';
+        cargoProduct = 'Big Bags (Minerales/Cemento)';
+    } else if (/palet|palets|pallet|pallets|paletizad[ao]/i.test(`${cargoType} ${cargoProduct} ${cargoCategory} ${scenario.packaging || ''} ${scenario.packingType || ''}`)) {
+        cargoCategory = 'Carga Unitizada / Envasada';
+        cargoProduct = 'Carga Paletizada';
+    }
     const laydays = shouldApplyLaydays
         ? String(scenario.laydays || '').trim()
         : String(previousDraft.laycan?.laydays || '').trim();
@@ -410,9 +425,16 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     if (shouldApplyCancelling) {
         ['map-cancelling-date', 'gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setValue(id, cancelling));
     }
+    const isAiInjected = Boolean(window.isAiInjectedRate || scenario.ritmoMode === 'auto' || scenario.ritmoMode_pol === 'auto' || scenario.ritmoMode_pod === 'auto');
     if (shouldApplyDwt) setValue('vessel-dwt', dwt);
-    if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
-    if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
+    if (shouldApplyLoadingRate) {
+        if (isAiInjected) applyAssistantOperationalRate('pol', loadingRate);
+        else applyManualOperationalRate('pol', loadingRate);
+    }
+    if (shouldApplyDischargeRate) {
+        if (isAiInjected) applyAssistantOperationalRate('pod', dischargeRate);
+        else applyManualOperationalRate('pod', dischargeRate);
+    }
     if (shouldApplyLoadingRate) setValue('ritmo_nominal_pol', loadingRate);
     if (shouldApplyDischargeRate) setValue('ritmo_nominal_pod', dischargeRate);
     if (scenario.laytimePOL || scenario.loading_terms) {
@@ -476,8 +498,8 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
         ...(shouldApplyDwt ? { dwt, vesselDwt: dwt } : {}),
         ...(methodPOL ? { methodPOL, loadMethod: methodPOL } : {}),
         ...(methodPOD ? { methodPOD, dischargeMethod: methodPOD } : {}),
-        ...(shouldApplyLoadingRate ? { ratePOL: loadingRate, ritmoMode: 'manual', ritmoMode_pol: 'manual' } : {}),
-        ...(shouldApplyDischargeRate ? { ratePOD: dischargeRate, ritmoMode_pod: 'manual', podCalcMode: 'manual' } : {}),
+        ...(shouldApplyLoadingRate ? { ratePOL: loadingRate, ritmoMode: isAiInjected ? 'auto' : 'manual', ritmoMode_pol: isAiInjected ? 'auto' : 'manual' } : {}),
+        ...(shouldApplyDischargeRate ? { ratePOD: dischargeRate, ritmoMode_pod: isAiInjected ? 'auto' : 'manual', podCalcMode: isAiInjected ? 'auto' : 'manual' } : {}),
     };
     window.SeaCharterStore?.set?.(calculatorState, { force: true, source: 'assistant-nlp' });
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
@@ -487,8 +509,14 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     if (shouldApplyCargoClassification && cargoCategory && cargoProduct) replaceCargoHierarchySelection(cargoCategory, cargoProduct);
     if (methodPOL) replaceOperationalMethod('pol', methodPOL);
     if (methodPOD) replaceOperationalMethod('pod', methodPOD);
-    if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
-    if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
+    if (shouldApplyLoadingRate) {
+        if (isAiInjected) applyAssistantOperationalRate('pol', loadingRate);
+        else applyManualOperationalRate('pol', loadingRate);
+    }
+    if (shouldApplyDischargeRate) {
+        if (isAiInjected) applyAssistantOperationalRate('pod', dischargeRate);
+        else applyManualOperationalRate('pod', dischargeRate);
+    }
     const requiresPortSelection = hasIncomingRoute && (!hasValidatedPol || !hasValidatedPod);
     if (!options.deferFinalActions && hasIncomingRoute && !requiresPortSelection) {
         void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
@@ -549,8 +577,15 @@ function applyAssistantCalculatorAutofill(payload = {}) {
     const cargoQuantity = currentCargoQuantity > 0 ? currentCargoQuantity : requestedCargoQuantity;
     const cargoPreserved = currentCargoQuantity > 0;
     const cargoType = String(payload.cargo_type || payload.cargoType || '').trim();
-    const cargoCategory = String(payload.cargo_category || payload.categoriaCarga || '').trim();
-    const cargoProduct = String(payload.cargo_product || payload.productoEspecifico || cargoType).trim();
+    let cargoCategory = String(payload.cargo_category || payload.cargoCategory || payload.category || payload.categoriaCarga || '').trim();
+    let cargoProduct = String(payload.cargo_product || payload.cargoProduct || payload.product || payload.productoEspecifico || cargoType).trim();
+    if (/big\s*bags?|bigbags?|jumbo|sacos?|ensacado/i.test(`${cargoType} ${cargoProduct} ${cargoCategory} ${payload.packaging || ''} ${payload.packingType || ''}`)) {
+        cargoCategory = 'Carga Unitizada / Envasada';
+        cargoProduct = 'Big Bags (Minerales/Cemento)';
+    } else if (/palet|palets|pallet|pallets|paletizad[ao]/i.test(`${cargoType} ${cargoProduct} ${cargoCategory} ${payload.packaging || ''} ${payload.packingType || ''}`)) {
+        cargoCategory = 'Carga Unitizada / Envasada';
+        cargoProduct = 'Carga Paletizada';
+    }
     const cargoSpecification = String(payload.cargo_specification || payload.especificacionCargaId || '100').trim();
     const loadingMethod = resolveBigBagsMethod(`${cargoType} ${cargoProduct}`, readMethodValue(payload.methodPOL ?? payload.loading_method ?? payload.loadingMethod));
     const dischargeMethod = readMethodValue(payload.methodPOD ?? payload.discharge_method ?? payload.dischargeMethod) || loadingMethod;
@@ -569,8 +604,12 @@ function applyAssistantCalculatorAutofill(payload = {}) {
 
     const applyUpdates = () => {
         if (!cargoPreserved && cargoQuantity > 0) setValue('cargo-qty', cargoQuantity);
-        if (cargoCategory) setSelectValue('cargo-type', cargoCategory);
-        if (cargoProduct) setSelectValue('cargo-product', cargoProduct);
+        if (cargoCategory && cargoProduct) {
+            replaceCargoHierarchySelection(cargoCategory, cargoProduct);
+        } else {
+            if (cargoCategory) setSelectValue('cargo-type', cargoCategory);
+            if (cargoProduct) setSelectValue('cargo-product', cargoProduct);
+        }
         if (cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
 
         if (hasProjectCargoData) {

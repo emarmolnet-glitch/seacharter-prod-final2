@@ -156,8 +156,8 @@ export function applyPackagingOverride(responseObj, promptText = "") {
         const hasEnvase = isPallet || isBigBag || PACKAGING_REGEX.test(normalized);
         const isBulk = !hasEnvase && (/\b(granel|bulk)\b/.test(normalized) || obj.isBulk === true || obj.isGranel === true);
 
-        // 2. Coches / Maquinaria / Piezas Sueltas / Eólicos / Breakbulk
-        const isBreakbulk = /\b(coche|coches|auto|autos|automovil|automoviles|vehiculo|vehiculos|cars?|vehicles?|camion|camiones|trucks?|maquinaria|machinery|equipos?|equipment|piezas?\s*(sueltas?|especiales?|de\s*proyecto)?|spare\s*parts?|eolico|eolicos|aerogenerador|aerogeneradores|wind\s*turbines?|palas?\s*(eolicas?)?|blades?|transformador|transformadores|yate|yates|yacht|yachts?|breakbulk|heavy\s*lift|carga\s*de\s*proyecto)\b/.test(normalized);
+        // 2. Coches / Maquinaria / Piezas Sueltas / Eólicos / Breakbulk (sin 'auto'/'autos' aislados para no colisionar con 'modo auto' o 'ritmo auto')
+        const isBreakbulk = /\b(coche|coches|automovil|automoviles|vehiculo|vehiculos|cars?|vehicles?|camion|camiones|trucks?|maquinaria|machinery|equipos?|equipment|piezas?\s*(sueltas?|especiales?|de\s*proyecto)?|spare\s*parts?|eolico|eolicos|aerogenerador|aerogeneradores|wind\s*turbines?|palas?\s*(eolicas?)?|blades?|transformador|transformadores|yate|yates|yacht|yachts?|breakbulk|heavy\s*lift|carga\s*de\s*proyecto)\b/.test(normalized);
 
         // 3. Acero / Bobinas / Chatarra / Siderúrgica
         const isSteel = /\b(acero|steel|bobinas?|coils?|tubos?|pipes?|tuberia|chatarra|scrap|hierro|iron|varillas?|rebar|billets?|palanquilla|perfiles|aluminio|aluminum|aluminium|siderurgic[ao]s?)\b/.test(normalized);
@@ -192,7 +192,7 @@ export function applyPackagingOverride(responseObj, promptText = "") {
         let loadingMethod = "";
         let dischargeMethod = "";
 
-        if (isBreakbulk) {
+        if (isBreakbulk && !hasEnvase) {
             // Coches / Maquinaria / Piezas Sueltas / Eólicos
             category = "Carga de Proyecto (Breakbulk)";
             packaging = "Breakbulk";
@@ -273,8 +273,8 @@ export function applyPackagingOverride(responseObj, promptText = "") {
             packingType = isPallet ? "Paletizado" : "Big Bags";
             specificationId = isWood ? "50" : isFertilizer ? "30" : isGrain ? "60" : "100";
             product = isPallet
-                ? (extractedProduct || "Carga Paletizada")
-                : (extractedProduct || (promptLower.includes("cemento") ? "Big Bags (Minerales/Cemento)" : "Big Bags"));
+                ? (extractedProduct && /palet/i.test(extractedProduct) ? extractedProduct : "Carga Paletizada")
+                : "Big Bags (Minerales/Cemento)";
             isFinalBulk = false;
             isFinalBigBags = packaging === "Big Bags";
             methodPOL = isPallet ? "paletizado_barco" : "big_bags_barco";
@@ -310,9 +310,15 @@ export function applyPackagingOverride(responseObj, promptText = "") {
             category = hasEnvase ? "Carga Unitizada / Envasada" : (obj.category || obj.cargoCategory || "100");
             packaging = isPallet ? "Palets" : isBigBag ? "Big Bags" : (obj.packaging || "");
             packingType = isPallet ? "Paletizado" : (packaging || obj.packingType || "");
-            product = extractedProduct;
+            product = isBigBag ? "Big Bags (Minerales/Cemento)" : extractedProduct;
             isFinalBulk = isBulk;
             isFinalBigBags = packaging === "Big Bags";
+        }
+
+        if (product) {
+            if (/^big\s*bags?$/i.test(product) || product === "Big Bags" || (/saco/i.test(product) && !/palet/i.test(product)) || (category === "Carga Unitizada / Envasada" && !/palet/i.test(product))) {
+                product = "Big Bags (Minerales/Cemento)";
+            }
         }
 
         if (category) {

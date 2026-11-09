@@ -10856,6 +10856,7 @@
                                 <div class="flex justify-between items-center mb-1">
                                     <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POL (TM/d)</label>
                                     <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POL">
+                                        <input type="hidden" id="ritmo-mode-pol" value="auto">
                                         <button type="button" id="btn-ritmo-auto-pol" data-ritmo-mode-btn="auto" onclick="setRitmoMode('auto', 'pol')" class="px-2 py-0.5 rounded-l-md font-bold transition cursor-pointer bg-blue-900 text-white" aria-pressed="true">Auto</button>
                                         <button type="button" id="btn-ritmo-manual-pol" data-ritmo-mode-btn="manual" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
@@ -10902,6 +10903,7 @@
                                 <div class="flex justify-between items-center mb-1">
                                     <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POD (TM/d)</label>
                                     <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POD">
+                                        <input type="hidden" id="ritmo-mode-pod" value="auto">
                                         <button type="button" id="btn-ritmo-auto-pod" data-ritmo-mode-btn="auto" data-pod-calc-mode="auto" onclick="setRitmoMode('auto', 'pod')" class="px-2 py-0.5 rounded-l-md font-bold transition cursor-pointer bg-blue-900 text-white" aria-pressed="true">Auto</button>
                                         <button type="button" id="btn-ritmo-manual-pod" data-ritmo-mode-btn="manual" data-pod-calc-mode="manual" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
@@ -34078,8 +34080,7 @@ function createRouteAnchorElement(type) {
             "Minerales y Construcción": [
                 { nombre: "Cemento a granel", sf: 0.70, requiresPieceWeight: false },
                 { nombre: "Clínker", sf: 0.85, requiresPieceWeight: false },
-                { nombre: "Yeso", sf: 0.90, requiresPieceWeight: false },
-                { nombre: "Big Bags (Minerales/Cemento)", sf: 0.95, requiresPieceWeight: false }
+                { nombre: "Yeso", sf: 0.90, requiresPieceWeight: false }
             ],
             "Biomasa y Combustibles Sólidos": [
                 { nombre: "Biomasa (Grignon, Astillas, Pellets)", sf: 1.85, requiresPieceWeight: false },
@@ -34168,7 +34169,14 @@ function createRouteAnchorElement(type) {
             if (!categoryEl || !productEl) return;
             enforceTurnTimeOptions();
             const products = (cargoDictionary[categoryEl.value] || []).map((product) => ({ ...product }));
-            const selectedProduct = preferredProduct || productEl.value;
+            let selectedProduct = preferredProduct || productEl.value;
+            if (categoryEl.value === 'Carga Unitizada / Envasada') {
+                if (/big\s*bags?|jumbo|saco/i.test(selectedProduct)) {
+                    selectedProduct = 'Big Bags (Minerales/Cemento)';
+                } else if (/palet|pallet/i.test(selectedProduct)) {
+                    selectedProduct = 'Carga Paletizada';
+                }
+            }
             replaceSelectOptions(productEl, [
                 { value: '', label: 'Selecciona una mercancía' },
                 ...products.map((product) => ({ value: product.nombre, label: product.nombre }))
@@ -34253,7 +34261,10 @@ function createRouteAnchorElement(type) {
             // 4. Fallback condicional ÚNICAMENTE si no se proporcionaron campos exactos desde el backend
             if (!cargoDictionary[resolvedCategory]) {
                 const normalized = String(category || '').toLowerCase();
-                if (normalized.includes('coche') || normalized.includes('vehiculo') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk') || normalized.includes('eolico')) {
+                if (normalized.includes('palet') || normalized.includes('madera') || normalized.includes('saco') || normalized.includes('big bag') || normalized.includes('jumbo') || normalized.includes('unitizada')) {
+                    resolvedCategory = 'Carga Unitizada / Envasada';
+                    if (!resolvedProduct) resolvedProduct = normalized.includes('palet') ? 'Carga Paletizada' : 'Big Bags (Minerales/Cemento)';
+                } else if (normalized.includes('coche') || normalized.includes('vehiculo') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk') || normalized.includes('eolico')) {
                     resolvedCategory = 'Carga de Proyecto (Breakbulk)';
                     if (!resolvedProduct) resolvedProduct = 'Piezas Especiales / Maquinaria';
                 } else if (normalized.includes('acero') || normalized.includes('hierro') || normalized.includes('bobina') || normalized.includes('chatarra') || normalized.includes('metal')) {
@@ -34262,11 +34273,13 @@ function createRouteAnchorElement(type) {
                 } else if (normalized.includes('combustible') || normalized.includes('carbon') || normalized.includes('carbón') || normalized.includes('biomasa') || normalized.includes('astilla')) {
                     resolvedCategory = 'Biomasa y Combustibles Sólidos';
                     if (!resolvedProduct) resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
-                } else if (normalized.includes('palet') || normalized.includes('madera') || normalized.includes('saco') || normalized.includes('big bag') || normalized.includes('unitizada')) {
-                    resolvedCategory = 'Carga Unitizada / Envasada';
-                    if (!resolvedProduct) resolvedProduct = normalized.includes('palet') ? 'Carga Paletizada' : 'Big Bags (Minerales/Cemento)';
                 } else if (normalized.includes('cemento') || normalized.includes('yeso') || normalized.includes('clinker') || normalized.includes('clínker') || normalized.includes('mineral')) {
-                    resolvedCategory = 'Minerales y Construcción';
+                    if (normalized.includes('big bag') || normalized.includes('saco') || normalized.includes('jumbo') || normalized.includes('palet')) {
+                        resolvedCategory = 'Carga Unitizada / Envasada';
+                        resolvedProduct = normalized.includes('palet') ? 'Carga Paletizada' : 'Big Bags (Minerales/Cemento)';
+                    } else {
+                        resolvedCategory = 'Minerales y Construcción';
+                    }
                 } else {
                     resolvedCategory = categoryEl.value || 'Carga Unitizada / Envasada';
                 }
@@ -34286,7 +34299,27 @@ function createRouteAnchorElement(type) {
             window.isRestoringCargo = false;
         }
 
+        function ensureTaxonomyIntegrity() {
+            const productEl = document.getElementById('cargo-product');
+            const categoryEl = document.getElementById('cargo-type');
+            if (!productEl || !categoryEl) return;
+            const prod = String(productEl.value || '').toLowerCase();
+            if (/big\s*bags?|jumbo|saco/i.test(prod) && categoryEl.value !== 'Carga Unitizada / Envasada') {
+                categoryEl.value = 'Carga Unitizada / Envasada';
+                if (typeof populateCargoProducts === 'function') {
+                    populateCargoProducts('Big Bags (Minerales/Cemento)');
+                }
+            } else if (/palet|pallet/i.test(prod) && categoryEl.value !== 'Carga Unitizada / Envasada') {
+                categoryEl.value = 'Carga Unitizada / Envasada';
+                if (typeof populateCargoProducts === 'function') {
+                    populateCargoProducts('Carga Paletizada');
+                }
+            }
+        }
+        window.ensureTaxonomyIntegrity = ensureTaxonomyIntegrity;
+
         function applySelectedCargoProduct(userInitiated = false) {
+            ensureTaxonomyIntegrity();
             if (userInitiated === true) markCargoSelectionCommitted();
             const product = getSelectedCargoProduct();
             updateCargoVesselClassDisplay();
@@ -34828,6 +34861,17 @@ function createRouteAnchorElement(type) {
             if (!CARGO_OPERATION_DRAFT_IDS.includes(id)) return;
             updateSection2LocalState(id, value);
             window.section2LocalState[`manualInput_${id}`] = true;
+            if (id && id.startsWith('gruas-')) {
+                const side = id.includes('pod') ? 'pod' : 'pol';
+                // Solo marcar como tocado manualmente y resetear ritmo de IA si proviene de una interacción física deliberada del usuario
+                const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+                const isUserActive = activeEl && activeEl.id === id;
+                const isProtectedMode = window.isRestoringCargo || window.isInjectingAssistant || window.__AI_INJECTION_IN_PROGRESS__ || window.updateFieldsActionInProgress || window.__IS_PROGRAMMATIC_UPDATE__;
+                if (isUserActive && !isProtectedMode) {
+                    window[`craneInputsManuallyTouched_${side}`] = true;
+                    window.isAiInjectedRate = false;
+                }
+            }
         }
         window.updateCargoOperationDraft = updateCargoOperationDraft;
 
@@ -65575,7 +65619,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 + notaCuelloBotella;
         }
 
+        function recalculateCraneRates(side = 'pol', options = {}) {
+            // Si el usuario no ha tocado las grúas manualmente y hay un ritmo por chat/IA, NO SOBRESCRIBIR
+            const modeEl = document.getElementById(`ritmo-mode-${side}`) || document.getElementById(`ritmoMode_${side}`);
+            if (window.isAiInjectedRate && modeEl?.value !== 'manual') {
+                const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+                const rateInput = document.getElementById(rateInputId);
+                const aiRate = parseFloat(rateInput?.value) || (side === 'pod' ? (window.State?.dischRate || window.State?.dischargeRate) : window.State?.loadRate) || 0;
+                if (aiRate > 0) {
+                    publicarRitmoRealEnEstado(side, aiRate);
+                    return aiRate; // Respetar y asumir el ritmo de la IA como base calculada
+                }
+                return; // Respetar el ritmo de la IA
+            }
+            return calcularRitmoGrua(side, options);
+        }
+        window.recalculateCraneRates = recalculateCraneRates;
+
         function calcularRitmoGrua(side = 'pol', options = {}) {
+            // Si el usuario no ha tocado las grúas manualmente y hay un ritmo por chat/IA, NO SOBRESCRIBIR
+            const modeEl = document.getElementById(`ritmo-mode-${side}`) || document.getElementById(`ritmoMode_${side}`);
+            if (window.isAiInjectedRate && modeEl?.value !== 'manual') {
+                const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+                const rateInput = document.getElementById(rateInputId);
+                const aiRate = parseFloat(rateInput?.value) || (side === 'pod' ? (window.State?.dischRate || window.State?.dischargeRate) : window.State?.loadRate) || 0;
+                if (aiRate > 0) {
+                    publicarRitmoRealEnEstado(side, aiRate);
+                    return aiRate; // Respetar y asumir el ritmo de la IA como base calculada
+                }
+                return; // Respetar el ritmo de la IA
+            }
+
             const deferEngine = options.deferEngine === true;
             const label = getSelectedMethodLabel(side);
             if (!isCraneMethod(label)) return;
@@ -65881,9 +65955,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.isRestoringCargo) return false; // ABORTAR SI ESTAMOS INYECTANDO
             const productEl = document.getElementById('cargo-product');
             const productVal = productEl ? productEl.value.toLowerCase() : '';
-            if (productVal.includes('big bag') || productVal.includes('saco') || productVal.includes('palet')) return false;
+            if (productVal.includes('big bag') || productVal.includes('saco') || productVal.includes('ensacad') || productVal.includes('jumbo') || productVal.includes('palet')) return false;
 
             const rateDischInput = document.getElementById('rate-disch') || document.querySelector('[name="rate-disch"]');
+            if (window.isAiInjectedRate || rateDischInput?.dataset?.aiInjected === "true") return false;
             if (rateDischInput && (rateDischInput.dataset.manualOverride === "true" || window.State?.podCalcMode === "manual")) return false;
 
             const { force = false } = options;
@@ -65983,14 +66058,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 handlePortMethodChange('pod');
             }
 
-            // BLINDAJE: Solo forzar los 8000 del cementero si la IA no ha bloqueado el campo manualmente
-if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rateDischInput.value || rateDischInput.value === '0' || previousMethod === 'camion_tolva')) {
-    rateDischInput.value = '8000';
-    if (window.State) {
-        window.State.dischRate = 8000;
-        window.State.dischargeRate = 8000;
-    }
-}
+            // BLINDAJE: Solo forzar los 8000 del cementero si la IA no ha inyectado el ritmo y no está en override manual
+            if (!window.isAiInjectedRate && rateDischInput && rateDischInput.dataset.aiInjected !== "true" && rateDischInput.dataset.manualOverride !== "true" && (!rateDischInput.value || rateDischInput.value === '0' || previousMethod === 'camion_tolva')) {
+                rateDischInput.value = '8000';
+                if (window.State) {
+                    window.State.dischRate = 8000;
+                    window.State.dischargeRate = 8000;
+                }
+            }
 
             if (typeof recalcularDiasPuerto === 'function') {
                 recalcularDiasPuerto('pod');
@@ -66165,6 +66240,8 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             const isManual = mode === 'manual';
             const autoBtn = document.getElementById(`btn-ritmo-auto-${side}`) || document.getElementById('btn-mode-auto');
             const manualBtn = document.getElementById(`btn-ritmo-manual-${side}`) || document.getElementById('btn-mode-manual');
+            const modeEl = document.getElementById(`ritmo-mode-${side}`) || document.getElementById(`ritmoMode_${side}`);
+            if (modeEl) modeEl.value = isManual ? 'manual' : 'auto';
 
             if (autoBtn) {
                 autoBtn.className = `${RITMO_MODE_BTN_BASE_AUTO} ${isManual ? RITMO_MODE_BTN_INACTIVE : RITMO_MODE_BTN_ACTIVE}`;
@@ -66258,6 +66335,19 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             const input = document.getElementById(inputId);
             if (!input) return 0;
 
+            const modeEl = document.getElementById(`ritmo-mode-${side}`) || document.getElementById(`ritmoMode_${side}`);
+            if (window.isAiInjectedRate && modeEl?.value !== 'manual') {
+                const aiRate = parseFloat(input.value) || (side === 'pod' ? (window.State?.dischRate || window.State?.dischargeRate) : window.State?.loadRate) || 0;
+                if (aiRate > 0) {
+                    input.value = String(Math.round(aiRate));
+                    window.section2LocalState[inputId] = input.value;
+                    window.section2LocalState[`rateStandard_${side}`] = aiRate;
+                    window.section2LocalState[`manualInput_${inputId}`] = false;
+                    publicarRitmoRealEnEstado(side, aiRate);
+                    return aiRate;
+                }
+            }
+
             const craneRate = typeof calcularRitmoGruaTeorico === 'function'
                 ? Number(calcularRitmoGruaTeorico(side))
                 : 0;
@@ -66302,6 +66392,8 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
                 // `State.ritmoMode` es el flag legacy del POL: el POD usa `podCalcMode`.
                 if (!side || side === 'pol') window.State.ritmoMode = targetMode;
                 if (s === 'pod') window.State.podCalcMode = targetMode;
+                const modeEl = document.getElementById(`ritmo-mode-${s}`) || document.getElementById(`ritmoMode_${s}`);
+                if (modeEl) modeEl.value = targetMode;
 
                 const inputId = s === 'pod' ? 'rate-disch' : 'rate-load';
                 const input = document.getElementById(inputId);
@@ -66937,7 +67029,7 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
             const rateInput = document.getElementById(side === 'pod' ? 'rate-disch' : 'rate-load');
             const enteredRate = Math.max(0, parseFloat(rateInput?.value) || 0);
-            if (isCustomPortMethod(metodo) || rateInput?.dataset.manualOverride === 'true') {
+            if (isCustomPortMethod(metodo) || rateInput?.dataset.manualOverride === 'true' || (window.isAiInjectedRate && enteredRate > 0) || rateInput?.dataset.aiInjected === 'true') {
                 return enteredRate;
             }
 
@@ -71450,6 +71542,17 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
                 }
 
                 if (!isManual && rateInput) {
+                    // Si el usuario no ha tocado las grúas manualmente y hay un ritmo por chat/IA, NO SOBRESCRIBIR
+                    const modeEl = document.getElementById(`ritmo-mode-${s}`) || document.getElementById(`ritmoMode_${s}`);
+                    if (window.isAiInjectedRate && modeEl?.value !== 'manual') {
+                        const aiRate = parseFloat(rateInput.value) || (s === 'pod' ? (window.State?.dischRate || window.State?.dischargeRate) : window.State?.loadRate) || 0;
+                        if (aiRate > 0) {
+                            if (s === 'pol') window.State.loadRate = aiRate;
+                            else window.State.dischRate = aiRate;
+                        }
+                        return; // Respetar el ritmo de la IA
+                    }
+
                     let estimatedTpd = 0;
 
                     const numCranes = typeof window.readNumeroGruasPuerto === 'function' ? window.readNumeroGruasPuerto(s) : 1;
@@ -71573,6 +71676,10 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
                     }
 
                     if (estimatedTpd > 0) {
+                        const modeEl = document.getElementById(`ritmo-mode-${s}`) || document.getElementById(`ritmoMode_${s}`);
+                        if (window.isAiInjectedRate && modeEl?.value !== 'manual') {
+                            return; // Respetar el ritmo de la IA
+                        }
                         rateInput.value = String(Math.round(estimatedTpd));
                         if (s === 'pol') window.State.loadRate = estimatedTpd;
                         else window.State.dischRate = estimatedTpd;
