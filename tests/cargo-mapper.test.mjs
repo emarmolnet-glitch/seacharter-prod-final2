@@ -13,7 +13,7 @@ import {
 
 test("validates exact cargo category and product hierarchy values", () => {
   assert.deepEqual(validateCargoHierarchy("Minerales y Construcción", "Big Bags (Minerales/Cemento)", "cemento en big bags"), {
-    categoriaCarga: "Minerales y Construcción",
+    categoriaCarga: "Carga Unitizada / Envasada",
     productoEspecifico: "Big Bags (Minerales/Cemento)",
   });
   assert.deepEqual(validateCargoHierarchy("Carga Siderúrgica y Metales", "Big Bags (Minerales/Cemento)", "big bags"), {
@@ -88,7 +88,7 @@ test("maps steel, grain, fertilizer and breakbulk families", () => {
 
 test("forces Big Bags equipment and copies POL method into POD", () => {
   const payload = normalizeNlpVoyagePayload({ cargo_type: "cemento en big bags" });
-  assert.equal(payload.cargo_category, "Minerales y Construcción");
+  assert.equal(payload.cargo_category, "Carga Unitizada / Envasada");
   assert.equal(payload.cargo_product, "Big Bags (Minerales/Cemento)");
   assert.equal(payload.cargo_specification, "10");
   assert.equal(payload.methodPOL, "big_bags_barco");
@@ -168,7 +168,7 @@ test("validates the six-step dependency tree before store injection", () => {
     discharge_rate: 2000,
   });
 
-  assert.equal(payload.cargo_category, "Minerales y Construcción");
+  assert.equal(payload.cargo_category, "Carga Unitizada / Envasada");
   assert.equal(payload.cargo_product, "Big Bags (Minerales/Cemento)");
   assert.equal(payload.methodPOL, "Big Bags - Grúa Portuaria");
   assert.equal(payload.methodPOD, "Big Bags - Grúa Portuaria");

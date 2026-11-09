@@ -1049,6 +1049,83 @@ function clickActionableAiFinalValidationButton() {
   return true;
 }
 
+const TAXONOMY_TRANSLATION_DICTIONARY = [
+    {
+        matcher: /big\s*bags?|jumbo|sacos?|ensacado/i,
+        category: "Carga Unitizada / Envasada",
+        product: "Big Bags (Minerales/Cemento)",
+        loadingMethod: "Big Bags - Grúa Barco",
+        dischargeMethod: "Big Bags - Grúa Barco",
+        polCode: "big_bags_barco",
+        podCode: "big_bags_barco"
+    },
+    {
+        matcher: /palet|pallet|paletizado/i,
+        category: "Carga Unitizada / Envasada",
+        product: "Carga Paletizada",
+        loadingMethod: "Paletizado - Grúa Barco",
+        dischargeMethod: "Paletizado - Grúa Barco",
+        polCode: "paletizado_barco",
+        podCode: "paletizado_barco"
+    },
+    {
+        matcher: /break[ _-]?proyecto|maquinaria|piezas?\s*especiales?/i,
+        category: "Carga de Proyecto (Breakbulk)",
+        product: "Piezas Especiales / Maquinaria",
+        loadingMethod: "Hierro/Acero - Grúa Barco",
+        dischargeMethod: "Hierro/Acero - Grúa Barco",
+        polCode: "hierro_acero_barco",
+        podCode: "hierro_acero_barco"
+    },
+    {
+        matcher: /granel|bulk|free\s*flow/i,
+        category: "Minerales y Construcción",
+        product: "Cemento a granel",
+        loadingMethod: "Cuchara (Grab) - Grúa Barco",
+        dischargeMethod: "Cinta Transportadora",
+        polCode: "cuchara_grab",
+        podCode: "cinta_transportadora"
+    }
+];
+
+function applyTaxonomyDictionary(promptText = "", payload = {}) {
+    const rawText = String(promptText + " " + (payload.product || "") + " " + (payload.cargo_type || "")).toLowerCase();
+    
+    let matchRule = TAXONOMY_TRANSLATION_DICTIONARY.find(rule => rule.matcher.test(rawText));
+    
+    // Fallback por defecto si no hay cerco de envase explícito pero menciona cemento de forma ambigua
+    if (!matchRule && /cemento|clinker/i.test(rawText)) {
+        // Si no dice explícitamente granel, por seguridad revisamos si hay envase en el payload
+        if (/big\s*bag|saco|palet/i.test(JSON.stringify(payload))) {
+            matchRule = TAXONOMY_TRANSLATION_DICTIONARY[0]; // Big Bags
+        } else {
+            matchRule = TAXONOMY_TRANSLATION_DICTIONARY[3]; // Granel por defecto
+        }
+    }
+    
+    if (!matchRule) return;
+
+    // Aplicación atómica directa en el DOM sin bucles asíncronos rotos
+    const catEl = document.getElementById('cargo-type');
+    if (catEl) catEl.value = matchRule.category;
+    
+    if (typeof window.populateCargoProducts === 'function') {
+        window.populateCargoProducts(matchRule.product);
+    }
+    
+    const prodEl = document.getElementById('cargo-product');
+    if (prodEl) prodEl.value = matchRule.product;
+    
+    const polSelect = document.getElementById('metodo_carga');
+    if (polSelect) polSelect.value = matchRule.polCode;
+    
+    const podSelect = document.getElementById('metodo_descarga_pod');
+    if (podSelect) podSelect.value = matchRule.podCode;
+    
+    window.renderMethodPills?.('pol');
+    window.renderMethodPills?.('pod');
+}
+
 async function executeActionableAiUpdateFields(actionObj) {
     console.group("🧩 [Cerebro.ia/update_fields] Procesando actualización múltiple universal y precisa");
     console.log("Objeto de acción recibido:", actionObj);
@@ -1227,7 +1304,7 @@ async function executeActionableAiUpdateFields(actionObj) {
         const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
         updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt, !isMapView);
 
-        // 🚀 2. MOTOR LÉXICO AVANZADO
+        // 🚀 2. MOTOR LÉXICO AVANZADO Y TAXONOMÍA DEL BACKEND
         const packagingRegex = /(big\s*bag|saco|sling|palet|envasad)/i;
         const cargoTypeLower = (p.cargo_type || p.underlyingCommodity || p.mercancia || p.cargo || p.product || p.category || "").toLowerCase();
         const rawPackagingText = String(p.packingType || p.packaging || p.packageType || "").toLowerCase();
@@ -1235,6 +1312,13 @@ async function executeActionableAiUpdateFields(actionObj) {
         const rawCategoryText = String(p.category || p.cargoCategory || p.categoriaCarga || "").toLowerCase();
         const hasEnvase = packagingRegex.test(cargoTypeLower) || packagingRegex.test(rawPackagingText) || packagingRegex.test(rawProductText) || packagingRegex.test(rawCategoryText);
         const isGranel = !hasEnvase && (cargoTypeLower.includes('granel') || cargoTypeLower.includes('bulk') || (p.category || "").toLowerCase().includes('granel') || p.isBulk === true);
+
+        const explicitCategory = String(p.category || p.cargoCategory || p.categoriaCarga || p.cargo_category || "").trim();
+        const explicitProduct = String(p.product || p.cargoProduct || p.productoEspecifico || p.productSpecific || p.cargo_product || "").trim();
+        const explicitPackaging = String(p.packaging || p.packageType || p.tipoEmpaque || "").trim();
+        const explicitPackingType = String(p.packingType || explicitPackaging || "").trim();
+        const explicitSpecification = String(p.cargoSpecification || p.cargo_specification || p.especificacionCargaId || "").trim();
+        const hasExplicitBackendCargo = Boolean(explicitCategory || explicitProduct || explicitPackingType);
 
         const combinedClues = [
             cargoTypeLower,
@@ -1269,7 +1353,63 @@ async function executeActionableAiUpdateFields(actionObj) {
         let resolvedLoadingMethod = "";
         let resolvedDischargeMethod = "";
 
-        if (isBreakbulk) {
+        if (hasExplicitBackendCargo) {
+            resolvedCategory = explicitCategory;
+            resolvedProduct = explicitProduct;
+            resolvedPackaging = explicitPackaging;
+            resolvedPackingType = explicitPackingType;
+            if (explicitSpecification) resolvedSpecification = explicitSpecification;
+
+            if (/palet/i.test(explicitProduct) || /palet/i.test(explicitPackingType) || /palet/i.test(explicitPackaging)) {
+                resolvedProduct = "Carga Paletizada";
+                resolvedPackaging = "Palets";
+                resolvedPackingType = "Paletizado";
+                resolvedCategory = "Carga Unitizada / Envasada";
+                resolvedIsBulk = false;
+                resolvedIsBigBags = false;
+                resolvedMethodPOL = "paletizado_barco";
+                resolvedMethodPOD = "paletizado_barco";
+                resolvedLoadingMethod = "Paletizado - Grúa Barco";
+                resolvedDischargeMethod = "Paletizado - Grúa Barco";
+            } else if (/big\s*bags?|jumbo|saco/i.test(explicitProduct) || /big\s*bags?|jumbo|saco/i.test(explicitPackingType) || /big\s*bags?|jumbo|saco/i.test(explicitPackaging)) {
+                resolvedProduct = "Big Bags (Minerales/Cemento)";
+                resolvedPackaging = "Big Bags";
+                resolvedPackingType = "Big Bags";
+                resolvedCategory = "Carga Unitizada / Envasada";
+                resolvedIsBulk = false;
+                resolvedIsBigBags = true;
+                resolvedMethodPOL = "big_bags_barco";
+                resolvedMethodPOD = "big_bags_barco";
+                resolvedLoadingMethod = "Big Bags - Grúa Barco";
+                resolvedDischargeMethod = "Big Bags - Grúa Barco";
+            } else if (/breakbulk|proyecto/i.test(explicitCategory) || /maquinaria|piezas? especial/i.test(explicitProduct)) {
+                resolvedCategory = "Carga de Proyecto (Breakbulk)";
+                resolvedPackaging = "Breakbulk";
+                resolvedPackingType = "Breakbulk";
+                resolvedSpecification = explicitSpecification || "90";
+                resolvedProduct = explicitProduct || "Piezas Especiales / Maquinaria";
+                resolvedMethodPOL = "hierro_acero_barco";
+                resolvedMethodPOD = "hierro_acero_barco";
+                resolvedLoadingMethod = "Hierro/Acero - Grúa Barco";
+                resolvedDischargeMethod = "Hierro/Acero - Grúa Barco";
+                resolvedIsBulk = false;
+            } else if (/sider[uú]rg|metal/i.test(explicitCategory) || /bobina|tubo|chatarra|hierro/i.test(explicitProduct)) {
+                resolvedCategory = "Carga Siderúrgica y Metales";
+                resolvedSpecification = explicitSpecification || "20";
+                resolvedPackaging = resolvedIsBulk ? "A granel" : "Breakbulk";
+                resolvedPackingType = resolvedPackaging;
+                resolvedMethodPOL = "hierro_acero_barco";
+                resolvedMethodPOD = "hierro_acero_barco";
+                resolvedLoadingMethod = "Hierro/Acero - Grúa Barco";
+                resolvedDischargeMethod = "Hierro/Acero - Grúa Barco";
+            }
+
+            if (/unitiz|envasad/i.test(resolvedCategory)) resolvedCategory = "Carga Unitizada / Envasada";
+            else if (/proyect|breakbulk/i.test(resolvedCategory)) resolvedCategory = "Carga de Proyecto (Breakbulk)";
+            else if (/sider|metal/i.test(resolvedCategory)) resolvedCategory = "Carga Siderúrgica y Metales";
+            else if (/biomas|combustible/i.test(resolvedCategory)) resolvedCategory = "Biomasa y Combustibles Sólidos";
+            else if (/mineral|construc/i.test(resolvedCategory)) resolvedCategory = "Minerales y Construcción";
+        } else if (isBreakbulk) {
             resolvedCategory = "Carga de Proyecto (Breakbulk)";
             resolvedPackaging = "Breakbulk";
             resolvedPackingType = "Breakbulk";
@@ -1407,13 +1547,33 @@ async function executeActionableAiUpdateFields(actionObj) {
         p.isGranel = resolvedIsBulk;
         p.isBigBags = resolvedIsBigBags;
 
-        if (resolvedMethodPOL && !p.loadingMethod) {
+        if (resolvedIsBigBags || resolvedPackaging === "Big Bags" || resolvedPackingType === "Big Bags" || resolvedProduct === "Big Bags (Minerales/Cemento)") {
+            resolvedLoadingMethod = "Big Bags - Grúa Barco";
+            resolvedDischargeMethod = "Big Bags - Grúa Barco";
+            resolvedMethodPOL = "big_bags_barco";
+            resolvedMethodPOD = "big_bags_barco";
             p.loadingMethod = resolvedLoadingMethod;
-            p.methodPOL = resolvedMethodPOL;
-        }
-        if (resolvedMethodPOD && !p.dischargeMethod) {
             p.dischargeMethod = resolvedDischargeMethod;
+            p.methodPOL = resolvedMethodPOL;
             p.methodPOD = resolvedMethodPOD;
+        } else if (resolvedPackaging === "Palets" || resolvedPackingType === "Paletizado" || resolvedProduct === "Carga Paletizada") {
+            resolvedLoadingMethod = "Paletizado - Grúa Barco";
+            resolvedDischargeMethod = "Paletizado - Grúa Barco";
+            resolvedMethodPOL = "paletizado_barco";
+            resolvedMethodPOD = "paletizado_barco";
+            p.loadingMethod = resolvedLoadingMethod;
+            p.dischargeMethod = resolvedDischargeMethod;
+            p.methodPOL = resolvedMethodPOL;
+            p.methodPOD = resolvedMethodPOD;
+        } else {
+            if (resolvedMethodPOL && !p.loadingMethod) {
+                p.loadingMethod = resolvedLoadingMethod;
+                p.methodPOL = resolvedMethodPOL;
+            }
+            if (resolvedMethodPOD && !p.dischargeMethod) {
+                p.dischargeMethod = resolvedDischargeMethod;
+                p.methodPOD = resolvedMethodPOD;
+            }
         }
 
         const methodLoadLower = (p.loadingMethod || p.metodo_carga || "").toLowerCase();
@@ -1437,7 +1597,7 @@ async function executeActionableAiUpdateFields(actionObj) {
                 pillButtons.forEach(btn => {
                     const txt = btn.textContent.trim().toLowerCase();
                     if (fallbackRule === 'granel' && txt.includes('cuchara') && txt.includes('grúa barco')) btn.click();
-                    if (fallbackRule === 'paletizado' && txt.includes('palletizado') && txt.includes('grúa barco')) btn.click();
+                    if (fallbackRule === 'paletizado' && (txt.includes('palletizado') || txt.includes('paletizado')) && txt.includes('grúa barco')) btn.click();
                     if (fallbackRule === 'bigbags' && txt.includes('big bags') && txt.includes('grúa barco')) btn.click();
                     if (fallbackRule === 'proyecto' && (txt.includes('carga general') || txt.includes('proyecto') || txt.includes('heavy'))) btn.click();
                 });
@@ -1445,7 +1605,9 @@ async function executeActionableAiUpdateFields(actionObj) {
         };
 
         let family = 'general';
-        if (hasEnvase) family = isPallet ? 'paletizado' : 'bigbags';
+        if (resolvedIsBigBags || resolvedPackaging === 'Big Bags' || resolvedProduct === 'Big Bags (Minerales/Cemento)') family = 'bigbags';
+        else if (resolvedPackaging === 'Palets' || resolvedProduct === 'Carga Paletizada') family = 'paletizado';
+        else if (hasEnvase) family = isPallet ? 'paletizado' : 'bigbags';
         else if (resolvedIsBulk || cargoTypeLower.match(/trigo|maiz|soja|cebada|carbon|mineral|bauxita/)) family = 'granel';
         else if (isPallet || cargoTypeLower.match(/paletiz|pallet|madera|papel/)) family = 'paletizado';
         else if (isBigBag || cargoTypeLower.match(/big bag|cemento|fertilizante/)) family = 'bigbags';
@@ -1454,35 +1616,21 @@ async function executeActionableAiUpdateFields(actionObj) {
         clickMethodPill(methodLoadLower, family);
         if (methodDischLower !== methodLoadLower) clickMethodPill(methodDischLower, family);
 
+        // 2b. INYECCIÓN DETERMINISTA DE TAXONOMÍA DE CARGA Y MÉTODOS
+        applyTaxonomyDictionary(combinedClues || p.cargo_type || p.cargoType || p.mercancia || "", p);
+
         const selects = document.querySelectorAll('select');
         selects.forEach(sel => {
+            if (sel.id === 'cargo-type' || sel.id === 'cargo-product') return;
             const options = Array.from(sel.options);
             
             let targetOption = options.find(opt => {
                 const optText = opt.text.toLowerCase();
                 const optValue = String(opt.value).toLowerCase();
                 
-                if (sel.id === 'cargo-type' && resolvedCategory && (optValue === resolvedCategory.toLowerCase() || optText.includes(resolvedCategory.toLowerCase()))) return true;
-                if (sel.id === 'cargo-product' && resolvedProduct && (optValue === resolvedProduct.toLowerCase() || optText.includes(resolvedProduct.toLowerCase()))) return true;
                 if (sel.id === 'cargo-type-manual' && resolvedSpecification && (optValue === String(resolvedSpecification) || optText.startsWith(String(resolvedSpecification)))) return true;
 
                 if (p.cargoSpecification && (optValue === String(p.cargoSpecification) || optText.startsWith(String(p.cargoSpecification)))) return true;
-                if (p.product && optText.includes(p.product.toLowerCase())) return true;
-                if (p.category && optText === p.category.toLowerCase()) return true;
-                if (cargoTypeLower.includes('fertilizante') || cargoTypeLower.includes('abono')) return optText.includes('fertilizante') || optText.includes('abono');
-                if (cargoTypeLower.includes('cemento') || cargoTypeLower.includes('clinker')) {
-                    if (hasEnvase && optText.includes('big bag')) return true;
-                    if (isGranel && optText.includes('cemento') && optText.includes('granel')) return true;
-                    if (!isGranel && optText.includes('cemento') && optText.includes('big bag')) return true;
-                    return optText.includes('cemento');
-                }
-                
-                if (cargoTypeLower.match(/madera|forestal/)) return optText.match(/madera|forestal/);
-                if (cargoTypeLower.match(/trigo|maiz|soja|cebada|grano|cereal/)) return optText.match(/agrícola|grano|cereal/);
-                if (cargoTypeLower.match(/acero|bobina|tubo/)) return optText.match(/acero|metal|siderúrgica/);
-                if (cargoTypeLower.match(/carbon|mineral|bauxita|hierro/)) return optText.match(/mineral|carbón|construcción/);
-                if (cargoTypeLower.match(/maquinaria|pieza|voluminos|yate|transformador|eolico|project|heavy/)) return optText.match(/proyecto|heavy|maquinaria|breakbulk|general/);
-                
                 return false;
             });
 

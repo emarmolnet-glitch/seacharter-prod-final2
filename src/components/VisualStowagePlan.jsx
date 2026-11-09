@@ -151,14 +151,20 @@ export function VisualStowagePlan({
 
   const gm = Number(hydro.metacentricHeightGmEstimatedM || 1.55);
 
+  const isGeared = profile === 'HANDYSIZE' || profile === 'SUPRAMAX' || Boolean(
+    stowagePlan?.vesselModel?.isGeared ||
+    /geared|con gr[uú]as|with cranes|barco|ship(?:'?s)?\s*crane/i.test(`${vesselType} ${model?.type || ''} ${model?.operationalType || ''}`) ||
+    (globalThis.FixtureOperatingProfile && globalThis.FixtureOperatingProfile.resolve({ vesselType, ...stowagePlan?.vesselModel }).isGeared)
+  );
+
   const profileBadgeLabel = profile === 'PNEUMATIC'
     ? 'PNEUMATIC CEMENT CARRIER (GEARLESS · SEALED HOLDS)'
     : profile === 'COASTER'
-    ? 'COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · GEARLESS)'
+    ? `COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · ${isGeared ? 'GEARED' : 'GEARLESS'})`
     : profile === 'RORO'
     ? 'RO-RO / RO-LO CARRIER (CUBIERTAS CORRIDAS & RAMPA POPA)'
     : ['PANAMAX', 'CAPESIZE', 'GEARLESS'].includes(profile)
-    ? `${profile} (GEARLESS · BODEGAS INDEPENDIENTES)`
+    ? `${profile} (${isGeared ? 'GEARED' : 'GEARLESS'} · BODEGAS INDEPENDIENTES)`
     : `${profile} / BULK CARRIER (4 BODEGAS INDEPENDIENTES & GRÚAS)`;
 
   return (

@@ -7502,7 +7502,7 @@ export function ForwarderWorkspace() {
                             {currentProfile === 'RORO'
                               ? `${vesselType || 'Ro-Ro / Pure Car Carrier'} · 3 Cubiertas Horizontales + Rampa de Popa · Operativa Rodada`
                               : currentProfile === 'COASTER'
-                              ? `${vesselType || 'Coaster / Mini-Bulker'} · 2 Bodegas Diáfanas · Bodega Corrida Gearless`
+                              ? `${vesselType || 'Coaster / Mini-Bulker'} · 2 Bodegas Diáfanas · Bodega Corrida ${/geared|barco|gr[uú]a/i.test(`${vesselType} ${currentStowage?.vesselModel?.type || ''}`) ? 'Geared' : 'Gearless'}`
                               : 'Handysize MPP · 4 Bodegas + Cubierta · Capacidad: 30.300 m³'}
                           </span>
                         </div>
