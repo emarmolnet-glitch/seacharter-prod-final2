@@ -25,6 +25,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
   const cargoVolumeCbm = Number(voyageState.cargoVolume || voyageState.volumeCbm || Math.round(cargoTons * stowageFactor * 100) / 100);
 
   const profile = resolveVesselStowageProfile(resolveReportVessel(voyageState).operationalType, vesselClass, voyageState.shipProfile || rawShipType);
+  const isGeared = globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared;
 
   let holds = [];
   let weatherDeck = {
@@ -109,7 +110,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     justification = [
       `1. Distribución simétrica en 2 bodegas diáfanas corridas (${(cargoTons / 2).toLocaleString('en-US')} MT por bodega) minimizando esfuerzos flectores en navegación.`,
       `2. Altura metacéntrica transversal (GM) proyectada en 1.55 m, cumpliendo holgadamente el criterio de estabilidad intacta OMI A.749(18).`,
-      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, compatible con calado admisible y operativa gearless.`,
+      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, compatible con calado admisible y operativa ${isGeared ? 'geared (con grúas de a bordo)' : 'gearless'}.`,
     ];
   } else {
     // HANDYSIZE / BULK CARRIER / MPP
@@ -134,7 +135,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     justification = [
       `1. Distribución simétrica de ${cargoTons.toLocaleString('en-US')} MT entre las 4 bodegas independientes para minimizar esfuerzos flectores y cortantes en navegación.`,
       `2. Altura metacéntrica transversal (GM) proyectada en 1.55 m, cumpliendo holgadamente el criterio de estabilidad intacta OMI A.749(18).`,
-      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, ${profile === 'HANDYSIZE' || profile === 'SUPRAMAX' ? 'operativa obligatoria con grúas de a bordo, eslingas certificadas y sacas/big bags sobre madera de estiba seca, con manipulación a cargo del fletador bajo supervisión del capitán' : 'medios de terminal acordados para operativa gearless'} y calado admisible del buque.`,
+      `3. Factor de estiba proyectado para ${cargoType} de ${cargoVolumeCbm.toLocaleString('en-US')} m³, ${isGeared || profile === 'HANDYSIZE' || profile === 'SUPRAMAX' ? 'operativa obligatoria con grúas de a bordo, eslingas certificadas y estiba asegurada sobre madera seca, con manipulación a cargo del fletador bajo supervisión del capitán' : 'medios de terminal acordados para operativa gearless'} y calado admisible del buque.`,
     ];
   }
 
@@ -160,6 +161,7 @@ export function buildVoyageStowagePlan(voyageState = {}) {
       type: vesselType,
       selectedType: voyageState.vesselType,
       operationalType: resolveReportVessel(voyageState).operationalType,
+      isGeared: globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared,
       profile,
       dwt,
     },

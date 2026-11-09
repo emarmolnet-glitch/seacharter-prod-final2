@@ -13,7 +13,7 @@
         designCategory design_category categoriaDiseno tipoBuque
         loadRate loadingRate ratePOL dischargeRate dischRate ratePOD
         optimalDischargeRate ritmoDescargaOptimizado ritmo_descarga_optimizado dssFormState madreUltimaAuditoria reporte_estrategico reporteEstrategico
-        loadingMethod methodPOL loading_method loadMethod
+        loadingMethod methodPOL loading_method loadMethod dischargeMethod methodPOD dischMethod discharge_method method_pol method_pod
         productoEspecifico cargoProduct cargo_product bulk_category bulkCategory cargo_type
         freightTerms freightTerm terms cargoTerms charterPartyStandard
         laycanDaysLeft estimatedVoyageDays seaDays portDays totalDays
@@ -28,7 +28,7 @@
         clausulas specialClauses clausulasEspeciales clausulasEspecialesRecap
     `.trim().split(/\s+/);
     const dateFields = new Set(['cancellingDate', 'etaDate', 'laycanStart', 'laycanEnd']);
-    const labelFields = new Set(['productoEspecifico', 'cargoProduct', 'cargo_product', 'loadingMethod', 'methodPOL', 'loading_method', 'loadMethod']);
+    const labelFields = new Set(['productoEspecifico', 'cargoProduct', 'cargo_product', 'loadingMethod', 'methodPOL', 'loading_method', 'loadMethod', 'dischargeMethod', 'methodPOD', 'dischMethod', 'discharge_method', 'method_pol', 'method_pod']);
     const clauseFields = new Set(['clausulas', 'specialClauses', 'clausulasEspeciales', 'clausulasEspecialesRecap', 'reporte_estrategico', 'reporteEstrategico']);
     const ownValue = (source, key) => {
         if (!source || typeof source !== 'object') return undefined;

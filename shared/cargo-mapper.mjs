@@ -153,17 +153,15 @@ export function validateCargoHierarchy(category, product, cargoContext = "") {
   const exactProduct = findExactCargoValue(CARGO_PRODUCTS, product);
   if (!exactProduct) return { categoriaCarga: exactCategory, productoEspecifico: "" };
 
-  const validParents = CARGO_CATEGORIES.filter((candidate) => CARGO_PRODUCT_TREE[candidate]?.includes(exactProduct));
-  if (validParents.includes(exactCategory)) return { categoriaCarga: exactCategory, productoEspecifico: exactProduct };
-
-  if (exactProduct === "Big Bags (Minerales/Cemento)") {
-    const normalizedContext = normalizeLookupText(cargoContext);
-    const mineralContext = ["cemento", "clinker", "clinquer", "yeso", "mineral"].some((keyword) => normalizedContext.includes(keyword));
+  if (exactProduct === "Big Bags (Minerales/Cemento)" || exactProduct === "Carga Paletizada" || exactProduct === "Big Bags") {
     return {
-      categoriaCarga: mineralContext ? "Minerales y Construcción" : "Carga Unitizada / Envasada",
-      productoEspecifico: exactProduct,
+      categoriaCarga: "Carga Unitizada / Envasada",
+      productoEspecifico: exactProduct === "Big Bags" ? "Big Bags (Minerales/Cemento)" : exactProduct,
     };
   }
+
+  const validParents = CARGO_CATEGORIES.filter((candidate) => CARGO_PRODUCT_TREE[candidate]?.includes(exactProduct));
+  if (validParents.includes(exactCategory)) return { categoriaCarga: exactCategory, productoEspecifico: exactProduct };
 
   return { categoriaCarga: validParents[0] || exactCategory, productoEspecifico: exactProduct };
 }

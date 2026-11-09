@@ -255,7 +255,7 @@ export function applyPackagingOverride(responseObj, promptText = "") {
             }
         } else if (isCementOrMineral && hasEnvase) {
             // Cemento en big bags / sacos / palets
-            category = "Minerales y Construcción";
+            category = "Carga Unitizada / Envasada"; // ¡PRIORIDAD ABSOLUTA DEL ENVASE!
             specificationId = "10";
             packaging = isPallet ? "Palets" : "Big Bags";
             packingType = isPallet ? "Paletizado" : "Big Bags";

@@ -34178,37 +34178,112 @@ function createRouteAnchorElement(type) {
             applySelectedCargoProduct();
         }
 
-        function restoreCargoSelection(category = '', product = '') {
+        function restoreCargoSelection(category = '', product = '', packingType = '') {
             const categoryEl = document.getElementById('cargo-type');
             if (!categoryEl) return;
-            const normalized = String(category || '').toLowerCase();
-            let resolvedCategory = cargoDictionary[category] ? category : '';
-            let resolvedProduct = product;
-            if (!cargoDictionary[category]) {
+
+            let resolvedCategory = String(category || '').trim();
+            let resolvedProduct = String(product || '').trim();
+            const resolvedPacking = String(packingType || '').trim();
+
+            const cargoCheckStr = String(resolvedCategory + ' ' + resolvedProduct + ' ' + resolvedPacking).toLowerCase();
+            if (/big\s*bags?|jumbo|saco/i.test(cargoCheckStr)) {
+                resolvedCategory = 'Carga Unitizada / Envasada';
+                resolvedProduct = 'Big Bags (Minerales/Cemento)';
+            } else if (/palet|pallet/i.test(cargoCheckStr)) {
+                resolvedCategory = 'Carga Unitizada / Envasada';
+                resolvedProduct = 'Carga Paletizada';
+            }
+
+            // 1. Respetar coincidencia exacta o insensible a mayúsculas con el diccionario del UI
+            for (const key of Object.keys(cargoDictionary)) {
+                if (key.toLowerCase() === resolvedCategory.toLowerCase()) {
+                    resolvedCategory = key;
+                    break;
+                }
+            }
+
+            // 2. Normalización de productos y tipos de envase exactos del backend
+            if (/palet/i.test(resolvedProduct) || /palet/i.test(resolvedPacking)) {
+                resolvedProduct = 'Carga Paletizada';
+                resolvedCategory = 'Carga Unitizada / Envasada';
+            } else if (/big\s*bags?|jumbo|saco/i.test(resolvedProduct) || /big\s*bags?|jumbo|saco/i.test(resolvedPacking)) {
+                resolvedProduct = 'Big Bags (Minerales/Cemento)';
+                resolvedCategory = 'Carga Unitizada / Envasada';
+            } else if (resolvedProduct === "Grignon d'olive (Biomasa)" || /grignon|biomasa|astilla|pellet/i.test(resolvedProduct)) {
+                resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
+                resolvedCategory = resolvedCategory || 'Biomasa y Combustibles Sólidos';
+            } else if (/carb[oó]n/i.test(resolvedProduct)) {
+                resolvedProduct = 'Carbón mineral';
+                resolvedCategory = resolvedCategory || 'Biomasa y Combustibles Sólidos';
+            } else if (/bobina|coil/i.test(resolvedProduct)) {
+                resolvedProduct = 'Bobinas de Acero (Steel Coils)';
+                resolvedCategory = resolvedCategory || 'Carga Siderúrgica y Metales';
+            } else if (/tubo|pipe/i.test(resolvedProduct)) {
+                resolvedProduct = 'Tubos de Acero (Steel Pipes)';
+                resolvedCategory = resolvedCategory || 'Carga Siderúrgica y Metales';
+            } else if (/hierro|chatarra|scrap/i.test(resolvedProduct)) {
+                resolvedProduct = 'Hierro / Chatarra';
+                resolvedCategory = resolvedCategory || 'Carga Siderúrgica y Metales';
+            } else if (/pieza|maquinaria|proyecto|special|breakbulk/i.test(resolvedProduct)) {
+                resolvedProduct = 'Piezas Especiales / Maquinaria';
+                resolvedCategory = resolvedCategory || 'Carga de Proyecto (Breakbulk)';
+            } else if (/cl[ií]nker/i.test(resolvedProduct)) {
+                resolvedProduct = 'Clínker';
+                resolvedCategory = resolvedCategory || 'Minerales y Construcción';
+            } else if (/yeso/i.test(resolvedProduct)) {
+                resolvedProduct = 'Yeso';
+                resolvedCategory = resolvedCategory || 'Minerales y Construcción';
+            }
+
+            // 3. Si el producto ya está resuelto en una categoría de la taxonomía, asegurar coherencia de categoría
+            if (resolvedProduct) {
+                if (resolvedProduct === 'Big Bags (Minerales/Cemento)' || resolvedProduct === 'Carga Paletizada') {
+                    resolvedCategory = 'Carga Unitizada / Envasada';
+                } else if (!resolvedCategory || !cargoDictionary[resolvedCategory]?.some(p => p.nombre === resolvedProduct)) {
+                    for (const [catName, prods] of Object.entries(cargoDictionary)) {
+                        if (prods.some(p => p.nombre === resolvedProduct)) {
+                            resolvedCategory = catName;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 4. Fallback condicional ÚNICAMENTE si no se proporcionaron campos exactos desde el backend
+            if (!cargoDictionary[resolvedCategory]) {
+                const normalized = String(category || '').toLowerCase();
                 if (normalized.includes('coche') || normalized.includes('vehiculo') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk') || normalized.includes('eolico')) {
                     resolvedCategory = 'Carga de Proyecto (Breakbulk)';
+                    if (!resolvedProduct) resolvedProduct = 'Piezas Especiales / Maquinaria';
                 } else if (normalized.includes('acero') || normalized.includes('hierro') || normalized.includes('bobina') || normalized.includes('chatarra') || normalized.includes('metal')) {
                     resolvedCategory = 'Carga Siderúrgica y Metales';
+                    if (!resolvedProduct) resolvedProduct = 'Bobinas de Acero (Steel Coils)';
                 } else if (normalized.includes('combustible') || normalized.includes('carbon') || normalized.includes('carbón') || normalized.includes('biomasa') || normalized.includes('astilla')) {
                     resolvedCategory = 'Biomasa y Combustibles Sólidos';
+                    if (!resolvedProduct) resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
                 } else if (normalized.includes('palet') || normalized.includes('madera') || normalized.includes('saco') || normalized.includes('big bag') || normalized.includes('unitizada')) {
                     resolvedCategory = 'Carga Unitizada / Envasada';
+                    if (!resolvedProduct) resolvedProduct = normalized.includes('palet') ? 'Carga Paletizada' : 'Big Bags (Minerales/Cemento)';
                 } else if (normalized.includes('cemento') || normalized.includes('yeso') || normalized.includes('clinker') || normalized.includes('clínker') || normalized.includes('mineral')) {
                     resolvedCategory = 'Minerales y Construcción';
                 } else {
                     resolvedCategory = categoryEl.value || 'Carga Unitizada / Envasada';
                 }
-
-                if (!resolvedProduct && (normalized.includes('coche') || normalized.includes('maquinaria') || normalized.includes('proyecto') || normalized.includes('breakbulk'))) resolvedProduct = 'Piezas Especiales / Maquinaria';
-                if (!resolvedProduct && (normalized.includes('acero') || normalized.includes('bobina'))) resolvedProduct = 'Bobinas de Acero (Steel Coils)';
-                if (!resolvedProduct && (normalized.includes('biomasa') || normalized.includes('astilla'))) resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
-                if (!resolvedProduct && normalized.includes('palet')) resolvedProduct = 'Carga Paletizada';
-                if (!resolvedProduct && normalized.includes('big bag')) resolvedProduct = (normalized.includes('cemento') || normalized.includes('mineral')) ? 'Big Bags (Minerales/Cemento)' : 'Big Bags';
             }
+
             if (resolvedProduct === "Grignon d'olive (Biomasa)") resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
-            if (resolvedProduct === 'Big Bags (Jumbo Bags - Minerales/Cemento)') resolvedProduct = 'Big Bags (Minerales/Cemento)';
+            if (resolvedProduct === 'Big Bags (Jumbo Bags - Minerales/Cemento)' || resolvedProduct === 'Big Bags') resolvedProduct = 'Big Bags (Minerales/Cemento)';
+            // Bloquear eventos temporalmente
+            window.isRestoringCargo = true;
             categoryEl.value = resolvedCategory;
             populateCargoProducts(resolvedProduct);
+            const productEl = document.getElementById('cargo-product');
+            if (productEl && resolvedProduct && Array.from(productEl.options).some(opt => opt.value === resolvedProduct)) {
+                productEl.value = resolvedProduct;
+                applySelectedCargoProduct();
+            }
+            window.isRestoringCargo = false;
         }
 
         function applySelectedCargoProduct(userInitiated = false) {
@@ -34221,6 +34296,10 @@ function createRouteAnchorElement(type) {
             actualizarCamposTipoCarga();
             if (typeof autoSelectCementCarrierDischargeMethod === 'function') {
                 autoSelectCementCarrierDischargeMethod();
+            }
+            if (typeof updateCraneDefaultsForProduct === 'function') {
+                updateCraneDefaultsForProduct('pol');
+                updateCraneDefaultsForProduct('pod');
             }
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions();
@@ -50891,15 +50970,22 @@ Example:
         window.printExecutiveReportClient = printExecutiveReportClient;
 
         function renderVoyageStowagePlanFallback(st) {
+            const op = globalThis.FixtureOperatingProfile ? globalThis.FixtureOperatingProfile.resolve(st) : null;
             const cargo = Number(st.cargo || 25000);
             const dwt = Number(st.dwt || 32000);
-            const vesselClass = st.class || 'Handysize';
+            const vesselClass = op?.vesselType || st.class || 'Handysize';
             const vesselName = st.vessel || `${vesselClass} ${dwt.toLocaleString('en-US')} DWT`;
+            const isGeared = op ? op.isGeared : /(?:barco|ship(?:'?s)?\s*crane|geared)/i.test(`${st.loadingMethod || ''} ${st.dischargeMethod || ''} ${st.methodPOL || ''} ${st.methodPOD || ''} ${st.class || ''} ${vesselClass}`);
             const isCoaster = /coaster|mini/i.test(vesselClass) || dwt < 12000;
             const isRoro = /ro-ro|roro|ro-lo|rolo|vehicle|car carrier/i.test(`${vesselName} ${vesselClass}`);
             const holdsCount = isCoaster ? 2 : 4;
             const holdTons = cargo > 0 ? (cargo / holdsCount).toFixed(0) : '0';
             const holdPct = cargo > 0 ? (100 / holdsCount).toFixed(1) : '0.0';
+            const badgeLabel = isRoro
+                ? 'RO-RO / RO-LO CARRIER'
+                : isCoaster
+                ? `COASTER / MINI-BULKER (1-2 BODEGAS DIÁFANAS · ${isGeared ? 'GEARED' : 'GEARLESS'})`
+                : `${isGeared ? 'GEARED' : 'GEARLESS'} BULK CARRIER (${holdsCount} BODEGAS)`;
 
             return `
                 <div class="visual-stowage-plan-wrapper bg-white text-slate-800 border-2 border-slate-300 rounded-xl p-4 sm:p-5 shadow-md mb-4 print:border-slate-300 print:shadow-none break-inside-avoid" style="-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
@@ -50907,7 +50993,7 @@ Example:
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 shadow-[0_0_6px_rgba(5,150,105,0.4)]"></span>
                             <span class="text-xs font-black uppercase tracking-wider text-slate-900">UNIVERSAL STOWAGE ENGINE · SEACHARTER PRO</span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold uppercase">${vesselClass} (${dwt.toLocaleString('en-US')} DWT)</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold uppercase">${badgeLabel} (${dwt.toLocaleString('en-US')} DWT)</span>
                         </div>
                         <div class="text-[11px] font-mono text-slate-600">
                             <strong>Carga Total:</strong> ${cargo.toLocaleString('en-US')} MT
@@ -64635,6 +64721,70 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return spec.efficiencyDefaultPct;
         }
 
+        function getCraneDefaultsForCargo(productName = '', packagingType = '') {
+            const combined = String(productName + ' ' + packagingType).toLowerCase();
+            const isPallet = /palet|pallet/i.test(combined);
+            const isBigBag = /big\s*bag|saco/i.test(combined);
+
+            if (isPallet) {
+                return {
+                    grossPerLift: 1.5, // 1.5 MT por palet/izada
+                    gearTare: 0.1,     // 0.1 MT de eslingas/palet spreader
+                    cyclesPerHour: 15,  // Ciclos operativos reales por hora
+                    efficiency: 85     // 85% de eficiencia estándar
+                };
+            } else if (isBigBag) {
+                return {
+                    grossPerLift: 2.0, // 2.0 MT por big bag
+                    gearTare: 0.15,    // 0.15 MT de accesorios
+                    cyclesPerHour: 12,
+                    efficiency: 85
+                };
+            }
+            // ... valores por defecto para granel o proyectos
+            return { grossPerLift: 5.0, gearTare: 0.5, cyclesPerHour: 12, efficiency: 85 };
+        }
+        window.getCraneDefaultsForCargo = getCraneDefaultsForCargo;
+
+        function updateCraneDefaultsForProduct(side = 'pol') {
+            const label = getSelectedMethodLabel(side);
+            if (!isCraneMethod(label)) return;
+
+            const productEl = document.getElementById('cargo-product');
+            const productName = productEl ? productEl.value : '';
+            const packingEl = document.getElementById('gc-add-packing');
+            const packagingType = packingEl ? packingEl.value : '';
+
+            const isPallet = /palet|pallet/i.test(productName + ' ' + packagingType + ' ' + label);
+            const isBigBag = /big\s*bag|saco/i.test(productName + ' ' + packagingType + ' ' + label);
+
+            if (!isPallet && !isBigBag) return;
+
+            const defaults = getCraneDefaultsForCargo(productName, packagingType);
+
+            const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+            const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
+            const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+            const swlEl = document.getElementById(swlId);
+            const taraEl = document.getElementById(taraId);
+            const ciclosEl = document.getElementById(ciclosId);
+
+            if (swlEl && swlEl.dataset.manualOverride !== 'true') {
+                swlEl.value = String(defaults.grossPerLift);
+                if (typeof updateSection2LocalState === 'function') updateSection2LocalState(swlId, swlEl.value);
+            }
+            if (taraEl && taraEl.dataset.manualOverride !== 'true') {
+                taraEl.value = String(defaults.gearTare);
+                if (typeof updateSection2LocalState === 'function') updateSection2LocalState(taraId, taraEl.value);
+            }
+            if (ciclosEl && ciclosEl.dataset.manualOverride !== 'true') {
+                ciclosEl.value = String(defaults.cyclesPerHour);
+                if (typeof updateSection2LocalState === 'function') updateSection2LocalState(ciclosId, ciclosEl.value);
+            }
+            setEficienciaGruaValor(side, defaults.efficiency);
+        }
+        window.updateCraneDefaultsForProduct = updateCraneDefaultsForProduct;
+
         function isCraneMethod(label = '') {
             const l = String(label || '');
             return l.includes('Grúa')
@@ -65117,6 +65267,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 const autoEficiencia = getAutoEficienciaForMethodAndCategory(label, getActiveCargoCategory());
                 setEficienciaGruaValor(side, autoEficiencia);
+                updateCraneDefaultsForProduct(side);
             } else {
                 resetEficienciaGrua(side);
             }
@@ -65727,6 +65878,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
          * ya que no se necesitan camiones para descargar un Cement Carrier.
          */
         function autoSelectCementCarrierDischargeMethod(options = {}) {
+            if (window.isRestoringCargo) return false; // ABORTAR SI ESTAMOS INYECTANDO
             const productEl = document.getElementById('cargo-product');
             const productVal = productEl ? productEl.value.toLowerCase() : '';
             if (productVal.includes('big bag') || productVal.includes('saco') || productVal.includes('palet')) return false;
@@ -65821,6 +65973,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             // Aplicar ritmos propios de bombeo del buque (8,000 TM/d y 10h turn time)
+            if (typeof updateCraneDefaultsForProduct === 'function') {
+                updateCraneDefaultsForProduct('pol');
+                updateCraneDefaultsForProduct('pod');
+            }
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions('pod');
             } else if (typeof handlePortMethodChange === 'function') {
@@ -65957,6 +66113,10 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             validarCompatibilidadMetodo(side);
             actualizarDesviacionDeltaManual(side);
             if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
+            if (typeof updateCraneDefaultsForProduct === 'function') {
+                updateCraneDefaultsForProduct('pol');
+                updateCraneDefaultsForProduct('pod');
+            }
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions(side);
             } else if (typeof recalcularDiasPuerto === 'function') {
@@ -67310,12 +67470,14 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
         }
 
         function detectExecutiveShipClass() {
+            const op = globalThis.FixtureOperatingProfile && typeof State !== 'undefined' ? globalThis.FixtureOperatingProfile.resolve(State) : null;
             const dwt = Number(State.dwt || document.getElementById('vessel-dwt')?.value || 0);
             const rawType = String(State.class || document.getElementById('vessel-badge')?.innerText || document.getElementById('vessel-type')?.value || '').toLowerCase();
+            const dynamicLabel = op ? op.vesselType : null;
             if (rawType.includes('mini') || rawType.includes('coaster') || rawType.includes('minibulker') || (dwt > 0 && dwt < 15000)) {
                 return {
                     key: 'MINI_BULKER',
-                    label: 'Mini Bulker',
+                    label: dynamicLabel || 'Mini Bulker',
                     capexUsdPerDwt: 620,
                     capexAnnualRate: 0.115,
                     insuranceUsdPerDwtDay: 0.018,
@@ -67328,7 +67490,7 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             if (rawType.includes('handy') || (dwt >= 15000 && dwt <= 34999)) {
                 return {
                     key: 'HANDYSIZE',
-                    label: 'Handysize',
+                    label: (dynamicLabel && op.isGeared) ? dynamicLabel : 'Handysize',
                     capexUsdPerDwt: 540,
                     capexAnnualRate: 0.10,
                     insuranceUsdPerDwtDay: 0.026,
@@ -67340,7 +67502,7 @@ if (rateDischInput && rateDischInput.dataset.manualOverride !== "true" && (!rate
             }
             return {
                 key: 'STANDARD',
-                label: State.class || 'Buque estándar',
+                label: dynamicLabel || State.class || 'Buque estándar',
                 capexUsdPerDwt: 450,
                 capexAnnualRate: 0.10,
                 insuranceUsdPerDwtDay: 0.025,
