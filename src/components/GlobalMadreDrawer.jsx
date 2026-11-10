@@ -351,57 +351,73 @@ function buildMotherExecutiveScript(state = {}) {
 }
 
 /**
- * Reproducción de voz neuronal MADRE conectando con DataBridge (madre-voice.js / ElevenLabs)
+ * Reproducción de voz neuronal MADRE conectando con DataBridge (madre-voice.js / Google Cloud TTS)
  * Reproducción directa en hardware usando Web Audio API (Bypass CSP media-src / blob:)
  */
 async function playNeuralMotherVoice(textToSpeak, playback = {}) {
+  if (!textToSpeak) return null;
   let audioCtx;
+  
   try {
     const response = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/madre-voice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: textToSpeak })
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg' 
+      },
+      body: JSON.stringify({ 
+        text: textToSpeak,
+        origen: "Sea Charter"
+      })
     });
 
-    if (!response.ok) throw new Error('Error en DataBridge TTS');
+    if (!response.ok) {
+      console.warn(`[playNeuralMotherVoice] Petición rechazada por Netlify (HTTP ${response.status})`);
+      return null;
+    }
 
     const contentType = response.headers?.get ? (response.headers.get("content-type") || response.headers.get("Content-Type")) : null;
     if (contentType && contentType.includes("application/json")) {
-      const data = await response.json();
-      if (data.fallback_to_browser) {
-        return; // Fallback no compatible con entorno Web Audio estricto
-      }
+      console.warn("[playNeuralMotherVoice] El servidor devolvió JSON de error. Abortando síntesis para evitar voz robótica.");
+      return null;
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     audioCtx = new AudioContext();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    
     if (playback.shouldPlay && !playback.shouldPlay()) {
       await audioCtx.close();
-      return;
+      return null;
     }
+    
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
+    
     source.onended = () => {
       source.disconnect();
       void audioCtx.close().catch(() => {});
       playback.onEnded?.(source);
     };
+    
     playback.onReady?.(source);
-    // No asynchronous work between the final validity check and playback.
+    
     if (playback.shouldPlay && !playback.shouldPlay()) {
       source.disconnect();
       await audioCtx.close();
       playback.onEnded?.(source);
-      return;
+      return null;
     }
+    
     source.start(0);
     return source;
+    
   } catch (error) {
     if (audioCtx) void audioCtx.close().catch(() => {});
     console.error("Fallo al invocar a Madre neuronal en DataBridge:", error);
+    return null;
   }
 }
 
