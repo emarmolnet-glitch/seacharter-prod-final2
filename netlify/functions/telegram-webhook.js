@@ -12,7 +12,7 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { procesarChatMadre } from "./madre-chat.js";
+import { requestVerdict } from "./madre-chat.js";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -516,7 +516,7 @@ export async function queryMadreEngineFromTelegram(userText, metadata = {}, opti
 
       let resultado;
       try {
-        resultado = await Promise.race([procesarChatMadre(madrePayload), timeoutPromise]);
+        resultado = await Promise.race([requestVerdict(madrePayload), timeoutPromise]);
       } finally {
         clearTimeout(timer);
       }
