@@ -11,6 +11,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/pdf"
+  to = "/.netlify/functions/pdf"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ocr-extract"
+  to = "/.netlify/functions/ocr-extract"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/databridge-port-tariff"
   to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
   status = 301
