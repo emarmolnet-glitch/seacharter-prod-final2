@@ -4,6 +4,10 @@ import { createIaReport, failIaReport, getVesselSyncContext } from "../../db/ia-
 
 type GeminiPart = {
   text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
 };
 
 export type GeminiPayload = {
@@ -290,6 +294,20 @@ function extractPrompt(payload: GeminiPayload) {
     .trim();
 }
 
+export function extractInlineDataParts(payload: GeminiPayload): GeminiPart[] {
+  return (payload.contents || [])
+    .flatMap((content) => content.parts || [])
+    .filter((part): part is GeminiPart & { inlineData: { mimeType: string; data: string } } =>
+      Boolean(part.inlineData?.mimeType && part.inlineData?.data)
+    )
+    .map((part) => ({
+      inlineData: {
+        mimeType: String(part.inlineData.mimeType),
+        data: String(part.inlineData.data),
+      },
+    }));
+}
+
 function wantsJson(payload: GeminiPayload, prompt: string) {
   const normalizedPrompt = prompt.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return payload.generationConfig?.responseMimeType === "application/json"
@@ -476,7 +494,7 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
         initialUserContent: prompt,
       };
 
-  async function generateContentWithFallback(contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>) {
+  async function generateContentWithFallback(contents: Array<{ role: "user" | "model"; parts: GeminiPart[] }>) {
     let lastError: unknown;
     for (const modelName of candidateModels) {
       try {
@@ -502,8 +520,14 @@ export async function processLegalAuditPayload(payload: GeminiPayload, onProgres
   }
 
   let text = "";
-  const contentsHistory: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [
-    { role: "user", parts: [{ text: initialUserContent }] },
+  const inlineDataParts = extractInlineDataParts(payload);
+  const initialUserParts: GeminiPart[] = [
+    { text: initialUserContent },
+    ...inlineDataParts,
+  ];
+
+  const contentsHistory: Array<{ role: "user" | "model"; parts: GeminiPart[] }> = [
+    { role: "user", parts: initialUserParts },
   ];
 
   for (let attempt = 0; attempt < (isStrictAudit ? 2 : 1); attempt += 1) {
