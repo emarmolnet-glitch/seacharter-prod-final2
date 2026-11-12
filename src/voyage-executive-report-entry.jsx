@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { resolveReportVessel } from './report-vessel.mjs';
 import { translateExecutivePDF } from './executive-pdf-english.mjs';
+import { EXECUTIVE_REPORT_DICTIONARY, toggleExecutiveReportLanguage } from './executive-report-dictionary.mjs';
 import VisualStowagePlan from './components/VisualStowagePlan.jsx';
 import VoyageExecutiveReportModal, { buildVoyageStowagePlan } from './components/VoyageExecutiveReportModal.jsx';
 
@@ -51,6 +52,7 @@ export function mountVoyageExecutiveReport(container, props = {}) {
       onClose={handleClose}
       voyageData={props.voyageData || (typeof window !== 'undefined' ? window.State : null)}
       initialClientMode={Boolean(props.isClientMode ?? window.isExecutiveClientMode)}
+      initialLanguage={props.initialLanguage || props.lang || (typeof window !== 'undefined' ? window.currentExecutiveReportLang : 'es')}
     />
   );
 
@@ -108,7 +110,9 @@ if (typeof window !== 'undefined') {
   window.buildVoyageStowagePlan = buildVoyageStowagePlan;
   window.VoyageExecutiveReportModal = VoyageExecutiveReportModal;
   window.VisualStowagePlan = VisualStowagePlan;
+  window.EXECUTIVE_REPORT_DICTIONARY = EXECUTIVE_REPORT_DICTIONARY;
+  window.toggleExecutiveReportLanguage = toggleExecutiveReportLanguage;
 }
 
-export { VoyageExecutiveReportModal, VisualStowagePlan, buildVoyageStowagePlan };
+export { VoyageExecutiveReportModal, VisualStowagePlan, buildVoyageStowagePlan, EXECUTIVE_REPORT_DICTIONARY, toggleExecutiveReportLanguage };
 export default VoyageExecutiveReportModal;

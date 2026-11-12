@@ -17,10 +17,38 @@ export default function VoyageExecutiveReportModal({
   voyageData = null,
   initialClientMode = false,
   textOnly = false,
+  initialLanguage = 'es',
 }) {
   const [isClientMode, setIsClientMode] = useState(initialClientMode);
+  const [currentLang, setCurrentLang] = useState(
+    initialLanguage || (typeof window !== 'undefined' ? window.currentExecutiveReportLang : 'es') || 'es'
+  );
   const [printPending, setPrintPending] = useState(false);
   const isPrintingRef = useRef(false);
+
+  const handleLanguageChange = (lang) => {
+    const target = lang === 'en' ? 'en' : 'es';
+    setCurrentLang(target);
+    if (typeof window !== 'undefined') {
+      window.currentExecutiveReportLang = target;
+      if (typeof window.toggleExecutiveReportLanguage === 'function') {
+        window.toggleExecutiveReportLanguage(target);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalLang = (e) => {
+      const nextLang = e.detail?.lang;
+      if (nextLang && nextLang !== currentLang) {
+        setCurrentLang(nextLang);
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('executive-report-language-changed', handleGlobalLang);
+      return () => window.removeEventListener('executive-report-language-changed', handleGlobalLang);
+    }
+  }, [currentLang]);
 
   // Extraer estado del viaje desde props o desde window.State
   // A supplied Recap is the complete report source; never merge live vessel defaults.
@@ -144,6 +172,9 @@ export default function VoyageExecutiveReportModal({
   const handlePrint = (clientMode) => {
     if (typeof window !== 'undefined') {
       window.isExecutiveClientMode = clientMode;
+      if (typeof window.toggleExecutiveReportLanguage === 'function') {
+        window.toggleExecutiveReportLanguage(currentLang);
+      }
     }
     setIsClientMode(clientMode);
     setPrintPending(true);
@@ -219,8 +250,47 @@ export default function VoyageExecutiveReportModal({
             </p>
           </div>
 
-          {/* Toggle de Modo Cliente en cabecera */}
+          {/* Toggle de Idioma y Modo Cliente en cabecera */}
           <div className="flex flex-wrap items-center gap-2 no-print">
+            {/* Selector de Idioma (ES / EN) */}
+            <div
+              id="report-language-toggle-group"
+              role="radiogroup"
+              aria-label="Selector de Idioma del Reporte"
+              className="inline-flex rounded-lg p-1 bg-slate-100 border border-slate-200 gap-1"
+            >
+              <button
+                type="button"
+                id="btn-report-lang-es"
+                data-lang-btn="es"
+                aria-pressed={currentLang === 'es'}
+                onClick={() => handleLanguageChange('es')}
+                className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
+                  currentLang === 'es'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                }`}
+                title="Reporte en Español"
+              >
+                <span>🇪🇸 ES</span>
+              </button>
+              <button
+                type="button"
+                id="btn-report-lang-en"
+                data-lang-btn="en"
+                aria-pressed={currentLang === 'en'}
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
+                  currentLang === 'en'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                }`}
+                title="Report in English"
+              >
+                <span>🇬🇧 EN</span>
+              </button>
+            </div>
+
             <div
               id="report-mode-toggle-group"
               role="radiogroup"
@@ -279,11 +349,11 @@ export default function VoyageExecutiveReportModal({
                 <i className="fa-solid fa-ship text-blue-600 print:hidden"></i> ESPECIFICACIONES BUQUE &amp; CARGA
               </h5>
               <ul className="space-y-1.5">
-                <li className="flex justify-between"><span className="text-slate-600">Buque:</span> <span className="font-bold text-slate-900">{vesselName}</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Capacidad / Clase:</span> <span className="font-bold text-slate-900">{vesselDescription}</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Carga a Transportar:</span> <span className="font-bold text-slate-900">{cargoTons.toLocaleString('en-US')} MT</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Tipo Carga:</span> <span className="font-bold text-slate-900">{cargoType}</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Póliza Estándar:</span> <span className="font-bold text-blue-800">{cpStandard}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Vessel / Details:' : 'Buque / Detalles:'}</span> <span className="font-bold text-slate-900">{vesselName}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Capacity / Class:' : 'Capacidad / Clase:'}</span> <span className="font-bold text-slate-900">{vesselDescription}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Cargo to Transport:' : 'Carga a Transportar:'}</span> <span className="font-bold text-slate-900">{cargoTons.toLocaleString('en-US')} MT</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Cargo Type:' : 'Tipo Carga:'}</span> <span className="font-bold text-slate-900">{cargoType}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Terms & Conditions:' : 'Condiciones:'}</span> <span className="font-bold text-blue-800">{cpStandard}</span></li>
               </ul>
             </div>
 
@@ -293,10 +363,10 @@ export default function VoyageExecutiveReportModal({
                 <i className="fa-solid fa-route text-blue-600 print:hidden"></i> RUTA E ITINERARIO
               </h5>
               <ul className="space-y-1.5">
-                <li className="flex justify-between"><span className="text-slate-600">Puerto Lastre:</span> <span className="font-bold text-slate-900">{ballastPort}</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Carga / Descarga:</span> <span className="font-bold text-slate-900">{pol} ➔ {pod}</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Distancia Total:</span> <span className="font-bold text-slate-900">{distTotal.toLocaleString('en-US')} NM</span></li>
-                <li className="flex justify-between"><span className="text-slate-600">Duración Estimada:</span> <span className="font-bold text-slate-900">{totalDays.toFixed(2)} Días</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Ballast Port:' : 'Puerto Lastre:'}</span> <span className="font-bold text-slate-900">{ballastPort}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Load Port / Discharge Port:' : 'Puerto de Carga / Descarga:'}</span> <span className="font-bold text-slate-900">{pol} ➔ {pod}</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Total Distance:' : 'Distancia Total:'}</span> <span className="font-bold text-slate-900">{distTotal.toLocaleString('en-US')} NM</span></li>
+                <li className="flex justify-between"><span className="text-slate-600">{currentLang === 'en' ? 'Estimated Duration:' : 'Duración Estimada:'}</span> <span className="font-bold text-slate-900">{totalDays.toFixed(2)} {currentLang === 'en' ? 'Days' : 'Días'}</span></li>
               </ul>
             </div>
           </div>
@@ -566,6 +636,34 @@ export default function VoyageExecutiveReportModal({
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Selector de Idioma en pie de página junto a Imprimir */}
+            <div className="inline-flex items-center rounded-lg p-1 bg-slate-100 border border-slate-200 gap-1">
+              <button
+                type="button"
+                id="btn-footer-report-lang-es"
+                data-lang-btn="es"
+                onClick={() => handleLanguageChange('es')}
+                className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                  currentLang === 'es' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Español"
+              >
+                <span>🇪🇸 ES</span>
+              </button>
+              <button
+                type="button"
+                id="btn-footer-report-lang-en"
+                data-lang-btn="en"
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                  currentLang === 'en' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="English"
+              >
+                <span>🇬🇧 EN</span>
+              </button>
+            </div>
+
             <button
               id="btn-print-internal-report"
               type="button"
