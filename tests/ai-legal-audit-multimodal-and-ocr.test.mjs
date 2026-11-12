@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [auditSource, ocrSource] = await Promise.all([
+const [auditSource, ocrSource, indexSource] = await Promise.all([
   readFile(new URL("../netlify/functions/ai-legal-audit.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/ocr-extract.ts", import.meta.url), "utf8"),
+  readFile(new URL("../index.html", import.meta.url), "utf8"),
 ]);
 
 test("ai-legal-audit preserves inlineData for multimodal Gemini requests", () => {
@@ -26,4 +27,18 @@ test("ocr-extract serverless function is configured correctly", () => {
   assert.match(ocrSource, /gemini-2\.5-flash/);
   assert.match(ocrSource, /inlineData/);
   assert.match(ocrSource, /cleanBase64/);
+});
+
+test("index.html connects frontend to /api/ocr-extract with loading state, base64 payload and DOM update", () => {
+  assert.match(indexSource, /fetch\(\s*['"]\/api\/ocr-extract['"]/);
+  assert.match(indexSource, /Extrayendo texto mediante OCR\.\.\./);
+  assert.match(indexSource, /uploadedBase64/);
+  assert.match(indexSource, /document\.getElementById\(['"]recapInput['"]\)\.value\s*=\s*result\.text/);
+});
+
+test("index.html defines @media print styles hiding sidebar and header and showing dictamen results", () => {
+  assert.match(indexSource, /#sidebar/);
+  assert.match(indexSource, /\.nav-sidebar/);
+  assert.match(indexSource, /#resultsContent/);
+  assert.match(indexSource, /@media print/);
 });

@@ -2616,7 +2616,7 @@
 
             body { color: #000 !important; font-size: 8pt; line-height: 1.3; }
 
-            header, .no-print, #global-splash-screen, #view-estimator, #view-auditor, #view-ais, #gc-form-view, #asb-form-view, #toast, #comparison-modal, #vessels-list-modal, #ai-modal-loader { 
+            #sidebar, .nav-sidebar, #app-navigation-sidebar, .app-navigation-sidebar, aside, header, #app-header, .app-header, .no-print, #global-splash-screen, #view-estimator, #view-auditor, #view-ais, #gc-form-view, #asb-form-view, #toast, #comparison-modal, #vessels-list-modal, #ai-modal-loader { 
                 display: none !important; 
             }
             body:not(.is-printing-modal):not(.print-report-mode) #ai-modal {
@@ -2816,6 +2816,14 @@
             }
 
             /* Si se está imprimiendo la auditoría de IA */
+            body.print-audit-mode #sidebar,
+            body.print-audit-mode .nav-sidebar,
+            body.print-audit-mode #app-navigation-sidebar,
+            body.print-audit-mode .app-navigation-sidebar,
+            body.print-audit-mode aside,
+            body.print-audit-mode header,
+            body.print-audit-mode #app-header,
+            body.print-audit-mode .app-header,
             body.print-audit-mode #view-gencon, 
             body.print-audit-mode #view-asbatankvoy,
             body.print-audit-mode #view-ais,
@@ -2834,6 +2842,115 @@
                 margin: 0 !important;
                 background: #fff !important;
                 color: #000 !important;
+            }
+
+            /* Regla de Impresión para Vista de Auditoría (#view-auditor):
+               Oculta el sidebar (#sidebar, .nav-sidebar, etc.) y el header, mostrando únicamente el área del dictamen (el contenedor de los resultados de la IA) */
+            body:has(#view-auditor.active-flex) #sidebar,
+            body:has(#view-auditor.active-flex) .nav-sidebar,
+            body:has(#view-auditor.active-flex) #app-navigation-sidebar,
+            body:has(#view-auditor.active-flex) .app-navigation-sidebar,
+            body:has(#view-auditor.active-flex) aside,
+            body:has(#view-auditor.active-flex) header,
+            body:has(#view-auditor.active-flex) #app-header,
+            body:has(#view-auditor.active-flex) .app-header,
+            body:has(#view-auditor:not(.hidden)) #sidebar,
+            body:has(#view-auditor:not(.hidden)) .nav-sidebar,
+            body:has(#view-auditor:not(.hidden)) #app-navigation-sidebar,
+            body:has(#view-auditor:not(.hidden)) .app-navigation-sidebar,
+            body:has(#view-auditor:not(.hidden)) aside,
+            body:has(#view-auditor:not(.hidden)) header,
+            body:has(#view-auditor:not(.hidden)) #app-header,
+            body:has(#view-auditor:not(.hidden)) .app-header,
+            #view-auditor.active-flex ~ #sidebar,
+            #view-auditor.active-flex ~ aside {
+                display: none !important;
+            }
+
+            body:has(#view-auditor.active-flex) #view-auditor,
+            body:has(#view-auditor:not(.hidden)) #view-auditor,
+            #view-auditor.active-flex {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            body:has(#view-auditor.active-flex) #view-auditor > .ai-work-grid,
+            body:has(#view-auditor:not(.hidden)) #view-auditor > .ai-work-grid,
+            #view-auditor.active-flex > .ai-work-grid {
+                display: block !important;
+                overflow: visible !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            body:has(#view-auditor.active-flex) #view-auditor .w-full.md\:w-1\/3,
+            body:has(#view-auditor.active-flex) #view-auditor .audit-collapsible-panel:not(.audit-results-panel),
+            body:has(#view-auditor.active-flex) #view-auditor #audit-active-vessel-panel,
+            body:has(#view-auditor.active-flex) #view-auditor #emptyState,
+            body:has(#view-auditor.active-flex) #view-auditor #loadingState,
+            body:has(#view-auditor.active-flex) #view-auditor button,
+            body:has(#view-auditor.active-flex) #view-auditor .no-print,
+            body:has(#view-auditor.active-flex) #view-auditor .collapsible-section-header,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .w-full.md\:w-1\/3,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .audit-collapsible-panel:not(.audit-results-panel),
+            body:has(#view-auditor:not(.hidden)) #view-auditor #audit-active-vessel-panel,
+            body:has(#view-auditor:not(.hidden)) #view-auditor #emptyState,
+            body:has(#view-auditor:not(.hidden)) #view-auditor #loadingState,
+            body:has(#view-auditor:not(.hidden)) #view-auditor button,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .no-print,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .collapsible-section-header,
+            #view-auditor.active-flex .w-full.md\:w-1\/3,
+            #view-auditor.active-flex .audit-collapsible-panel:not(.audit-results-panel),
+            #view-auditor.active-flex #audit-active-vessel-panel,
+            #view-auditor.active-flex #emptyState,
+            #view-auditor.active-flex #loadingState,
+            #view-auditor.active-flex button,
+            #view-auditor.active-flex .no-print,
+            #view-auditor.active-flex .collapsible-section-header {
+                display: none !important;
+            }
+
+            body:has(#view-auditor.active-flex) #view-auditor .audit-results-panel,
+            body:has(#view-auditor.active-flex) #view-auditor #resultsContent,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .audit-results-panel,
+            body:has(#view-auditor:not(.hidden)) #view-auditor #resultsContent,
+            #view-auditor.active-flex .audit-results-panel,
+            #view-auditor.active-flex #resultsContent,
+            body.print-audit-mode #resultsContent {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: #fff !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            body:has(#view-auditor.active-flex) #resultsContent .legacy-audit-section,
+            body:has(#view-auditor:not(.hidden)) #resultsContent .legacy-audit-section,
+            #view-auditor.active-flex #resultsContent .legacy-audit-section,
+            body:has(#view-auditor.active-flex) #resultsContent > div,
+            body:has(#view-auditor:not(.hidden)) #resultsContent > div,
+            #view-auditor.active-flex #resultsContent > div {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                box-shadow: none !important;
+                background: #fff !important;
+                border-color: #cbd5e1 !important;
             }
 
             /* Si se está imprimiendo el contrato (por defecto o explícito) */
@@ -54600,7 +54717,12 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                 const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
                 if (file.type === 'application/pdf' || fileExtension === 'pdf') {
-                    extractedText = await extractTextFromPDF(file);
+                    try {
+                        extractedText = await extractTextFromPDF(file);
+                    } catch (pdfErr) {
+                        console.warn("[PDF extract] Error leyendo texto PDF:", pdfErr);
+                        extractedText = "";
+                    }
                     
                     const dataUrl = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
@@ -54610,15 +54732,49 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     });
                     
                     const base64Data = dataUrl.split(',')[1];
+                    const uploadedBase64 = base64Data;
+                    const mimeType = 'application/pdf';
                     State.uploadedFile = {
                         name: fileName,
-                        type: 'application/pdf',
-                        base64: base64Data,
+                        type: mimeType,
+                        base64: uploadedBase64,
                         dataUrl: dataUrl
                     };
 
+                    const fallbackPdfPlaceholder = `[Documento PDF escaneado / OCR para auditar: ${fileName}]\nEste archivo PDF parece estar escaneado o protegido contra copia directa de texto. Por favor, realiza la lectura visual y OCR de este documento PDF adjunto, y audítalo (Contrato, Carta de Crédito, Factura, Packing List, etc.) evaluando si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+
                     if (!extractedText || extractedText.trim().length === 0) {
-                        extractedText = `[Documento PDF escaneado / OCR para auditar: ${fileName}]\nEste archivo PDF parece estar escaneado o protegido contra copia directa de texto. Por favor, realiza la lectura visual y OCR de este documento PDF adjunto, y audítalo (Contrato, Carta de Crédito, Factura, Packing List, etc.) evaluando si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+                        textarea.value = "Extrayendo texto mediante OCR...";
+                        if (uploadBtn) {
+                            uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> OCR...';
+                        }
+                        try {
+                            const ocrResponse = await fetch('/api/ocr-extract', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    mimeType: mimeType,
+                                    base64: uploadedBase64
+                                })
+                            });
+                            if (ocrResponse.ok) {
+                                const result = await ocrResponse.json();
+                                if (result && result.text && result.text.trim().length > 0) {
+                                    extractedText = result.text.trim();
+                                    document.getElementById('recapInput').value = result.text;
+                                } else {
+                                    extractedText = fallbackPdfPlaceholder;
+                                    document.getElementById('recapInput').value = fallbackPdfPlaceholder;
+                                }
+                            } else {
+                                extractedText = fallbackPdfPlaceholder;
+                                document.getElementById('recapInput').value = fallbackPdfPlaceholder;
+                            }
+                        } catch (ocrErr) {
+                            console.warn("[OCR fallback] Falló la petición a /api/ocr-extract:", ocrErr);
+                            extractedText = fallbackPdfPlaceholder;
+                            document.getElementById('recapInput').value = fallbackPdfPlaceholder;
+                        }
                     }
                 } else if (fileExtension === 'docx') {
                     extractedText = await extractTextFromWord(file);
@@ -54636,14 +54792,49 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     });
                     
                     const base64Data = dataUrl.split(',')[1];
+                    const uploadedBase64 = base64Data;
+                    const mimeType = file.type || `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
                     State.uploadedFile = {
                         name: fileName,
-                        type: file.type || `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
-                        base64: base64Data,
+                        type: mimeType,
+                        base64: uploadedBase64,
                         dataUrl: dataUrl
                     };
                     
-                    extractedText = `[Fotografía de documento adjunto para auditar: ${fileName}]\nPor favor, audita la imagen adjunta de este documento (Contrato, Carta de Crédito, Factura, Packing List, etc.) y evalúa si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+                    const fallbackImagePlaceholder = `[Fotografía de documento adjunto para auditar: ${fileName}]\nPor favor, audita la imagen adjunta de este documento (Contrato, Carta de Crédito, Factura, Packing List, etc.) y evalúa si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+
+                    // Para imágenes, la extracción local no devuelve texto: llamar a OCR
+                    textarea.value = "Extrayendo texto mediante OCR...";
+                    if (uploadBtn) {
+                        uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> OCR...';
+                    }
+                    try {
+                        const ocrResponse = await fetch('/api/ocr-extract', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                mimeType: mimeType,
+                                base64: uploadedBase64
+                            })
+                        });
+                        if (ocrResponse.ok) {
+                            const result = await ocrResponse.json();
+                            if (result && result.text && result.text.trim().length > 0) {
+                                extractedText = result.text.trim();
+                                document.getElementById('recapInput').value = result.text;
+                            } else {
+                                extractedText = fallbackImagePlaceholder;
+                                document.getElementById('recapInput').value = fallbackImagePlaceholder;
+                            }
+                        } else {
+                            extractedText = fallbackImagePlaceholder;
+                            document.getElementById('recapInput').value = fallbackImagePlaceholder;
+                        }
+                    } catch (ocrErr) {
+                        console.warn("[OCR fallback] Falló la petición a /api/ocr-extract para imagen:", ocrErr);
+                        extractedText = fallbackImagePlaceholder;
+                        document.getElementById('recapInput').value = fallbackImagePlaceholder;
+                    }
                 } else {
                     throw new Error("Formato no soportado. Sube PDF, Word (.docx), Excel (.xlsx, .xls), texto (.txt, .csv, .md) o fotografías (.png, .jpg, .jpeg, .webp, .gif).");
                 }
