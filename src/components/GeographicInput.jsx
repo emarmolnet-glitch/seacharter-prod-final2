@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { I18nContext } from '../context/I18nContext.jsx';
 
 /**
  * GeographicInput / MapSidebar Component
@@ -23,6 +24,10 @@ export function GeographicInput({
   const [pod, setPod] = useState(defaultPod);
   const [laydays, setLaydays] = useState(defaultLaydays);
   const [cancelling, setCancelling] = useState(defaultCancelling);
+
+  const i18n = useContext(I18nContext);
+  const currentLang = i18n?.lang || (typeof localStorage !== 'undefined' ? localStorage.getItem('seacharter_lang') : 'es') || 'es';
+  const isEn = currentLang === 'en';
 
   const handleToggle = () => {
     const nextState = !isPanelOpen;
@@ -75,15 +80,15 @@ export function GeographicInput({
             data-i18n="map_input_header"
           >
             <i className="fa-solid fa-map-location-dot mr-2" aria-hidden="true" />
-            Input geográfico
+            {isEn ? 'Geographic Input' : 'Input geográfico'}
           </h2>
           <button
             id="btn-map-collapse-input"
             type="button"
             onClick={() => setIsPanelOpen(!isPanelOpen)}
             className="map-icon-button !w-8 !h-8 !shadow-none cursor-pointer shrink-0 z-10"
-            title={isPanelOpen ? 'Colapsar Input geográfico' : 'Expandir Input geográfico'}
-            aria-label={isPanelOpen ? 'Colapsar Input geográfico' : 'Expandir Input geográfico'}
+            title={isEn ? (isPanelOpen ? 'Collapse Geographic Input' : 'Expand Geographic Input') : (isPanelOpen ? 'Colapsar Input geográfico' : 'Expandir Input geográfico')}
+            aria-label={isEn ? (isPanelOpen ? 'Collapse Geographic Input' : 'Expand Geographic Input') : (isPanelOpen ? 'Colapsar Input geográfico' : 'Expandir Input geográfico')}
             aria-expanded={isPanelOpen}
             aria-controls="map-input-overlay"
           >
@@ -100,7 +105,9 @@ export function GeographicInput({
             isPanelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
-          Los puertos, laycan y millas alimentan automáticamente la calculadora y los contratos.
+          {isEn
+            ? 'Ports, laycan and distances automatically feed the calculator and charter parties.'
+            : 'Los puertos, laycan y millas alimentan automáticamente la calculadora y los contratos.'}
         </p>
       </div>
 
@@ -111,13 +118,13 @@ export function GeographicInput({
       >
         <div className="input-group">
           <label htmlFor="map-port-ballast" data-i18n="map_label_ballast">
-            Puerto previo (Lastre)
+            {isEn ? 'Previous Port (Ballast)' : 'Puerto previo (Lastre)'}
           </label>
           <input
             type="text"
             id="map-port-ballast"
             className="input-gc"
-            placeholder="Ej: Puerto Rico"
+            placeholder={isEn ? 'e.g. Puerto Rico' : 'Ej: Puerto Rico'}
             autoComplete="off"
             inputMode="text"
             spellCheck="false"
@@ -128,13 +135,13 @@ export function GeographicInput({
 
         <div className="input-group">
           <label htmlFor="map-port-pol" data-i18n="map_label_pol">
-            Puerto de carga (POL)
+            {isEn ? 'Port of Loading (POL)' : 'Puerto de carga (POL)'}
           </label>
           <input
             type="text"
             id="map-port-pol"
             className="input-gc"
-            placeholder="Ej: Buenos Aires"
+            placeholder={isEn ? 'e.g. Buenos Aires' : 'Ej: Buenos Aires'}
             autoComplete="off"
             inputMode="text"
             spellCheck="false"
@@ -145,13 +152,13 @@ export function GeographicInput({
 
         <div className="input-group">
           <label htmlFor="map-port-pod" data-i18n="map_label_pod">
-            Puerto de descarga (POD)
+            {isEn ? 'Port of Discharge (POD)' : 'Puerto de descarga (POD)'}
           </label>
           <input
             type="text"
             id="map-port-pod"
             className="input-gc"
-            placeholder="Ej: Monopoli"
+            placeholder={isEn ? 'e.g. Monopoli' : 'Ej: Monopoli'}
             autoComplete="off"
             inputMode="text"
             spellCheck="false"
@@ -162,7 +169,7 @@ export function GeographicInput({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="input-group">
-            <label htmlFor="map-laycan-date">Laydays (Inicio)</label>
+            <label htmlFor="map-laycan-date">{isEn ? 'Laydays (Commencement)' : 'Laydays (Inicio)'}</label>
             <input
               type="date"
               id="map-laycan-date"
@@ -172,7 +179,7 @@ export function GeographicInput({
             />
           </div>
           <div className="input-group">
-            <label htmlFor="map-cancelling-date">Cancelación (Cancelling)</label>
+            <label htmlFor="map-cancelling-date">{isEn ? 'Cancelling Date' : 'Cancelación (Cancelling)'}</label>
             <input
               type="date"
               id="map-cancelling-date"
@@ -189,7 +196,7 @@ export function GeographicInput({
           onClick={handleCalculate}
           className="btn-light-action w-full text-xs font-bold py-2 rounded"
         >
-          <i className="fa-solid fa-route mr-1" aria-hidden="true" /> Calcular ruta marítima y actualizar ecosistema
+          <i className="fa-solid fa-route mr-1" aria-hidden="true" /> {isEn ? 'Calculate maritime route & update ecosystem' : 'Calcular ruta marítima y actualizar ecosistema'}
         </button>
       </div>
     </section>

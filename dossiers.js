@@ -286,32 +286,54 @@
         const body = document.getElementById('dossiers-table-body');
         const count = document.getElementById('dossiers-count');
         if (!body) return;
-        count.textContent = `${state.dossiers.length} expediente${state.dossiers.length === 1 ? '' : 's'}`;
-        if (!state.dossiers.length) {
-            body.innerHTML = '<tr><td colspan="7"><div class="dossiers-empty"><i class="fa-regular fa-folder-open text-3xl mb-3 block"></i><strong>No hay dossiers guardados</strong><p class="mt-1 text-xs">Guarda una estimación para iniciar el historial comercial.</p></div></td></tr>';
+
+        const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || 'es';
+        const isEn = currentLang === 'en';
+
+        const dossiersLen = state.dossiers.length;
+        const countSuffix = isEn
+            ? `${dossiersLen} dossier${dossiersLen === 1 ? '' : 's'}`
+            : `${dossiersLen} expediente${dossiersLen === 1 ? '' : 's'}`;
+        count.textContent = countSuffix;
+
+        if (!dossiersLen) {
+            const strEmpty = isEn ? 'No saved dossiers' : 'No hay dossiers guardados';
+            const strEmptySub = isEn ? 'Save an estimation to start commercial history.' : 'Guarda una estimación para iniciar el historial comercial.';
+            body.innerHTML = `<tr><td colspan="7"><div class="dossiers-empty"><i class="fa-regular fa-folder-open text-3xl mb-3 block"></i><strong>${strEmpty}</strong><p class="mt-1 text-xs">${strEmptySub}</p></div></td></tr>`;
             return;
         }
+
+        const strUnspecified = isEn ? 'Unspecified' : 'Sin especificar';
+        const strLastUpdate = isEn ? 'Last update' : 'Última actualización';
+        const strDraft = isEn ? 'Draft' : 'Borrador';
+        const strQuoted = isEn ? 'Quoted' : 'Cotizado';
+        const strFixed = isEn ? 'Fixed' : 'Fijado';
+        const strOpenDossier = isEn ? 'Open Dossier' : 'Abrir Dossier';
+
         body.innerHTML = state.dossiers.map((dossier) => {
             const status = String(dossier.status || 'BORRADOR').toLowerCase();
             return `<tr>
                 <td><div class="dossier-ref">${escapeHtml(dossier.reference)}</div><div class="text-[10px] text-slate-400 mt-1">${escapeHtml(dossier.id.slice(0, 8))}</div></td>
                 <td><div class="dossier-route"><span>${escapeHtml(dossier.pol || 'POL')}</span><i class="fa-solid fa-arrow-right-long"></i><span>${escapeHtml(dossier.pod || 'POD')}</span></div></td>
-                <td><div class="font-bold text-slate-700">${escapeHtml(dossier.cargoName || 'Sin especificar')}</div><div class="text-xs text-slate-500 mt-1">${Number(dossier.cargoVolume || 0).toLocaleString('es-ES')} MT</div></td>
-                <td>${escapeHtml(dossier.charterer || 'Sin especificar')}</td>
-                <td><div class="font-semibold text-slate-700">${formatDate(dossier.updatedAt)}</div><div class="text-[10px] text-slate-400 mt-1">Última actualización</div></td>
+                <td><div class="font-bold text-slate-700">${escapeHtml(dossier.cargoName || strUnspecified)}</div><div class="text-xs text-slate-500 mt-1">${Number(dossier.cargoVolume || 0).toLocaleString(isEn ? 'en-US' : 'es-ES')} MT</div></td>
+                <td>${escapeHtml(dossier.charterer || strUnspecified)}</td>
+                <td><div class="font-semibold text-slate-700">${formatDate(dossier.updatedAt)}</div><div class="text-[10px] text-slate-400 mt-1">${strLastUpdate}</div></td>
                 <td><select class="dossier-status dossier-status--${status}" data-dossier-status="${dossier.id}">
-                    <option value="BORRADOR" ${dossier.status === 'BORRADOR' ? 'selected' : ''}>Borrador</option>
-                    <option value="COTIZADO" ${dossier.status === 'COTIZADO' ? 'selected' : ''}>Cotizado</option>
-                    <option value="FIJADO" ${dossier.status === 'FIJADO' ? 'selected' : ''}>Fijado</option>
+                    <option value="BORRADOR" ${dossier.status === 'BORRADOR' ? 'selected' : ''}>${strDraft}</option>
+                    <option value="COTIZADO" ${dossier.status === 'COTIZADO' ? 'selected' : ''}>${strQuoted}</option>
+                    <option value="FIJADO" ${dossier.status === 'FIJADO' ? 'selected' : ''}>${strFixed}</option>
                 </select></td>
-                <td class="text-right"><button class="dossier-open" data-open-dossier="${dossier.id}"><i class="fa-solid fa-folder-open"></i>Abrir Dossier</button></td>
+                <td class="text-right"><button class="dossier-open" data-open-dossier="${dossier.id}"><i class="fa-solid fa-folder-open"></i>${strOpenDossier}</button></td>
             </tr>`;
         }).join('');
     }
 
     async function loadList() {
         const body = document.getElementById('dossiers-table-body');
-        if (body) body.innerHTML = '<tr><td colspan="7" class="dossiers-empty"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Cargando expedientes...</td></tr>';
+        const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || 'es';
+        const isEn = currentLang === 'en';
+        const strLoading = isEn ? 'Loading files...' : 'Cargando expedientes...';
+        if (body) body.innerHTML = `<tr><td colspan="7" class="dossiers-empty"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>${strLoading}</td></tr>`;
         try {
             const data = await request(state.query ? `?q=${encodeURIComponent(state.query)}` : '');
             state.dossiers = data.dossiers || [];
