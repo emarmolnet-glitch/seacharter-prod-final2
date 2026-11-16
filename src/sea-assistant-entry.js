@@ -13,7 +13,11 @@ import {
 
 export { getUILanguage, selectBestVoice, initSpeechVoices, mapLanguageToBcp47, getSpeechRecognitionLanguage, SPEECH_LANG_MAP };
 
-const DEFAULT_CEREBRO_IA_ENDPOINT = getApiUrl("/api/cerebro-ia");
+const DATABRIDGE_URL = (
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_DATABRIDGE_URL) ||
+  "https://calm-shortbread-55bcfc.netlify.app"
+).replace(/\/+$/, "");
+const DEFAULT_CEREBRO_IA_ENDPOINT = `${DATABRIDGE_URL}/api/cerebro-ia`;
 const DEFAULT_CHAT_ASSISTANT_ENDPOINT = getApiUrl("/.netlify/functions/chat-assistant");
 const REQUEST_TIMEOUT_MS = 45_000;
 const AI_HISTORY_LIMIT = 6;

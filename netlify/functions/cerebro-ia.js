@@ -2,6 +2,13 @@ import chatAssistant from "./chat-assistant.js";
 import { calcularDss } from "./_shared/dss-calculations.mjs";
 import { parseOperationalRate } from "./_shared/calculator-autofill-reasoning.mjs";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT, DELETE",
+  "Access-Control-Max-Age": "86400"
+};
+
 export const PACKAGING_REGEX = /(big\s*bag|saco|sling|palet|envasad)/i;
 
 export function detectPackaging(text) {
@@ -378,21 +385,30 @@ export function applyPackagingOverride(responseObj, promptText = "") {
 
     return responseObj;
 }
-export default async function proxyRequest(request) {
-    // 🔴 ESTA ES LA URL REAL DE TU BACKEND (DATA BRIDGE)
-    const BACKEND_URL = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
+export async function processRequest(request, context) {
+    // 1. Interceptar OPTIONS inmediatamente
+    const method = request?.method || request?.httpMethod || "POST";
+    if (method === 'OPTIONS') {
+        const isExpress = context && typeof context.status === "function";
+        if (isExpress) return context.status(204).set(corsHeaders).send();
+        return new Response(null, { status: 204, headers: corsHeaders });
+    }
 
-    // 1. Manejar las peticiones de seguridad CORS del navegador
-    if (request.method === "OPTIONS") {
-        return new Response("ok", { 
-            status: 200, 
+    if (method !== 'POST') {
+        return new Response(JSON.stringify({
+            success: false,
+            error: "Método no permitido. Solo se admite POST."
+        }), {
+            status: 405,
             headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type",
-                "Access-Control-Allow-Methods": "POST, OPTIONS"
-            } 
+                "Content-Type": "application/json",
+                ...corsHeaders
+            }
         });
     }
+
+    // 🔴 ESTA ES LA URL REAL DE TU BACKEND (DATA BRIDGE)
+    const BACKEND_URL = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
 
     let fallbackRequest = null;
     let rawBody = null;
@@ -400,7 +416,7 @@ export default async function proxyRequest(request) {
 
     try {
         // 2. Extraer el Content-Type original (Vital para que no se rompan los PDFs)
-        const contentType = request.headers.get("content-type");
+        const contentType = request.headers?.get("content-type");
         
         const fetchOptions = {
             method: request.method,
@@ -464,7 +480,7 @@ export default async function proxyRequest(request) {
                             status: 200,
                             headers: {
                                 "Content-Type": "application/json",
-                                "Access-Control-Allow-Origin": "*",
+                                ...corsHeaders
                             }
                         });
                     }
@@ -495,7 +511,7 @@ export default async function proxyRequest(request) {
             status: response.status,
             headers: {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+                ...corsHeaders
             }
         });
 
@@ -514,9 +530,22 @@ export default async function proxyRequest(request) {
                 if (fallbackRes.ok && fallbackRes.headers.get("content-type")?.includes("application/json")) {
                     const parsed = await fallbackRes.json();
                     applyOperationalRateOverride(parsed, promptText);
-                    return new Response(JSON.stringify(parsed), { status: fallbackRes.status, headers: fallbackRes.headers });
+                    return new Response(JSON.stringify(parsed), {
+                        status: fallbackRes.status,
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...corsHeaders
+                        }
+                    });
                 }
-                return fallbackRes;
+                const fallbackBody = await fallbackRes.text();
+                return new Response(fallbackBody, {
+                    status: fallbackRes.status,
+                    headers: {
+                        "Content-Type": fallbackRes.headers?.get("content-type") || "application/json",
+                        ...corsHeaders
+                    }
+                });
             }
         } catch (localError) {
             console.error("[Proxy Core PRO] Error en fallback local:", localError);
@@ -528,11 +557,17 @@ export default async function proxyRequest(request) {
             respuesta: "Error de conexión: El frontend no pudo alcanzar el servidor Data Bridge.",
             payload: {}
         }), { 
-            status: 500, 
+            status: 503, 
             headers: { 
                 "Content-Type": "application/json", 
-                "Access-Control-Allow-Origin": "*" 
+                ...corsHeaders 
             } 
         });
     }
 }
+
+export default async function proxyRequest(request, context) {
+    return processRequest(request, context);
+}
+
+export const handler = proxyRequest;

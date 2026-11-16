@@ -118,8 +118,8 @@ test('chat vessel requests resolve a unique IMO and hand it to tracking', () => 
   assert.match(backendSource, /const locateVesselAction = extractLocateVesselAction\(mensaje\)/);
   assert.match(backendSource, /respuesta: JSON\.stringify\(locateVesselAction\)/);
   assert.match(frontendSource, /async function executeActionableAiLocateVessel\(actionObj\)/);
-  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = "\/api\/cerebro-ia"/);
-  assert.doesNotMatch(frontendSource, /calm-shortbread-55bcfc.*cerebro-ia/);
+  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = `\${DATABRIDGE_URL}\/api\/cerebro-ia`/);
+  assert.match(frontendSource, /calm-shortbread-55bcfc/);
   assert.match(frontendSource, /fetch\(VESSEL_NAME_RESOLUTION_ENDPOINT/);
   assert.match(frontendSource, /payload\?\.status !== "resolved"/);
   assert.match(frontendSource, /window\.locateTrackingVesselByImo/);
