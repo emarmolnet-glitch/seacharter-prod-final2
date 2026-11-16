@@ -3323,24 +3323,6 @@
         </ul>
     </div>
 
-    ${(() => {
-        const rawReport = safeState.reporte_estrategico || safeState.reporteEstrategico || safeState.madreUltimaAuditoria?.reporte_estrategico;
-        const englishReport = (rawReport && typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function')
-            ? window.formatMadreStrategicReportEnglish(rawReport, safeState)
-            : ((rawReport && typeof formatMadreStrategicReportEnglish === 'function') ? formatMadreStrategicReportEnglish(rawReport, safeState) : rawReport);
-        if (!englishReport) return '';
-        return `
-    <!-- 5. MADRE STRATEGIC AUDIT & RECOMMENDATIONS -->
-    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #0d9488; border-radius: 4px; padding: 10px; background: #f0fdfa; break-inside: avoid; page-break-inside: avoid;">
-        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #0d9488; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #115e59; break-after: avoid; page-break-after: avoid;">
-            5. MADRE STRATEGIC AUDIT &amp; RECOMMENDATIONS
-        </h4>
-        <div style="font-size: 9pt; color: #134e4a; white-space: pre-line; line-height: 1.45;">
-            ${englishReport}
-        </div>
-    </div>`;
-    })()}
-
     <div style="border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 14px; text-align: center; font-weight: bold; font-size: 9.5pt; break-inside: avoid; page-break-inside: avoid;">
         END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
     </div>

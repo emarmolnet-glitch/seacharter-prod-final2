@@ -74,8 +74,8 @@ Se detecta un cuello de botella relevante en el ritmo de descarga (2.500 MT/d) q
   assert.match(englishReport, /25,000 METRIC TONS 5% MOLOO OF DRY BULK/i, 'Must format cargo in Section 3');
   assert.match(englishReport, /WWD SHINC/i, 'Must reference WWD SHINC in Section 3');
   assert.match(englishReport, /4\.\s*FINANCIAL\s*&\s*FREIGHT\s*ANALYSIS:/, 'Must contain Section 4 header');
-  assert.match(englishReport, /USD \$32\.50\/MT/i, 'Must reference Break-Even in Section 4');
-  assert.match(englishReport, /USD \$42\.00\/MT/i, 'Must reference freight rate in Section 4');
+  assert.doesNotMatch(englishReport, /Base operational break-even/i, 'Must NOT reveal Break-Even in Section 4');
+  assert.match(englishReport, /Agreed all-in freight rate fixed at USD \$42\.00\/MT \(protecting commercial net margin\)\./i, 'Must start with agreed freight in Section 4');
   assert.match(englishReport, /Option B strategic execution confirmed/i, 'Must reference Option B in Section 4');
   assert.match(englishReport, /Signed:\s*MADRE\s*$/, 'Must strictly end with Signed: MADRE');
 });
@@ -116,7 +116,7 @@ test('prepareCurrentFixtureRecapState forces lang: en and translates reporte_est
   assert.match(prepared.madreUltimaAuditoria.reporte_estrategico, /Signed:\s*MADRE/);
 });
 
-test('buildFixtureRecapHTMLTemplate includes Section 5 in English when reporte_estrategico is present', () => {
+test('buildFixtureRecapHTMLTemplate excludes Section 5 (internal MADRE audit) from commercial recap', () => {
   const htmlContent = fs.readFileSync('index.html', 'utf8');
   const start = htmlContent.indexOf('function resolveFixtureRecapOperations(');
   const end = htmlContent.indexOf('window.buildFixtureRecapHTMLTemplate =', start);
@@ -139,10 +139,8 @@ test('buildFixtureRecapHTMLTemplate includes Section 5 in English when reporte_e
     reporte_estrategico: 'Auditoría Estratégica Ejecutiva de MADRE para la operación Rotterdam ➔ Houston (45.000 MT). Flete ALL-IN GROSS: $45.00/MT.'
   }, windowContext);
 
-  assert.match(html, /5\.\s*MADRE STRATEGIC AUDIT &amp; RECOMMENDATIONS/);
-  assert.match(html, /1\.\s*ROUTE & TRAFFIC:/);
-  assert.match(html, /4\.\s*FINANCIAL & FREIGHT ANALYSIS:/);
-  assert.match(html, /Signed:\s*MADRE/);
+  assert.doesNotMatch(html, /5\.\s*MADRE STRATEGIC AUDIT/);
+  assert.doesNotMatch(html, /MADRE STRATEGIC AUDIT &amp; RECOMMENDATIONS/);
   assert.match(html, /END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL/);
 });
 

@@ -146,7 +146,7 @@ export function formatMadreStrategicReportEnglish(rawReport, state = {}) {
     `${formattedCargoQty} METRIC TONS 5% MOLOO OF ${commodity}. Contractual loading rate fixed at ${formattedLoadRate} MT/WWD SHINC. Contractual discharge rate evaluated at ${formattedDischRate} MT/WWD SHINC. Turnaround bottleneck identified at discharge port requiring strict laytime definition and Reachable on Arrival terms to eliminate uncompensated waiting time.`,
     ``,
     `4. FINANCIAL & FREIGHT ANALYSIS:`,
-    `Base operational break-even calculated at USD $${formattedBreakEven}/MT against agreed all-in freight rate of USD $${formattedFreight}/MT (protecting commercial net margin). Demurrage rate fixed at USD $${formattedDemurrage}/day pro rata to insulate against terminal congestion. Option B strategic execution confirmed, locking in required bunker coverage, JWC war risk provisions, and laytime safeguards.`,
+    `Agreed all-in freight rate fixed at USD $${formattedFreight}/MT (protecting commercial net margin). Demurrage rate fixed at USD $${formattedDemurrage}/day pro rata to insulate against terminal congestion. Option B strategic execution confirmed, locking in required bunker coverage, JWC war risk provisions, and laytime safeguards.`,
     ``,
     `Signed: MADRE`
   ].join('\n');
