@@ -661,7 +661,10 @@ export default function App(props) {
   const [isMadreOpen, setIsMadreOpen] = useState(false);
   const [lang, setLang] = useState(() => {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-      return localStorage.getItem('seacharter_lang') || 'es';
+      const saved = localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang');
+      if (saved && saved !== 'auto') return saved;
+      const navLang = (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage || '')) || '';
+      return navLang.toLowerCase().startsWith('en') ? 'en' : 'es';
     }
     return 'es';
   });
