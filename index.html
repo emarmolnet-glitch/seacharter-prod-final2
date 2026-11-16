@@ -18022,40 +18022,169 @@
             });
         }
 
+        const NATIVE_LANGS = ['es', 'en', 'fr'];
+
+        function clearGoogTransCookie() {
+            try {
+                const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 UTC; Max-Age=0; path=/;';
+                document.cookie = 'googtrans=; ' + expiry;
+                const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : '';
+                if (host && host !== 'localhost') {
+                    document.cookie = 'googtrans=; ' + expiry + ' domain=' + host + ';';
+                    document.cookie = 'googtrans=; ' + expiry + ' domain=.' + host + ';';
+                    const parts = host.split('.');
+                    if (parts.length >= 2) {
+                        document.cookie = 'googtrans=; ' + expiry + ' domain=.' + parts.slice(-2).join('.') + ';';
+                    }
+                    if (host.includes('netlify.app')) {
+                        document.cookie = 'googtrans=; ' + expiry + ' domain=.netlify.app;';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function setGoogTransCookie(targetLang) {
+            try {
+                const cookieVal = '/es/' + targetLang;
+                document.cookie = 'googtrans=' + cookieVal + '; path=/; SameSite=Lax';
+                const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : '';
+                if (host && host !== 'localhost') {
+                    document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=' + host + '; SameSite=Lax';
+                    const parts = host.split('.');
+                    if (parts.length >= 2) {
+                        document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=.' + parts.slice(-2).join('.') + '; SameSite=Lax';
+                    }
+                    if (host.includes('netlify.app')) {
+                        document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=.netlify.app; SameSite=Lax';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function setNotranslateProtection(enable) {
+            try {
+                if (enable) {
+                    if (document.documentElement) {
+                        document.documentElement.classList.add('notranslate');
+                        document.documentElement.setAttribute('translate', 'no');
+                    }
+                    if (document.body) {
+                        document.body.classList.add('notranslate');
+                        document.body.setAttribute('translate', 'no');
+                    }
+                } else {
+                    if (document.documentElement) {
+                        document.documentElement.classList.remove('notranslate');
+                        document.documentElement.removeAttribute('translate');
+                    }
+                    if (document.body) {
+                        document.body.classList.remove('notranslate');
+                        document.body.removeAttribute('translate');
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function activateGoogleTranslateForSecondary(targetLang) {
+            setNotranslateProtection(false);
+            setGoogTransCookie(targetLang);
+
+            if (typeof window !== 'undefined' && !window.googleTranslateElementInit) {
+                window.googleTranslateElementInit = function() {
+                    try {
+                        if (window.google && window.google.translate) {
+                            new window.google.translate.TranslateElement({
+                                pageLanguage: 'es',
+                                autoDisplay: false
+                            }, 'google_translate_element');
+                        }
+                    } catch (err) {
+                        console.warn('[GoogleTranslate] Error de inicialización:', err);
+                    }
+                };
+            }
+
+            if (!document.getElementById('google-translate-script')) {
+                const gtScript = document.createElement('script');
+                gtScript.id = 'google-translate-script';
+                gtScript.type = 'text/javascript';
+                gtScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+                gtScript.async = true;
+                document.head.appendChild(gtScript);
+            } else {
+                const combo = document.querySelector('.goog-te-combo');
+                if (combo) {
+                    combo.value = targetLang;
+                    combo.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+
         function changeLanguage(lang) {
             if (!lang) lang = 'es';
             try {
                 localStorage.setItem('seacharter_lang', lang);
                 localStorage.setItem('rodahmar_lang', lang);
             } catch (e) {}
-            if (typeof document !== 'undefined' && document.documentElement) {
-                document.documentElement.lang = (lang === 'auto' ? 'es' : (lang.startsWith('zh') ? 'zh-CN' : lang));
+
+            let effectiveLang = lang;
+            if (lang === 'auto') {
+                const browserLang = (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage || 'es') || 'es').toLowerCase();
+                effectiveLang = browserLang.startsWith('zh') ? 'zh-CN' : browserLang.split('-')[0];
+                if (!effectiveLang) effectiveLang = 'es';
+            } else if (lang === 'zh') {
+                effectiveLang = 'zh-CN';
             }
+
+            if (typeof document !== 'undefined' && document.documentElement) {
+                document.documentElement.lang = (effectiveLang === 'es' ? 'es' : effectiveLang);
+            }
+
             const selector = document.getElementById('language-selector');
             if (selector && selector.value !== lang) {
                 selector.value = lang;
             }
             updateSidebarLanguageUI(lang);
-            translatePage(lang === 'auto' ? 'es' : lang);
+
+            const isNative = NATIVE_LANGS.includes(effectiveLang);
+
+            if (isNative) {
+                // Cortafuegos de Exclusión Mutua para es, en, fr:
+                // Prohibido Google Translate en idiomas cubiertos por nuestro diccionario nativo
+                clearGoogTransCookie();
+                setNotranslateProtection(true);
+                translatePage(effectiveLang);
+            } else {
+                // Idiomas secundarios sin soporte nativo completo (de, it, pt, ar, zh, tr, ru):
+                activateGoogleTranslateForSecondary(effectiveLang);
+            }
+
             if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-                window.dispatchEvent(new CustomEvent('language:change', { detail: { lang: (lang === 'auto' ? 'es' : lang) } }));
+                window.dispatchEvent(new CustomEvent('language:change', { detail: { lang: effectiveLang, rawLang: lang } }));
             }
             if (typeof autoPopulateRouteLimits === 'function') autoPopulateRouteLimits();
             if (typeof runEngine === 'function') runEngine();
         }
 
         function initLanguage() {
-            let savedLang = 'es';
+            let activeLang = 'es';
             try {
-                savedLang = localStorage.getItem('seacharter_lang') || 'es';
+                const stored = localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang');
+                if (stored) {
+                    activeLang = stored;
+                } else {
+                    const navLang = (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage || '')) || '';
+                    activeLang = navLang.toLowerCase().startsWith('en') ? 'en' : 'es';
+                    localStorage.setItem('seacharter_lang', activeLang);
+                    localStorage.setItem('rodahmar_lang', activeLang);
+                }
             } catch (e) {}
+
             if (typeof document !== 'undefined' && document.documentElement) {
-                document.documentElement.lang = savedLang;
+                document.documentElement.lang = (activeLang === 'auto' ? 'es' : (activeLang.startsWith('zh') ? 'zh-CN' : activeLang));
             }
-            const selector = document.getElementById('language-selector');
-            if (selector) selector.value = savedLang;
-            updateSidebarLanguageUI(savedLang);
-            translatePage(savedLang);
+
+            changeLanguage(activeLang);
         }
 
         if (typeof window !== 'undefined') {
@@ -18065,6 +18194,10 @@
             window.toggleSidebarLanguageDropdown = toggleSidebarLanguageDropdown;
             window.selectSidebarLanguage = selectSidebarLanguage;
             window.updateSidebarLanguageUI = updateSidebarLanguageUI;
+            window.clearGoogTransCookie = clearGoogTransCookie;
+            window.setGoogTransCookie = setGoogTransCookie;
+            window.setNotranslateProtection = setNotranslateProtection;
+            window.handleRodahmarLanguageChange = changeLanguage;
         }
         if (typeof globalThis !== 'undefined') {
             globalThis.changeLanguage = changeLanguage;
@@ -18073,6 +18206,10 @@
             globalThis.toggleSidebarLanguageDropdown = toggleSidebarLanguageDropdown;
             globalThis.selectSidebarLanguage = selectSidebarLanguage;
             globalThis.updateSidebarLanguageUI = updateSidebarLanguageUI;
+            globalThis.clearGoogTransCookie = clearGoogTransCookie;
+            globalThis.setGoogTransCookie = setGoogTransCookie;
+            globalThis.setNotranslateProtection = setNotranslateProtection;
+            globalThis.handleRodahmarLanguageChange = changeLanguage;
         }
 
         if (typeof document !== 'undefined') {
@@ -77048,82 +77185,15 @@ window.actualizarGrabCapacityVisibility = function() {
 
   <script type="text/javascript">
     (function() {
-      // --- 1. UTILIDADES PARA MANIPULACIÓN DE COOKIES ---
-      function setGoogTransCookie(targetLang) {
-        const cookieVal = '/es/' + targetLang;
-        document.cookie = 'googtrans=' + cookieVal + '; path=/; SameSite=Lax';
-        const host = window.location.hostname;
-        if (host && host !== 'localhost') {
-          document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=' + host + '; SameSite=Lax';
-          const parts = host.split('.');
-          if (parts.length >= 2) {
-            document.cookie = 'googtrans=' + cookieVal + '; path=/; domain=.' + parts.slice(-2).join('.') + '; SameSite=Lax';
-          }
-        }
-      }
-
-      function clearGoogTransCookie() {
-        const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        document.cookie = 'googtrans=; ' + expiry;
-        const host = window.location.hostname;
-        if (host && host !== 'localhost') {
-          document.cookie = 'googtrans=; ' + expiry + ' domain=' + host + ';';
-          const parts = host.split('.');
-          if (parts.length >= 2) {
-            document.cookie = 'googtrans=; ' + expiry + ' domain=.' + parts.slice(-2).join('.') + ';';
-          }
-        }
-      }
-
-      // --- 2. DETECCIÓN AUTOMÁTICA UNIVERSAL DE IDIOMA (🌐 AUTO PARA CUALQUIER PAÍS) ---
-      let manualLang = null;
-      try {
-        manualLang = localStorage.getItem('rodahmar_lang');
-      } catch (e) {}
-
-      let activeLang = 'es';
-      if (!manualLang || manualLang === 'auto') {
-        const browserLang = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
-        const targetLang = browserLang.startsWith('zh') ? 'zh-CN' : browserLang.split('-')[0];
-        if (targetLang && targetLang !== 'es') {
-          setGoogTransCookie(targetLang);
-          activeLang = targetLang;
-        } else {
-          clearGoogTransCookie();
-        }
-      } else if (manualLang === 'es') {
-        clearGoogTransCookie();
-        activeLang = 'es';
-      } else {
-        setGoogTransCookie(manualLang);
-        activeLang = manualLang;
-      }
-
-      // Configuración silenciosa de Google Translate
-      window.googleTranslateElementInit = function() {
-        try {
-          if (window.google && window.google.translate) {
-            new window.google.translate.TranslateElement({
-              pageLanguage: 'es',
-              autoDisplay: false
-            }, 'google_translate_element');
-          }
-        } catch (err) {
-          console.warn('[GoogleTranslate] Error de inicialización:', err);
-        }
-      };
-
-      // Inyección oficial del script de Google Translate
-      const gtScript = document.createElement('script');
-      gtScript.type = 'text/javascript';
-      gtScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-      gtScript.async = true;
-      document.head.appendChild(gtScript);
-
-      // --- 3. CONECTAR Y POBLAR EL SELECTOR DE IDIOMA EN EL SIDEBAR ---
+      // --- 1. CONECTAR Y POBLAR EL SELECTOR DE IDIOMA EN EL SIDEBAR ---
       function syncSelectorUI() {
         const selector = document.getElementById('language-selector');
         if (!selector) return;
+
+        let manualLang = null;
+        try {
+          manualLang = localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang');
+        } catch (e) {}
 
         // Si el selector aún no tiene la opción 'auto', inyectamos la lista universal completa
         if (!selector.querySelector('option[value="auto"]')) {
@@ -77151,61 +77221,14 @@ window.actualizarGrabCapacityVisibility = function() {
         }
       }
 
-      let isChanging = false;
       function onRodahmarLanguageChange(val) {
-        if (isChanging) return;
-        isChanging = true;
-        try {
-          localStorage.setItem('rodahmar_lang', val);
-          localStorage.setItem('seacharter_lang', val === 'auto' ? 'es' : val);
-        } catch (e) {}
-
-        if (val === 'es') {
-          clearGoogTransCookie();
-          if (document.documentElement) document.documentElement.lang = 'es';
-          location.reload();
-          return;
-        }
-
-        let target = val;
-        if (val === 'auto') {
-          const browserLang = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
-          const targetLang = browserLang.startsWith('zh') ? 'zh-CN' : browserLang.split('-')[0];
-          if (!targetLang || targetLang === 'es') {
-            clearGoogTransCookie();
-            location.reload();
-            return;
-          }
-          target = targetLang;
-        } else if (val === 'zh') {
-          target = 'zh-CN';
-        }
-
-        setGoogTransCookie(target);
-        if (document.documentElement) document.documentElement.lang = target;
-
-        const combo = document.querySelector('.goog-te-combo');
-        if (combo) {
-          combo.value = target;
-          combo.dispatchEvent(new Event('change'));
-          isChanging = false;
-        } else {
-          location.reload();
+        if (typeof window.changeLanguage === 'function') {
+          window.changeLanguage(val);
         }
       }
-
       window.handleRodahmarLanguageChange = onRodahmarLanguageChange;
-      window.changeLanguage = function(val) {
-        if (typeof window.updateSidebarLanguageUI === 'function') {
-          window.updateSidebarLanguageUI(val);
-        }
-        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-          window.dispatchEvent(new CustomEvent('language:change', { detail: { lang: (val === 'auto' ? 'es' : val) } }));
-        }
-        onRodahmarLanguageChange(val);
-      };
 
-      // --- 4. PROTECCIÓN DE NÚMEROS Y SIGLAS TÉCNICAS (notranslate) ---
+      // --- 2. PROTECCIÓN DE NÚMEROS Y SIGLAS TÉCNICAS (notranslate) ---
       function applyNotranslateProtections() {
         try {
           // 1) Todos los <input>, <select> de referencia y campos numéricos
@@ -77228,7 +77251,7 @@ window.actualizarGrabCapacityVisibility = function() {
             }
           });
 
-          // Envolver siglas dentro de textos para que Google Translate no las altere
+          // Envolver siglas dentro de textos para que Google Translate no las altere si se activa para idiomas secundarios
           const walker = document.createTreeWalker(
             document.body,
             NodeFilter.SHOW_TEXT,
@@ -77290,8 +77313,24 @@ window.actualizarGrabCapacityVisibility = function() {
         if (selector && !selector.dataset.gtBound) {
           selector.dataset.gtBound = 'true';
           selector.addEventListener('change', function() {
-            onRodahmarLanguageChange(this.value);
+            if (typeof window.changeLanguage === 'function') {
+              window.changeLanguage(this.value);
+            }
           });
+        }
+
+        // Cortafuegos al inicio: si el idioma activo es nativo (es, en, fr), garantizar exclusión mutua
+        let currentLang = 'es';
+        try {
+          currentLang = localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang') || 'es';
+        } catch (e) {}
+        if (currentLang === 'auto') {
+          const browserLang = (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage || 'es') || 'es').toLowerCase();
+          currentLang = browserLang.startsWith('en') ? 'en' : (browserLang.startsWith('fr') ? 'fr' : 'es');
+        }
+        if (['es', 'en', 'fr'].includes(currentLang)) {
+          if (typeof window.clearGoogTransCookie === 'function') window.clearGoogTransCookie();
+          if (typeof window.setNotranslateProtection === 'function') window.setNotranslateProtection(true);
         }
       }
 
