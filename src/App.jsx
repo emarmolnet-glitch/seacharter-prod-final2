@@ -655,16 +655,48 @@ export function useHeaderVisibility(defaultVisible = true) {
 }
 
 import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
+import { I18nContext, I18nProvider, useI18n } from './context/I18nContext.jsx';
 
 export default function App(props) {
   const [isMadreOpen, setIsMadreOpen] = useState(false);
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      return localStorage.getItem('seacharter_lang') || 'es';
+    }
+    return 'es';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleLanguageChange = (event) => {
+      const nextLang = event?.detail?.lang || (typeof localStorage !== 'undefined' ? localStorage.getItem('seacharter_lang') : null) || 'es';
+      if (nextLang) setLang(nextLang);
+    };
+
+    const handleStorage = (event) => {
+      if ((event.key === 'seacharter_lang' || event.key === 'rodahmar_lang') && event.newValue) {
+        setLang(event.newValue);
+      }
+    };
+
+    window.addEventListener('language:change', handleLanguageChange);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('language:change', handleLanguageChange);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   return (
     <HashRouter>
-      <ProjectProvider>
-        <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
-        <AppLayout {...props} isMadreOpen={isMadreOpen} setIsMadreOpen={setIsMadreOpen} />
-      </ProjectProvider>
+      <I18nContext.Provider value={{ lang, setLang }}>
+        <ProjectProvider>
+          <GlobalMadreDrawer isOpen={isMadreOpen} onClose={() => setIsMadreOpen(false)} />
+          <AppLayout {...props} isMadreOpen={isMadreOpen} setIsMadreOpen={setIsMadreOpen} />
+        </ProjectProvider>
+      </I18nContext.Provider>
     </HashRouter>
   );
 }
@@ -828,6 +860,7 @@ export function TopNav() {
 }
 
 export { HashRouter, HashRouter as BrowserRouter };
+export { I18nContext, I18nProvider, useI18n };
 export { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef };
 export {
   GlobalMadreDrawer,
