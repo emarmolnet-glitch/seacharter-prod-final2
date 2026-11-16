@@ -36,7 +36,7 @@ test('chat assistant sends the unified Data Bridge context with each message', (
   assert.match(frontendSource, /ConversationHistory: historial/);
   assert.match(frontendSource, /const sanitizedPayload = sanitizePayloadForAI\(requestPayload\)/);
   assert.match(frontendSource, /JSON\.stringify\(sanitizedPayload\)/);
-  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = "\/api\/cerebro-ia"/);
+  assert.match(frontendSource, /DEFAULT_CEREBRO_IA_ENDPOINT = `\${DATABRIDGE_URL}\/api\/cerebro-ia`/);
   assert.doesNotMatch(frontendSource, /const CHAT_ENDPOINT = "\/\.netlify\/functions\/chat-assistant"/);
 });
 

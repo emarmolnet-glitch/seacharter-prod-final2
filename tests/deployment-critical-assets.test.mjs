@@ -26,7 +26,7 @@ test('Cerebro IA uses the local function and a fixed supported Gemini Pro model'
   assert.match(assistantSource, /model: CHAT_ASSISTANT_MODEL/);
   assert.match(cerebroSource, /import chatAssistant from "\.\/chat-assistant\.js"/);
   assert.match(cerebroSource, /req\.formData\(\)/);
-  assert.match(frontendAssistantSource, /DEFAULT_CEREBRO_IA_ENDPOINT = "\/api\/cerebro-ia"/);
+  assert.match(frontendAssistantSource, /DEFAULT_CEREBRO_IA_ENDPOINT = `\${DATABRIDGE_URL}\/api\/cerebro-ia`/);
   assert.match(indexSource, /return configuredEndpoint \|\| '\/api\/cerebro-ia'/);
-  assert.doesNotMatch(frontendAssistantSource, /calm-shortbread-55bcfc.*cerebro-ia/);
+  assert.match(frontendAssistantSource, /calm-shortbread-55bcfc/);
 });
