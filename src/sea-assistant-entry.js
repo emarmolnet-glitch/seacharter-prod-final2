@@ -22,20 +22,37 @@ const AI_USER_CONTEXT_MAX_CHARS = 8_000;
 const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
 const VESSEL_NAME_RESOLUTION_ENDPOINT = getApiUrl("/api/vessel-name-resolution");
-const MODULE_LABELS = Object.freeze({
-  map: "Mapa",
-  estimator: "Calculadora",
-  decisiones: "Decisiones",
-  tracking: "Tracking",
-  ais: "Densidad",
-  matching: "Coincidencia",
-  gencon: "Editor",
-  asbatankvoy: "EDITOR ASBATANKVOY",
-  auditor: "Auditoría",
-  multimodal: "Cotizador Multimodal",
-  fcl: "Cotizador Multimodal",
-  cbam: "CBAM",
-});
+const MODULE_LABELS = {
+  es: {
+    map: "Mapa",
+    estimator: "Calculadora",
+    decisiones: "Decisiones",
+    tracking: "Tracking",
+    ais: "Densidad",
+    matching: "Coincidencia",
+    gencon: "Editor",
+    asbatankvoy: "EDITOR ASBATANKVOY",
+    auditor: "Auditoría",
+    multimodal: "Cotizador Multimodal",
+    fcl: "Cotizador Multimodal",
+    cbam: "CBAM",
+  },
+  en: {
+    map: "Map",
+    estimator: "Calculator",
+    decisiones: "Decisions",
+    tracking: "Tracking",
+    ais: "Density",
+    matching: "Matching",
+    gencon: "Editor",
+    asbatankvoy: "ASBATANKVOY EDITOR",
+    auditor: "Audit",
+    multimodal: "Multimodal Quotation",
+    fcl: "Multimodal Quotation",
+    cbam: "CBAM",
+  },
+};
+Object.assign(MODULE_LABELS, MODULE_LABELS.es);
 
 const icons = {
   assistant: `
@@ -2256,14 +2273,22 @@ function collectMarketData() {
 }
 
 function getActiveModuleDescriptor() {
+  const currentLang = typeof getUILanguage === "function"
+    ? getUILanguage()
+    : (typeof localStorage !== "undefined" && (localStorage.getItem("seacharter_lang") || localStorage.getItem("rodahmar_lang"))) || "es";
+  const normalizedLang = String(currentLang || "").toLowerCase().startsWith("en") ? "en" : "es";
+  const dict = MODULE_LABELS[normalizedLang] || MODULE_LABELS.es;
+
   if (document.getElementById("tracking-live-overlay")?.classList.contains("is-open")) {
-    return { id: "tracking", name: MODULE_LABELS.tracking };
+    return { id: "tracking", name: dict.tracking || "Tracking" };
   }
-  if (document.getElementById("dual-mode-overlay")) return { id: "dual", name: "MODO DUAL" };
+  if (document.getElementById("dual-mode-overlay")) {
+    return { id: "dual", name: normalizedLang === "en" ? "DUAL MODE" : "MODO DUAL" };
+  }
 
   const activeView = document.querySelector(".view-section.active-block, .view-section.active-flex");
   const moduleId = activeView?.id?.replace(/^view-/, "") || "map";
-  return { id: moduleId, name: MODULE_LABELS[moduleId] || moduleId.toUpperCase() };
+  return { id: moduleId, name: dict[moduleId] || MODULE_LABELS.es[moduleId] || moduleId.toUpperCase() };
 }
 
 function getActiveModule() {
@@ -2497,7 +2522,7 @@ function createAiAlertsStore(toggleButton) {
   const badge = toggleButton.querySelector(".sea-assistant-alert-badge");
   let aiAlerts = 0;
 
-  let currentEvaluation = { moduleId: "map", moduleName: MODULE_LABELS.map, alerts: 0, issues: [] };
+  let currentEvaluation = { moduleId: "map", moduleName: MODULE_LABELS.es?.map || MODULE_LABELS.map, alerts: 0, issues: [] };
 
   const render = () => {
     const hasAlerts = aiAlerts > 0;
@@ -2508,9 +2533,13 @@ function createAiAlertsStore(toggleButton) {
       badge.textContent = hasAlerts ? `💡 ${aiAlerts > 9 ? "9+" : aiAlerts}` : "";
       badge.setAttribute("aria-label", `${aiAlerts} sugerencia${aiAlerts === 1 ? "" : "s"} de riesgo`);
     }
+    const currentLang = typeof getUILanguage === "function"
+      ? getUILanguage()
+      : (typeof localStorage !== "undefined" && (localStorage.getItem("seacharter_lang") || localStorage.getItem("rodahmar_lang"))) || "es";
+    const isEnglish = String(currentLang || "").toLowerCase().startsWith("en");
     toggleButton.title = hasAlerts
-      ? `💡 Sugerencia disponible en ${currentEvaluation.moduleName}`
-      : "Abrir Asistente SeaCharter";
+      ? (isEnglish ? `💡 Suggestion available in ${currentEvaluation.moduleName}` : `💡 Sugerencia disponible en ${currentEvaluation.moduleName}`)
+      : (isEnglish ? "Open SeaCharter Assistant" : "Abrir Asistente SeaCharter");
   };
 
   const setAlerts = (value) => {
@@ -2535,7 +2564,11 @@ function createAiAlertsStore(toggleButton) {
     },
     evaluateCurrentContext: () => store.evaluateBasicRisks(collectBasicRiskContext()),
     evaluateModule: (moduleId = getActiveModuleDescriptor().id) => {
-      const moduleName = MODULE_LABELS[moduleId] || moduleId.toUpperCase();
+      const currentLang = typeof getUILanguage === "function"
+        ? getUILanguage()
+        : (typeof localStorage !== "undefined" && (localStorage.getItem("seacharter_lang") || localStorage.getItem("rodahmar_lang"))) || "es";
+      const normalizedLang = String(currentLang || "").toLowerCase().startsWith("en") ? "en" : "es";
+      const moduleName = MODULE_LABELS[normalizedLang]?.[moduleId] || MODULE_LABELS.es?.[moduleId] || moduleId.toUpperCase();
       const data = collectModuleScreenContext(moduleId);
       const result = evaluateModuleSuggestions(moduleId, data);
       currentEvaluation = { moduleId, moduleName, ...result, data };
@@ -2551,7 +2584,22 @@ function createAiAlertsStore(toggleButton) {
   return store;
 }
 
-function createProactiveGreeting(moduleName) {
+function createProactiveGreeting(moduleKey, lang = "es") {
+  const normalizedLang = String(lang || "").toLowerCase().startsWith("en") ? "en" : "es";
+  const dict = MODULE_LABELS[normalizedLang] || MODULE_LABELS.es;
+  const esDict = MODULE_LABELS.es;
+
+  let moduleName = dict[moduleKey];
+  if (!moduleName) {
+    const foundKey = Object.keys(esDict).find(
+      (k) => esDict[k] === moduleKey || MODULE_LABELS.en?.[k] === moduleKey
+    );
+    moduleName = foundKey ? dict[foundKey] : (dict[moduleKey] || esDict[moduleKey] || moduleKey);
+  }
+
+  if (normalizedLang === "en") {
+    return `Hello! I see you are working in the ${moduleName} section. Do you want us to analyze if any data is missing, check if everything is correct, or look out for what you should modify according to your commercial strategy?`;
+  }
   return `¡Hola! Veo que estás trabajando en la sección de ${moduleName}. ¿Quieres que analicemos si falta algún dato, comprobemos si todo es correcto, o velemos por lo que deberías modificar según tu estrategia comercial?`;
 }
 
@@ -2567,9 +2615,13 @@ function monitorActiveModule(aiAlertsStore, statusElement) {
     activeModuleId = descriptor.id;
     const evaluation = aiAlertsStore.evaluateModule(descriptor.id);
     if (statusElement) {
+      const currentLang = typeof getUILanguage === "function"
+        ? getUILanguage()
+        : (typeof localStorage !== "undefined" && (localStorage.getItem("seacharter_lang") || localStorage.getItem("rodahmar_lang"))) || "es";
+      const isEnglish = String(currentLang || "").toLowerCase().startsWith("en");
       statusElement.textContent = evaluation.alerts > 0
-        ? `💡 Sugerencia en ${descriptor.name}`
-        : `Disponible en ${descriptor.name}`;
+        ? (isEnglish ? `💡 Suggestion in ${descriptor.name}` : `💡 Sugerencia en ${descriptor.name}`)
+        : (isEnglish ? `Available in ${descriptor.name}` : `Disponible en ${descriptor.name}`);
     }
     if (moduleChanged) {
       window.dispatchEvent(new CustomEvent("seaassistantmodulechange", { detail: evaluation }));
@@ -3024,15 +3076,22 @@ const fileInput = root.querySelector("#sca-file-input");
       minimizeButton.setAttribute("aria-expanded", "true");
       minimizeButton.setAttribute("aria-label", "Minimizar asistente");
       minimizeButton.title = "Minimizar asistente";
+      const currentLang = typeof getUILanguage === "function"
+        ? getUILanguage()
+        : (typeof localStorage !== "undefined" && (localStorage.getItem("seacharter_lang") || localStorage.getItem("rodahmar_lang"))) || "es";
+      const isEnglish = String(currentLang || "").toLowerCase().startsWith("en");
+
       if (aiAlertsStore.getAlerts() > 0) {
         const evaluation = aiAlertsStore.getCurrentEvaluation();
-        appendMessage(createMessage("assistant", createProactiveGreeting(evaluation.moduleName), { meta: formatTime() }));
+        const moduleKey = evaluation.moduleId || evaluation.moduleName;
+        appendMessage(createMessage("assistant", createProactiveGreeting(moduleKey, currentLang), { meta: formatTime() }));
         aiAlertsStore.resetAlerts();
       } else if (!history.querySelector(".sca-message")) {
-        appendMessage(createMessage(
-          "assistant",
-          "Hola. Soy el Asistente SeaCharter. Puedo ayudarte con consultas sobre logística marítima, fletamentos y rutas.",
-        ));
+        const defaultGreeting = isEnglish
+          ? "Hello. I am the SeaCharter Assistant. I can help you with queries about maritime logistics, chartering, and routes."
+          : "Hola. Soy el Asistente SeaCharter. Puedo ayudarte con consultas sobre logística marítima, fletamentos y rutas.";
+
+        appendMessage(createMessage("assistant", defaultGreeting));
       }
       requestAnimationFrame(() => {
         if (!hasCustomPosition) initializePosition();
