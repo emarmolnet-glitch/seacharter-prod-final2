@@ -1,5 +1,6 @@
 import './dss-panel.css';
 import { initializeDssPanel } from './dss-panel-toggle.js';
+import { formatMadreStrategicReportEnglish } from './madre-report-translator.mjs';
 
 const DECISION_SUPPORT_TEMPLATE = String.raw`
             <div class="w-full px-4 md:px-8">
@@ -1709,6 +1710,86 @@ export function cerrarAuditoriaMadreOffcanvas() {
     if (backdrop) backdrop.classList.add('hidden');
 }
 
+export async function handleDownloadLOI() {
+    try {
+        const currentDss = (typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function')
+            ? window.getDSSCurrentState()
+            : ((typeof window !== 'undefined' && (window.dssFormState || window.dssBaseActualState)) || {});
+
+        const getVal = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.value : '');
+        const getText = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.textContent : '');
+
+        const pol = (getVal('input-pol') || currentDss.pol || getText('summary-pol') || 'Rotterdam').trim();
+        const pod = (getVal('input-pod') || currentDss.pod || getText('summary-pod') || 'Houston').trim();
+        const mercancia = (getVal('input-commodity') || currentDss.commodity || currentDss.mercancia || currentDss.cargo || getText('summary-commodity') || 'Carga General').trim();
+
+        const response = await fetch('/.netlify/functions/generate-loi', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                pol,
+                pod,
+                mercancia,
+                POL: pol,
+                POD: pod,
+                Mercancía: mercancia
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error en el servidor: ${response.status} ${response.statusText}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        let blob;
+
+        if (contentType.includes('application/json')) {
+            const data = await response.json();
+            const b64 = data.body || data.b64 || data.data;
+            const binaryStr = atob(b64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        } else {
+            const rawBlob = await response.blob();
+            const preview = await rawBlob.slice(0, 32).text();
+            if (preview.startsWith('UEsDB') || (!preview.startsWith('PK') && /^[A-Za-z0-9+/=]+$/.test(preview.trim()))) {
+                const fullText = await rawBlob.text();
+                const binaryStr = atob(fullText.trim());
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+                blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            } else {
+                blob = rawBlob;
+            }
+        }
+
+        const safePol = pol.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POL';
+        const safePod = pod.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POD';
+        const fileName = `LOI_${safePol}_${safePod}.docx`;
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+        console.error('Error al generar LOI:', err);
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+            window.showToast('❌ Error al generar LOI: ' + (err?.message || 'Error desconocido'));
+        }
+    }
+}
+
 export async function generarFixtureRecapOpcionB() {
     // Shared guard covers inline and module entry points, including store callbacks.
     if (window.fixtureRecapOptionBPending) return;
@@ -1718,7 +1799,7 @@ export async function generarFixtureRecapOpcionB() {
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
 
-        const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+        const auditFreightInput = (typeof document !== 'undefined' && typeof document.querySelector === 'function') ? document.getElementById('input-audit-final-freight') : null;
         const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
             ? parseFloat(auditFreightInput.value)
             : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
@@ -1733,15 +1814,30 @@ export async function generarFixtureRecapOpcionB() {
         const approved = typeof window.prepareCurrentFixtureRecapState === 'function'
             ? window.prepareCurrentFixtureRecapState({
                 ...mods,
+                lang: 'en',
                 ...(audit ? { madreUltimaAuditoria: audit } : {}),
                 ...(rep ? { reporte_estrategico: rep } : {})
-            })
+            }, { lang: 'en' })
             : {
                 ...mods,
+                lang: 'en',
                 allInRateGross: mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario,
                 ...(audit ? { madreUltimaAuditoria: audit } : {}),
                 ...(rep ? { reporte_estrategico: rep } : {})
             };
+        approved.lang = 'en';
+        approved.language = 'en';
+        if (approved.reporte_estrategico) {
+            const translator = typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function'
+                ? window.formatMadreStrategicReportEnglish
+                : formatMadreStrategicReportEnglish;
+            if (typeof translator === 'function') {
+                approved.reporte_estrategico = translator(approved.reporte_estrategico, approved);
+                if (approved.madreUltimaAuditoria && typeof approved.madreUltimaAuditoria === 'object') {
+                    approved.madreUltimaAuditoria.reporte_estrategico = approved.reporte_estrategico;
+                }
+            }
+        }
         if (customFreight && !isNaN(customFreight) && customFreight > 0) {
             approved.allInRateGross = customFreight;
             approved.flete = customFreight;
@@ -1850,9 +1946,9 @@ export async function generarFixtureRecapOpcionB() {
         }
 
         if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-            await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
+            await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot, lang: 'en' });
         } else if (typeof generateFixtureRecapPDF === 'function') {
-            await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
+            await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot, lang: 'en' });
         } else {
             console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
         }
@@ -1863,86 +1959,6 @@ export async function generarFixtureRecapOpcionB() {
         }
     } finally {
         window.fixtureRecapOptionBPending = false;
-    }
-}
-
-export async function handleDownloadLOI() {
-    try {
-        const currentDss = (typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function')
-            ? window.getDSSCurrentState()
-            : ((typeof window !== 'undefined' && (window.dssFormState || window.dssBaseActualState)) || {});
-
-        const getVal = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.value : '');
-        const getText = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.textContent : '');
-
-        const pol = (getVal('input-pol') || currentDss.pol || getText('summary-pol') || 'Rotterdam').trim();
-        const pod = (getVal('input-pod') || currentDss.pod || getText('summary-pod') || 'Houston').trim();
-        const mercancia = (getVal('input-commodity') || currentDss.commodity || currentDss.mercancia || currentDss.cargo || getText('summary-commodity') || 'Carga General').trim();
-
-        const response = await fetch('/.netlify/functions/generate-loi', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                pol,
-                pod,
-                mercancia,
-                POL: pol,
-                POD: pod,
-                Mercancía: mercancia
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error en el servidor: ${response.status} ${response.statusText}`);
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-        let blob;
-
-        if (contentType.includes('application/json')) {
-            const data = await response.json();
-            const b64 = data.body || data.b64 || data.data;
-            const binaryStr = atob(b64);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
-            blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        } else {
-            const rawBlob = await response.blob();
-            const preview = await rawBlob.slice(0, 32).text();
-            if (preview.startsWith('UEsDB') || (!preview.startsWith('PK') && /^[A-Za-z0-9+/=]+$/.test(preview.trim()))) {
-                const fullText = await rawBlob.text();
-                const binaryStr = atob(fullText.trim());
-                const bytes = new Uint8Array(binaryStr.length);
-                for (let i = 0; i < binaryStr.length; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
-                }
-                blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-            } else {
-                blob = rawBlob;
-            }
-        }
-
-        const safePol = pol.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POL';
-        const safePod = pod.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'POD';
-        const fileName = `LOI_${safePol}_${safePod}.docx`;
-
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-        console.error('Error al generar LOI:', err);
-        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-            window.showToast('❌ Error al generar LOI: ' + (err?.message || 'Error desconocido'));
-        }
     }
 }
 

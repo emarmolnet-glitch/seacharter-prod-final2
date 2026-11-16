@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import VisualStowagePlan, { resolveVesselProfile, MemoizedVisualStowagePlan } from './VisualStowagePlan.jsx';
 import { buildVoyageStowagePlan } from '../voyage-stowage-builder.mjs';
 import { getStipulatedClauses } from '../dry-bulk-clause-matrix.mjs';
+import { formatMadreStrategicReportEnglish } from '../madre-report-translator.mjs';
 
 export { buildVoyageStowagePlan };
 
@@ -91,6 +92,19 @@ export default function VoyageExecutiveReportModal({
     typeof window !== 'undefined' ? window.State?.reporte_estrategico : null,
     typeof window !== 'undefined' ? window.State?.madreUltimaAuditoria?.reporte_estrategico : null,
   ].find(val => typeof val === 'string' && val.trim().length > 0) || null;
+
+  const formattedMadreReport = useMemo(() => {
+    if (!madreReporteEstrategico) return null;
+    if (currentLang === 'en' || isClientMode) {
+      if (typeof formatMadreStrategicReportEnglish === 'function') {
+        return formatMadreStrategicReportEnglish(madreReporteEstrategico, data);
+      }
+      if (typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function') {
+        return window.formatMadreStrategicReportEnglish(madreReporteEstrategico, data);
+      }
+    }
+    return madreReporteEstrategico;
+  }, [madreReporteEstrategico, currentLang, isClientMode, data]);
 
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
@@ -607,7 +621,7 @@ export default function VoyageExecutiveReportModal({
           )}
 
           {/* 6. MADRE STRATEGIC AUDIT & FIXTURE RECAP */}
-          {madreReporteEstrategico && (
+          {formattedMadreReport && (
             <section id="executive-madre-recap" className="mt-4 bg-slate-50 p-5 rounded-xl border border-teal-200 shadow-sm break-inside-avoid">
               <div className="flex items-center gap-2 mb-3 border-b border-teal-200 pb-2">
                 <span className="w-1.5 h-3.5 bg-teal-800 rounded-xs inline-block"></span>
@@ -617,7 +631,7 @@ export default function VoyageExecutiveReportModal({
                 </h4>
               </div>
               <div id="executive-madre-recap-content" className="text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-line bg-white p-4 rounded-lg border border-slate-200 shadow-inner">
-                {madreReporteEstrategico}
+                {formattedMadreReport}
               </div>
             </section>
           )}

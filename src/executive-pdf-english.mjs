@@ -1,4 +1,5 @@
 // PDF-only localization. The interactive report and voyage engine remain unchanged.
+import { formatMadreStrategicReportEnglish } from './madre-report-translator.mjs';
 const labels = {
   'BODEGA': 'HOLD', 'DISPONIBLE': 'AVAILABLE', 'peso': 'weight',
   'Unidades Rodadas / High & Heavy': 'Rolling Units / High & Heavy',
@@ -77,6 +78,15 @@ const labels = {
 };
 const orderedLabels = Object.entries(labels).sort((a, b) => b[0].length - a[0].length);
 export function translateExecutivePDF(report) {
+  const recapContent = report.querySelector?.('#executive-madre-recap-content');
+  if (recapContent) {
+    const rawText = recapContent.textContent || '';
+    if (typeof formatMadreStrategicReportEnglish === 'function') {
+      recapContent.textContent = formatMadreStrategicReportEnglish(rawText);
+    } else if (typeof globalThis.formatMadreStrategicReportEnglish === 'function') {
+      recapContent.textContent = globalThis.formatMadreStrategicReportEnglish(rawText);
+    }
+  }
   const walker = report.ownerDocument.createTreeWalker(report, 4);
   while (walker.nextNode()) {
     const node = walker.currentNode;
