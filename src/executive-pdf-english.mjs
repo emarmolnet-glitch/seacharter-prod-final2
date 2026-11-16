@@ -81,10 +81,11 @@ export function translateExecutivePDF(report) {
   const recapContent = report.querySelector?.('#executive-madre-recap-content');
   if (recapContent) {
     const rawText = recapContent.textContent || '';
+    const state = typeof window !== 'undefined' && typeof window.getDSSCurrentState === 'function' ? window.getDSSCurrentState() : {};
     if (typeof formatMadreStrategicReportEnglish === 'function') {
-      recapContent.textContent = formatMadreStrategicReportEnglish(rawText);
+      recapContent.textContent = formatMadreStrategicReportEnglish(rawText, state);
     } else if (typeof globalThis.formatMadreStrategicReportEnglish === 'function') {
-      recapContent.textContent = globalThis.formatMadreStrategicReportEnglish(rawText);
+      recapContent.textContent = globalThis.formatMadreStrategicReportEnglish(rawText, state);
     }
   }
   const walker = report.ownerDocument.createTreeWalker(report, 4);

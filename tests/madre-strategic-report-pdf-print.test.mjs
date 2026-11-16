@@ -115,6 +115,50 @@ test('translateExecutivePDF preserves MADRE strategic audit content without modi
   assert.doesNotThrow(() => translateExecutivePDF(domReport));
 });
 
+test('translateExecutivePDF passes window.getDSSCurrentState() to formatMadreStrategicReportEnglish', () => {
+  const mockState = {
+    pol: 'Santander',
+    pod: 'Veracruz',
+    cargoQty: 32000,
+    commodity: 'Siderúrgico',
+    vesselName: 'MV BISCAY LEADER',
+    vesselType: 'Handymax',
+    dwt: 35000,
+    allInRateGross: 48.50,
+  };
+
+  const recapElement = {
+    textContent: 'Auditoría Estratégica Ejecutiva de MADRE para la operación Santander ➔ Veracruz (32.000 MT de Siderúrgico). Flete ALL-IN GROSS: $48.50/MT.',
+  };
+
+  const domReport = {
+    ownerDocument: {
+      createTreeWalker: () => ({
+        nextNode: () => false,
+      }),
+    },
+    querySelector: (selector) => {
+      if (selector === '#executive-madre-recap-content') return recapElement;
+      return null;
+    },
+  };
+
+  globalThis.window = {
+    getDSSCurrentState: () => mockState,
+  };
+
+  try {
+    translateExecutivePDF(domReport);
+    assert.match(recapElement.textContent, /SANTANDER.*VERACRUZ/i, 'Must translate route with state ports');
+    assert.match(recapElement.textContent, /MV BISCAY LEADER/i, 'Must use state vessel name instead of fallback');
+    assert.match(recapElement.textContent, /35,000 MT DWT/i, 'Must use state DWT');
+    assert.doesNotMatch(recapElement.textContent, /LOADING PORT \(POL\)/, 'Must NOT contain fake POL placeholder');
+    assert.doesNotMatch(recapElement.textContent, /Base operational break-even/, 'Must NOT contain break-even');
+  } finally {
+    delete globalThis.window;
+  }
+});
+
 test('selectFixtureRecapState and prepareCurrentFixtureRecapState preserve reporte_estrategico in snapshot state', () => {
   const windowContext = {};
   vm.runInNewContext(readFileSync('public/fixture-financial-snapshot.js', 'utf8'), { window: windowContext });
