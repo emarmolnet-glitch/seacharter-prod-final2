@@ -85,10 +85,13 @@ export function mountVisualStowageInExecutiveModal(containerId = 'voyage-visual-
 // Render a fresh snapshot: never copy the open modal, which may contain base values.
 export async function buildFixtureExecutiveReportHTML(state) {
   const operations = window.resolveFixtureRecapOperations?.(state);
-  const approvedState = operations ? { ...state, operationalProfile: operations.operationalProfile } : state;
+  const approvedState = operations ? { ...state, operationalProfile: operations.operationalProfile, lang: 'en', language: 'en' } : { ...state, lang: 'en', language: 'en' };
+  if (approvedState.reporte_estrategico && typeof window.formatMadreStrategicReportEnglish === 'function') {
+    approvedState.reporte_estrategico = window.formatMadreStrategicReportEnglish(approvedState.reporte_estrategico, approvedState);
+  }
   const template = document.createElement('template');
   template.innerHTML = renderToStaticMarkup(
-    <VoyageExecutiveReportModal voyageData={approvedState} initialClientMode={true} />
+    <VoyageExecutiveReportModal voyageData={approvedState} initialClientMode={true} initialLanguage="en" />
   );
   const report = template.content.firstElementChild.firstElementChild;
   report.querySelectorAll('.no-print, button').forEach(node => node.remove());

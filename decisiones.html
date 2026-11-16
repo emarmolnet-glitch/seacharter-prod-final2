@@ -2832,8 +2832,12 @@
 
         function getDSSCurrentState() {
             const canonicalFinancials = window.getCurrentFixtureRecapState();
+            let domDemurrage = null;
+            try {
+                domDemurrage = parseFloat(document.getElementById('demurrage-rate')?.value);
+            } catch {}
             const calculatorDemurrage = [
-                parseFloat(document.getElementById('demurrage-rate')?.value),
+                domDemurrage,
                 canonicalFinancials?.demurrage,
                 typeof State !== 'undefined' ? State.demurrage : null
             ].map(Number).find(value => Number.isFinite(value) && value > 0) || 31200;
@@ -3100,7 +3104,10 @@
             const pod = String(safeState.pod || '').trim();
             if (!pol || !pod) throw new Error('Seleccione los puertos reales POL y POD antes de generar el Recap.');
             const cargoQty = Number(safeState.cargoQty) || 0;
-            const commodity = String(safeState.commodity || 'CARGA GENERAL');
+            const rawCommodity = String(safeState.commodity || 'CARGA GENERAL');
+            const commodity = (typeof window !== 'undefined' && typeof window.translateCommodityToEnglish === 'function')
+                ? window.translateCommodityToEnglish(rawCommodity)
+                : ((typeof translateCommodityToEnglish === 'function') ? translateCommodityToEnglish(rawCommodity) : rawCommodity.toUpperCase());
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
 
             const rawVesselName = String(
@@ -3316,6 +3323,24 @@
         </ul>
     </div>
 
+    ${(() => {
+        const rawReport = safeState.reporte_estrategico || safeState.reporteEstrategico || safeState.madreUltimaAuditoria?.reporte_estrategico;
+        const englishReport = (rawReport && typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function')
+            ? window.formatMadreStrategicReportEnglish(rawReport, safeState)
+            : ((rawReport && typeof formatMadreStrategicReportEnglish === 'function') ? formatMadreStrategicReportEnglish(rawReport, safeState) : rawReport);
+        if (!englishReport) return '';
+        return `
+    <!-- 5. MADRE STRATEGIC AUDIT & RECOMMENDATIONS -->
+    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #0d9488; border-radius: 4px; padding: 10px; background: #f0fdfa; break-inside: avoid; page-break-inside: avoid;">
+        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #0d9488; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #115e59; break-after: avoid; page-break-after: avoid;">
+            5. MADRE STRATEGIC AUDIT &amp; RECOMMENDATIONS
+        </h4>
+        <div style="font-size: 9pt; color: #134e4a; white-space: pre-line; line-height: 1.45;">
+            ${englishReport}
+        </div>
+    </div>`;
+    })()}
+
     <div style="border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 14px; text-align: center; font-weight: bold; font-size: 9.5pt; break-inside: avoid; page-break-inside: avoid;">
         END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
     </div>
@@ -3326,8 +3351,15 @@
 
         async function generateAuditPDF() {
             try {
+                const options = (typeof arguments !== 'undefined' && arguments[0]) || {};
+                const lang = options?.lang || 'en';
                 const state = getDSSCurrentState();
-                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                state.lang = lang;
+                state.language = lang;
+                let auditFreightInput = null;
+                try {
+                    auditFreightInput = (typeof document !== 'undefined' && typeof document.querySelector === 'function') ? document.getElementById('input-audit-final-freight') : null;
+                } catch {}
                 const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
                     ? parseFloat(auditFreightInput.value)
                     : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
@@ -3335,6 +3367,9 @@
                     state.allInRateGross = customFreight;
                     state.fleteEstimado = customFreight;
                     state.fleteUnitario = customFreight;
+                }
+                if (typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function' && state.reporte_estrategico) {
+                    state.reporte_estrategico = window.formatMadreStrategicReportEnglish(state.reporte_estrategico, state);
                 }
                 const htmlString = buildAuditHTMLTemplate(state);
                 const filename = `Auditoria_Riesgo_Comercial_DSS_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
@@ -3359,8 +3394,14 @@
 
         async function generateFixtureRecapPDF(options = {}) {
             try {
+                const lang = options?.lang || 'en';
                 const current = getDSSCurrentState();
-                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                current.lang = lang;
+                current.language = lang;
+                let auditFreightInput = null;
+                try {
+                    auditFreightInput = (typeof document !== 'undefined' && typeof document.querySelector === 'function') ? document.getElementById('input-audit-final-freight') : null;
+                } catch {}
                 const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
                     ? parseFloat(auditFreightInput.value)
                     : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
@@ -3373,6 +3414,11 @@
                 if (options.fixtureRecapSnapshot && !snapshot) throw new Error('El snapshot no pertenece a las condiciones actuales del expediente');
                 if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
                 const state = snapshot ? snapshot.state : current;
+                state.lang = lang;
+                state.language = lang;
+                if (typeof window !== 'undefined' && typeof window.formatMadreStrategicReportEnglish === 'function' && state.reporte_estrategico) {
+                    state.reporte_estrategico = window.formatMadreStrategicReportEnglish(state.reporte_estrategico, state);
+                }
                 if (!snapshot && window.FixtureReferenceService) {
                     const identity = state.estimationId && state.estimationId !== 'current' ? state.estimationId : window.crypto.randomUUID();
                     const reference = await window.FixtureReferenceService.ensure(identity);
@@ -3971,7 +4017,10 @@
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
 
-                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                let auditFreightInput = null;
+                try {
+                    auditFreightInput = (typeof document !== 'undefined' && typeof document.querySelector === 'function') ? document.getElementById('input-audit-final-freight') : null;
+                } catch {}
                 const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
                     ? parseFloat(auditFreightInput.value)
                     : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
@@ -3985,9 +4034,18 @@
                 const rep = audit?.reporte_estrategico || mods?.reporte_estrategico || audit?.respuesta;
                 const approved = window.prepareCurrentFixtureRecapState({
                     ...mods,
+                    lang: 'en',
                     ...(audit ? { madreUltimaAuditoria: audit } : {}),
                     ...(rep ? { reporte_estrategico: rep } : {})
-                });
+                }, { lang: 'en' });
+                approved.lang = 'en';
+                approved.language = 'en';
+                if (typeof window.formatMadreStrategicReportEnglish === 'function' && approved.reporte_estrategico) {
+                    approved.reporte_estrategico = window.formatMadreStrategicReportEnglish(approved.reporte_estrategico, approved);
+                    if (approved.madreUltimaAuditoria && typeof approved.madreUltimaAuditoria === 'object') {
+                        approved.madreUltimaAuditoria.reporte_estrategico = approved.reporte_estrategico;
+                    }
+                }
                 if (customFreight && !isNaN(customFreight) && customFreight > 0) {
                     approved.allInRateGross = customFreight;
                     approved.flete = customFreight;
@@ -4083,9 +4141,9 @@
                 }
 
                 if (typeof window !== 'undefined' && typeof window.generateFixtureRecapPDF === 'function') {
-                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
+                    await window.generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot, lang: 'en' });
                 } else if (typeof generateFixtureRecapPDF === 'function') {
-                    await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot });
+                    await generateFixtureRecapPDF({ includeExecutiveReport: true, fixtureRecapSnapshot, lang: 'en' });
                 } else {
                     console.warn('generateFixtureRecapPDF no está disponible en este contexto.');
                 }
