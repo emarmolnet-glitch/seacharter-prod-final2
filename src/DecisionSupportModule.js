@@ -115,7 +115,7 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Cantidad Carga (MT)</label>
-                                        <input type="number" id="input-cargoQty" value="0" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-cargoQty" value="0" min="0" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Mercancía / Commodity</label>
@@ -123,27 +123,27 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Días Restantes Laycan</label>
-                                        <input type="number" id="input-laycanDaysLeft" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-laycanDaysLeft" value="10" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Días Est. Navegación</label>
-                                        <input type="number" id="input-estimatedVoyageDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-estimatedVoyageDays" value="8" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Ritmo Carga (MT/día)</label>
-                                        <input type="number" id="input-loadRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-loadRate" value="5000" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Ritmo Descarga (MT/día)</label>
-                                        <input type="number" id="input-dischargeRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-dischargeRate" value="5000" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Días en Puerto (Port Days)</label>
-                                        <input type="number" id="input-portDays" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-portDays" value="10" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Días Navegando (Sea Days)</label>
-                                        <input type="number" id="input-seaDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-seaDays" value="8" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                 </div>
                             </div>
@@ -201,7 +201,7 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                                         </div>
                                         <div id="container-jwlaPremiumUSD" class="flex items-center gap-2">
                                             <label for="input-jwlaPremiumUSD" class="text-slate-600 font-medium text-xs">Prima JWLA ($):</label>
-                                            <input type="number" id="input-jwlaPremiumUSD" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-32 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-bold text-xs focus:outline-none focus:border-amber-500">
+                                            <input type="number" id="input-jwlaPremiumUSD" value="0" step="any" min="0" oninput="actualizarDesdeFormulario()" class="w-32 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-bold text-xs focus:outline-none focus:border-amber-500">
                                         </div>
                                     </div>
                                     <div>
@@ -211,11 +211,11 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                                                 <i class="fa-solid fa-robot text-indigo-500"></i> AUTO
                                             </span>
                                         </label>
-                                        <input type="number" id="input-ballastDays" value="0" step="0.1" min="0" readonly class="w-full bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 text-slate-700 font-extrabold focus:outline-none cursor-not-allowed" title="Autocalculado por Matriz de Distancias DSS (Read-Only)">
+                                        <input type="number" id="input-ballastDays" value="0" step="any" min="0" readonly class="w-full bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 text-slate-700 font-extrabold focus:outline-none cursor-not-allowed" title="Autocalculado por Matriz de Distancias DSS (Read-Only)">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1" for="input-actualCargoIntake">Ajuste de Calado (Short Lift MT)</label>
-                                        <input type="number" id="input-actualCargoIntake" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-actualCargoIntake" value="0" step="any" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                 </div>
                             </div>
@@ -253,8 +253,19 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
                                     <strong id="display-commission-pct" class="text-slate-200 font-extrabold text-sm">5.0%</strong>
                                 </div>
                                 <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700 flex flex-col justify-between">
-                                    <span class="text-slate-300 font-bold text-[11px]">FLETE ALL-IN GROSS</span>
-                                    <strong id="display-all-in-gross" class="text-emerald-400 font-bold text-xl">$0.00 / MT</strong>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-300 font-bold text-[11px]">FLETE ALL-IN GROSS</span>
+                                        <button type="button" id="btn-reset-all-in-gross" onclick="restablecerFleteAllInGross()" title="Restablecer al cálculo automático" class="text-[10px] text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-rotate-left"></i>
+                                            <span>Auto</span>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <span class="text-emerald-400 font-bold text-sm">$</span>
+                                        <input type="number" step="0.01" id="display-all-in-gross" class="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-2.5 py-1 text-emerald-400 font-bold text-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" placeholder="0.00" oninput="onInputAllInGross(this)">
+                                        <span class="text-slate-400 text-xs font-semibold whitespace-nowrap">/ MT</span>
+                                    </div>
+                                    <input type="hidden" id="input-freight-all-in" value="">
                                 </div>
                             </div>
 
@@ -784,6 +795,31 @@ const DECISION_SUPPORT_TEMPLATE = String.raw`
 
                             <!-- Acciones del informe: Fixture Recap (Opción B) -->
                             <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
+                                <div id="container-control-flete-auditoria" class="mb-3.5 p-3.5 bg-white border-2 border-teal-600/40 rounded-xl shadow-sm space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <label for="input-audit-final-freight" class="text-xs font-bold text-teal-900 flex items-center gap-1.5 uppercase tracking-wide">
+                                            <i class="fa-solid fa-money-bill-wave text-teal-600"></i>
+                                            <span>Flete Final Acordado / All-In Gross ($/MT)</span>
+                                        </label>
+                                        <span class="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
+                                            Fixture Recap & Reporte
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative flex-1">
+                                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-teal-700 font-bold text-sm select-none">$</span>
+                                            <input type="number" step="0.01" id="input-audit-final-freight" class="w-full pl-7 pr-16 py-2 bg-slate-50 border border-teal-500/50 rounded-lg text-teal-950 font-extrabold text-base focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all" placeholder="0.00" oninput="onAuditFinalFreightChange(this.value)">
+                                            <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-xs font-semibold select-none">/ MT</span>
+                                        </div>
+                                        <button type="button" id="btn-reset-audit-freight" onclick="restablecerFleteAuditoria()" title="Restablecer al flete calculado" class="px-2.5 py-2 text-xs font-bold text-teal-800 bg-teal-100 hover:bg-teal-200 border border-teal-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1">
+                                            <i class="fa-solid fa-rotate-left"></i>
+                                            <span>Reset</span>
+                                        </button>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500 leading-tight">
+                                        Ajuste manual del flete final de cierre. Sincroniza en vivo el reporte estratégico, Fixture Recap y exportaciones PDF.
+                                    </p>
+                                </div>
                                 <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
                                     <i class="fa-solid fa-file-contract text-teal-200"></i>
                                     <span>Imprimir Fixture Recap Estratégico (Opción B)</span>
@@ -1386,6 +1422,20 @@ export function renderizarAuditoriaDss(auditoriaData) {
     const variables = Array.isArray(auditoriaData.variables_perjudiciales) ? auditoriaData.variables_perjudiciales : [];
     const recomendaciones = Array.isArray(auditoriaData.recomendaciones) ? auditoriaData.recomendaciones : [];
 
+    // Sincronizar input de flete final acordado para Auditoría / Fixture Recap
+    const mods = auditoriaData.modificaciones_recap || {};
+    const initialFreight = (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0)
+        ? window.dssAuditCustomFreight
+        : (mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? (typeof window !== 'undefined' && (window.dssFormState?.allInRateGross || window.dssFormState?.fleteUnitario) || 0));
+    const numFreight = Number(initialFreight) || 0;
+    const auditFreightInput = document.getElementById('input-audit-final-freight');
+    if (auditFreightInput && numFreight > 0) {
+        auditFreightInput.value = numFreight.toFixed(2);
+        if (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0) {
+            onAuditFinalFreightChange(window.dssAuditCustomFreight);
+        }
+    }
+
     const cardContainer = document.getElementById('tarjeta-resumen-auditoria-madre');
     if (cardContainer) {
         cardContainer.innerHTML = `
@@ -1431,7 +1481,10 @@ export function renderizarAuditoriaDss(auditoriaData) {
 
     const reporteContainer = document.getElementById('madre-offcanvas-reporte');
     if (reporteContainer) {
-        reporteContainer.textContent = reporte;
+        const activeReport = (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0)
+            ? actualizarTextoReporteConFlete(reporte, window.dssAuditCustomFreight)
+            : reporte;
+        reporteContainer.textContent = activeReport;
     }
 
     const varsContainer = document.getElementById('madre-offcanvas-variables');
@@ -1459,26 +1512,187 @@ export function renderizarAuditoriaDss(auditoriaData) {
         if (recomendaciones.length === 0) {
             recsContainer.innerHTML = `<span class="text-xs text-gray-400 italic">Sin recomendaciones adicionales.</span>`;
         } else {
-            recsContainer.innerHTML = recomendaciones.map((rec, i) => `
+            recsContainer.innerHTML = recomendaciones.map((rec, i) => {
+                let texto = '';
+                let pro = '';
+                let contra = '';
+                if (typeof rec === 'string') {
+                    texto = rec;
+                } else if (rec && typeof rec === 'object') {
+                    texto = rec.texto || rec.descripcion || rec.recomendacion || rec.title || rec.accion || rec.action || '';
+                    pro = rec.pro || '';
+                    contra = rec.contra || '';
+                }
+                return `
                 <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
                     <div class="font-bold text-slate-900 text-sm flex items-start gap-2">
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs shrink-0 font-extrabold mt-0.5">${i + 1}</span>
-                        <span class="text-slate-900 font-bold">${escapeHtml(rec.accion || rec.action || '')}</span>
+                        <span class="text-slate-900 font-bold">${escapeHtml(texto)}</span>
                     </div>
-                    ${rec.pro ? `
+                    ${pro ? `
                         <div class="mt-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md p-2.5 flex items-start gap-2">
                             <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5 shrink-0"></i>
-                            <div><strong class="font-bold text-emerald-900">Pro:</strong> ${escapeHtml(rec.pro)}</div>
+                            <div><strong class="font-bold text-emerald-900">Pro:</strong> ${escapeHtml(pro)}</div>
                         </div>
                     ` : ''}
-                    ${rec.contra ? `
+                    ${contra ? `
                         <div class="mt-1.5 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-md p-2.5 flex items-start gap-2">
                             <i class="fa-solid fa-circle-xmark text-rose-600 mt-0.5 shrink-0"></i>
-                            <div><strong class="font-bold text-rose-900">Contra:</strong> ${escapeHtml(rec.contra)}</div>
+                            <div><strong class="font-bold text-rose-900">Contra:</strong> ${escapeHtml(contra)}</div>
                         </div>
                     ` : ''}
                 </div>
-            `).join('');
+            `;
+            }).join('');
+        }
+    }
+}
+
+export function actualizarTextoReporteConFlete(reporteTexto, nuevoFlete) {
+    if (!reporteTexto || typeof reporteTexto !== 'string') return reporteTexto;
+    const fleteNum = Number(nuevoFlete);
+    if (isNaN(fleteNum) || fleteNum <= 0) return reporteTexto;
+    const fleteFormatted = fleteNum.toFixed(2);
+
+    let updated = reporteTexto;
+
+    // Helper regex y replacer para cifras de flete respetando unidad ($ o USD/MT)
+    const replaceFleteRegex = /(flete(?:\s+unitario|\s+comercial|\s+de\s+venta|\s+acordado|\s+nominal|\s+all-in\s+gross)?(?:\s+de|\s+en|\s+a|\s*:)?\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi;
+    const replaceFleteReplacer = (match, prefix, symbol, unit) => {
+        const hasDollar = Boolean(symbol && symbol.trim());
+        const unitStr = unit || '';
+        if (hasDollar) {
+            return `${prefix}$${fleteFormatted}${unitStr}`;
+        } else if (unitStr) {
+            return `${prefix}${fleteFormatted}${unitStr}`;
+        } else {
+            return `${prefix}$${fleteFormatted}`;
+        }
+    };
+
+    // 1. Reemplazar específicamente en la sección 4: "4. ANÁLISIS FINANCIERO Y FLETE" (o "4. ANALISIS FINANCIERO Y FLETE")
+    // Sin tocar jamás la cifra del Break-Even ni otros costes operativos
+    const regexSec4 = /(4\.\s*AN[ÁA]LISIS\s+FINANCIERO\s+Y\s+FLETE[\s\S]*?)(?=(?:\n\s*\d+\.|\n\n[A-Z0-9\s.-]+:|$))/i;
+    const matchSec4 = updated.match(regexSec4);
+    if (matchSec4) {
+        let sec4Text = matchSec4[1];
+        sec4Text = sec4Text.replace(replaceFleteRegex, replaceFleteReplacer);
+        updated = updated.replace(matchSec4[1], sec4Text);
+    } else {
+        // Fallback si no viene seccionado formalmente
+        updated = updated.replace(replaceFleteRegex, replaceFleteReplacer);
+    }
+
+    // 2. Frases estándar de auditoría estratégica
+    updated = updated.replace(
+        /(ajustando el flete a\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+        (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+    );
+    updated = updated.replace(
+        /(Flete ALL-IN GROSS:\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+        (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+    );
+    updated = updated.replace(
+        /(flete acordado(?:\s+de)?\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+        (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+    );
+    updated = updated.replace(
+        /(flete nominal de\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+        (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+    );
+
+    return updated;
+}
+
+export function onAuditFinalFreightChange(val) {
+    const num = parseFloat(val);
+    if (isNaN(num) || num <= 0) return;
+
+    if (typeof window !== 'undefined') {
+        window.dssAuditCustomFreight = num;
+        if (window.madreUltimaAuditoria) {
+            if (!window.madreUltimaAuditoria.modificaciones_recap) {
+                window.madreUltimaAuditoria.modificaciones_recap = {};
+            }
+            window.madreUltimaAuditoria.modificaciones_recap.flete = num;
+            window.madreUltimaAuditoria.modificaciones_recap.fleteUnitario = num;
+            window.madreUltimaAuditoria.modificaciones_recap.allInRateGross = num;
+        }
+        if (window.dssFormState) {
+            window.dssFormState.allInRateGross = num;
+            window.dssFormState.fleteUnitario = num;
+            window.dssFormState.fleteEstimado = num;
+        }
+        if (window.dssBaseActualState) {
+            window.dssBaseActualState.allInRateGross = num;
+            window.dssBaseActualState.fleteUnitario = num;
+            window.dssBaseActualState.fleteEstimado = num;
+        }
+        window.dssInjectedRecapFreight = num;
+        if (window.State) {
+            window.State.freightSell = num;
+            window.State.allInRateGross = num;
+            window.State.contractFreightGross = num;
+        }
+    }
+
+    const reporteEl = document.getElementById('madre-offcanvas-reporte');
+    if (reporteEl) {
+        const rawReport = (typeof window !== 'undefined' && window.madreUltimaAuditoria?.reporte_estrategico) || reporteEl.textContent || '';
+        const updated = actualizarTextoReporteConFlete(rawReport, num);
+        reporteEl.textContent = updated;
+        if (typeof window !== 'undefined' && window.madreUltimaAuditoria) {
+            window.madreUltimaAuditoria.reporte_estrategico = updated;
+        }
+    }
+}
+
+export function restablecerFleteAuditoria() {
+    const auditFreightInput = document.getElementById('input-audit-final-freight');
+    if (typeof window !== 'undefined') {
+        window.dssAuditCustomFreight = null;
+        const audit = window.madreUltimaAuditoria;
+        const mods = audit?.modificaciones_recap || {};
+        const fallbackFreight = (window.dssFormState?.allInRateGross || window.dssFormState?.fleteUnitario || 0);
+        const originalFreight = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? fallbackFreight;
+        const num = Number(originalFreight) || 0;
+        if (auditFreightInput && num > 0) {
+            auditFreightInput.value = num.toFixed(2);
+            onAuditFinalFreightChange(num);
+        }
+    }
+}
+
+export function onInputAllInGross(inputEl) {
+    if (!inputEl) return;
+    const val = inputEl.value;
+    if (val === '') {
+        restablecerFleteAllInGross();
+        return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+        inputEl.dataset.userModified = 'true';
+        if (typeof window !== 'undefined') {
+            window.dssManualAllInGross = num;
+            if (window.dssFormState) {
+                window.dssFormState.allInRateGross = num;
+            }
+            const hiddenAllIn = document.getElementById('input-freight-all-in');
+            if (hiddenAllIn) hiddenAllIn.value = num.toFixed(2);
+        }
+    }
+}
+
+export function restablecerFleteAllInGross() {
+    const elGross = document.getElementById('display-all-in-gross');
+    if (elGross) {
+        delete elGross.dataset.userModified;
+    }
+    if (typeof window !== 'undefined') {
+        window.dssManualAllInGross = null;
+        if (typeof window.actualizarDesdeFormulario === 'function') {
+            window.actualizarDesdeFormulario();
         }
     }
 }
@@ -1503,6 +1717,18 @@ export async function generarFixtureRecapOpcionB() {
         let fixtureRecapSnapshot = null;
         const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
         const mods = audit?.modificaciones_recap || {};
+
+        const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+        const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
+            ? parseFloat(auditFreightInput.value)
+            : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
+
+        if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+            mods.flete = customFreight;
+            mods.fleteUnitario = customFreight;
+            mods.allInRateGross = customFreight;
+        }
+
         const rep = audit?.reporte_estrategico || mods?.reporte_estrategico || audit?.respuesta;
         const approved = typeof window.prepareCurrentFixtureRecapState === 'function'
             ? window.prepareCurrentFixtureRecapState({
@@ -1516,6 +1742,11 @@ export async function generarFixtureRecapOpcionB() {
                 ...(audit ? { madreUltimaAuditoria: audit } : {}),
                 ...(rep ? { reporte_estrategico: rep } : {})
             };
+        if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+            approved.allInRateGross = customFreight;
+            approved.flete = customFreight;
+            approved.fleteUnitario = customFreight;
+        }
         if (audit && !approved.madreUltimaAuditoria) approved.madreUltimaAuditoria = audit;
         if (rep && !approved.reporte_estrategico) approved.reporte_estrategico = rep;
 
@@ -1723,5 +1954,10 @@ if (typeof window !== 'undefined') {
     window.generarFixtureRecapOpcionB = generarFixtureRecapOpcionB;
     window.generarAuditoriaMadreFallback = generarAuditoriaMadreFallback;
     window.handleDownloadLOI = handleDownloadLOI;
+    window.actualizarTextoReporteConFlete = actualizarTextoReporteConFlete;
+    window.onAuditFinalFreightChange = onAuditFinalFreightChange;
+    window.restablecerFleteAuditoria = restablecerFleteAuditoria;
+    window.onInputAllInGross = onInputAllInGross;
+    window.restablecerFleteAllInGross = restablecerFleteAllInGross;
 }
 

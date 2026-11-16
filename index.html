@@ -12846,16 +12846,143 @@
                 <div id="accordion-section-primas-riesgo">
                     <span>Primas de Riesgo & Reposicionamiento</span>
                     <input type="checkbox" id="input-jwlaRiskActive" />
-                    <input type="number" id="input-jwlaPremiumUSD" />
-                    <input type="number" id="input-ballastDays" />
-                    <input type="number" id="input-actualCargoIntake" />
+                    <input type="number" id="input-jwlaPremiumUSD" step="any" />
+                    <input type="number" id="input-ballastDays" step="any" />
+                    <input type="number" id="input-actualCargoIntake" step="any" />
                 </div>
             </template>
+
+            <!-- DSS ALL-IN RATE ENGINE & FLETE BASE CONTROLS (DOM Reference & Static State) -->
+            <div id="section-flete-all-in-gross" class="hidden">
+                <div class="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">FLETE ALL-IN GROSS</span>
+                        <button type="button" id="btn-reset-all-in-gross" onclick="restablecerFleteAllInGross()" title="Restablecer al cálculo automático" class="text-[10px] text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Auto</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1">
+                        <span class="text-emerald-400 font-bold text-sm">$</span>
+                        <input type="number" step="0.01" id="display-all-in-gross" class="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-2.5 py-1 text-emerald-400 font-bold text-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" placeholder="0.00" oninput="onInputAllInGross(this)">
+                        <span class="text-slate-400 text-xs font-semibold whitespace-nowrap">/ MT</span>
+                    </div>
+                    <input type="hidden" id="input-freight-all-in" value="">
+                </div>
+                <input type="number" id="input-fleteEstimado" value="35" step="any" oninput="actualizarDesdeFormulario()">
+            </div>
+
             <div class="flex min-h-full items-center justify-center">
                 <div class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800 px-5 py-4 text-sm font-semibold text-slate-200 shadow-xl">
                     <i class="fa-solid fa-circle-notch animate-spin text-indigo-400" aria-hidden="true"></i>
                     <span>Cargando Sistema de Soporte de Decisiones…</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- NIVEL 2: DOCUMENTO EJECUTIVO CENTRADO - AUDITORÍA MADRE -->
+        <div id="madre-offcanvas-backdrop" class="fixed inset-0 z-[9999] hidden overflow-y-auto bg-slate-50" onclick="cerrarAuditoriaMadreOffcanvas()">
+            <div class="flex justify-center items-start w-full min-h-screen p-4 sm:p-6 lg:p-8">
+                <article id="madre-offcanvas-panel" class="w-full max-w-4xl min-w-0 bg-white shadow-xl rounded-xl mx-auto my-4 p-4 sm:p-8 flex flex-col font-sans" onclick="event.stopPropagation()" aria-label="Auditoría Estratégica MADRE" role="dialog" aria-modal="true">
+                    <!-- Encabezado del documento -->
+                    <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-lg">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900">Auditoría Estratégica MADRE</h3>
+                                <p class="text-xs text-gray-500">Dictamen Ejecutivo Corporativo & Propuesta de Optimización</p>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-cerrar-auditoria-offcanvas" onclick="cerrarAuditoriaMadreOffcanvas()" class="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" aria-label="Cerrar panel">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </header>
+
+                    <!-- Cuerpo del informe -->
+                    <div id="madre-offcanvas-body" class="py-6 space-y-6 text-slate-900 bg-white break-words">
+                        <!-- Veredicto Banner -->
+                        <div id="madre-offcanvas-veredicto-container" class="p-4 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dictamen General</span>
+                                <div id="madre-offcanvas-veredicto-val" class="text-base font-bold text-slate-900 mt-0.5">--</div>
+                            </div>
+                            <div id="madre-offcanvas-veredicto-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-white border border-gray-200 shadow-sm">
+                                --
+                            </div>
+                        </div>
+
+                        <!-- Reporte Estratégico -->
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-lines"></i>
+                                <span>Reporte Estratégico</span>
+                            </h4>
+                            <div id="madre-offcanvas-reporte" class="text-sm text-gray-800 leading-relaxed bg-white border border-gray-200 rounded-xl p-4 shadow-sm whitespace-pre-line">
+                                <!-- Se inyecta reporte_estrategico -->
+                            </div>
+                        </div>
+
+                        <!-- Variables Perjudiciales -->
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span>Variables Perjudiciales Identificadas</span>
+                            </h4>
+                            <div id="madre-offcanvas-variables" class="flex flex-wrap gap-2">
+                                <!-- Se inyectan badges rojas/naranjas -->
+                            </div>
+                        </div>
+
+                        <!-- Recomendaciones Estratégicas (Acción, Pro en verde, Contra en rojo) -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                                <span>Recomendaciones Estratégicas</span>
+                            </h4>
+                            <div id="madre-offcanvas-recomendaciones" class="space-y-3">
+                                <!-- Se inyectan recomendaciones -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Acciones del informe: Fixture Recap (Opción B) -->
+                    <footer class="bg-slate-50 border-t border-gray-200 p-4 shrink-0">
+                        <div id="container-control-flete-auditoria" class="mb-3.5 p-3.5 bg-white border-2 border-teal-600/40 rounded-xl shadow-sm space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label for="input-audit-final-freight" class="text-xs font-bold text-teal-900 flex items-center gap-1.5 uppercase tracking-wide">
+                                    <i class="fa-solid fa-money-bill-wave text-teal-600"></i>
+                                    <span>Flete Final Acordado / All-In Gross ($/MT)</span>
+                                </label>
+                                <span class="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
+                                    Fixture Recap & Reporte
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-1">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-teal-700 font-bold text-sm select-none">$</span>
+                                    <input type="number" step="0.01" id="input-audit-final-freight" class="w-full pl-7 pr-16 py-2 bg-slate-50 border border-teal-500/50 rounded-lg text-teal-950 font-extrabold text-base focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all" placeholder="0.00" oninput="onAuditFinalFreightChange(this.value)">
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-xs font-semibold select-none">/ MT</span>
+                                </div>
+                                <button type="button" id="btn-reset-audit-freight" onclick="restablecerFleteAuditoria()" title="Restablecer al flete calculado" class="px-2.5 py-2 text-xs font-bold text-teal-800 bg-teal-100 hover:bg-teal-200 border border-teal-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                    <span>Reset</span>
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-gray-500 leading-tight">
+                                Ajuste manual del flete final de cierre. Sincroniza en vivo el reporte estratégico, Fixture Recap y exportaciones PDF.
+                            </p>
+                        </div>
+                        <button type="button" id="btn-fixture-recap-opcion-b" onclick="generarFixtureRecapOpcionB()" class="w-full py-3 px-4 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="fa-solid fa-file-contract text-teal-200"></i>
+                            <span>Imprimir Fixture Recap Estratégico (Opción B)</span>
+                        </button>
+                        <p class="text-[11px] text-gray-500 text-center mt-2">
+                            Aplica automáticamente las modificaciones acordadas (flete, cláusulas y laytime) y exporta el Recap PDF oficial.
+                        </p>
+                    </footer>
+                </article>
             </div>
         </div>
 
@@ -44301,13 +44428,27 @@ function scheduleReactiveEngine() {
             const allInResult = calculateAllInFreightGross(currentState);
             const demurrageRate = (typeof State !== 'undefined' && State && State.demurrage) ? Number(State.demurrage) : 15000;
 
-            window.dssInjectedRecapFreight = allInResult.allInRateGross;
+            const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+            const customAuditFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
+                ? parseFloat(auditFreightInput.value)
+                : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
+            const grossInput = (typeof document !== 'undefined') ? document.getElementById('display-all-in-gross') : null;
+            const customGross = grossInput && grossInput.tagName === 'INPUT' && parseFloat(grossInput.value) > 0
+                ? parseFloat(grossInput.value)
+                : (typeof window !== 'undefined' ? (window.dssManualAllInGross || null) : null);
+
+            const finalFreight = (customAuditFreight && !isNaN(customAuditFreight) && customAuditFreight > 0)
+                ? customAuditFreight
+                : ((customGross && !isNaN(customGross) && customGross > 0) ? customGross : allInResult.allInRateGross);
+
+            window.dssInjectedRecapFreight = finalFreight;
             window.dssInjectedRecapDemurrage = demurrageRate;
             window.dssInjectedJwcActive = allInResult.jwcRiskActive;
 
             if (typeof State !== 'undefined' && State) {
-                State.allInRateGross = allInResult.allInRateGross;
-                State.contractFreightGross = allInResult.allInRateGross;
+                State.allInRateGross = finalFreight;
+                State.contractFreightGross = finalFreight;
+                State.freightSell = finalFreight;
                 State.demurrage = demurrageRate;
                 State.jwcActive = allInResult.jwcRiskActive;
             }
@@ -44316,8 +44457,8 @@ function scheduleReactiveEngine() {
             // antes de navegar al Editor, de modo que el Editor no arrastre el flete antiguo.
             if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore.set) {
                 SeaCharterStore.set({
-                    allInRateGross: allInResult.allInRateGross,
-                    contractFreightGross: allInResult.allInRateGross,
+                    allInRateGross: finalFreight,
+                    contractFreightGross: finalFreight,
                     demurrage: demurrageRate,
                     jwcActive: allInResult.jwcRiskActive
                 });
@@ -44325,7 +44466,7 @@ function scheduleReactiveEngine() {
 
             const setContractFreightInput = (id) => {
                 const el = document.getElementById(id);
-                if (el) el.value = allInResult.allInRateGross.toFixed(2);
+                if (el) el.value = finalFreight.toFixed(2);
             };
             setContractFreightInput('gc-freight-val');
             setContractFreightInput('asb-freight-val');
@@ -44337,7 +44478,7 @@ function scheduleReactiveEngine() {
                 if (recapContainer) {
                     recapContainer.innerHTML = buildFixtureRecapHTMLTemplate({
                         ...currentState,
-                        allInRateGross: allInResult.allInRateGross,
+                        allInRateGross: finalFreight,
                         demurrageRate,
                         jwlaRiskActive: allInResult.jwcRiskActive
                     });
@@ -44345,9 +44486,9 @@ function scheduleReactiveEngine() {
             }
 
             if (typeof showToast === 'function') {
-                showToast(`✅ Condiciones del DSS aplicadas al Recap (Flete ALL-IN Gross: $${allInResult.allInRateGross.toFixed(2)}/MT, Demurrage: $${demurrageRate.toLocaleString('en-US')}/día)`);
+                showToast(`✅ Condiciones del DSS aplicadas al Recap (Flete ALL-IN Gross: $${finalFreight.toFixed(2)}/MT, Demurrage: $${demurrageRate.toLocaleString('en-US')}/día)`);
             } else {
-                alert(`Condiciones inyectadas al Fixture Recap:\n• Flete ALL-IN Gross: $${allInResult.allInRateGross.toFixed(2)} / MT\n• Demurrage Recomendado: $${demurrageRate.toLocaleString('en-US')} / día`);
+                alert(`Condiciones inyectadas al Fixture Recap:\n• Flete ALL-IN Gross: $${finalFreight.toFixed(2)} / MT\n• Demurrage Recomendado: $${demurrageRate.toLocaleString('en-US')} / día`);
             }
         }
 
@@ -44392,16 +44533,26 @@ function scheduleReactiveEngine() {
             let jwlaPremiumUSD = inputJwlaPremiumUSD ? (Number(inputJwlaPremiumUSD.value) || 0) : 0;
             const actualCargoIntake = inputActualCargoIntake ? (Number(inputActualCargoIntake.value) || cargoQty) : cargoQty;
 
-            // Vincular strictly el Flete Neto Base al output real de la calculadora activa
+            // Vincular strictly el Flete Neto Base al output real de la calculadora activa o input manual de DSS
             const activeCalcFreight = (typeof State !== 'undefined' && State && (Number(State.freightSell) > 0 || Number(State.fleteUnitario) > 0 || Number(State.fleteEstimado) > 0 || Number(State.freightRate) > 0))
                 ? Number(State.freightSell || State.fleteUnitario || State.fleteEstimado || State.freightRate)
                 : (parseFloat(document.getElementById('freight-sell')?.value) || 35);
 
-            if (inputFleteEstimado) {
-                inputFleteEstimado.value = activeCalcFreight.toFixed(2);
+            let fleteBaseUnitario;
+            if (inputFleteEstimado && inputFleteEstimado.value !== '' && !isNaN(Number(inputFleteEstimado.value)) && Number(inputFleteEstimado.value) > 0) {
+                fleteBaseUnitario = Number(inputFleteEstimado.value);
+            } else {
+                fleteBaseUnitario = activeCalcFreight;
+                if (inputFleteEstimado && document.activeElement !== inputFleteEstimado) {
+                    inputFleteEstimado.value = activeCalcFreight.toFixed(2);
+                }
             }
 
-            const fleteBaseUnitario = activeCalcFreight;
+            if (inputFleteEstimado && document.activeElement === inputFleteEstimado) {
+                const elGross = document.getElementById('display-all-in-gross');
+                if (elGross) delete elGross.dataset.userModified;
+                if (typeof window !== 'undefined') window.dssManualAllInGross = null;
+            }
 
             // Evaluacion de Riesgo JWC e Inyeccion Automatica
             const jwcEval = evaluateJWCRisk(polVal, podVal);
@@ -44507,12 +44658,31 @@ function scheduleReactiveEngine() {
             const elSurcharges = document.getElementById('display-surcharges-total');
             const elComm = document.getElementById('display-commission-pct');
             const elGross = document.getElementById('display-all-in-gross');
+            const hiddenAllIn = document.getElementById('input-freight-all-in');
             const badgeJwc = document.getElementById('badge-jwc-risk');
 
             if (elNet) elNet.textContent = `$${(allInResult.netFreightRate || 0).toFixed(2)} / MT`;
             if (elSurcharges) elSurcharges.textContent = `$${(Number(allInResult.totalSurchargesUSD) || ((allInResult.jwcPremiumUSD || 0) + (allInResult.ballastCostUSD || 0))).toLocaleString('en-US')}`;
             if (elComm) elComm.textContent = `${(allInResult.totalCommissionPct || 5).toFixed(1)}%`;
-            if (elGross) elGross.textContent = `$${(allInResult.allInRateGross || 0).toFixed(2)} / MT`;
+
+            const activeAllInGross = (elGross && elGross.tagName === 'INPUT' && elGross.dataset.userModified && parseFloat(elGross.value) > 0)
+                ? parseFloat(elGross.value)
+                : ((typeof window !== 'undefined' && window.dssManualAllInGross && window.dssManualAllInGross > 0)
+                    ? window.dssManualAllInGross
+                    : (allInResult.allInRateGross || 0));
+
+            dssFormState.allInRateGross = activeAllInGross;
+
+            if (elGross) {
+                if (elGross.tagName === 'INPUT') {
+                    if (!elGross.dataset.userModified) {
+                        elGross.value = activeAllInGross > 0 ? activeAllInGross.toFixed(2) : '';
+                    }
+                } else {
+                    elGross.textContent = `$${activeAllInGross.toFixed(2)} / MT`;
+                }
+            }
+            if (hiddenAllIn) hiddenAllIn.value = activeAllInGross.toFixed(2);
 
             if (badgeJwc) badgeJwc.classList.toggle('hidden', !allInResult.jwcRiskActive);
 
@@ -45670,6 +45840,15 @@ function scheduleReactiveEngine() {
                 }
 
                 const state = getDSSCurrentState();
+                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
+                    ? parseFloat(auditFreightInput.value)
+                    : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
+                if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+                    state.allInRateGross = customFreight;
+                    state.fleteEstimado = customFreight;
+                    state.fleteUnitario = customFreight;
+                }
                 const htmlString = buildAuditHTMLTemplate(state);
                 const filename = `Auditoria_Riesgo_Comercial_DSS_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
@@ -45703,10 +45882,19 @@ function scheduleReactiveEngine() {
         async function generateFixtureRecapPDF(options = {}) {
             try {
                 const current = getDSSCurrentState();
+                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
+                    ? parseFloat(auditFreightInput.value)
+                    : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
+                if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+                    current.allInRateGross = customFreight;
+                    current.fleteEstimado = customFreight;
+                    current.fleteUnitario = customFreight;
+                }
                 const snapshot = window.getFixtureRecapSnapshot(current, options.fixtureRecapSnapshot);
                 if (options.fixtureRecapSnapshot && !snapshot) throw new Error('El snapshot no pertenece a las condiciones actuales del expediente');
                 if (options.includeExecutiveReport && !snapshot) throw new Error('Falta snapshot financiero aprobado');
-                const state = snapshot ? snapshot.state : getDSSCurrentState();
+                const state = snapshot ? snapshot.state : current;
                 if (!snapshot && window.FixtureReferenceService) {
                     const identity = state.estimationId && state.estimationId !== 'current' ? state.estimationId : window.crypto.randomUUID();
                     const reference = await window.FixtureReferenceService.ensure(identity);
@@ -46005,6 +46193,20 @@ function scheduleReactiveEngine() {
             const variables = Array.isArray(auditoriaData.variables_perjudiciales) ? auditoriaData.variables_perjudiciales : [];
             const recomendaciones = Array.isArray(auditoriaData.recomendaciones) ? auditoriaData.recomendaciones : [];
 
+            // Sincronizar input de flete final acordado para Auditoría / Fixture Recap
+            const mods = auditoriaData.modificaciones_recap || {};
+            const initialFreight = (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0)
+                ? window.dssAuditCustomFreight
+                : (mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? (typeof window !== 'undefined' && (window.dssFormState?.allInRateGross || window.dssFormState?.fleteUnitario) || 0));
+            const numFreight = Number(initialFreight) || 0;
+            const auditFreightInput = document.getElementById('input-audit-final-freight');
+            if (auditFreightInput && numFreight > 0) {
+                auditFreightInput.value = numFreight.toFixed(2);
+                if (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0) {
+                    onAuditFinalFreightChange(window.dssAuditCustomFreight);
+                }
+            }
+
             const cardContainer = document.getElementById('tarjeta-resumen-auditoria-madre');
             if (cardContainer) {
                 cardContainer.innerHTML = `
@@ -46050,7 +46252,10 @@ function scheduleReactiveEngine() {
 
             const reporteContainer = document.getElementById('madre-offcanvas-reporte');
             if (reporteContainer) {
-                reporteContainer.textContent = reporte;
+                const activeReport = (typeof window !== 'undefined' && window.dssAuditCustomFreight && window.dssAuditCustomFreight > 0)
+                    ? actualizarTextoReporteConFlete(reporte, window.dssAuditCustomFreight)
+                    : reporte;
+                reporteContainer.textContent = activeReport;
             }
 
             const varsContainer = document.getElementById('madre-offcanvas-variables');
@@ -46078,26 +46283,187 @@ function scheduleReactiveEngine() {
                 if (recomendaciones.length === 0) {
                     recsContainer.innerHTML = `<span class="text-xs text-gray-400 italic">Sin recomendaciones adicionales.</span>`;
                 } else {
-                    recsContainer.innerHTML = recomendaciones.map((rec, i) => `
+                    recsContainer.innerHTML = recomendaciones.map((rec, i) => {
+                        let texto = '';
+                        let pro = '';
+                        let contra = '';
+                        if (typeof rec === 'string') {
+                            texto = rec;
+                        } else if (rec && typeof rec === 'object') {
+                            texto = rec.texto || rec.descripcion || rec.recomendacion || rec.title || rec.accion || rec.action || '';
+                            pro = rec.pro || '';
+                            contra = rec.contra || '';
+                        }
+                        return `
                         <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
                             <div class="font-bold text-slate-900 text-sm flex items-start gap-2">
                                 <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs shrink-0 font-extrabold mt-0.5">${i + 1}</span>
-                                <span class="text-slate-900 font-bold">${escapeHtmlDSS(rec.accion || rec.action || '')}</span>
+                                <span class="text-slate-900 font-bold">${escapeHtmlDSS(texto)}</span>
                             </div>
-                            ${rec.pro ? `
+                            ${pro ? `
                                 <div class="mt-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md p-2.5 flex items-start gap-2">
                                     <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5 shrink-0"></i>
-                                    <div><strong class="font-bold text-emerald-900">Pro:</strong> ${escapeHtmlDSS(rec.pro)}</div>
+                                    <div><strong class="font-bold text-emerald-900">Pro:</strong> ${escapeHtmlDSS(pro)}</div>
                                 </div>
                             ` : ''}
-                            ${rec.contra ? `
+                            ${contra ? `
                                 <div class="mt-1.5 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-md p-2.5 flex items-start gap-2">
                                     <i class="fa-solid fa-circle-xmark text-rose-600 mt-0.5 shrink-0"></i>
-                                    <div><strong class="font-bold text-rose-900">Contra:</strong> ${escapeHtmlDSS(rec.contra)}</div>
+                                    <div><strong class="font-bold text-rose-900">Contra:</strong> ${escapeHtmlDSS(contra)}</div>
                                 </div>
                             ` : ''}
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
+                }
+            }
+        }
+
+        function actualizarTextoReporteConFlete(reporteTexto, nuevoFlete) {
+            if (!reporteTexto || typeof reporteTexto !== 'string') return reporteTexto;
+            const fleteNum = Number(nuevoFlete);
+            if (isNaN(fleteNum) || fleteNum <= 0) return reporteTexto;
+            const fleteFormatted = fleteNum.toFixed(2);
+
+            let updated = reporteTexto;
+
+            // Helper regex y replacer para cifras de flete respetando unidad ($ o USD/MT)
+            const replaceFleteRegex = /(flete(?:\s+unitario|\s+comercial|\s+de\s+venta|\s+acordado|\s+nominal|\s+all-in\s+gross)?(?:\s+de|\s+en|\s+a|\s*:)?\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi;
+            const replaceFleteReplacer = (match, prefix, symbol, unit) => {
+                const hasDollar = Boolean(symbol && symbol.trim());
+                const unitStr = unit || '';
+                if (hasDollar) {
+                    return `${prefix}$${fleteFormatted}${unitStr}`;
+                } else if (unitStr) {
+                    return `${prefix}${fleteFormatted}${unitStr}`;
+                } else {
+                    return `${prefix}$${fleteFormatted}`;
+                }
+            };
+
+            // 1. Reemplazar específicamente en la sección 4: "4. ANÁLISIS FINANCIERO Y FLETE" (o "4. ANALISIS FINANCIERO Y FLETE")
+            // Sin tocar jamás la cifra del Break-Even ni otros costes operativos
+            const regexSec4 = /(4\.\s*AN[ÁA]LISIS\s+FINANCIERO\s+Y\s+FLETE[\s\S]*?)(?=(?:\n\s*\d+\.|\n\n[A-Z0-9\s.-]+:|$))/i;
+            const matchSec4 = updated.match(regexSec4);
+            if (matchSec4) {
+                let sec4Text = matchSec4[1];
+                sec4Text = sec4Text.replace(replaceFleteRegex, replaceFleteReplacer);
+                updated = updated.replace(matchSec4[1], sec4Text);
+            } else {
+                // Fallback si no viene seccionado formalmente
+                updated = updated.replace(replaceFleteRegex, replaceFleteReplacer);
+            }
+
+            // 2. Frases estándar de auditoría estratégica
+            updated = updated.replace(
+                /(ajustando el flete a\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+                (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+            );
+            updated = updated.replace(
+                /(Flete ALL-IN GROSS:\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+                (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+            );
+            updated = updated.replace(
+                /(flete acordado(?:\s+de)?\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+                (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+            );
+            updated = updated.replace(
+                /(flete nominal de\s*)(\$\s*)?\d+(?:[.,]\d{1,2})?(\s*(?:USD\s*\/\s*MT|\/\s*MT|USD))?/gi,
+                (m, p1, p2, p3) => `${p1}$${fleteFormatted}${p3 || '/MT'}`
+            );
+
+            return updated;
+        }
+
+        function onAuditFinalFreightChange(val) {
+            const num = parseFloat(val);
+            if (isNaN(num) || num <= 0) return;
+
+            if (typeof window !== 'undefined') {
+                window.dssAuditCustomFreight = num;
+                if (window.madreUltimaAuditoria) {
+                    if (!window.madreUltimaAuditoria.modificaciones_recap) {
+                        window.madreUltimaAuditoria.modificaciones_recap = {};
+                    }
+                    window.madreUltimaAuditoria.modificaciones_recap.flete = num;
+                    window.madreUltimaAuditoria.modificaciones_recap.fleteUnitario = num;
+                    window.madreUltimaAuditoria.modificaciones_recap.allInRateGross = num;
+                }
+                if (window.dssFormState) {
+                    window.dssFormState.allInRateGross = num;
+                    window.dssFormState.fleteUnitario = num;
+                    window.dssFormState.fleteEstimado = num;
+                }
+                if (window.dssBaseActualState) {
+                    window.dssBaseActualState.allInRateGross = num;
+                    window.dssBaseActualState.fleteUnitario = num;
+                    window.dssBaseActualState.fleteEstimado = num;
+                }
+                window.dssInjectedRecapFreight = num;
+                if (window.State) {
+                    window.State.freightSell = num;
+                    window.State.allInRateGross = num;
+                    window.State.contractFreightGross = num;
+                }
+            }
+
+            const reporteEl = document.getElementById('madre-offcanvas-reporte');
+            if (reporteEl) {
+                const rawReport = (typeof window !== 'undefined' && window.madreUltimaAuditoria?.reporte_estrategico) || reporteEl.textContent || '';
+                const updated = actualizarTextoReporteConFlete(rawReport, num);
+                reporteEl.textContent = updated;
+                if (typeof window !== 'undefined' && window.madreUltimaAuditoria) {
+                    window.madreUltimaAuditoria.reporte_estrategico = updated;
+                }
+            }
+        }
+
+        function restablecerFleteAuditoria() {
+            const auditFreightInput = document.getElementById('input-audit-final-freight');
+            if (typeof window !== 'undefined') {
+                window.dssAuditCustomFreight = null;
+                const audit = window.madreUltimaAuditoria;
+                const mods = audit?.modificaciones_recap || {};
+                const fallbackFreight = (window.dssFormState?.allInRateGross || window.dssFormState?.fleteUnitario || 0);
+                const originalFreight = mods.allInRateGross ?? mods.flete ?? mods.fleteUnitario ?? fallbackFreight;
+                const num = Number(originalFreight) || 0;
+                if (auditFreightInput && num > 0) {
+                    auditFreightInput.value = num.toFixed(2);
+                    onAuditFinalFreightChange(num);
+                }
+            }
+        }
+
+        function onInputAllInGross(inputEl) {
+            if (!inputEl) return;
+            const val = inputEl.value;
+            if (val === '') {
+                restablecerFleteAllInGross();
+                return;
+            }
+            const num = parseFloat(val);
+            if (!isNaN(num) && num > 0) {
+                inputEl.dataset.userModified = 'true';
+                if (typeof window !== 'undefined') {
+                    window.dssManualAllInGross = num;
+                    if (window.dssFormState) {
+                        window.dssFormState.allInRateGross = num;
+                    }
+                    const hiddenAllIn = document.getElementById('input-freight-all-in');
+                    if (hiddenAllIn) hiddenAllIn.value = num.toFixed(2);
+                }
+            }
+        }
+
+        function restablecerFleteAllInGross() {
+            const elGross = document.getElementById('display-all-in-gross');
+            if (elGross) {
+                delete elGross.dataset.userModified;
+            }
+            if (typeof window !== 'undefined') {
+                window.dssManualAllInGross = null;
+                if (typeof window.actualizarDesdeFormulario === 'function') {
+                    window.actualizarDesdeFormulario();
                 }
             }
         }
@@ -46131,12 +46497,29 @@ function scheduleReactiveEngine() {
             try {
                 const audit = (typeof window !== 'undefined') ? window.madreUltimaAuditoria : null;
                 const mods = audit?.modificaciones_recap || {};
+
+                const auditFreightInput = (typeof document !== 'undefined') ? document.getElementById('input-audit-final-freight') : null;
+                const customFreight = auditFreightInput && parseFloat(auditFreightInput.value) > 0
+                    ? parseFloat(auditFreightInput.value)
+                    : (typeof window !== 'undefined' ? (window.dssAuditCustomFreight || null) : null);
+
+                if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+                    mods.flete = customFreight;
+                    mods.fleteUnitario = customFreight;
+                    mods.allInRateGross = customFreight;
+                }
+
                 const rep = audit?.reporte_estrategico || mods?.reporte_estrategico || audit?.respuesta;
                 const approved = window.prepareCurrentFixtureRecapState({
                     ...mods,
                     ...(audit ? { madreUltimaAuditoria: audit } : {}),
                     ...(rep ? { reporte_estrategico: rep } : {})
                 });
+                if (customFreight && !isNaN(customFreight) && customFreight > 0) {
+                    approved.allInRateGross = customFreight;
+                    approved.flete = customFreight;
+                    approved.fleteUnitario = customFreight;
+                }
                 if (audit && !approved.madreUltimaAuditoria) approved.madreUltimaAuditoria = audit;
                 if (rep && !approved.reporte_estrategico) approved.reporte_estrategico = rep;
 
@@ -46250,6 +46633,11 @@ function scheduleReactiveEngine() {
             window.cerrarAuditoriaMadreOffcanvas = cerrarAuditoriaMadreOffcanvas;
             window.generarFixtureRecapOpcionB = generarFixtureRecapOpcionB;
             window.generarAuditoriaMadreFallback = generarAuditoriaMadreFallback;
+            window.actualizarTextoReporteConFlete = actualizarTextoReporteConFlete;
+            window.onAuditFinalFreightChange = onAuditFinalFreightChange;
+            window.restablecerFleteAuditoria = restablecerFleteAuditoria;
+            window.onInputAllInGross = onInputAllInGross;
+            window.restablecerFleteAllInGross = restablecerFleteAllInGross;
         }
 
         /**
