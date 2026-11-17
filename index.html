@@ -32333,7 +32333,40 @@ function createRouteAnchorElement(type) {
                 }
             }
             if (tabId === 'compatibilidad') {
-                window.mountCompatibilityModule?.(targetView);
+                const ensureRadarAndMount = async () => {
+                    const currentFleet = (Array.isArray(window.datalasticRadarVessels) && window.datalasticRadarVessels.length > 0)
+                        ? window.datalasticRadarVessels
+                        : (Array.isArray(window.GlobalStore?.radarVessels) && window.GlobalStore.radarVessels.length > 0)
+                            ? window.GlobalStore.radarVessels
+                            : [];
+                    if (currentFleet.length === 0) {
+                        const polCoords = (window.State?.polLat && window.State?.polLon)
+                            ? { lat: Number(window.State.polLat), lon: Number(window.State.polLon) }
+                            : (typeof extractPortCoords === 'function' && typeof findPortData === 'function')
+                                ? extractPortCoords(findPortData(window.State?.pol || document.getElementById('port-pol')?.value || ''))
+                                : null;
+                        if (polCoords && Number.isFinite(polCoords.lat) && Number.isFinite(polCoords.lon)) {
+                            try {
+                                let res = await fetch(`/api/radar/live?lat=${polCoords.lat}&lon=${polCoords.lon}&radius=10`, { headers: { Accept: 'application/json' } });
+                                let json = await res.json().catch(() => null);
+                                let vessels = Array.isArray(json?.data) ? json.data : [];
+                                if (vessels.length === 0) {
+                                    res = await fetch(`/api/radar/live?lat=${polCoords.lat}&lon=${polCoords.lon}&radius=100`, { headers: { Accept: 'application/json' } });
+                                    json = await res.json().catch(() => null);
+                                    vessels = Array.isArray(json?.data) ? json.data : [];
+                                }
+                                if (vessels.length > 0) {
+                                    window.datalasticRadarVessels = vessels;
+                                    if (window.GlobalStore?.setRadarVessels) {
+                                        window.GlobalStore.setRadarVessels(vessels, { source: 'compatibilidad-tab-auto-sync' });
+                                    }
+                                }
+                            } catch (_) {}
+                        }
+                    }
+                    window.mountCompatibilityModule?.(targetView);
+                };
+                void ensureRadarAndMount();
             }
             if (tabId === 'FORWARDERS' || tabId === 'forwarders') {
                 window.currentView = 'FORWARDERS';
@@ -40117,24 +40150,39 @@ function scheduleReactiveEngine() {
         
         const currentState = window.SeaCharterStore?.getState?.() || window.State || {};
         const polName = currentState.pol || 'Puerto de Carga (POL)';
-        const targetDwt = Number(currentState.dwt || currentState.cargoQty || 10000);
+        const targetDwt = Number(currentState.dwt || currentState.cargoQty || 15000);
+        const isDryBulk = /granel|clinker|clínker|cemento|yeso|cal|mineral|coque|carbón|carbon|chatarra|scrap|bauxita|fertilizante|urea|cereal|trigo|maiz|maíz|soja|cebada|azucar|azúcar|sal\b|arena|aridos|áridos|feed|big\s*bags?|solido|sólido|dry\s*bulk/i.test(String(currentState.cargo || currentState.cargoName || currentState.commodity || ''));
 
         const candidatosRadar = vesselsArray.filter(vessel => {
+            const rawType = String(vessel.type_name || vessel.tipo_buque || vessel.ship_type || vessel.vessel_type || '').toLowerCase();
+            if (/fishing|pesquero|tug|remolcador|passenger|pasaje|crucero|yacht|recreo/i.test(rawType)) return false;
+            if (isDryBulk && /container|portacontenedores|feeder|boxship/i.test(rawType)) return false;
+
             const isAnchoredOrMoored = vessel.navigation_status === 1 || vessel.navigation_status === 5 || vessel.speed < 1.0;
-            const hasValidImo = vessel.imo > 0;
-            const dwtValid = !vessel.dwt || (vessel.dwt >= (targetDwt * 0.8) && vessel.dwt <= (targetDwt * 3));
+            const hasValidImo = Number(vessel.imo || vessel.imo_number) > 0;
+            const vDwt = Number(vessel.dwt || vessel.deadweight || 0);
+            const dwtValid = vDwt === 0 || vDwt > 500;
             
-            return isAnchoredOrMoored && hasValidImo && dwtValid;
-        }).map(vessel => ({
-            imo: vessel.imo,
-            name: vessel.name,
-            dwt: vessel.dwt || 'N/A',
-            vesselClass: vessel.type_name || 'Desconocido',
-            location: polName,
-            source: 'datalastic_live',
-            sourceTag: `Radar en Vivo: ${polName}`,
-            distance: vessel.distance_to_port || 'N/A'
-        }));
+            return (isAnchoredOrMoored || hasValidImo) && dwtValid;
+        }).map(vessel => {
+            const vDwt = Number(vessel.dwt || vessel.deadweight || 0);
+            let commercialStatus = '';
+            if (vDwt > 0 && targetDwt > 0) {
+                if (vDwt > targetDwt * 1.25) commercialStatus = 'Part-Cargo / Exceso DWT';
+                else if (vDwt < targetDwt * 0.85) commercialStatus = 'Lote Fraccionado / DWT Inferior';
+            }
+            return {
+                imo: vessel.imo || vessel.imo_number,
+                name: vessel.name || vessel.vessel_name,
+                dwt: vDwt > 0 ? vDwt : 'N/A',
+                commercialStatus,
+                vesselClass: vessel.type_name || vessel.tipo_buque || 'General Cargo',
+                location: polName,
+                source: 'datalastic_live',
+                sourceTag: commercialStatus ? `Radar en Vivo: ${polName} (${commercialStatus})` : `Radar en Vivo: ${polName}`,
+                distance: vessel.distance_to_port || vessel.distancePolNm || 'N/A'
+            };
+        });
 
         if (candidatosRadar.length > 0) {
             window.dispatchEvent(new CustomEvent("seacharter:matching-inject-candidates", {

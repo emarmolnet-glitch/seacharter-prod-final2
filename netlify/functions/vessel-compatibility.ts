@@ -53,7 +53,7 @@ const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|li
 const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|petrolero|quimiquero|tanquero|lng|lpg|container|containership|feeder|boxship|portacontenedores|tug|tugboat|remolcador|remolque|pusher|empujador|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure|yacht|yate|sailing|velero|fishing|pesquero|trawler)\b/i;
 
 // Compatible vessel types for dry bulk cargoes
-const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
+const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader|heavy load|heavy carrier|heavy lift)\b/i;
 
 // Default commercial operation baseline initialized to zero / blank
 const DEFAULT_ACTIVE_OPERATION = Object.freeze({
@@ -228,15 +228,20 @@ export function evaluateMathematicalMatch(
   const baseVol = Math.max(1, cargoVolumeMt);
   const dwtRatio = dwt / baseVol;
   let dwtScore = 100;
+  let commercialStatusLabel = "";
   if (cargoVolumeMt > 0) {
-    if (dwtRatio < 1.0) {
-      dwtScore = Math.max(0, 60 - (1.0 - dwtRatio) * 200);
+    if (dwt > cargoVolumeMt * 1.25) {
+      commercialStatusLabel = "Part-Cargo / Exceso DWT";
+      dwtScore = Math.max(70, Math.round(92 - (dwtRatio - 1.25) * 15));
+    } else if (dwt < cargoVolumeMt * 0.85) {
+      commercialStatusLabel = "Lote Fraccionado / DWT Inferior";
+      dwtScore = Math.max(65, Math.round(88 - (0.85 - dwtRatio) * 40));
     } else if (dwtRatio >= 1.05 && dwtRatio <= 1.15) {
       dwtScore = 100;
-    } else if (dwtRatio > 1.15 && dwtRatio <= 1.30) {
-      dwtScore = Math.max(80, 100 - (dwtRatio - 1.15) * 100);
+    } else if (dwtRatio > 1.15 && dwtRatio <= 1.25) {
+      dwtScore = Math.max(85, Math.round(100 - (dwtRatio - 1.15) * 150));
     } else {
-      dwtScore = Math.max(50, 85 - (dwtRatio - 1.30) * 80);
+      dwtScore = Math.max(75, Math.round(90 - (1.0 - dwtRatio) * 100));
     }
   }
 
@@ -304,10 +309,13 @@ export function evaluateMathematicalMatch(
     locationLabel = `en tránsito (${distancePolNm.toFixed(1)} NM a POL / ${distancePodNm.toFixed(1)} NM a POD)`;
   }
 
-  let justification = `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; ${locationLabel}.`;
+  let justification = commercialStatusLabel
+    ? `[${commercialStatusLabel}] DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; ${locationLabel}.`
+    : `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${cargoVolumeMt.toLocaleString()} MT; calado ${draftMeters.toFixed(2)}m admisible; ${locationLabel}.`;
 
   return {
     compatibilityScore: compositeScore,
+    commercialStatusLabel,
     technicalJustification: justification,
     stowageFactor: stowageFactorStr,
     technicalEvaluation: {
@@ -434,10 +442,10 @@ export default async function handler(req: Request, _context: Context) {
     let dbRows: VesselMasterRecord[] = [];
     try {
       // La banda comercial se inyecta en la consulta para no descargar tonelaje
-      // fuera de rango; los buques sin DWT registrado siguen entrando como pendientes.
+      // fuera de rango; se descartan buques sin DWT real válido (<= 500)
       const dwtBandClause = commercialDwtBounds.applied
-        ? "AND (dwt IS NULL OR dwt BETWEEN $1 AND $2)"
-        : "";
+        ? "AND dwt IS NOT NULL AND dwt > 500 AND dwt BETWEEN $1 AND $2"
+        : "AND dwt IS NOT NULL AND dwt > 500";
       const dwtBandValues = commercialDwtBounds.applied
         ? [commercialDwtBounds.minDwt, commercialDwtBounds.maxDwt]
         : [];
@@ -485,6 +493,24 @@ export default async function handler(req: Request, _context: Context) {
     for (const r of dbRows) {
       const imo = Number(r.imo_number);
       if (!imo || imo <= 1000000) continue;
+      const realDwt = Number(r.dwt);
+      // Filtra y descarta de los candidatos de Neon cualquier buque que no tenga un dwt real válido (!Number.isFinite(Number(ship.dwt)) || Number(ship.dwt) <= 500)
+      if (!Number.isFinite(realDwt) || realDwt <= 500) continue;
+
+      const rawLoa = Number(r.loa_meters || 0);
+      const rawBeam = Number(r.beam_meters || 0);
+      // O cuyo dwt haya sido rellenado artificialmente con el valor de la carga junto con eslora y manga en cero (loa === 0 && beam === 0)
+      if (rawLoa === 0 && rawBeam === 0 && cargoVolumeMt > 0 && Math.abs(realDwt - cargoVolumeMt) < 1) {
+        continue;
+      }
+
+      // Si un buque de Neon tiene un dwt real válido pero le faltan loa, beam o draft, calcúlalos de forma paramétrica realista a partir de su dwt real:
+      const loaMeters = rawLoa > 0 ? rawLoa : Math.round(Math.cbrt(realDwt / 0.45) * 2.6);
+      const beamMeters = rawBeam > 0 ? rawBeam : Math.round(loaMeters / 6.3);
+      const rawDraft = Number(r.draft_meters || 0);
+      const draftMeters = rawDraft > 0 ? rawDraft : Number((beamMeters * 0.42).toFixed(2));
+      const yearBuilt = Number(r.year_built && r.year_built !== 2026 ? r.year_built : 2014);
+
       const vLat = Number(r.latitude ?? 0);
       const vLon = Number(r.longitude ?? 0);
 
@@ -503,11 +529,11 @@ export default async function handler(req: Request, _context: Context) {
         vesselType: String(r.vessel_type || "General Cargo"),
         tipo_buque: String(r.vessel_type || "General Cargo"),
         categoria_buque: String(r.vessel_type || "General Cargo"),
-        dwt: Number(r.dwt || 0),
-        draftMeters: Number(r.draft_meters || 0),
-        loaMeters: Number(r.loa_meters || 0),
-        beamMeters: Number(r.beam_meters || 0),
-        yearBuilt: Number(r.year_built || 2010),
+        dwt: realDwt,
+        draftMeters,
+        loaMeters,
+        beamMeters,
+        yearBuilt,
         flag: String(r.flag || "🌍"),
         latitude: vLat,
         longitude: vLon,
@@ -519,9 +545,7 @@ export default async function handler(req: Request, _context: Context) {
         distancePodNm: distPodNm,
         locationContext,
         isLiveRadar: false,
-        // `vessels_master.draft_meters` es el calado de diseño: sirve de máximo,
-        // no de calado instantáneo (el registro no lleva señal AIS asociada).
-        maxDraftMeters: Number(r.draft_meters || 0),
+        maxDraftMeters: draftMeters,
         navStatusRaw: null,
         destination: null,
         reportedEta: null,
@@ -529,6 +553,8 @@ export default async function handler(req: Request, _context: Context) {
     }
 
     let liveRadarCandidatesCount = 0;
+    const isDryBulkCargo = DRY_BULK_CARGO_RE.test(activeOperation.cargoName);
+
     for (const ship of rawIncomingVessels) {
       const imoClean = String(ship.imo || ship.imo_number || ship.IMO || "").replace(/\D/g, "");
       const imoNum = Number(imoClean);
@@ -548,6 +574,15 @@ export default async function handler(req: Request, _context: Context) {
 
       if (!isNotNoise || !isMerchant) continue;
 
+      if (isDryBulkCargo) {
+        // Excluye portacontenedores puros (CONTAINER SHIP)
+        if (/container\s*ship|containership|feeder|boxship|portacontenedor/i.test(typeStr)) continue;
+        // Conserva todos los buques reales de carga seca y bodega (BULK CARRIER, GENERAL CARGO, CEMENT CARRIER, MPP, HEAVY LOAD)
+        const isCompatibleHold = COMPATIBLE_DRY_BULK_TYPES_RE.test(typeStr)
+          || (!/tanker|petrolero|tug|passenger|fishing/i.test(typeStr) && Number(ship.dwt) >= 1000);
+        if (!isCompatibleHold) continue;
+      }
+
       const dbRow = dbRows.find(
         (r) => (isValidImo && Number(r.imo_number) === imoNum) || (isValidMmsi && String(r.mmsi) === mmsiClean)
       );
@@ -565,6 +600,15 @@ export default async function handler(req: Request, _context: Context) {
       const locationContext = determineLocationContext(distPolNm, distPodNm, hasPolCoords, hasPodCoords);
 
       const resolvedType = String(dbRow?.vessel_type || rawType || "General Cargo");
+      const shipDwtRaw = Number(dbRow?.dwt ?? ship.dwt ?? ship.deadweight ?? 0);
+      const rawLoa = Number(dbRow?.loa_meters ?? ship.loa ?? ship.loa_meters ?? 0);
+      const rawBeam = Number(dbRow?.beam_meters ?? ship.beam ?? ship.beam_meters ?? 0);
+      const rawDraft = Number(dbRow?.draft_meters ?? ship.draft ?? ship.draft_meters ?? ship.max_draft ?? 0);
+
+      const effectiveDwt = shipDwtRaw > 0 ? shipDwtRaw : 0;
+      const loaMeters = rawLoa > 0 ? rawLoa : (effectiveDwt > 0 ? Math.round(Math.cbrt(effectiveDwt / 0.45) * 2.6) : 0);
+      const beamMeters = rawBeam > 0 ? rawBeam : (loaMeters > 0 ? Math.round(loaMeters / 6.3) : 0);
+      const draftMeters = rawDraft > 0 ? rawDraft : (beamMeters > 0 ? Number((beamMeters * 0.42).toFixed(2)) : 0);
 
       candidateMap.set(effectiveImo, {
         imo: effectiveImo,
@@ -573,11 +617,11 @@ export default async function handler(req: Request, _context: Context) {
         vesselType: resolvedType,
         tipo_buque: resolvedType,
         categoria_buque: resolvedType,
-        dwt: Number(dbRow?.dwt ?? ship.dwt ?? ship.deadweight ?? 0),
-        draftMeters: Number(dbRow?.draft_meters ?? ship.draft ?? ship.draft_meters ?? ship.max_draft ?? 0),
-        loaMeters: Number(dbRow?.loa_meters ?? ship.loa ?? ship.loa_meters ?? 0),
-        beamMeters: Number(dbRow?.beam_meters ?? ship.beam ?? ship.beam_meters ?? 0),
-        yearBuilt: Number(dbRow?.year_built ?? ship.year_built ?? ship.yearBuilt ?? 2010),
+        dwt: effectiveDwt,
+        draftMeters,
+        loaMeters,
+        beamMeters,
+        yearBuilt: Number(dbRow?.year_built ?? ship.year_built ?? ship.yearBuilt ?? 2012),
         flag: String(dbRow?.flag || ship.flag || "🌍"),
         latitude: lat,
         longitude: lon,
@@ -588,9 +632,7 @@ export default async function handler(req: Request, _context: Context) {
         currentDraftMeters: Number(
           ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? ship.draft_meters ?? 0
         ),
-        maxDraftMeters: Number(
-          dbRow?.draft_meters ?? ship.max_draft ?? ship.summer_draft ?? ship.draught_max ?? ship.maxDraft ?? 0
-        ),
+        maxDraftMeters: draftMeters,
         navStatusRaw: ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus ?? ship.navStatus ?? null,
         destination: ship.destination ?? ship.destination_port ?? null,
         reportedEta: ship.eta ?? ship.destinationEta ?? null,
@@ -604,12 +646,19 @@ export default async function handler(req: Request, _context: Context) {
       liveRadarCandidatesCount++;
     }
 
-    // Filtro de tolerancia comercial: acota el tamaño del buque a la banda
-    // [carga x 0,9 , carga x 1,5] antes de puntuar y devolver resultados.
+    // Filtro de tolerancia comercial: si en el radar en vivo hay buques mercantes
+    // compatibles por tipo de bodega pero ninguno cae en el rango estricto de DWT,
+    // NO vacíes la lista ni muestres SIN DATOS EN RADAR.
     const allCandidates = Array.from(candidateMap.values());
-    const commerciallySizedCandidates = allCandidates.filter((cand) =>
-      isDwtWithinCommercialBand(cand.dwt, commercialDwtBounds.tonnage),
-    );
+    const validCandidates = allCandidates.filter((cand) => {
+      if (!cand.isLiveRadar && (!Number.isFinite(cand.dwt) || cand.dwt <= 500)) return false;
+      return true;
+    });
+
+    const commerciallySizedCandidates = validCandidates.filter((cand) => {
+      if (cand.isLiveRadar) return true;
+      return isDwtWithinCommercialBand(cand.dwt, commercialDwtBounds.tonnage);
+    });
     const excludedByDwtBandCount = allCandidates.length - commerciallySizedCandidates.length;
 
     // Motor de disponibilidad operativa: lastre, apertura proyectada y encaje
@@ -685,6 +734,7 @@ export default async function handler(req: Request, _context: Context) {
           dbStatus: "Sincronizado & Verificado",
         },
         technicalEvaluation: math.technicalEvaluation,
+        commercialStatus: math.commercialStatusLabel || "",
         vesselOpenness: openness,
         estimatedBallastStatus: openness.isBallast,
         estimatedOpenDate: openness.estimatedOpenDate,
@@ -695,7 +745,20 @@ export default async function handler(req: Request, _context: Context) {
       };
     });
 
-    evaluatedList.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+    evaluatedList.sort((a, b) => {
+      // Prioritize live radar candidates
+      if (a.isLiveRadar && !b.isLiveRadar) return -1;
+      if (!a.isLiveRadar && b.isLiveRadar) return 1;
+      // Among live radar candidates, order by proximity of DWT to cargo volume
+      if (a.isLiveRadar && b.isLiveRadar && cargoVolumeMt > 0 && a.dwt > 0 && b.dwt > 0) {
+        const diffA = Math.abs(a.dwt - cargoVolumeMt);
+        const diffB = Math.abs(b.dwt - cargoVolumeMt);
+        if (Math.abs(diffA - diffB) > 500) {
+          return diffA - diffB;
+        }
+      }
+      return b.compatibilityScore - a.compatibilityScore;
+    });
     
     for (const item of evaluatedList) {
       item.isTopMatch = false;
@@ -713,8 +776,15 @@ export default async function handler(req: Request, _context: Context) {
     const liveCompatibleCandidates = evaluatedList.filter(
       (cand) => cand.isLiveRadar && cand.compatibilityScore > 0 && cand.technicalEvaluation?.taxonomyCompatible !== false
     );
-    const hasLiveCompatibleVessels = rawIncomingVessels.length > 0 ? liveCompatibleCandidates.length > 0 : true;
-    const alternativeDbVessel = evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || evaluatedList[0] || null;
+    const hasLiveCompatibleVessels = liveCompatibleCandidates.length > 0;
+    const alternativeDbVessel = evaluatedList.find((cand) =>
+      !cand.isLiveRadar &&
+      cand.compatibilityScore > 0 &&
+      Number.isFinite(cand.dwt) &&
+      cand.dwt > 500 &&
+      cand.loaMeters > 0 &&
+      cand.beamMeters > 0
+    ) || evaluatedList.find((cand) => !cand.isLiveRadar && cand.compatibilityScore > 0) || null;
 
     // Recuento de disponibilidad para la cabecera del panel de radar.
     const opennessSummary = {

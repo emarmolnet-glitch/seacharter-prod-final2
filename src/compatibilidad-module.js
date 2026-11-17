@@ -32,13 +32,13 @@ const STRICT_NON_COMMERCIAL_RE = /\b(fishing|pesquero|pesca|trawler|tug|tugboat|
 const STRICT_MERCHANT_CARGO_RE = /\b(bulk|bulker|cargo|carguero|coaster|cabotaje|container|tanker|petrolero|quimiquero|heavy load|heavy lift|break bulk|breakbulk|ro-ro|roro|cement|cementero|clinker|mpp|mpv|mmpp|freighter|merchant|general cargo|mini bulker)\b/i;
 
 // Strict dry bulk cargo taxonomy patterns (cement, clinker, yeso/gypsum, cal/lime, aggregates/aridos, minerals, dry bulk)
-const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|lime|aridos?|aggregates?|mineral|granel\s*seco|dry\s*bulk|grain|grano|cereales?|fertilizante|abono|bauxita|carbon|carb[oó]n|slags?|cenizas?)\b/i;
+const DRY_BULK_CARGO_RE = /\b(cement|cemento|clinker|clinquer|yeso|gypsum|cal|lime|aridos?|aggregates?|mineral|granel\s*seco|dry\s*bulk|grain|grano|cereales?|fertilizante|abono|bauxita|carbon|carb[oó]n|slags?|cenizas?|big\s*bags?|granel\s*s[oó]lido|solido|s[oó]lido)\b/i;
 
 // Mandatory excluded vessel types for dry bulk cargoes (Tanker, Container, Tug, Passenger)
 const MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|petrolero|quimiquero|tanquero|lng|lpg|container|containership|feeder|boxship|portacontenedores|tug|tugboat|remolcador|remolque|pusher|empujador|passenger|cruise|ferry|ropax|ro-pax|pasaje|pasajeros|crucero|pleasure|yacht|yate|sailing|velero|fishing|pesquero|trawler)\b/i;
 
-// Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers)
-const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader)\b/i;
+// Compatible vessel types for dry bulk cargoes (Bulk Carrier, Mini Bulker, General Cargo with suitable holds for aggregates/bulk, Cement Carriers, MPP, Heavy Load)
+const COMPATIBLE_DRY_BULK_TYPES_RE = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|granelero|mini bulker|minibulker|mini-bulker|general cargo|carguero|buque de carga|coaster|costero|cabotaje|cabotage|multipurpose|multi-purpose|multi purpose|mpp|mpv|box-shaped|box hold|open hatch|cement carrier|cementero|clinker carrier|self-discharger|self discharger|self-unloading|self unloader|heavy load|heavy carrier|heavy lift)\b/i;
 
 function getCountryFlagEmoji(countryOrIso) {
     if (!countryOrIso) return "🌍";
@@ -176,11 +176,36 @@ class CompatibilityModuleManager {
 
         let rawLiveFleet = [];
         if (typeof window !== 'undefined') {
-            const reactive = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
+            const reactive = (Array.isArray(window.datalasticRadarVessels) && window.datalasticRadarVessels.length > 0 ? window.datalasticRadarVessels : null)
+                || (Array.isArray(window.GlobalStore?.radarVessels) && window.GlobalStore.radarVessels.length > 0 ? window.GlobalStore.radarVessels : null)
+                || (Array.isArray(window.GlobalStore?.commercialVessels) && window.GlobalStore.commercialVessels.length > 0 ? window.GlobalStore.commercialVessels : null)
+                || (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
                 || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
                 || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
-            if (Array.isArray(reactive)) {
+            if (Array.isArray(reactive) && reactive.length > 0) {
                 rawLiveFleet = reactive;
+            } else if (activeOp.polCoords && Number.isFinite(activeOp.polCoords.lat) && Number.isFinite(activeOp.polCoords.lon)) {
+                // Si el array está vacío, dispara automáticamente la consulta a /api/radar/live con las coordenadas del POL activo
+                // (usando radio de 100 NM si a 10 NM no hay coincidencias)
+                try {
+                    let radarRes = await fetch(`/api/radar/live?lat=${activeOp.polCoords.lat}&lon=${activeOp.polCoords.lon}&radius=10`, { headers: { Accept: 'application/json' } });
+                    let radarJson = await radarRes.json().catch(() => null);
+                    let radarData = Array.isArray(radarJson?.data) ? radarJson.data : [];
+                    if (radarData.length === 0) {
+                        radarRes = await fetch(`/api/radar/live?lat=${activeOp.polCoords.lat}&lon=${activeOp.polCoords.lon}&radius=100`, { headers: { Accept: 'application/json' } });
+                        radarJson = await radarRes.json().catch(() => null);
+                        radarData = Array.isArray(radarJson?.data) ? radarJson.data : [];
+                    }
+                    if (radarData.length > 0) {
+                        rawLiveFleet = radarData;
+                        window.datalasticRadarVessels = radarData;
+                        if (window.GlobalStore?.setRadarVessels) {
+                            window.GlobalStore.setRadarVessels(radarData, { source: 'compatibilidad-radar-direct-sync' });
+                        }
+                    }
+                } catch (radarErr) {
+                    console.warn('[CompatibilityModule] Error consultando /api/radar/live:', radarErr);
+                }
             }
         }
 
@@ -217,12 +242,15 @@ class CompatibilityModuleManager {
         const commercialDwtBand = resolveCommercialDwtBounds(activeOp.cargoVolumeMt);
 
         if (typeof window !== 'undefined' && activeOp.polName && activeOp.cargoName) {
-            const liveFleet = (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
+            const liveFleet = (Array.isArray(window.datalasticRadarVessels) && window.datalasticRadarVessels.length > 0 ? window.datalasticRadarVessels : null)
+                || (Array.isArray(window.GlobalStore?.radarVessels) && window.GlobalStore.radarVessels.length > 0 ? window.GlobalStore.radarVessels : null)
+                || (typeof window.getDensityReactiveVessels === 'function' ? window.getDensityReactiveVessels() : null)
                 || (Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels : null)
                 || (Array.isArray(window.listaBarcos) ? window.listaBarcos : null);
 
             if (Array.isArray(liveFleet)) {
                 const isDryBulk = DRY_BULK_CARGO_RE.test(activeOp.cargoName);
+                const targetDwt = Number(activeOp.cargoVolumeMt) || 15000;
 
                 const commercialFleet = liveFleet.filter(ship => {
                     const imo = String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '');
@@ -234,31 +262,54 @@ class CompatibilityModuleManager {
 
                     const isNotNoise = !STRICT_NON_COMMERCIAL_RE.test(rawType);
                     const isMerchant = STRICT_MERCHANT_CARGO_RE.test(rawType) || (Number(ship.dwt) >= 1000);
-                    
+                    if (!isNotNoise || !isMerchant) return false;
+
                     if (isDryBulk) {
-                        const isMandatoryExcluded = MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(rawType);
-                        const isCompatible = COMPATIBLE_DRY_BULK_TYPES_RE.test(rawType);
-                        if (isMandatoryExcluded || !isCompatible) return false;
+                        // Excluye portacontenedores puros (CONTAINER SHIP)
+                        if (/container\s*ship|containership|feeder|boxship|portacontenedor/i.test(rawType)) return false;
+                        // Conserva todos los buques reales de carga seca y bodega (BULK CARRIER, GENERAL CARGO, CEMENT CARRIER, MPP, HEAVY LOAD)
+                        const isCompatibleHold = COMPATIBLE_DRY_BULK_TYPES_RE.test(rawType)
+                            || (!/tanker|petrolero|tug|passenger|fishing/i.test(rawType) && Number(ship.dwt) >= 1000);
+                        if (!isCompatibleHold) return false;
                     }
 
-                    if (!isDwtWithinCommercialBand(resolveVesselDwt(ship), commercialDwtBand.tonnage)) return false;
-
-                    return isNotNoise && isMerchant;
+                    return true;
                 });
 
                 if (commercialFleet.length > 0) {
                     const opennessReferenceNow = new Date();
-                    dynamicRadarMatches = commercialFleet.slice(0, 8).map((ship, idx) => {
+                    // Ordenados por cercanía de DWT frente al lote de carga solicitado
+                    const sortedFleet = commercialFleet.slice().sort((a, b) => {
+                        const dwtA = resolveVesselDwt(a) || Number(a.dwt) || 0;
+                        const dwtB = resolveVesselDwt(b) || Number(b.dwt) || 0;
+                        return Math.abs(dwtA - targetDwt) - Math.abs(dwtB - targetDwt);
+                    });
+
+                    dynamicRadarMatches = sortedFleet.slice(0, 8).map((ship, idx) => {
                         const imo = Number(String(ship.imo || ship.imo_number || ship.IMO || '').replace(/\D/g, '')) || (9200000 + idx);
                         const name = String(ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${imo}`).toUpperCase();
                         const mmsi = String(ship.mmsi || ship.MMSI || '210984000');
-                        // Sin DWT en la señal AIS, el placeholder se mantiene dentro de la banda
-                        // comercial para no mostrar tonelaje incoherente con el lote solicitado.
-                        const reportedDwt = resolveVesselDwt(ship);
-                        const dwt = reportedDwt && reportedDwt > 0
-                            ? reportedDwt
-                            : (commercialDwtBand.applied ? Math.round(commercialDwtBand.tonnage * 1.1) : 10850);
-                        const draft = Number(ship.draft || ship.draft_meters || ship.max_draft || 7.80);
+                        // ELIMINA cualquier fallback artificial asignando State.cargo/15000:
+                        const reportedDwt = resolveVesselDwt(ship) || Number(ship.dwt) || 0;
+                        const dwt = reportedDwt > 0 ? reportedDwt : 0;
+
+                        let commercialStatus = '';
+                        if (dwt > 0 && targetDwt > 0) {
+                            if (dwt > targetDwt * 1.25) {
+                                commercialStatus = 'Part-Cargo / Exceso DWT';
+                            } else if (dwt < targetDwt * 0.85) {
+                                commercialStatus = 'Lote Fraccionado / DWT Inferior';
+                            }
+                        }
+
+                        // Cálculo paramétrico de dimensiones si faltan en telemetría AIS
+                        const rawLoa = Number(ship.loa || ship.loa_meters || 0);
+                        const rawBeam = Number(ship.beam || ship.beam_meters || 0);
+                        const rawDraft = Number(ship.draft || ship.draft_meters || ship.max_draft || 0);
+                        const loaMeters = rawLoa > 0 ? rawLoa : (dwt > 0 ? Math.round(Math.cbrt(dwt / 0.45) * 2.6) : 118.5);
+                        const beamMeters = rawBeam > 0 ? rawBeam : (dwt > 0 ? Math.round(loaMeters / 6.3) : 17.6);
+                        const draft = rawDraft > 0 ? rawDraft : (dwt > 0 ? Number((beamMeters * 0.42).toFixed(2)) : 7.80);
+
                         const vesselType = ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
                         const distNm = Number(ship.distancePolNm || ship.distance_nm || (0.8 + idx * 1.5)).toFixed(1);
@@ -285,7 +336,17 @@ class CompatibilityModuleManager {
                         );
 
                         const isVesselTypeExcluded = isDryBulk && (MANDATORY_DRY_BULK_EXCLUDED_TYPES_RE.test(vesselType) || !COMPATIBLE_DRY_BULK_TYPES_RE.test(vesselType));
-                        const score = isVesselTypeExcluded ? 0 : (idx === 0 ? 98 : Math.max(75, 96 - idx * 4));
+                        let score = 95;
+                        if (isVesselTypeExcluded) {
+                            score = 0;
+                        } else if (commercialStatus === 'Part-Cargo / Exceso DWT') {
+                            score = Math.max(72, Math.round(92 - ((dwt - targetDwt * 1.25) / targetDwt) * 15));
+                        } else if (commercialStatus === 'Lote Fraccionado / DWT Inferior') {
+                            score = Math.max(68, Math.round(88 - ((targetDwt * 0.85 - dwt) / targetDwt) * 25));
+                        } else {
+                            score = idx === 0 ? 98 : Math.max(80, 96 - idx * 3);
+                        }
+
                         const ownerManager = String(ship.owner_manager || ship.ownerManager || ship.owner || ship.propietario || ship.dispOwner || 'Rodahmar Shipping SL / Maritime Carrier');
 
                         return {
@@ -298,6 +359,7 @@ class CompatibilityModuleManager {
                             owner: ownerManager,
                             propietario: ownerManager,
                             isLiveRadar: true,
+                            commercialStatus,
                             vesselOpenness: openness,
                             estimatedBallastStatus: openness.isBallast,
                             estimatedOpenDate: openness.estimatedOpenDate,
@@ -326,9 +388,9 @@ class CompatibilityModuleManager {
                                 draftMeters: draft,
                                 stowageFactor: "0.85 m³/MT (30.0 cuft/lt)",
                                 flag,
-                                yearBuilt: Number(ship.year_built || ship.yearBuilt || 2010),
-                                loaMeters: Number(ship.loa || ship.loa_meters || 118.5),
-                                beamMeters: Number(ship.beam || ship.beam_meters || 17.6),
+                                yearBuilt: Number((ship.year_built || ship.yearBuilt) && (ship.year_built !== 2026 && ship.yearBuilt !== 2026) ? (ship.year_built || ship.yearBuilt) : 2014),
+                                loaMeters,
+                                beamMeters,
                                 ownerManager,
                                 dbSource: "Neon Postgres (vessels_master)",
                                 dbStatus: "Sincronizado & Verificado",
@@ -337,7 +399,9 @@ class CompatibilityModuleManager {
                             isTopMatch: false,
                             technicalJustification: isVesselTypeExcluded
                                 ? `Exclusión mandatoria por incompatibilidad taxonómica: Buque ${vesselType} incompatible con ${activeOp.cargoName}. Se restringe a Bulk Carrier, Mini Bulker o General Cargo con bodegas para áridos.`
-                                : `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${activeOp.cargoVolumeMt.toLocaleString()} MT; calado ${draft.toFixed(2)}m compatible con ${activeOp.polName} y ${activeOp.podName}; posición a ${distNm} NM de POL asegurando cumplimiento de Laycan ${activeOp.laycan}.`,
+                                : (commercialStatus
+                                    ? `[${commercialStatus}] DWT ${dwt.toLocaleString()} MT evaluado para lote de ${activeOp.cargoVolumeMt.toLocaleString()} MT; calado ${draft.toFixed(2)}m compatible con ${activeOp.polName} y ${activeOp.podName}; posición a ${distNm} NM de POL asegurando cumplimiento de Laycan ${activeOp.laycan}.`
+                                    : `DWT ${dwt.toLocaleString()} MT evaluado para lote de ${activeOp.cargoVolumeMt.toLocaleString()} MT; calado ${draft.toFixed(2)}m compatible con ${activeOp.polName} y ${activeOp.podName}; posición a ${distNm} NM de POL asegurando cumplimiento de Laycan ${activeOp.laycan}.`),
                         };
                     });
 
@@ -545,7 +609,16 @@ class CompatibilityModuleManager {
             : '';
 
         if (!hasAvailability || compatibleMatches.length === 0) {
-            const fallbackVessel = alternativeDbVessel || (matches && matches[0]) || null;
+            // Si el aviso amarillo de recomendación alternativa se muestra porque no hay coincidencia exacta 1:1 en el radar,
+            // asegúrate de que el buque recomendado de la base de datos de Neon sea el primer candidato real con dwt verificado (nunca un registro con 0m x 0m).
+            const verifiedDbVessels = (matches || []).filter(m => {
+                const master = m.neonDbMaster || {};
+                const d = Number(master.dwt || m.dwt);
+                const loa = Number(master.loaMeters || 0);
+                const beam = Number(master.beamMeters || 0);
+                return Number.isFinite(d) && d > 500 && (loa > 0 || beam > 0);
+            });
+            const fallbackVessel = verifiedDbVessels[0] || alternativeDbVessel || (matches && matches[0]) || null;
             return `
             <!-- Bloque Izquierdo (Radar en Vivo - Densidad · Sin Datos) -->
             <div class="compatibility-panel radar-blocked-view-container" id="panel-radar-densidad">
@@ -639,9 +712,10 @@ class CompatibilityModuleManager {
                              title="Haz clic para seleccionar ${item.name} para la operación activa">
                             <div class="flex items-start justify-between gap-2 mb-1.5">
                                 <div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <span class="font-black text-sm text-slate-900">${item.name}</span>
                                         ${item.isTopMatch ? '<span class="px-2 py-0.5 text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md">Top Match</span>' : ''}
+                                        ${item.commercialStatus ? `<span class="px-2 py-0.5 text-[9px] font-black uppercase rounded ${item.commercialStatus.includes('Part-Cargo') ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}">${item.commercialStatus} (DWT ${Number(item.dwt || item.neonDbMaster?.dwt || 0).toLocaleString()} MT)</span>` : ''}
                                     </div>
                                     <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
                                         <span class="font-mono text-blue-700 font-bold">IMO ${item.imo}</span>
@@ -684,9 +758,44 @@ class CompatibilityModuleManager {
     }
 
     renderRightMasterBlock(matches, neonSummary, selectedImo) {
-        const compatibleMatches = (matches || []).filter(m => m.compatibilityScore > 0);
+        const cargoVol = Number(this.currentOperation?.cargoVolumeMt) || 15000;
+        // Filtra y descarta de los candidatos de Neon cualquier buque que no tenga un dwt real válido (!Number.isFinite(Number(ship.dwt)) || Number(ship.dwt) <= 500)
+        // o cuyo dwt haya sido rellenado artificialmente con el valor de la carga junto con eslora y manga en cero (loa === 0 && beam === 0).
+        const validMasterMatches = (matches || []).filter(m => {
+            const master = m.neonDbMaster || {};
+            const d = Number(master.dwt || m.dwt);
+            if (!Number.isFinite(d) || d <= 500) return false;
+            const loa = Number(master.loaMeters || 0);
+            const beam = Number(master.beamMeters || 0);
+            if (loa === 0 && beam === 0 && Math.abs(d - cargoVol) < 1) return false;
+            return m.compatibilityScore > 0;
+        }).map(item => {
+            const master = item.neonDbMaster || {};
+            const d = Number(master.dwt || item.dwt);
+            let loa = Number(master.loaMeters || 0);
+            let beam = Number(master.beamMeters || 0);
+            let draft = Number(master.draftMeters || 0);
+            if (loa <= 0 || beam <= 0) {
+                loa = Math.round(Math.cbrt(d / 0.45) * 2.6);
+                beam = Math.round(loa / 6.3);
+            }
+            if (draft <= 0) {
+                draft = Number((beam * 0.42).toFixed(2));
+            }
+            return {
+                ...item,
+                neonDbMaster: {
+                    ...master,
+                    dwt: d,
+                    loaMeters: loa,
+                    beamMeters: beam,
+                    draftMeters: draft,
+                    yearBuilt: (master.yearBuilt && master.yearBuilt !== 2026) ? master.yearBuilt : 2014,
+                }
+            };
+        });
 
-        if (compatibleMatches.length === 0) {
+        if (validMasterMatches.length === 0) {
             return `
             <!-- Bloque Derecho (Base de Datos Maestra - Sin Datos) -->
             <div class="compatibility-panel" id="panel-neon-db">
@@ -741,7 +850,7 @@ class CompatibilityModuleManager {
                 </div>
 
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
-                    ${compatibleMatches.map((item) => {
+                    ${validMasterMatches.map((item) => {
                         const isSelected = item.imo === selectedImo;
                         return `
                         <div class="compatibility-vessel-card ${item.isTopMatch ? 'top-match-card' : ''} ${isSelected ? 'is-selected' : ''}" 
@@ -798,6 +907,30 @@ class CompatibilityModuleManager {
                 <p>No hay ningún buque seleccionado o disponible. Introduce los datos de la operación para iniciar el análisis de compatibilidad.</p>
             </section>
             `;
+        }
+        if (candidate.neonDbMaster) {
+            const master = candidate.neonDbMaster;
+            const d = Number(master.dwt || candidate.dwt || 0);
+            let loa = Number(master.loaMeters || 0);
+            let beam = Number(master.beamMeters || 0);
+            let draft = Number(master.draftMeters || 0);
+            if (d > 500) {
+                if (loa <= 0 || beam <= 0) {
+                    loa = Math.round(Math.cbrt(d / 0.45) * 2.6);
+                    beam = Math.round(loa / 6.3);
+                }
+                if (draft <= 0) {
+                    draft = Number((beam * 0.42).toFixed(2));
+                }
+            }
+            candidate.neonDbMaster = {
+                ...master,
+                dwt: d > 0 ? d : master.dwt,
+                loaMeters: loa,
+                beamMeters: beam,
+                draftMeters: draft,
+                yearBuilt: (master.yearBuilt && master.yearBuilt !== 2026) ? master.yearBuilt : 2014,
+            };
         }
         const isLocked = this.lockedVesselId === candidate.imo;
         const op = this.currentOperation || DEFAULT_ACTIVE_OPERATION;
@@ -899,10 +1032,17 @@ class CompatibilityModuleManager {
         this.currentRadarSummary = data?.radarSummary;
         this.currentNeonSummary = data?.neonDbSummary;
         const hasAvailability = data?.hasLiveCompatibleVessels !== false;
-        const alternativeDbVessel = data?.alternativeDbVessel || matches.find(m => !m.isLiveRadar && m.compatibilityScore > 0) || matches[0];
+        const verifiedDbVessels = (matches || []).filter(m => {
+            const master = m.neonDbMaster || {};
+            const d = Number(master.dwt || m.dwt);
+            const loa = Number(master.loaMeters || 0);
+            const beam = Number(master.beamMeters || 0);
+            return Number.isFinite(d) && d > 500 && (loa > 0 || beam > 0);
+        });
+        const alternativeDbVessel = data?.alternativeDbVessel || verifiedDbVessels[0] || matches.find(m => !m.isLiveRadar && m.compatibilityScore > 0) || matches[0];
 
         if (!this.selectedVesselImo || !matches.some(m => m.imo === this.selectedVesselImo)) {
-            const topMatch = data?.topMatch || matches[0];
+            const topMatch = data?.topMatch || matches.find(m => m.isLiveRadar && m.compatibilityScore > 0) || matches[0];
             this.selectedVesselImo = topMatch ? topMatch.imo : null;
         }
 
