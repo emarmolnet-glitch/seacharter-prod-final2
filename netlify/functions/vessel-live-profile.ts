@@ -139,6 +139,15 @@ export function normalizeAisStreamSnapshot(value: unknown): UnknownRecord {
     || root.position,
   );
   const staticData = asRecord(message.ShipStaticData || root.ShipStaticData || root.shipStaticData);
+  const dimension = asRecord(staticData.Dimension);
+  const dimA = Number(dimension.A ?? dimension.a) || 0;
+  const dimB = Number(dimension.B ?? dimension.b) || 0;
+  const dimC = Number(dimension.C ?? dimension.c) || 0;
+  const dimD = Number(dimension.D ?? dimension.d) || 0;
+  const loa = (dimA + dimB) > 0 ? (dimA + dimB) : null;
+  const beam = (dimC + dimD) > 0 ? (dimC + dimD) : null;
+  const draught = Number(staticData.MaximumStaticDraught ?? staticData.maximumStaticDraught ?? staticData.draught ?? staticData.draft) || null;
+  const navStatus = position.NavigationalStatus ?? position.navigationalStatus ?? position.nav_status ?? null;
   const scopes = [root, metadata, message, position, staticData];
   const latitude = numberValue(scopes, ["Latitude", "latitude", "lat"]);
   const longitude = numberValue(scopes, ["Longitude", "longitude", "lon", "lng"]);
@@ -155,6 +164,10 @@ export function normalizeAisStreamSnapshot(value: unknown): UnknownRecord {
     cog: numberValue(scopes, ["Cog", "COG", "cog", "CourseOverGround", "courseOverGround", "course"]),
     heading: numberValue(scopes, ["TrueHeading", "trueHeading", "Heading", "heading"]),
     timestamp: textValue(scopes, ["time_utc", "timestamp", "Timestamp", "receivedAt"]),
+    draught,
+    loa,
+    beam,
+    navStatus,
     rawData: root,
   };
 }

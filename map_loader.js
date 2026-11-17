@@ -653,7 +653,15 @@
             || sourcePayload.ExtendedClassBPositionReport
             || sourcePayload.position
             || {};
-        const scopes = [ship, sourcePayload, message, meta, position];
+        const scopes = [ship, sourcePayload, message, meta, position, message?.ShipStaticData, sourcePayload?.Message?.ShipStaticData].filter(Boolean);
+        const staticData = message?.ShipStaticData || sourcePayload?.Message?.ShipStaticData || ship.ShipStaticData || {};
+        const staticDimension = staticData?.Dimension || staticData?.dimension || {};
+        const dimA = Number(staticDimension.A ?? staticDimension.a) || 0;
+        const dimB = Number(staticDimension.B ?? staticDimension.b) || 0;
+        const dimC = Number(staticDimension.C ?? staticDimension.c) || 0;
+        const dimD = Number(staticDimension.D ?? staticDimension.d) || 0;
+        const calculatedLoa = (dimA + dimB) > 0 ? (dimA + dimB) : null;
+        const calculatedBeam = (dimC + dimD) > 0 ? (dimC + dimD) : null;
         const read = (keys) => {
             for (const scope of scopes) {
                 for (const key of keys) {
@@ -664,18 +672,19 @@
         };
 
         const name = firstDefined(read(['vesselName', 'vessel_name', 'ShipName', 'shipName', 'name']), 'Sin nombre');
-        const imo = firstDefined(read(['imo', 'IMO', 'imoNumber', 'imo_number']), 'N/A');
-        const mmsi = firstDefined(read(['mmsi', 'MMSI']), 'N/A');
+        const imo = firstDefined(read(['imo', 'IMO', 'imoNumber', 'imo_number', 'ImoNumber']), 'N/A');
+        const mmsi = firstDefined(read(['mmsi', 'MMSI', 'UserID', 'userId']), 'N/A');
         const latitude = normalizeNumeric(read(['latitude', 'lat', 'Latitude', 'AIS_Live_Lat', 'LAT']));
         const longitude = normalizeNumeric(read(['longitude', 'lon', 'lng', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
         const normalizedGt = normalizeNumeric(read(['GT', 'gt', 'grossTonnage', 'gross_tonnage']));
         const normalizedDwt = normalizeNumeric(read(['DWT_real', 'dwt_real', 'DWT', 'dwt', 'deadweight', 'deadweight_tonnage']));
-        const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters']));
+        const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters', 'MaximumStaticDraught', 'maximumStaticDraught', 'draught']));
+        const navigationalStatus = read(['NavigationalStatus', 'navigationalStatus', 'nav_status', 'NavStatus', 'navStatus']);
         const speed = readRealVesselSpeed(ship);
         const navigation = resolveAisNavigationCourse(scopes);
         const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination', 'destino_actual', 'destino', 'dest', 'Dest']), 'N/A');
         const lastPortOfCall = firstDefined(read(['lastPortOfCall', 'last_port_of_call', 'ultimo_puerto', 'LastPort', 'lastPort', 'DeparturePort']), 'N/A');
-        const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type']), 'Unknown');
+        const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type', 'Type']), 'Unknown');
         const rawIsCompatible = read(['isCompatible']);
         const isCompatible = rawIsCompatible !== null ? Boolean(rawIsCompatible) : (meta.isCompatible !== undefined ? Boolean(meta.isCompatible) : undefined);
 
@@ -694,6 +703,7 @@
                 isCompatible
             },
             PositionReport: position,
+            ShipStaticData: staticData,
             name: String(name),
             vesselName: String(name),
             ShipName: String(name),
@@ -713,6 +723,11 @@
             dwt: normalizedDwt === null ? undefined : normalizedDwt,
             Draft: normalizedDraft === null ? undefined : normalizedDraft,
             draft: normalizedDraft === null ? undefined : normalizedDraft,
+            draught: normalizedDraft === null ? undefined : normalizedDraft,
+            navigationalStatus: navigationalStatus !== null ? navigationalStatus : undefined,
+            navStatus: navigationalStatus !== null ? navigationalStatus : undefined,
+            loa: calculatedLoa !== null ? calculatedLoa : undefined,
+            beam: calculatedBeam !== null ? calculatedBeam : undefined,
             speed: speed === null ? undefined : speed,
             course: navigation.cog === null ? undefined : navigation.cog,
             cog: navigation.cog === null ? undefined : navigation.cog,
@@ -1191,10 +1206,12 @@
             console.warn('[SeaCharter AIS] Missing browser AISStream API Key; Tracking live socket was not started.');
             return { started: false, reason: 'missing-client-api-key' };
         }
-        if (!Array.isArray(payload.FiltersShipMMSI) || payload.FiltersShipMMSI.length !== 1) {
+        const hasValidBoxes = Array.isArray(payload.BoundingBoxes) && payload.BoundingBoxes.length > 0;
+        const hasMmsi = Array.isArray(payload.FiltersShipMMSI) && payload.FiltersShipMMSI.length === 1;
+        if (!hasMmsi && !hasValidBoxes) {
             aisStreamState.shouldReconnect = false;
-            console.warn('[SeaCharter AIS] Tracking requires one valid MMSI before opening AISStream.');
-            return { started: false, reason: 'tracking-mmsi-required' };
+            console.warn('[SeaCharter AIS] Tracking requires valid MMSI or BoundingBoxes before opening AISStream.');
+            return { started: false, reason: 'tracking-target-required' };
         }
 
         try {
