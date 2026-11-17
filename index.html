@@ -2834,6 +2834,8 @@
             body.print-audit-mode #asb-print-view,
             body.print-audit-mode #executive-report-print-view,
             body.print-audit-mode .w-full.md\:w-1\/3,
+            body.print-audit-mode .w-full.md\:w-\[28\%\],
+            body.print-audit-mode .w-full.lg\:w-\[26\%\],
             body.print-audit-mode .audit-collapsible-panel:not(.audit-results-panel),
             body.print-audit-mode #audit-active-vessel-panel,
             body.print-audit-mode #emptyState,
@@ -2904,6 +2906,8 @@
             }
 
             body:has(#view-auditor.active-flex) #view-auditor .w-full.md\:w-1\/3,
+            body:has(#view-auditor.active-flex) #view-auditor .w-full.md\:w-\[28\%\],
+            body:has(#view-auditor.active-flex) #view-auditor .w-full.lg\:w-\[26\%\],
             body:has(#view-auditor.active-flex) #view-auditor .audit-collapsible-panel:not(.audit-results-panel),
             body:has(#view-auditor.active-flex) #view-auditor #audit-active-vessel-panel,
             body:has(#view-auditor.active-flex) #view-auditor #emptyState,
@@ -2912,6 +2916,8 @@
             body:has(#view-auditor.active-flex) #view-auditor .no-print,
             body:has(#view-auditor.active-flex) #view-auditor .collapsible-section-header,
             body:has(#view-auditor:not(.hidden)) #view-auditor .w-full.md\:w-1\/3,
+            body:has(#view-auditor:not(.hidden)) #view-auditor .w-full.md\:w-\[28\%\],
+            body:has(#view-auditor:not(.hidden)) #view-auditor .w-full.lg\:w-\[26\%\],
             body:has(#view-auditor:not(.hidden)) #view-auditor .audit-collapsible-panel:not(.audit-results-panel),
             body:has(#view-auditor:not(.hidden)) #view-auditor #audit-active-vessel-panel,
             body:has(#view-auditor:not(.hidden)) #view-auditor #emptyState,
@@ -2920,6 +2926,8 @@
             body:has(#view-auditor:not(.hidden)) #view-auditor .no-print,
             body:has(#view-auditor:not(.hidden)) #view-auditor .collapsible-section-header,
             #view-auditor.active-flex .w-full.md\:w-1\/3,
+            #view-auditor.active-flex .w-full.md\:w-\[28\%\],
+            #view-auditor.active-flex .w-full.lg\:w-\[26\%\],
             #view-auditor.active-flex .audit-collapsible-panel:not(.audit-results-panel),
             #view-auditor.active-flex #audit-active-vessel-panel,
             #view-auditor.active-flex #emptyState,
@@ -2962,6 +2970,37 @@
                 box-shadow: none !important;
                 background: #fff !important;
                 border-color: #cbd5e1 !important;
+            }
+
+            /* Reglas de maquetación e impresión para auditoría, cláusulas y proforma */
+            #print-audit-proforma .audit-clause-card,
+            #resultsContent .audit-clause-card {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                margin-bottom: 12px !important;
+                border: 1px solid #cbd5e1 !important;
+                border-radius: 8px !important;
+                padding: 12px !important;
+                background: #fff !important;
+            }
+
+            #print-audit-proforma table,
+            #resultsContent table {
+                width: 100% !important;
+                table-layout: fixed !important;
+                border-collapse: collapse !important;
+                font-size: 8pt !important;
+            }
+
+            #print-audit-proforma tr,
+            #resultsContent tr {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+
+            #print-audit-proforma .overflow-x-auto,
+            #resultsContent .overflow-x-auto {
+                overflow: visible !important;
             }
 
             /* Si se está imprimiendo el contrato (por defecto o explícito) */
@@ -15171,7 +15210,7 @@
             <!-- Content Area (split columns) -->
             <div class="flex-1 flex flex-col md:flex-row md:items-start ai-work-grid p-4 md:p-6" style="overflow: visible !important;">
                 <!-- Left Panel: Input -->
-                <div class="w-full md:w-1/3 h-1/2 md:h-full shrink-0 flex flex-col gap-4 overflow-y-auto">
+                <div class="w-full md:w-[28%] lg:w-[26%] h-1/2 md:h-full shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <div class="audit-collapsible-panel ai-work-card p-4 md:p-6 flex-1 flex flex-col" data-collapsible-section data-default-open="false">
                     <div class="collapsible-section-header">
                         <h2 data-collapsible-title data-i18n="audit_doc_input_title" class="text-sm font-bold uppercase flex items-center text-slate-800">
@@ -15227,7 +15266,7 @@
             </div>
 
             <!-- Right Panel: Results -->
-            <div class="audit-collapsible-panel audit-results-panel w-full md:w-2/3 self-start" data-collapsible-section data-default-open="false">
+            <div class="audit-collapsible-panel audit-results-panel w-full md:w-[72%] lg:w-[74%] self-start" data-collapsible-section data-default-open="false">
                 <div class="collapsible-section-header">
                     <h2 data-collapsible-title data-i18n="audit_viewer_results_title" class="text-sm font-bold uppercase flex items-center text-slate-800">
                         <i class="fa-solid fa-file-shield text-slate-500 mr-2"></i>
@@ -15236,7 +15275,7 @@
                 </div>
 
                 <!-- Active Inherited Vessel Dossier & Due Diligence Panel -->
-                <div id="audit-active-vessel-panel" class="hidden space-y-4 max-w-4xl mx-auto pb-4 animate-fadeIn">
+                <div id="audit-active-vessel-panel" class="hidden space-y-4 w-full max-w-none mx-auto pb-4 animate-fadeIn">
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div class="audit-vessel-header bg-slate-900 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
@@ -15320,7 +15359,7 @@
                 </div>
 
                 <!-- Results Content -->
-                <div id="resultsContent" class="hidden space-y-6 max-w-4xl mx-auto pb-28" style="padding-bottom: 120px !important;">
+                <div id="resultsContent" class="hidden space-y-6 w-full max-w-none mx-auto pb-28" style="padding-bottom: 120px !important;">
                     <div id="commercial-nlp-panel" style="display: none !important;" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden">
                         <div class="bg-emerald-50 px-5 py-3 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
@@ -15427,7 +15466,7 @@
                             <i class="fa-solid fa-comments-dollar text-teal-600 mr-3" style="color: #0d9488 !important;"></i>
                             <h3 class="font-bold text-teal-900" style="color: #0f766e !important;">Estrategia de Negociación</h3>
                         </div>
-                        <div class="p-5 text-sm text-slate-700 leading-relaxed italic" id="resEstrategia"></div>
+                        <div class="p-5 text-sm text-slate-700 leading-relaxed" id="resEstrategia"></div>
                     </div>
 
                     <!-- 5. Email Draft -->
@@ -56496,6 +56535,259 @@ ADDITIONAL NOTES:
             });
         }
 
+        function formatProformaStructuredPoints(text) {
+            if (!text || typeof text !== 'string') return '';
+            const trimmed = text.trim();
+            if (!trimmed) return '';
+
+            // Proteger abreviaturas y números decimales/miles antes de dividir
+            let masked = trimmed;
+            masked = masked.replace(/(\d+)[\.](\d+)/g, '$1___DOT___$2');
+            masked = masked.replace(/(\d+)[,](\d+)/g, '$1___COMMA___$2');
+
+            const abbrs = [
+                { r: /\bS\.A\.U\./gi, t: '___ABBR_SAU___' },
+                { r: /\bS\.L\.U\./gi, t: '___ABBR_SLU___' },
+                { r: /\bS\.A\./gi, t: '___ABBR_SA___' },
+                { r: /\bS\.L\./gi, t: '___ABBR_SL___' },
+                { r: /\bS\.A\b/gi, t: '___ABBR_SA_NODOT___' },
+                { r: /\bS\.L\b/gi, t: '___ABBR_SL_NODOT___' },
+                { r: /\bp\.ej\./gi, t: '___ABBR_PEJ___' },
+                { r: /\bej\./gi, t: '___ABBR_EJ___' },
+                { r: /\bArts?\./gi, t: '___ABBR_ART___' },
+                { r: /\bCls?\./gi, t: '___ABBR_CL___' },
+                { r: /\bInc\./gi, t: '___ABBR_INC___' },
+                { r: /\bLtd\./gi, t: '___ABBR_LTD___' },
+                { r: /\bCorp\./gi, t: '___ABBR_CORP___' },
+                { r: /\bCo\./gi, t: '___ABBR_CO___' },
+                { r: /\bEE\.UU\./gi, t: '___ABBR_EEUU___' },
+                { r: /\bU\.S\.A\./gi, t: '___ABBR_USA___' },
+                { r: /\bU\.S\./gi, t: '___ABBR_US___' },
+                { r: /\bvs\./gi, t: '___ABBR_VS___' },
+                { r: /\betc\./gi, t: '___ABBR_ETC___' }
+            ];
+
+            abbrs.forEach(item => {
+                masked = masked.replace(item.r, item.t);
+            });
+
+            // Dividir por punto y coma (;), saltos de línea (\n), o punto seguido (. más espacio o fin de texto)
+            const rawChunks = masked.split(/(?:;\s*|\r?\n+|\.(?:\s+|$))/);
+
+            const points = [];
+            rawChunks.forEach(chunk => {
+                if (!chunk) return;
+                let c = chunk;
+
+                // Restaurar tokens protegidos
+                abbrs.forEach(item => {
+                    const original = item.t.replace(/___ABBR_([A-Z_]+)___/, (m, p1) => {
+                        switch (p1) {
+                            case 'SAU': return 'S.A.U.';
+                            case 'SLU': return 'S.L.U.';
+                            case 'SA': return 'S.A.';
+                            case 'SL': return 'S.L.';
+                            case 'SA_NODOT': return 'S.A';
+                            case 'SL_NODOT': return 'S.L';
+                            case 'PEJ': return 'p.ej.';
+                            case 'EJ': return 'ej.';
+                            case 'ART': return 'Art.';
+                            case 'CL': return 'Cl.';
+                            case 'INC': return 'Inc.';
+                            case 'LTD': return 'Ltd.';
+                            case 'CORP': return 'Corp.';
+                            case 'CO': return 'Co.';
+                            case 'EEUU': return 'EE.UU.';
+                            case 'USA': return 'U.S.A.';
+                            case 'US': return 'U.S.';
+                            case 'VS': return 'vs.';
+                            case 'ETC': return 'etc.';
+                            default: return m;
+                        }
+                    });
+                    c = c.replaceAll(item.t, original);
+                });
+                c = c.replaceAll('___DOT___', '.');
+                c = c.replaceAll('___COMMA___', ',');
+
+                // Limpiar viñetas, guiones, numeraciones y espacios al inicio
+                c = c.trim().replace(/^[\s•\-\*\u2022\u2023\u25E6\u2043\u2219]+/, '');
+                c = c.replace(/^\d+[\.\)]\s*/, '');
+                // Limpiar puntuación residual al final
+                c = c.replace(/[\.;,\s]+$/, '').trim();
+
+                if (c.length > 0) {
+                    points.push(c);
+                }
+            });
+
+            if (points.length === 0) return '';
+
+            const listItems = points.map((p, idx) => {
+                const isLast = idx === points.length - 1;
+                const terminator = isLast ? '.' : ';';
+                const formatted = p.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-800">$1</strong>');
+                return `<li>${formatted}${terminator}</li>`;
+            }).join('');
+
+            return `<ul class="space-y-1.5 list-disc pl-5 text-xs text-slate-700 leading-relaxed">${listItems}</ul>`;
+        }
+        window.formatProformaStructuredPoints = formatProformaStructuredPoints;
+
+        function renderComparativaClausulasHtml(comparativaArray) {
+            if (!Array.isArray(comparativaArray) || comparativaArray.length === 0) return '';
+
+            const cardsHtml = comparativaArray.map(item => {
+                const rawRiesgo = String(item.riesgo || 'MEDIO').trim();
+                const match = rawRiesgo.match(/^(CR[IÍ]TICO|ALTO|MEDIO|BAJO)[\s.:;\-–—]*(.*)$/i);
+                const severity = match
+                    ? match[1].toUpperCase().replace('CRITICO', 'CRÍTICO')
+                    : (/(CR[IÍ]TICO|ALTO|MEDIO|BAJO)/i.test(rawRiesgo)
+                        ? rawRiesgo.match(/(CR[IÍ]TICO|ALTO|MEDIO|BAJO)/i)[1].toUpperCase().replace('CRITICO', 'CRÍTICO')
+                        : 'MEDIO');
+                const riesgoExplicacion = match && match[2]
+                    ? match[2].trim()
+                    : (/^(?:CR[IÍ]TICO|ALTO|MEDIO|BAJO)/i.test(rawRiesgo)
+                        ? rawRiesgo.replace(/^(?:CR[IÍ]TICO|ALTO|MEDIO|BAJO)[\s.:;\-–—]*/i, '').trim()
+                        : '');
+
+                const badgeColor = /CR[IÍ]TICO/i.test(severity)
+                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                    : (/ALTO/i.test(severity)
+                        ? 'bg-rose-100 text-rose-800 border-rose-200'
+                        : (/BAJO/i.test(severity)
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'));
+
+                return `
+                    <div class="audit-clause-card bg-white rounded-lg border border-slate-200 p-3.5 space-y-3 shadow-2xs">
+                        <!-- Cabecera del bloque de cláusula -->
+                        <div class="flex items-center justify-between gap-3 pb-2 border-b border-slate-200">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-file-contract text-teal-700 text-xs"></i>
+                                <span class="font-bold text-xs text-slate-900">${escapeHtml(item.clausula || '—')}</span>
+                            </div>
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded border uppercase tracking-wider shrink-0 ${badgeColor}">${escapeHtml(severity)}</span>
+                        </div>
+
+                        <!-- Fila 1 (Grid de 2 bloques anchos: Estándar vs Desviación) -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <!-- Bloque A: Estándar de Mercado -->
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <strong class="text-[11px] font-bold text-slate-800 uppercase tracking-wider block mb-1">
+                                    <i class="fa-solid fa-scale-balanced text-teal-700 mr-1"></i> Estándar de Mercado
+                                </strong>
+                                <p class="text-xs text-slate-700 leading-relaxed">${escapeHtml(item.estandar || '—')}</p>
+                            </div>
+
+                            <!-- Bloque B: Desviación Detectada en Contrato -->
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <strong class="text-[11px] font-bold text-slate-800 uppercase tracking-wider block mb-1">
+                                    <i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i> Desviación Detectada en Contrato
+                                </strong>
+                                <p class="text-xs text-slate-700 leading-relaxed">${escapeHtml(item.desviacion || '—')}</p>
+                                ${riesgoExplicacion ? `
+                                    <div class="mt-2 pt-2 border-t border-slate-200/80 text-xs text-slate-600">
+                                        <span class="font-semibold text-slate-700">Detalle de Severidad:</span> ${escapeHtml(riesgoExplicacion)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Fila 2: Impacto Operativo y Comercial -->
+                        ${(item.impacto_armador || item.impacto_fletador) ? `
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1.5">
+                                <strong class="text-[11px] font-bold text-slate-800 uppercase tracking-wider block mb-1">
+                                    <i class="fa-solid fa-chart-line text-blue-600 mr-1"></i> Impacto Operativo y Comercial
+                                </strong>
+                                ${item.impacto_armador ? `
+                                    <div class="text-slate-700 leading-relaxed">
+                                        <span class="font-semibold text-slate-800">Vendedor / Armador (Seller / Owner):</span> ${escapeHtml(item.impacto_armador)}
+                                    </div>
+                                ` : ''}
+                                ${item.impacto_fletador ? `
+                                    <div class="text-slate-700 leading-relaxed">
+                                        <span class="font-semibold text-slate-800">Comprador / Fletador (Buyer / Charterer):</span> ${escapeHtml(item.impacto_fletador)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+
+                        <!-- Fila 3: Cambio Solicitado / Acción Correctiva -->
+                        <div class="bg-teal-50/80 border-l-4 border-teal-600 p-2.5 rounded-r text-xs text-teal-950 leading-relaxed">
+                            <strong class="font-bold text-teal-900 block mb-0.5">
+                                <i class="fa-solid fa-pen-to-square text-teal-700 mr-1"></i> Cambio Solicitado / Acción Correctiva:
+                            </strong>
+                            <span>${escapeHtml(item.cambio_solicitado || '—')}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="mt-4 pt-3 border-t border-teal-200/80">
+                    <h5 class="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+                        <i class="fa-solid fa-table-columns text-teal-700"></i> Comparativa Cláusula por Cláusula vs Estándar de Mercado
+                    </h5>
+                    <div class="space-y-3">
+                        ${cardsHtml}
+                    </div>
+                </div>
+            `;
+        }
+        window.renderComparativaClausulasHtml = renderComparativaClausulasHtml;
+
+        function formatEstrategiaStructuredPoints(text) {
+            if (!text || typeof text !== 'string') return '';
+            const trimmed = text.trim();
+            if (!trimmed) return '';
+
+            // Proteger números con punto o coma para evitar falsos positivos
+            let masked = trimmed.replace(/(\d+)[\.,](\d+)/g, '$1___NUMSEP___$2');
+
+            // Detectar si contiene puntos numerados (1. ... o 1) ...)
+            const hasNumberedPoints = /(?:^|\s+|\n+)\d+[\.\)]\s+/.test(masked);
+            if (!hasNumberedPoints) {
+                return formatMarkdownBold(trimmed);
+            }
+
+            // Dividir por el inicio de cada punto numerado
+            const parts = masked.split(/(?=(?:^|\s+|\n+)\d+[\.\)]\s+)/);
+            const blocks = [];
+
+            parts.forEach(part => {
+                let clean = part.replace(/___NUMSEP___/g, '.').trim();
+                if (!clean) return;
+
+                const numMatch = clean.match(/^(\d+)[\.\)]\s+([\s\S]+)$/);
+                if (numMatch) {
+                    const num = numMatch[1];
+                    const body = numMatch[2].trim();
+                    const content = body.includes('\n')
+                        ? formatMarkdownBold(body)
+                        : body.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-800">$1</strong>');
+                    blocks.push(`
+                        <div class="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs text-xs text-slate-700 leading-relaxed flex items-start gap-2.5 not-italic">
+                            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-[11px] font-bold shrink-0 mt-0.5">${num}</span>
+                            <div class="flex-1">${content}</div>
+                        </div>
+                    `);
+                } else {
+                    const introContent = clean.includes('\n')
+                        ? formatMarkdownBold(clean)
+                        : clean.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-teal-900">$1</strong>');
+                    blocks.push(`
+                        <div class="p-3 bg-teal-50/70 rounded-lg border border-teal-200 text-xs text-teal-950 leading-relaxed font-medium not-italic">
+                            ${introContent}
+                        </div>
+                    `);
+                }
+            });
+
+            return `<div class="space-y-2 not-italic">${blocks.join('')}</div>`;
+        }
+        window.formatEstrategiaStructuredPoints = formatEstrategiaStructuredPoints;
+
         function formatMarkdownBold(text) {
             if (text === null || text === undefined || text === '') return "";
             const safeText = typeof text === 'string' ? text : toAuditText(text);
@@ -57743,58 +58035,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (reportContainer) reportContainer.innerHTML = '';
                     legacySections.forEach(section => section.classList.remove('hidden'));
 
-                    const buildComparativaRowsHtml = (clausesList) => {
-                        if (!Array.isArray(clausesList) || clausesList.length === 0) return '';
-                        return clausesList.map(item => {
-                            const riesgo = String(item.riesgo || 'Medio').toUpperCase();
-                            const badgeColor = /ALTO|CR[IÍ]TICO/i.test(riesgo)
-                                ? 'bg-rose-100 text-rose-800 border-rose-200'
-                                : (/BAJO/i.test(riesgo) ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200');
-                            return `
-                                <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                                    <td class="p-2.5 font-semibold text-slate-800 whitespace-nowrap align-top">${escapeHtml(item.clausula || '—')}</td>
-                                    <td class="p-2.5 text-slate-600 align-top">${escapeHtml(item.estandar || '—')}</td>
-                                    <td class="p-2.5 text-slate-700 align-top">${escapeHtml(item.desviacion || '—')}</td>
-                                    <td class="p-2.5 text-slate-700 align-top">
-                                        ${item.impacto_armador ? `<div><span class="font-semibold text-slate-800">Armador:</span> ${escapeHtml(item.impacto_armador)}</div>` : ''}
-                                        ${item.impacto_fletador ? `<div><span class="font-semibold text-slate-800">Fletador:</span> ${escapeHtml(item.impacto_fletador)}</div>` : ''}
-                                    </td>
-                                    <td class="p-2.5 align-top whitespace-nowrap">
-                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${escapeHtml(item.riesgo || 'Medio')}</span>
-                                    </td>
-                                    <td class="p-2.5 text-teal-900 font-medium align-top">${escapeHtml(item.cambio_solicitado || '—')}</td>
-                                </tr>
-                            `;
-                        }).join('');
-                    };
-
                     const buildComparativaTableHtml = (clausesList, extraNotice = '') => {
-                        const rows = buildComparativaRowsHtml(clausesList);
-                        if (!rows && !extraNotice) return '';
+                        const cardsHtml = renderComparativaClausulasHtml(clausesList);
+                        if (!cardsHtml && !extraNotice) return '';
                         return `
-                            <div class="mt-4 pt-3 border-t border-teal-200/80">
-                                <h5 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-table-columns text-teal-700"></i> Comparativa Cláusula por Cláusula vs Estándar de Mercado
-                                </h5>
-                                <div class="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs bg-white">
-                                    <table class="w-full text-left text-xs border-collapse">
-                                        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
-                                            <tr>
-                                                <th class="p-2.5">Cláusula</th>
-                                                <th class="p-2.5">Estándar</th>
-                                                <th class="p-2.5">Desviación Detectada</th>
-                                                <th class="p-2.5">Impacto Operativo</th>
-                                                <th class="p-2.5">Nivel Riesgo</th>
-                                                <th class="p-2.5">Cambio Solicitado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${rows}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                ${extraNotice}
-                            </div>
+                            ${cardsHtml}
+                            ${extraNotice}
                         `;
                     };
 
@@ -57830,7 +58076,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                         <span class="text-slate-800 font-medium">${escapeHtml(result.jurisdiccion_arbitraje || 'Según documento')}</span>
                                     </div>
                                 </div>
-                                ${result.proforma ? `<div class="text-xs text-slate-700 leading-relaxed pt-2.5 border-t border-teal-100">${formatMarkdownBold(result.proforma)}</div>` : ''}
+                                ${result.proforma ? `<div class="pt-2.5 border-t border-teal-100">${formatProformaStructuredPoints(result.proforma)}</div>` : ''}
                                 <div id="comparativa-clausulas-slot">${compContent}</div>
                             </div>
                         </div>
@@ -58026,52 +58272,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
 
                 let comparativaHtml = '';
                 if (Array.isArray(result.comparativa_clausulas) && result.comparativa_clausulas.length > 0) {
-                    const rows = result.comparativa_clausulas.map(item => {
-                        const riesgo = String(item.riesgo || 'Medio').toUpperCase();
-                        const badgeColor = /ALTO|CR[IÍ]TICO/i.test(riesgo)
-                            ? 'bg-rose-100 text-rose-800 border-rose-200'
-                            : (/BAJO/i.test(riesgo) ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200');
-                        return `
-                            <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                                <td class="p-2.5 font-semibold text-slate-800 whitespace-nowrap align-top">${escapeHtml(item.clausula || '—')}</td>
-                                <td class="p-2.5 text-slate-600 align-top">${escapeHtml(item.estandar || '—')}</td>
-                                <td class="p-2.5 text-slate-700 align-top">${escapeHtml(item.desviacion || '—')}</td>
-                                <td class="p-2.5 text-slate-700 align-top">
-                                    ${item.impacto_armador ? `<div><span class="font-semibold text-slate-800">Armador:</span> ${escapeHtml(item.impacto_armador)}</div>` : ''}
-                                    ${item.impacto_fletador ? `<div><span class="font-semibold text-slate-800">Fletador:</span> ${escapeHtml(item.impacto_fletador)}</div>` : ''}
-                                </td>
-                                <td class="p-2.5 align-top whitespace-nowrap">
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${escapeHtml(item.riesgo || 'Medio')}</span>
-                                </td>
-                                <td class="p-2.5 text-teal-900 font-medium align-top">${escapeHtml(item.cambio_solicitado || '—')}</td>
-                            </tr>
-                        `;
-                    }).join('');
-
-                    comparativaHtml = `
-                        <div class="mt-4 pt-3 border-t border-teal-200/80">
-                            <h5 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                                <i class="fa-solid fa-table-columns text-teal-700"></i> Comparativa Cláusula por Cláusula vs Estándar de Mercado
-                            </h5>
-                            <div class="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs bg-white">
-                                <table class="w-full text-left text-xs border-collapse">
-                                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
-                                        <tr>
-                                            <th class="p-2.5">Cláusula</th>
-                                            <th class="p-2.5">Estándar</th>
-                                            <th class="p-2.5">Desviación Detectada</th>
-                                            <th class="p-2.5">Impacto Operativo</th>
-                                            <th class="p-2.5">Nivel Riesgo</th>
-                                            <th class="p-2.5">Cambio Solicitado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${rows}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
+                    comparativaHtml = renderComparativaClausulasHtml(result.comparativa_clausulas);
                 }
 
                 const proformaHtml = `
@@ -58106,7 +58307,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                                     <span class="text-slate-800 font-medium">${escapeHtml(jurisdiccion || 'Según documento')}</span>
                                 </div>
                             </div>
-                            ${result.proforma ? `<div class="text-xs text-slate-700 leading-relaxed pt-2.5 border-t border-teal-100">${formatMarkdownBold(result.proforma)}</div>` : ''}
+                            ${result.proforma ? `<div class="pt-2.5 border-t border-teal-100">${formatProformaStructuredPoints(result.proforma)}</div>` : ''}
                             ${comparativaHtml}
                         </div>
                     </div>
@@ -58143,7 +58344,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
 
                 document.getElementById('resEstrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
-                    : formatMarkdownBold(result.estrategia || '');
+                    : formatEstrategiaStructuredPoints(result.estrategia || '');
                 document.getElementById('resEmail').value = toAuditText(result.email || '');
 
                 // Actualizar identificador de referencia y rellenar vista imprimible
@@ -58164,7 +58365,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                 `).join('');
                 document.getElementById('print-audit-estrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
-                    : formatMarkdownBold(result.estrategia || '');
+                    : formatEstrategiaStructuredPoints(result.estrategia || '');
                 document.getElementById('print-audit-email').innerText = toAuditText(result.email || '');
 
                 document.getElementById('loadingState').classList.add('hidden');
