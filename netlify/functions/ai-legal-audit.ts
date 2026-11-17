@@ -129,7 +129,7 @@ FORMATO OBLIGATORIO:
 - "riesgos" y "mapa_red_flags": Lista los 5 a 6 riesgos principales (Red Flags) citando el número de cláusula y cifras reales del documento.
 - "clausulas": Redacta 3 cláusulas de protección (Rider Clauses) en inglés, directamente adaptadas al documento.
 - "estrategia" y "email": Obligatorios y completos, jamás vacíos, citando las partes, cláusulas y condiciones reales.
-- "proforma": Dictamen y recomendación pro-forma estructurada.
+- "proforma": Dictamen y recomendación pro-forma estructurada en puntos separados por punto y coma (;) y saltos de línea para máxima legibilidad ejecutiva.
 - Conserva también las claves: auditoria_operativa_html, auditoria_armador, auditoria_fletador, detalles_sof, laytime_excel_data.`;
 
 const strictAuditRequirements = [
@@ -284,7 +284,7 @@ Analiza el fragmento contractual recibido (encabezado, partes, cláusulas clave 
 5. incoterm_puertos: Incoterm estipulado y puertos de carga y descarga.
 6. condiciones_pago: Modalidad, plazos, instrumentos bancarios (LC, CAD, TT) y montos.
 7. jurisdiccion_arbitraje: Ley aplicable, cámara arbitral o tribunal pactado.
-8. proforma: Dictamen ejecutivo y comercial preliminar del contrato (resumen de 200-300 palabras).
+8. proforma: Dictamen ejecutivo y comercial preliminar del contrato redactado de forma estructurada en puntos separados por punto y coma (;) y saltos de línea para máxima legibilidad ejecutiva (resumen de 200-300 palabras).
 9. auditoria_contrato_html: Breve dictamen ejecutivo en HTML estilizado.
 
 Devuelve única y exclusivamente JSON que cumpla el esquema requerido.`;
