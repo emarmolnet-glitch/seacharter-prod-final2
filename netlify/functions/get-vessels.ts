@@ -4,6 +4,8 @@ import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./_shared/a
 import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
 import { evaluateCommercialTransitToPol, LONG_DISTANCE_TRANSIT_LABEL } from "./_shared/ais-commercial-transit.mjs";
 import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";
+import { fetchAisStreamAndNeonFallback, persistMerchantFleetInNeon } from "./_shared/aisCoordinator.js";
+import { getDatabase } from "netlify-database-client";
 
 type VesselMessage = Record<string, unknown>;
 declare const process: { env: Record<string, string | undefined> };
@@ -1089,13 +1091,57 @@ export async function handleGetVessels(req: Request) {
   }
 
   if (forceLive) {
-    return vesselsResponse({
-      success: false,
-      vessels: [],
-      source: "aisstream-client-only",
-      error: "AISSTREAM_BACKEND_DISABLED",
-      message: "Los barridos AISStream desde backend están deshabilitados. Radar usa exclusivamente Datalastic y Tracking abre AISStream en el navegador.",
-    }, { status: 410 });
+    const pol = parseRouteCoordinate(url, "coords_pol");
+    let targetLat = pol?.lat ?? normalizeNumber(url.searchParams.get("polLat"));
+    let targetLon = pol?.lon ?? normalizeNumber(url.searchParams.get("polLon"));
+    const requestedRadius = numberParam(url, ["radiusNm", "radius_nm", "captureRadiusNm"], 50);
+
+    if (targetLat === undefined || targetLon === undefined) {
+      const boxes = getRequestedBoundingBoxes(url);
+      if (boxes && boxes.length > 0) {
+        targetLat = (boxes[0][0][0] + boxes[0][1][0]) / 2;
+        targetLon = (boxes[0][0][1] + boxes[0][1][1]) / 2;
+      }
+    }
+
+    if (targetLat !== undefined && targetLon !== undefined) {
+      const fallbackResult = await fetchAisStreamAndNeonFallback({
+        lat: targetLat,
+        lon: targetLon,
+        radius: requestedRadius,
+      });
+
+      const fallbackVessels = Array.isArray(fallbackResult.data) ? fallbackResult.data : [];
+
+      if (fallbackVessels.length > 0) {
+        const dbUrl = (typeof Netlify !== "undefined" && (Netlify as any)?.env?.get ? ((Netlify as any).env.get("DATABASE_URL") ?? (Netlify as any).env.get("NETLIFY_DATABASE_URL") ?? (Netlify as any).env.get("NETLIFY_DB_URL")) : null) ?? process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? process.env.NETLIFY_DB_URL;
+        if (dbUrl) {
+          try {
+            const database = getDatabase({ connectionString: dbUrl });
+            await persistMerchantFleetInNeon(fallbackVessels, database.pool as any);
+          } catch (dbErr) {
+            console.warn("[get-vessels] Error persistiendo buques mercantes fallback en vessels_master:", dbErr);
+          }
+        }
+      }
+
+      const normalizedFallback = fallbackVessels.map(normalizeVesselMessage);
+      const acceptedFallback = strictTaxonomyMode
+        ? filterVesselsByTaxonomies(normalizedFallback, requestedTaxonomies)
+        : normalizedFallback;
+      const filtered = filterSelectiveVessels(url, acceptedFallback);
+
+      return vesselsResponse({
+        success: true,
+        vessels: filtered,
+        data: filtered,
+        source: "aisstream-neon-fallback",
+        liveConnection: true,
+        selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
+        updatedAt: Date.now(),
+        message: `Barrido AISStream + Neon completado: ${filtered.length} buques encontrados.`,
+      });
+    }
   }
 
   const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
