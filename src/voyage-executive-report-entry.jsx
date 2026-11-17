@@ -24,14 +24,25 @@ export function mountVoyageExecutiveReport(container, props = {}) {
     }
   }
 
+  if (props.isOpen !== false) {
+    mountPoint.classList.remove('hidden', 'pointer-events-none');
+    mountPoint.style.display = 'block';
+    mountPoint.style.pointerEvents = 'auto';
+  }
+
   if (!voyageReportRoot) {
     voyageReportRoot = createRoot(mountPoint);
   }
 
   const handleClose = () => {
+    window.closeExecutiveReport?.();
     if (typeof props.onClose === 'function') {
       props.onClose();
     }
+    mountPoint.classList.add('hidden', 'pointer-events-none');
+    mountPoint.style.display = 'none';
+    mountPoint.style.pointerEvents = 'none';
+
     const modalEl = document.getElementById('voyage-executive-report-modal');
     if (modalEl) {
       modalEl.classList.add('hidden');
