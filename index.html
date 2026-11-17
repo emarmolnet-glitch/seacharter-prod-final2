@@ -3864,10 +3864,12 @@
         @media (min-width: 768px) {
             #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
                 padding: 1.5rem;
+                padding-bottom: 120px !important;
             }
 
             #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
                 max-height: calc(100vh - 9rem);
+                overflow-y: auto !important;
             }
         }
 
@@ -6215,6 +6217,71 @@
             color: #E2E8F0 !important;
         }
 
+        /* Contraste perfecto para cabeceras y elementos de Módulo 6 (Informe de Auditoría IA) */
+        #resultsContent .audit-card-header,
+        #resultsContent .legacy-audit-section > div:first-child {
+            border-radius: 8px 8px 0 0 !important;
+        }
+
+        #resultsContent .audit-header-proforma,
+        #resultsContent .audit-header-strategy {
+            background-color: #f0fdfa !important;
+            background: #f0fdfa !important;
+            border-bottom: 1px solid #99f6e4 !important;
+            border-color: #99f6e4 !important;
+        }
+
+        #resultsContent .audit-header-proforma h3,
+        #resultsContent .audit-header-strategy h3,
+        #resultsContent .legacy-audit-section .audit-header-proforma h3,
+        #resultsContent .legacy-audit-section .audit-header-strategy h3 {
+            color: #0f766e !important;
+            font-weight: 700 !important;
+        }
+
+        #resultsContent .audit-header-proforma i,
+        #resultsContent .audit-header-strategy i,
+        #resultsContent .legacy-audit-section .audit-header-proforma i,
+        #resultsContent .legacy-audit-section .audit-header-strategy i {
+            color: #0d9488 !important;
+        }
+
+        #view-auditor .audit-vessel-header,
+        #view-auditor [class*="bg-slate-900"] h2,
+        #view-auditor [class*="bg-slate-900"] h3,
+        #view-auditor [class*="bg-slate-900"] i,
+        #view-auditor [class*="bg-slate-900"] p {
+            color: #ffffff !important;
+        }
+
+        /* Scroll fluido sin cortes verticales para el visor de resultados */
+        #view-auditor {
+            overflow-y: auto !important;
+            padding-bottom: 120px !important;
+        }
+
+        #view-auditor .ai-work-grid {
+            overflow: visible !important;
+        }
+
+        #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
+            overflow-y: auto !important;
+            padding-bottom: 120px !important;
+        }
+
+        #resultsContent {
+            padding-bottom: 120px !important;
+        }
+
+        #resEmail {
+            min-height: 240px !important;
+        }
+
+        #resultsContent .bg-slate-50:not(.audit-header-proforma):not(.audit-header-strategy) {
+            background-color: #f8fafc !important;
+            background: #f8fafc !important;
+        }
+
         #view-auditor > .bg-slate-900 .bg-indigo-600 {
             background: var(--accent) !important;
             color: #FFFFFF !important;
@@ -7408,6 +7475,71 @@
 
         #view-auditor #audit-active-vessel-panel .audit-vessel-origin {
             color: #E2E8F0 !important;
+        }
+
+        /* Contraste perfecto para cabeceras y elementos de Módulo 6 (Informe de Auditoría IA) */
+        #resultsContent .audit-card-header,
+        #resultsContent .legacy-audit-section > div:first-child {
+            border-radius: 8px 8px 0 0 !important;
+        }
+
+        #resultsContent .audit-header-proforma,
+        #resultsContent .audit-header-strategy {
+            background-color: #f0fdfa !important;
+            background: #f0fdfa !important;
+            border-bottom: 1px solid #99f6e4 !important;
+            border-color: #99f6e4 !important;
+        }
+
+        #resultsContent .audit-header-proforma h3,
+        #resultsContent .audit-header-strategy h3,
+        #resultsContent .legacy-audit-section .audit-header-proforma h3,
+        #resultsContent .legacy-audit-section .audit-header-strategy h3 {
+            color: #0f766e !important;
+            font-weight: 700 !important;
+        }
+
+        #resultsContent .audit-header-proforma i,
+        #resultsContent .audit-header-strategy i,
+        #resultsContent .legacy-audit-section .audit-header-proforma i,
+        #resultsContent .legacy-audit-section .audit-header-strategy i {
+            color: #0d9488 !important;
+        }
+
+        #view-auditor .audit-vessel-header,
+        #view-auditor [class*="bg-slate-900"] h2,
+        #view-auditor [class*="bg-slate-900"] h3,
+        #view-auditor [class*="bg-slate-900"] i,
+        #view-auditor [class*="bg-slate-900"] p {
+            color: #ffffff !important;
+        }
+
+        /* Scroll fluido sin cortes verticales para el visor de resultados */
+        #view-auditor {
+            overflow-y: auto !important;
+            padding-bottom: 120px !important;
+        }
+
+        #view-auditor .ai-work-grid {
+            overflow: visible !important;
+        }
+
+        #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
+            overflow-y: auto !important;
+            padding-bottom: 120px !important;
+        }
+
+        #resultsContent {
+            padding-bottom: 120px !important;
+        }
+
+        #resEmail {
+            min-height: 240px !important;
+        }
+
+        #resultsContent .bg-slate-50:not(.audit-header-proforma):not(.audit-header-strategy) {
+            background-color: #f8fafc !important;
+            background: #f8fafc !important;
         }
 
         #view-estimator .text-slate-400,
@@ -15035,9 +15167,9 @@
         <!-- ========================================== -->
         <!-- MÓDULO 3: CHARTERAI RISK AUDITOR           -->
         <!-- ========================================== -->
-        <div id="view-auditor" class="view-section absolute inset-0 overflow-hidden flex flex-col bg-slate-100">
+        <div id="view-auditor" class="view-section absolute inset-0 overflow-y-auto flex flex-col bg-slate-100 pb-28" style="padding-bottom: 120px !important; overflow-y: auto !important;">
             <!-- Content Area (split columns) -->
-            <div class="flex-1 flex flex-col md:flex-row md:items-start overflow-hidden ai-work-grid p-4 md:p-6">
+            <div class="flex-1 flex flex-col md:flex-row md:items-start ai-work-grid p-4 md:p-6" style="overflow: visible !important;">
                 <!-- Left Panel: Input -->
                 <div class="w-full md:w-1/3 h-1/2 md:h-full shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <div class="audit-collapsible-panel ai-work-card p-4 md:p-6 flex-1 flex flex-col" data-collapsible-section data-default-open="false">
@@ -15074,15 +15206,15 @@
                         </button>
                     </div>
 
-                    <textarea id="recapInput" class="input-gc w-full flex-1 resize-none transition-colors" placeholder="Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías..."></textarea>
+                    <textarea id="recapInput" rows="14" style="min-height: 320px !important;" class="input-gc w-full flex-1 resize-none transition-colors min-h-[320px]" placeholder="Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías..."></textarea>
                     
                     <button id="analyzeBtn" onclick="analyzeDocument()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
                         <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Auditar Contrato
                     </button>
-                    <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
+                    <button id="commercialNlpBtn" onclick="analyzeDocument()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm hidden" style="display: none !important;">
                         <i class="fa-solid fa-table-list mr-2"></i> Motor NPL · Analizar Documento
                     </button>
-                    <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div id="commercial-nlp-origin-container" class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 hidden" style="display: none !important;">
                         <label for="commercial-nlp-origin" class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Origen de datos</label>
                         <select id="commercial-nlp-origin" onchange="handleCommercialNlpOriginChange(this.value)" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
                             <option value="Externo" selected>Externo</option>
@@ -15188,7 +15320,7 @@
                 </div>
 
                 <!-- Results Content -->
-                <div id="resultsContent" class="hidden space-y-6 max-w-4xl mx-auto pb-10">
+                <div id="resultsContent" class="hidden space-y-6 max-w-4xl mx-auto pb-28" style="padding-bottom: 120px !important;">
                     <div id="commercial-nlp-panel" style="display: none !important;" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden">
                         <div class="bg-emerald-50 px-5 py-3 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
@@ -15233,17 +15365,20 @@
                             <p class="text-sm text-slate-600 mt-1">Resumen legal y comercial generado desde los puntos clave detectados por la auditoría.</p>
                             <p class="text-xs text-slate-500 mt-1">ID Estimación: <span id="audit-report-ref-id" class="font-semibold text-slate-700">SeaCharter Core PRO - (Cargando...)</span></p>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="printAuditReport()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
-                                <i class="fa-solid fa-print"></i> Imprimir Informe
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="printAuditReport()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap" title="Imprimir Informe de Auditoría">
+                                <i class="fa-solid fa-print"></i> <span>Imprimir Informe</span>
                             </button>
-                            <button id="commercial-nlp-export-json-btn" onclick="downloadCommercialNlpJson()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap" title="Exportar JSON para Data Bridge">
+                            <button type="button" onclick="copyFullAuditReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap" title="Copiar informe completo al portapapeles">
+                                <i class="fa-regular fa-copy"></i> <span>Copiar Todo</span>
+                            </button>
+                            <button type="button" onclick="finishAuditSession()" class="bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap" title="Iniciar Nueva Auditoría">
+                                <i class="fa-solid fa-rotate-left"></i> <span>Nueva Auditoría</span>
+                            </button>
+                            <button id="commercial-nlp-export-json-btn" onclick="downloadCommercialNlpJson()" class="hidden bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap" style="display: none !important;" title="Exportar JSON para Data Bridge">
                                 <i class="fa-solid fa-file-arrow-down text-slate-500"></i> Exportar JSON
                             </button>
-                            <button onclick="finishAuditSession()" class="bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
-                                <i class="fa-solid fa-rotate-left"></i> Nueva Auditoría / Finish Audit
-                            </button>
-                            <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-1.5 rounded-full border border-green-200">Completado</span>
+                            <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-1.5 rounded-full border border-green-200 whitespace-nowrap">Completado</span>
                         </div>
                     </div>
 
@@ -15257,16 +15392,16 @@
 
                     <!-- 1. Proforma -->
                     <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center">
-                            <i class="fa-solid fa-file-contract text-blue-500 mr-3"></i>
-                            <h3 class="font-semibold text-slate-800">Recomendación de Pro-forma</h3>
+                        <div class="audit-card-header audit-header-proforma bg-teal-50 px-5 py-3 border-b border-teal-200 flex items-center" style="background-color: #f0fdfa !important; border-color: #99f6e4 !important;">
+                            <i class="fa-solid fa-file-contract text-teal-600 mr-3" style="color: #0d9488 !important;"></i>
+                            <h3 class="font-bold text-teal-900" style="color: #0f766e !important;">Recomendación / Dictamen Pro-forma</h3>
                         </div>
                         <div class="p-5 text-sm text-slate-700 leading-relaxed" id="resProforma"></div>
                     </div>
 
                     <!-- 2. Riesgos -->
                     <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="bg-red-50 px-5 py-3 border-b border-red-100 flex items-center">
+                        <div class="audit-card-header bg-red-50 px-5 py-3 border-b border-red-100 flex items-center">
                             <i class="fa-solid fa-triangle-exclamation text-red-500 mr-3"></i>
                             <h3 class="font-semibold text-red-800">Riesgos Identificados (Red Flags)</h3>
                         </div>
@@ -15277,7 +15412,7 @@
 
                     <!-- 3. Cláusulas -->
                     <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="bg-green-50 px-5 py-3 border-b border-green-100 flex items-center">
+                        <div class="audit-card-header bg-green-50 px-5 py-3 border-b border-green-100 flex items-center">
                             <i class="fa-solid fa-shield-halved text-green-600 mr-3"></i>
                             <h3 class="font-semibold text-green-800">Cláusulas de Protección Sugeridas (Rider Clauses)</h3>
                         </div>
@@ -15287,27 +15422,27 @@
                     </div>
 
                     <!-- 4. Estrategia -->
-                    <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden border-l-4 border-l-blue-500">
-                        <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center">
-                            <i class="fa-solid fa-comments-dollar text-blue-500 mr-3"></i>
-                            <h3 class="font-semibold text-slate-800">Estrategia de Negociación</h3>
+                    <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden border-l-4 border-l-teal-600">
+                        <div class="audit-card-header audit-header-strategy bg-teal-50 px-5 py-3 border-b border-teal-200 flex items-center" style="background-color: #f0fdfa !important; border-color: #99f6e4 !important;">
+                            <i class="fa-solid fa-comments-dollar text-teal-600 mr-3" style="color: #0d9488 !important;"></i>
+                            <h3 class="font-bold text-teal-900" style="color: #0f766e !important;">Estrategia de Negociación</h3>
                         </div>
                         <div class="p-5 text-sm text-slate-700 leading-relaxed italic" id="resEstrategia"></div>
                     </div>
 
                     <!-- 5. Email Draft -->
                     <div class="legacy-audit-section bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="bg-indigo-50 px-5 py-3 border-b border-indigo-100 flex justify-between items-center">
+                        <div class="audit-card-header bg-indigo-50 px-5 py-3 border-b border-indigo-100 flex justify-between items-center">
                             <div class="flex items-center">
                                 <i class="fa-solid fa-envelope text-indigo-500 mr-3"></i>
-                                <h3 class="font-semibold text-indigo-800">Borrador de Respuesta (Para el Armador)</h3>
+                                <h3 class="font-semibold text-indigo-800">Borrador de Respuesta (Para la Contraparte / Armador / Seller)</h3>
                             </div>
-                            <button onclick="copyEmail()" class="text-xs bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded flex items-center transition-colors shadow-sm">
+                            <button onclick="copyEmail()" class="text-xs bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded flex items-center transition-colors shadow-sm font-semibold">
                                 <i class="fa-regular fa-copy mr-1.5"></i> Copiar Email
                             </button>
                         </div>
                         <div class="p-5">
-                            <textarea id="resEmail" class="w-full h-48 p-4 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono text-slate-700 bg-slate-50 resize-y" readonly></textarea>
+                            <textarea id="resEmail" rows="10" class="w-full min-h-[240px] p-4 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono text-slate-700 bg-slate-50 resize-y" style="min-height: 240px !important;" readonly></textarea>
                         </div>
                     </div>
 
@@ -48588,23 +48723,92 @@ function scheduleReactiveEngine() {
             );
         }
 
-        async function waitForLegalAuditTask(taskId, dataBridgeSyncId = '') {
+        let lastDirectAuditErrorMessage = null;
+        async function executeDirectLegalAuditFallback(payload) {
+            lastDirectAuditErrorMessage = null;
+            const fallbackEndpoints = ['/api/ai-legal-audit', '/.netlify/functions/ai-legal-audit', '/api/generate'];
+            const directPayload = {
+                ...payload,
+                auditMode: 'direct',
+                directExecution: true
+            };
+            const loadingMessage = document.getElementById('audit-loading-message');
+            if (loadingMessage) loadingMessage.textContent = 'Procesando auditoría legal directamente con IA...';
+
+            for (const endpoint of fallbackEndpoints) {
+                try {
+                    const fallbackResp = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-direct-audit': 'true'
+                        },
+                        body: JSON.stringify(directPayload)
+                    });
+                    if (fallbackResp.ok) {
+                        const directResult = await fallbackResp.json();
+                        if (directResult?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            return directResult;
+                        }
+                    } else {
+                        const errData = await fallbackResp.json().catch(() => ({}));
+                        if (errData?.error?.message) {
+                            lastDirectAuditErrorMessage = errData.error.message;
+                        }
+                        console.warn(`[executeDirectLegalAuditFallback] ${endpoint} devolvió HTTP ${fallbackResp.status}:`, errData);
+                    }
+                } catch (fallbackErr) {
+                    console.warn(`[executeDirectLegalAuditFallback] Fallback a ${endpoint} falló:`, fallbackErr);
+                }
+            }
+            return null;
+        }
+        window.executeDirectLegalAuditFallback = executeDirectLegalAuditFallback;
+
+        async function waitForLegalAuditTask(taskId, dataBridgeSyncId = '', originalPayload = null) {
             const startedAt = Date.now();
             const maximumWaitMs = 15 * 60 * 1000;
             const loadingMessage = document.getElementById('audit-loading-message');
 
             while (Date.now() - startedAt < maximumWaitMs) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
-                const response = await fetch(`/api/syncPull/${encodeURIComponent(taskId)}`, {
-                    headers: { 'Accept': 'application/json' },
-                    cache: 'no-store'
-                });
-                const task = await response.json().catch(() => ({}));
+                let response = null;
+                let task = null;
+                try {
+                    response = await fetch(`/api/syncPull/${encodeURIComponent(taskId)}`, {
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    });
+                    task = await response.json().catch(() => ({}));
+                } catch (pullErr) {
+                    console.warn('[waitForLegalAuditTask] Error en syncPull:', pullErr);
+                }
 
-                if (!response.ok) {
-                    throw new Error(task.error || `No se pudo consultar la auditoría (${response.status}).`);
+                if (!response || !response.ok || task?.status === 'ERROR') {
+                    if (originalPayload) {
+                        console.warn('[waitForLegalAuditTask] Tarea con error o syncPull falló, ejecutando fallback directo...');
+                        const directResult = await executeDirectLegalAuditFallback(originalPayload);
+                        if (directResult) {
+                            localStorage.removeItem('legal_audit_task_id');
+                            return directResult;
+                        }
+                    }
+                    if (task?.status === 'ERROR') {
+                        localStorage.removeItem('legal_audit_task_id');
+                        throw new Error(task.error || 'La auditoría legal no pudo completarse.');
+                    }
+                    if (!response || !response.ok) {
+                        throw new Error(task?.error || `No se pudo consultar la auditoría (${response?.status || 500}).`);
+                    }
                 }
                 if (task.available === false) {
+                    if (originalPayload) {
+                        const directResult = await executeDirectLegalAuditFallback(originalPayload);
+                        if (directResult) {
+                            localStorage.removeItem('legal_audit_task_id');
+                            return directResult;
+                        }
+                    }
                     localStorage.removeItem('legal_audit_task_id');
                     throw new Error(task.message || 'Reporte no disponible');
                 }
@@ -48616,9 +48820,14 @@ function scheduleReactiveEngine() {
                     localStorage.removeItem('legal_audit_task_id');
                     return task.result;
                 }
-                if (status === 'ERROR') {
+            }
+
+            if (originalPayload) {
+                console.warn('[waitForLegalAuditTask] Timeout esperando worker, intentando llamada directa...');
+                const directResult = await executeDirectLegalAuditFallback(originalPayload);
+                if (directResult) {
                     localStorage.removeItem('legal_audit_task_id');
-                    throw new Error(task.error || 'La auditoría legal no pudo completarse.');
+                    return directResult;
                 }
             }
 
@@ -48626,25 +48835,66 @@ function scheduleReactiveEngine() {
         }
 
         async function executeAsyncLegalAudit(payload) {
-            const response = await fetch('/api/syncPush', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const task = await response.json().catch(() => ({}));
-            if (response.ok && task.available === false) {
-                throw new Error(task.message || 'Reporte no disponible');
-            }
-            if (!response.ok || !task.task_id) {
-                const requestError = new Error(task.error?.message || `No se pudo iniciar la auditoría (${response.status}).`);
-                requestError.code = task.error?.code || '';
-                throw requestError;
-            }
-            localStorage.setItem('legal_audit_task_id', task.task_id);
+            // Intenta SIEMPRE primero la inferencia directa con IA (ultrarrápida y sin límites de base de datos)
             const loadingMessage = document.getElementById('audit-loading-message');
-            if (loadingMessage) loadingMessage.textContent = `Análisis en curso · Tarea ${task.task_id.slice(0, 8)}`;
-            if (typeof showToast === 'function') showToast('Análisis en curso. La auditoría continúa en segundo plano.', false, 'success');
-            return waitForLegalAuditTask(task.task_id, payload?.dataBridgeSyncId);
+            if (loadingMessage) loadingMessage.textContent = 'Auditando cláusulas legales con Gemini 2.5 Flash...';
+            try {
+                const directResult = await executeDirectLegalAuditFallback(payload);
+                if (directResult) {
+                    return directResult;
+                }
+            } catch (directErr) {
+                console.warn('[executeAsyncLegalAudit] Inferencia directa inicial falló:', directErr);
+            }
+
+            const recapEl = document.getElementById('recapInput');
+            const hasTranscribedText = Boolean(
+                State.uploadedFile?.ocrCompleted ||
+                (recapEl && recapEl.value && recapEl.value.trim().length > 120)
+            );
+
+            // Si el documento ya fue transcrito como texto o si la inferencia directa devolvió un error concreto,
+            // jamás invocar a /api/syncPush (evitando desbordes SQL en base de datos) y mostrar el error limpio
+            if (hasTranscribedText || lastDirectAuditErrorMessage) {
+                const cleanError = lastDirectAuditErrorMessage || 'No se pudo completar la auditoría con IA. Por favor, reintenta.';
+                throw new Error(cleanError);
+            }
+
+            let syncPushFailed = false;
+            let syncPushError = null;
+            try {
+                const response = await fetch('/api/syncPush', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const task = await response.json().catch(() => ({}));
+                if (response.ok && task.available === false) {
+                    throw new Error(task.message || 'Reporte no disponible');
+                }
+                if (response.ok && task.task_id) {
+                    localStorage.setItem('legal_audit_task_id', task.task_id);
+                    const loadingMessage = document.getElementById('audit-loading-message');
+                    if (loadingMessage) loadingMessage.textContent = `Análisis en curso · Tarea ${task.task_id.slice(0, 8)}`;
+                    if (typeof showToast === 'function') showToast('Análisis en curso. La auditoría continúa en segundo plano.', false, 'success');
+                    return await waitForLegalAuditTask(task.task_id, payload?.dataBridgeSyncId, payload);
+                }
+                syncPushFailed = true;
+                syncPushError = new Error(task.error?.message || `No se pudo iniciar la auditoría (${response.status}).`);
+            } catch (err) {
+                syncPushFailed = true;
+                syncPushError = err;
+            }
+
+            if (syncPushFailed) {
+                console.warn('[executeAsyncLegalAudit] /api/syncPush devolvió error o no está disponible, ejecutando fallback directo:', syncPushError);
+                const directResult = await executeDirectLegalAuditFallback(payload);
+                if (directResult) {
+                    if (typeof showToast === 'function') showToast('Auditoría completada mediante inferencia directa.', false, 'success');
+                    return directResult;
+                }
+                throw syncPushError || new Error('No se pudo iniciar la auditoría y falló la llamada de respaldo directa.');
+            }
         }
 
         // --- LLAMADAS IA GEMINI MODALES ---
@@ -55731,10 +55981,10 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
             const originalBtnHtml = uploadBtn ? uploadBtn.innerHTML : '';
             
             textarea.value = "";
-            textarea.placeholder = "Extrayendo texto del archivo, por favor espera...";
+            textarea.placeholder = "Extrayendo y preparando documento para auditoría IA, por favor espera...";
             State.uploadedFile = null;
             if (uploadBtn) {
-                uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Leyendo...';
+                uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Procesando...';
                 uploadBtn.disabled = true;
             }
             document.getElementById('errorBox').classList.add('hidden');
@@ -55762,62 +56012,103 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     });
                     
                     const base64Data = dataUrl.split(',')[1];
-                    let uploadedBase64 = base64Data;
-                    const mimeType = 'application/pdf';
+                    const isLarge = base64Data.length > 3.5 * 1024 * 1024;
+                    const isScanned = !extractedText || extractedText.trim().length < 80;
+
+                    let isOcrCompleted = false;
+                    let fullTranscribedText = "";
+
+                    if (isScanned) {
+                        if (uploadBtn) {
+                            uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Preparando páginas PDF...';
+                        }
+                        const renderResult = await renderPdfPagesToCompressedParts(file, 25);
+                        const parts = renderResult?.parts || [];
+                        const totalPages = parts.length;
+
+                        if (totalPages > 0) {
+                            const BATCH_SIZE = 4;
+                            textarea.value = `[Documento PDF escaneado preparado: ${fileName} (${totalPages} páginas detectadas)]\nIniciando escaneo y transcripción OCR por lotes...`;
+
+                            for (let startIdx = 0; startIdx < totalPages; startIdx += BATCH_SIZE) {
+                                const endIdx = Math.min(startIdx + BATCH_SIZE, totalPages);
+                                const currentBatch = parts.slice(startIdx, endIdx);
+                                const progressMsg = `Escaneando y transcribiendo páginas ${startIdx + 1} a ${endIdx} de ${totalPages}...`;
+                                if (uploadBtn) {
+                                    uploadBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> ${progressMsg}`;
+                                }
+                                textarea.value = `[Documento PDF escaneado preparado: ${fileName} (${totalPages} páginas · ${progressMsg})]\n\n${fullTranscribedText ? fullTranscribedText + '\n\n' : ''}[Procesando páginas ${startIdx + 1} a ${endIdx}...]`;
+
+                                try {
+                                    let ocrResp = await fetch('/api/ocr-extract', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            pages: currentBatch.map((part, idx) => ({
+                                                data: part.inlineData.data,
+                                                mimeType: part.inlineData.mimeType,
+                                                pageNumber: startIdx + idx + 1
+                                            }))
+                                        })
+                                    });
+                                    if (ocrResp.status === 404) {
+                                        console.warn(`[OCR Batch] /api/ocr-extract devolvió 404 en páginas ${startIdx + 1}-${endIdx}, reintentando en /.netlify/functions/ocr-extract`);
+                                        ocrResp = await fetch('/.netlify/functions/ocr-extract', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                pages: currentBatch.map((part, idx) => ({
+                                                    data: part.inlineData.data,
+                                                    mimeType: part.inlineData.mimeType,
+                                                    pageNumber: startIdx + idx + 1
+                                                }))
+                                            })
+                                        });
+                                    }
+                                    if (ocrResp.ok) {
+                                        const ocrData = await ocrResp.json();
+                                        if (ocrData?.text) {
+                                            fullTranscribedText += (fullTranscribedText ? '\n\n' : '') + ocrData.text;
+                                        }
+                                    } else {
+                                        console.warn(`[OCR Batch] Error HTTP ${ocrResp.status} en páginas ${startIdx + 1}-${endIdx}`);
+                                    }
+                                } catch (batchErr) {
+                                    console.warn(`[OCR Batch] Excepción en páginas ${startIdx + 1}-${endIdx}:`, batchErr);
+                                }
+                            }
+
+                            if (fullTranscribedText.trim()) {
+                                isOcrCompleted = true;
+                                textarea.value = `[Documento escaneado listo para auditar con Gemini: ${fileName} (${totalPages} páginas transcritas con OCR)]\n\n============================================================\nTEXTO TRANSCRITO DEL CONTRATO:\n============================================================\n\n${fullTranscribedText.trim()}`;
+                            } else {
+                                textarea.value = `[Documento PDF escaneado preparado: ${fileName} (${totalPages} páginas preparadas)]\nDocumento escaneado listo para auditar con Gemini.`;
+                            }
+                        }
+                    } else {
+                        textarea.value = extractedText.trim();
+                    }
+
                     State.uploadedFile = {
                         name: fileName,
-                        type: mimeType,
-                        base64: uploadedBase64,
-                        dataUrl: dataUrl
+                        type: 'application/pdf',
+                        base64: "",
+                        dataUrl: dataUrl,
+                        file: file,
+                        pageParts: null,
+                        isScanned: isScanned,
+                        isLarge: isLarge,
+                        ocrCompleted: isOcrCompleted
                     };
-
-                    const fallbackPdfPlaceholder = `[Documento PDF escaneado / OCR para auditar: ${fileName}]\nEste archivo PDF parece estar escaneado o protegido contra copia directa de texto. Por favor, realiza la lectura visual y OCR de este documento PDF adjunto, y audítalo (Contrato, Carta de Crédito, Factura, Packing List, etc.) evaluando si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
-
-                    if (!extractedText || extractedText.trim().length === 0) {
-                        textarea.value = "Extrayendo texto mediante OCR...";
-                        if (uploadBtn) {
-                            uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> OCR...';
-                        }
-                        try {
-                            // Si el PDF contiene muchas páginas escaneadas, extraer un subconjunto de 5 páginas para evitar timeout 504
-                            const trimmedBase64 = await extractFirstPagesFromPdf(file, 5);
-                            if (trimmedBase64) {
-                                uploadedBase64 = trimmedBase64;
-                                if (State.uploadedFile) State.uploadedFile.base64 = trimmedBase64;
-                            }
-                            const ocrResponse = await fetch('/api/ocr-extract', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    mimeType: mimeType,
-                                    base64: uploadedBase64
-                                })
-                            });
-                            if (ocrResponse.ok) {
-                                const result = await ocrResponse.json();
-                                if (result && result.text && result.text.trim().length > 0) {
-                                    extractedText = result.text.trim();
-                                    document.getElementById('recapInput').value = result.text;
-                                } else {
-                                    extractedText = fallbackPdfPlaceholder;
-                                    document.getElementById('recapInput').value = fallbackPdfPlaceholder;
-                                }
-                            } else {
-                                extractedText = fallbackPdfPlaceholder;
-                                document.getElementById('recapInput').value = fallbackPdfPlaceholder;
-                            }
-                        } catch (ocrErr) {
-                            console.warn("[OCR fallback] Falló la petición a /api/ocr-extract:", ocrErr);
-                            extractedText = fallbackPdfPlaceholder;
-                            document.getElementById('recapInput').value = fallbackPdfPlaceholder;
-                        }
-                    }
                 } else if (fileExtension === 'docx') {
                     extractedText = await extractTextFromWord(file);
+                    textarea.value = extractedText;
                 } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
                     extractedText = await extractTextFromExcel(file);
+                    textarea.value = extractedText;
                 } else if (fileExtension === 'txt' || fileExtension === 'md' || fileExtension === 'csv') {
                     extractedText = await extractTextFromTxt(file);
+                    textarea.value = extractedText;
                 } else if ((file.type && file.type.startsWith('image/')) || imageExtensions.includes(fileExtension)) {
                     // For images, read as base64 Data URL and save in State
                     const dataUrl = await new Promise((resolve, reject) => {
@@ -55827,72 +56118,57 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                         reader.readAsDataURL(file);
                     });
                     
-                    const base64Data = dataUrl.split(',')[1];
-                    let uploadedBase64 = base64Data;
+                    const compressedBase64 = await compressImageForOcr(dataUrl, 1600, 0.85);
+                    const uploadedBase64 = compressedBase64 || dataUrl.split(',')[1];
                     const mimeType = file.type || `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
                     State.uploadedFile = {
                         name: fileName,
                         type: mimeType,
                         base64: uploadedBase64,
-                        dataUrl: dataUrl
+                        dataUrl: dataUrl,
+                        file: file
                     };
-                    
-                    const fallbackImagePlaceholder = `[Fotografía de documento adjunto para auditar: ${fileName}]\nPor favor, audita la imagen adjunta de este documento (Contrato, Carta de Crédito, Factura, Packing List, etc.) y evalúa si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
 
-                    // Para imágenes, la extracción local no devuelve texto: llamar a OCR
-                    textarea.value = "Extrayendo texto mediante OCR...";
-                    if (uploadBtn) {
-                        uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> OCR...';
-                    }
                     try {
-                        // Reducir resolución/calidad de imágenes pesadas antes de enviar a Gemini para acelerar OCR y evitar 504
-                        const compressedBase64 = await compressImageForOcr(dataUrl, 1600, 0.85);
-                        if (compressedBase64) {
-                            uploadedBase64 = compressedBase64;
-                            if (State.uploadedFile) State.uploadedFile.base64 = compressedBase64;
-                        }
-                        const ocrResponse = await fetch('/api/ocr-extract', {
+                        textarea.placeholder = "Extrayendo texto mediante OCR...";
+                        let ocrResp = await fetch('/api/ocr-extract', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                mimeType: mimeType,
-                                base64: uploadedBase64
-                            })
+                            body: JSON.stringify({ base64: uploadedBase64, mimeType })
                         });
-                        if (ocrResponse.ok) {
-                            const result = await ocrResponse.json();
-                            if (result && result.text && result.text.trim().length > 0) {
-                                extractedText = result.text.trim();
+                        if (ocrResp.status === 404) {
+                            ocrResp = await fetch('/.netlify/functions/ocr-extract', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ base64: uploadedBase64, mimeType })
+                            });
+                        }
+                        if (ocrResp.ok) {
+                            const result = await ocrResp.json();
+                            if (result && result.text) {
                                 document.getElementById('recapInput').value = result.text;
-                            } else {
-                                extractedText = fallbackImagePlaceholder;
-                                document.getElementById('recapInput').value = fallbackImagePlaceholder;
                             }
-                        } else {
-                            extractedText = fallbackImagePlaceholder;
-                            document.getElementById('recapInput').value = fallbackImagePlaceholder;
                         }
                     } catch (ocrErr) {
-                        console.warn("[OCR fallback] Falló la petición a /api/ocr-extract para imagen:", ocrErr);
-                        extractedText = fallbackImagePlaceholder;
-                        document.getElementById('recapInput').value = fallbackImagePlaceholder;
+                        console.warn("[OCR] Error en extracción preliminar:", ocrErr);
+                    }
+
+                    if (!textarea.value || !textarea.value.trim()) {
+                        textarea.value = `[Fotografía / Imagen del documento adjunta: ${fileName}]\nListo para análisis legal y OCR multimodal con Gemini.`;
                     }
                 } else {
                     throw new Error("Formato no soportado. Sube PDF, Word (.docx), Excel (.xlsx, .xls), texto (.txt, .csv, .md) o fotografías (.png, .jpg, .jpeg, .webp, .gif).");
                 }
 
-                textarea.value = extractedText.trim();
-                textarea.placeholder = "Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías...";
                 showDocPreview('file', fileName);
                 if (typeof showToast === 'function') {
                     const action = source === 'paste' ? 'pegado' : source === 'drop' ? 'arrastrado' : 'cargado';
                     showToast(`Archivo ${action}: ${fileName}`);
                 }
             } catch (error) {
-                console.error("Error leyendo archivo:", error);
-                document.getElementById('errorBox').innerText = "No se pudo extraer el texto. " + error.message;
+                console.error("Error procesando documento:", error);
+                document.getElementById('errorBox').innerText = "No se pudo preparar el archivo. " + error.message;
                 document.getElementById('errorBox').classList.remove('hidden');
-                textarea.placeholder = "Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías...";
                 clearDocPreview();
             } finally {
                 if (uploadBtn) {
@@ -55915,40 +56191,72 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
             return fullText;
         }
 
-        async function extractFirstPagesFromPdf(file, maxPages = 5) {
+        async function renderPdfPagesToCompressedParts(file, maxPages = 25) {
             try {
                 if (typeof pdfjsLib === 'undefined') return null;
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                if (!pdf || pdf.numPages <= maxPages) {
-                    return null;
-                }
-                const jspdfModule = window.jspdf || {};
-                const JsPDF = jspdfModule.jsPDF || window.jsPDF;
-                if (!JsPDF) return null;
+                if (!pdf || pdf.numPages === 0) return null;
 
-                const doc = new JsPDF({ unit: 'pt', format: 'a4' });
-                const count = Math.min(pdf.numPages, maxPages);
-                for (let i = 1; i <= count; i++) {
+                const parts = [];
+                const totalPages = pdf.numPages;
+                const pagesToRender = Math.min(totalPages, maxPages);
+                for (let i = 1; i <= pagesToRender; i++) {
                     const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 1.5 });
+                    const baseVp = page.getViewport({ scale: 1 });
+                    const scale = Math.min(1.15, 1050 / Math.max(baseVp.width, baseVp.height));
+                    const viewport = page.getViewport({ scale });
                     const canvas = document.createElement('canvas');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
                     const ctx = canvas.getContext('2d');
                     await page.render({ canvasContext: ctx, viewport }).promise;
 
-                    const imgData = canvas.toDataURL('image/jpeg', 0.85);
-                    if (i > 1) doc.addPage();
-                    doc.addImage(imgData, 'JPEG', 0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight());
+                    const imgData = canvas.toDataURL('image/jpeg', 0.52);
+                    const base64Data = imgData.split(',')[1];
+                    parts.push({
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: base64Data
+                        }
+                    });
                 }
-                const uri = doc.output('datauristring');
-                return uri.split(',')[1];
+                return { parts, totalPages, renderedPages: pagesToRender };
             } catch (err) {
-                console.warn("[OCR] Error preparando las 5 primeras páginas del PDF:", err);
+                console.warn("[OCR] Error renderizando páginas completas del PDF:", err);
                 return null;
             }
         }
+        window.renderPdfPagesToCompressedParts = renderPdfPagesToCompressedParts;
+
+        async function ensureFilePartsReady(uploadedFile) {
+            if (!uploadedFile) return [];
+            if (uploadedFile.ocrCompleted) return [];
+            if (uploadedFile.pageParts && uploadedFile.pageParts.length > 0) {
+                return uploadedFile.pageParts;
+            }
+            if (uploadedFile.file && (uploadedFile.type === 'application/pdf' || uploadedFile.name?.toLowerCase().endsWith('.pdf'))) {
+                const base64Len = uploadedFile.base64 ? uploadedFile.base64.length : 0;
+                if (base64Len > 3.5 * 1024 * 1024 || uploadedFile.isScanned) {
+                    const rendered = await renderPdfPagesToCompressedParts(uploadedFile.file, 25);
+                    if (rendered?.parts?.length) {
+                        uploadedFile.pageParts = rendered.parts;
+                        uploadedFile.base64 = "";
+                        return rendered.parts;
+                    }
+                }
+            }
+            if (uploadedFile.base64 && (uploadedFile.type?.startsWith('image/') || uploadedFile.type === 'application/pdf')) {
+                return [{
+                    inlineData: {
+                        mimeType: uploadedFile.type,
+                        data: uploadedFile.base64
+                    }
+                }];
+            }
+            return [];
+        }
+        window.ensureFilePartsReady = ensureFilePartsReady;
 
         async function compressImageForOcr(dataUrl, maxDim = 1600, quality = 0.85) {
             try {
@@ -56839,9 +57147,9 @@ ADDITIONAL NOTES:
             printBlock.innerText = payload?.printableReport || '';
             if (jsonBlock) jsonBlock.innerText = payload?.manualImportJson || JSON.stringify(payload?.manualImportPackage || {}, null, 2);
             if (exportBtn) {
-                exportBtn.disabled = false;
-                exportBtn.title = 'Exportar JSON';
-                exportBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                exportBtn.disabled = true;
+                exportBtn.classList.add('hidden');
+                exportBtn.style.display = 'none';
             }
             if (sendBtn) {
                 window.setDataBridgeTransmissionAvailability?.(getDataBridgeTransmissionVessels());
@@ -56869,39 +57177,87 @@ ADDITIONAL NOTES:
             if (jsonBlock) jsonBlock.innerText = '';
         }
 
-        async function runCommercialNlpMotor() {
-            const text = document.getElementById('recapInput').value.trim();
-            const btn = document.getElementById('commercialNlpBtn');
+        function stripOcrBoilerplate(text) {
+            if (!text) return '';
+            return text
+                .replace(/\[Documento PDF escaneado[\s\S]*?comprometan el éxito del viaje\.?/gi, '')
+                .replace(/\[Documento PDF escaneado[\s\S]*?\]/gi, '')
+                .replace(/Este archivo PDF parece estar escaneado[\s\S]*?(?:éxito del viaje\.?|\n\n)/gi, '');
+        }
+        window.stripOcrBoilerplate = stripOcrBoilerplate;
 
-            document.getElementById('errorBox').classList.add('hidden');
-            if (!text) {
-                document.getElementById('errorBox').innerText = "Pega texto extraído para ejecutar el Motor NPL independiente. No se envían capturas ni documentos al servidor.";
-                document.getElementById('errorBox').classList.remove('hidden');
+        async function runCommercialNlpMotor() {
+            return await analyzeDocument();
+        }
+        window.runCommercialNlpMotor = runCommercialNlpMotor;
+
+        async function performLocalContractAudit(text) {
+            return await analyzeDocument();
+        }
+        window.performLocalContractAudit = performLocalContractAudit;
+
+        function copyFullAuditReport() {
+            const proforma = document.getElementById('resProforma')?.innerText || '';
+            const riesgos = Array.from(document.querySelectorAll('#resRiesgos li')).map(li => `• ${li.innerText}`).join('\n');
+            const clausulas = Array.from(document.querySelectorAll('#resClausulas div')).map((el, i) => `[Cláusula ${i+1}]\n${el.innerText}`).join('\n\n');
+            const estrategia = document.getElementById('resEstrategia')?.innerText || '';
+            const email = document.getElementById('resEmail')?.value || '';
+            const masterHtml = document.getElementById('contenedor-informe-pdf')?.innerText || '';
+
+            const fullReport = masterHtml.trim() ? masterHtml : [
+                '=== INFORME DE AUDITORÍA CONTRACTUAL (SEACHARTER CORE PRO) ===',
+                '',
+                '--- I. RECOMENDACIÓN / DICTAMEN PRO-FORMA ---',
+                proforma,
+                '',
+                '--- II. RIESGOS IDENTIFICADOS (RED FLAGS) ---',
+                riesgos,
+                '',
+                '--- III. CLÁUSULAS DE PROTECCIÓN SUGERIDAS ---',
+                clausulas,
+                '',
+                '--- IV. ESTRATEGIA DE NEGOCIACIÓN ---',
+                estrategia,
+                '',
+                '--- V. BORRADOR DE RESPUESTA ---',
+                email
+            ].filter(Boolean).join('\n');
+
+            if (!fullReport.trim()) {
+                if (typeof showToast === 'function') showToast('No hay datos en el informe para copiar.', false, 'warning');
                 return;
             }
 
-            document.getElementById('emptyState').classList.add('hidden');
-            document.getElementById('resultsContent').classList.remove('hidden');
-            document.getElementById('loadingState').classList.remove('hidden');
-
-            const originalBtnHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando en memoria...';
-
-            try {
-                const payload = buildCommercialNlpLocalPayload(text);
-                renderCommercialNlpPanel(payload);
-                if (typeof showToast === 'function') showToast('Motor NPL: análisis completado. JSON e impresión disponibles.');
-            } catch (error) {
-                console.error(error);
-                document.getElementById('errorBox').innerText = error.message;
-                document.getElementById('errorBox').classList.remove('hidden');
-            } finally {
-                document.getElementById('loadingState').classList.add('hidden');
-                btn.disabled = false;
-                btn.innerHTML = originalBtnHtml;
+            if (navigator?.clipboard?.writeText) {
+                navigator.clipboard.writeText(fullReport).then(() => {
+                    if (typeof showToast === 'function') showToast('Informe de auditoría copiado al portapapeles.', false, 'success');
+                }).catch(() => {
+                    fallbackCopyAuditText(fullReport);
+                });
+            } else {
+                fallbackCopyAuditText(fullReport);
             }
         }
+
+        function fallbackCopyAuditText(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                if (typeof showToast === 'function') showToast('Informe de auditoría copiado al portapapeles.', false, 'success');
+            } catch (_) {
+                if (typeof showToast === 'function') showToast('No se pudo copiar el informe.', false, 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        window.copyFullAuditReport = copyFullAuditReport;
+        window.performLocalContractAudit = performLocalContractAudit;
 
         function printCommercialNlpReport() {
             const comparativeText = document.getElementById('commercial-nlp-comparative-block')?.textContent || '';
@@ -57060,6 +57416,7 @@ ADDITIONAL NOTES:
             if (errorBox) {
                 errorBox.innerText = message;
                 errorBox.classList.remove('hidden');
+                try { errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
             }
             if (typeof showToast === 'function') showToast(message, false, 'warning');
         }
@@ -57070,6 +57427,7 @@ ADDITIONAL NOTES:
         }
 
         function getStrictAuditGateError(data) {
+            if (data?.polizaAnalizada?.contenido) return '';
             const missingRequirement = STRICT_AUDIT_REQUIREMENTS.find(({ key }) => !hasStrictAuditData(data?.[key]));
             return missingRequirement?.message || '';
         }
@@ -57079,7 +57437,8 @@ ADDITIONAL NOTES:
             const policyStandard = State.charterPartyStandard
                 || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const normalizedPolicyText = toAuditText(policyText).trim();
-            const hasPolicy = Boolean(normalizedPolicyText);
+            const hasUploadedMedia = Boolean(State.uploadedFile?.base64 || State.uploadedFile?.pageParts?.length || State.uploadedFile?.file);
+            const hasPolicy = Boolean(normalizedPolicyText) || hasUploadedMedia;
 
             return {
                 puertosInforme: Object.keys(masterReportWorkflowState.portInfoReports || {}).length
@@ -57099,7 +57458,9 @@ ADDITIONAL NOTES:
                     ? {
                         tipo: policyStandard,
                         referencia: masterReportWorkflowState.legalAddendum?.reference || null,
-                        contenido: normalizedPolicyText
+                        contenido: normalizedPolicyText.length > 500
+                            ? '[Texto completo en contents]'
+                            : (normalizedPolicyText || `[Documento adjunto preparado para auditoría IA: ${State.uploadedFile?.name || 'archivo'}]`)
                     }
                     : null,
                 posicion: 'Fletador'
@@ -57178,11 +57539,17 @@ ADDITIONAL NOTES:
             const btn = document.getElementById('analyzeBtn');
             const activeTaskId = toAuditText(localStorage.getItem('legal_audit_task_id')).trim();
 
-            document.getElementById('errorBox').classList.add('hidden');
+            document.getElementById('errorBox')?.classList.add('hidden');
+
+            const hasUploadedMedia = Boolean(State.uploadedFile?.base64 || State.uploadedFile?.pageParts?.length || State.uploadedFile?.file);
+            if (!text && !hasUploadedMedia && !activeTaskId) {
+                showAuditGateError('⚠️ Bloqueado: Sube o pega un documento o contrato para auditar.');
+                return;
+            }
 
             const strictAuditData = buildStrictAuditSessionData(text);
             const strictAuditGateError = getStrictAuditGateError(strictAuditData);
-            if (!activeTaskId && strictAuditGateError) {
+            if (!activeTaskId && !text && !hasUploadedMedia && strictAuditGateError) {
                 showAuditGateError(strictAuditGateError);
                 return;
             }
@@ -57190,6 +57557,14 @@ ADDITIONAL NOTES:
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('resultsContent').classList.add('hidden');
             document.getElementById('loadingState').classList.remove('hidden');
+
+            const activeVesselPanel = document.getElementById('audit-active-vessel-panel');
+            const hasNominatedVessel = Boolean(State?.vessel && State?.dwt && !/^(?:No especificado|—|-)$/i.test(String(State.vessel).trim()));
+            if (activeVesselPanel && !hasNominatedVessel) {
+                activeVesselPanel.classList.add('hidden');
+                activeVesselPanel.style.setProperty('display', 'none', 'important');
+            }
+
             const docBadge = document.getElementById('doc-badge');
             if (docBadge) {
                 docBadge.innerText = '';
@@ -57261,16 +57636,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const parts = [];
                 parts.push({ text: "Analiza el siguiente documento y devuélveme la auditoría en formato JSON estructurado según el esquema del System Prompt. \n\nDOCUMENTO:\n" + text });
                 
-                // If there's an image photograph or a PDF document, include it as inlineData for native multimodal processing and OCR
-                const uploadedMimeType = toAuditText(State.uploadedFile?.type);
-                const uploadedBase64 = toAuditText(State.uploadedFile?.base64);
-                if (uploadedBase64 && (uploadedMimeType.startsWith('image/') || uploadedMimeType === 'application/pdf')) {
-                    parts.push({
-                        inlineData: {
-                            mimeType: uploadedMimeType,
-                            data: uploadedBase64
-                        }
-                    });
+                // Si el archivo adjunto tiene páginas preparadas o es una imagen/PDF, incluirlos como inlineData para procesamiento multimodal y OCR nativo.
+                // Si el OCR ya se completó o tenemos texto transcrito en #recapInput (> 120 caracteres o marcado como completado), jamás enviar imágenes pesadas para auditoría ultrarrápida (~15 KB)
+                const hasTranscribedText = Boolean(
+                    State.uploadedFile?.ocrCompleted ||
+                    text.includes('TEXTO TRANSCRITO DEL CONTRATO') ||
+                    text.trim().length > 120
+                );
+                const fileParts = !hasTranscribedText
+                    ? await ensureFilePartsReady(State.uploadedFile)
+                    : [];
+                if (fileParts.length > 0) {
+                    parts.push(...fileParts);
                 }
 
                 const payload = {
@@ -57285,76 +57662,327 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     sessionInstructions: dynamicSystemPrompt,
                     generationConfig: {
                         temperature: 0.2,
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "OBJECT",
-                            properties: {
-                                tipo_documento_detectado: { type: "STRING" },
-                                auditoria_contrato_html: { type: "STRING" },
-                                auditoria_operativa_html: { type: "STRING" },
-                                auditoria_armador: { type: "STRING" },
-                                auditoria_fletador: { type: "STRING" },
-                                comparativa_clausulas: {
-                                    type: "ARRAY",
-                                    items: {
-                                        type: "OBJECT",
-                                        properties: {
-                                            clausula: { type: "STRING" },
-                                            estandar: { type: "STRING" },
-                                            desviacion: { type: "STRING" },
-                                            impacto_armador: { type: "STRING" },
-                                            impacto_fletador: { type: "STRING" },
-                                            riesgo: { type: "STRING" },
-                                            cambio_solicitado: { type: "STRING" }
-                                        }
-                                    }
-                                },
-                                mapa_red_flags: { type: "ARRAY", items: { type: "STRING" } },
-                                detalles_sof: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        buque: { type: "STRING" },
-                                        puerto: { type: "STRING" },
-                                        carga: { type: "STRING" },
-                                        nor_tendered: { type: "STRING" }
-                                    }
-                                },
-                                laytime_excel_data: {
-                                    type: "ARRAY",
-                                    items: {
-                                        type: "OBJECT",
-                                        properties: {
-                                            Fecha: { type: "STRING" },
-                                            Desde: { type: "STRING" },
-                                            Hasta: { type: "STRING" },
-                                            Evento: { type: "STRING" },
-                                            Tiempo_Plancha_Contado: { type: "STRING" },
-                                            Argumento_Defensa: { type: "STRING" }
-                                        }
-                                    }
-                                },
-                                proforma: { type: "STRING" },
-                                riesgos: { type: "ARRAY", items: { type: "STRING" } },
-                                clausulas: { type: "ARRAY", items: { type: "STRING" } },
-                                estrategia: { type: "STRING" },
-                                email: { type: "STRING" }
-                            },
-                            required: ["tipo_documento_detectado", "auditoria_contrato_html", "auditoria_operativa_html", "comparativa_clausulas", "mapa_red_flags", "detalles_sof", "laytime_excel_data", "proforma", "riesgos", "clausulas", "estrategia", "email"]
-                        }
+                        responseMimeType: "application/json"
                     }
                 };
 
                 const loadingMessage = document.getElementById('audit-loading-message');
-                if (activeTaskId && loadingMessage) {
-                    loadingMessage.textContent = `Reanudando análisis en curso · Tarea ${activeTaskId.slice(0, 8)}`;
+                let result = {};
+                let detectedType = '';
+
+                // Dividir el texto limpio del contrato en bloques ligeros para las 4 fases
+                const cleanedContractText = String(text || '').trim();
+                const totalLen = cleanedContractText.length;
+                const midpoint = Math.floor(totalLen / 2);
+
+                // FASE 1: Primeros 12.000 chars + últimos 8.000 chars
+                let stage1Text = cleanedContractText;
+                if (totalLen > 20000) {
+                    const headText = cleanedContractText.slice(0, 12000);
+                    const tailText = cleanedContractText.slice(-8000);
+                    stage1Text = `${headText}\n\n[... SECCIÓN INTERMEDIA OMITIDA PARA METADATOS INICIALES ...]\n\n${tailText}`;
                 }
-                const data = activeTaskId
-                    ? await waitForLegalAuditTask(activeTaskId, payload?.dataBridgeSyncId)
-                    : await executeAsyncLegalAudit(payload);
-                const jsonText = toAuditText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
-                if (!jsonText) throw new Error('La IA no devolvió un resultado de auditoría válido.');
-                const result = JSON.parse(jsonText);
-                const detectedType = toAuditText(result.tipo_documento_detectado);
+
+                // FASE 2: Primera mitad del texto (máx 15.000 chars)
+                const firstHalfText = cleanedContractText.slice(0, Math.min(midpoint, 15000));
+
+                // FASE 3: Segunda mitad del texto (máx 15.000 chars)
+                const secondHalfRaw = cleanedContractText.slice(midpoint);
+                const secondHalfText = secondHalfRaw.length > 15000 ? secondHalfRaw.slice(0, 15000) : secondHalfRaw;
+
+                const makeStagePayload = (stageName, stageText, stageContext = null) => {
+                    return {
+                        ...payload,
+                        auditStage: stageName,
+                        stageContext: stageContext,
+                        contents: [{
+                            parts: [{ text: stageText }]
+                        }]
+                    };
+                };
+
+                if (activeTaskId) {
+                    if (loadingMessage) {
+                        loadingMessage.textContent = `Reanudando análisis en curso · Tarea ${activeTaskId.slice(0, 8)}`;
+                    }
+                    const data = await waitForLegalAuditTask(activeTaskId, payload?.dataBridgeSyncId);
+                    const jsonText = toAuditText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+                    if (!jsonText) throw new Error('La IA no devolvió un resultado de auditoría válido.');
+                    result = JSON.parse(jsonText);
+                    detectedType = toAuditText(result.tipo_documento_detectado);
+                } else {
+                    // ARQUITECTURA EN 4 FASES LIGERAS POR BLOQUES DE TEXTO:
+                    // FASE 1 (25% — auditStage: 'stage1_metadata'):
+                    if (loadingMessage) loadingMessage.textContent = 'Fase 1/4 (25%): Extrayendo términos clave y dictamen ejecutivo...';
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Fase 1/4 (25%)...</span>';
+                    const payloadStage1 = makeStagePayload('stage1_metadata', "Analiza los términos clave de este contrato y extrae metadatos y dictamen pro-forma en JSON:\n\n" + stage1Text);
+                    const data1 = await executeAsyncLegalAudit(payloadStage1);
+                    const jsonText1 = toAuditText(data1?.candidates?.[0]?.content?.parts?.[0]?.text);
+                    if (!jsonText1) throw new Error('La IA no devolvió los metadatos de la Fase 1.');
+                    const result1 = JSON.parse(jsonText1);
+                    Object.assign(result, result1);
+
+                    detectedType = toAuditText(result.tipo_documento_detectado);
+                    const docBadge = document.getElementById('doc-badge');
+                    if (docBadge && detectedType) {
+                        docBadge.innerText = detectedType;
+                        docBadge.classList.remove('hidden');
+                    }
+
+                    // Ocultar ficha técnica de buque si no hay buque nominado
+                    const activeVesselPanel = document.getElementById('audit-active-vessel-panel');
+                    const hasNominatedVessel = Boolean(State?.vessel && State?.dwt && !/^(?:No especificado|—|-)$/i.test(String(State.vessel).trim()));
+                    if (activeVesselPanel && (!hasNominatedVessel || !/buque|vessel/i.test(detectedType))) {
+                        activeVesselPanel.classList.add('hidden');
+                        activeVesselPanel.style.setProperty('display', 'none', 'important');
+                    }
+
+                    // Mostrar contenedor de resultados progresivamente
+                    const reportContainer = document.getElementById('contenedor-informe-pdf');
+                    const legacySections = document.querySelectorAll('#resultsContent .legacy-audit-section');
+                    if (reportContainer) reportContainer.innerHTML = '';
+                    legacySections.forEach(section => section.classList.remove('hidden'));
+
+                    const buildComparativaRowsHtml = (clausesList) => {
+                        if (!Array.isArray(clausesList) || clausesList.length === 0) return '';
+                        return clausesList.map(item => {
+                            const riesgo = String(item.riesgo || 'Medio').toUpperCase();
+                            const badgeColor = /ALTO|CR[IÍ]TICO/i.test(riesgo)
+                                ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                : (/BAJO/i.test(riesgo) ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200');
+                            return `
+                                <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                                    <td class="p-2.5 font-semibold text-slate-800 whitespace-nowrap align-top">${escapeHtml(item.clausula || '—')}</td>
+                                    <td class="p-2.5 text-slate-600 align-top">${escapeHtml(item.estandar || '—')}</td>
+                                    <td class="p-2.5 text-slate-700 align-top">${escapeHtml(item.desviacion || '—')}</td>
+                                    <td class="p-2.5 text-slate-700 align-top">
+                                        ${item.impacto_armador ? `<div><span class="font-semibold text-slate-800">Armador:</span> ${escapeHtml(item.impacto_armador)}</div>` : ''}
+                                        ${item.impacto_fletador ? `<div><span class="font-semibold text-slate-800">Fletador:</span> ${escapeHtml(item.impacto_fletador)}</div>` : ''}
+                                    </td>
+                                    <td class="p-2.5 align-top whitespace-nowrap">
+                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${escapeHtml(item.riesgo || 'Medio')}</span>
+                                    </td>
+                                    <td class="p-2.5 text-teal-900 font-medium align-top">${escapeHtml(item.cambio_solicitado || '—')}</td>
+                                </tr>
+                            `;
+                        }).join('');
+                    };
+
+                    const buildComparativaTableHtml = (clausesList, extraNotice = '') => {
+                        const rows = buildComparativaRowsHtml(clausesList);
+                        if (!rows && !extraNotice) return '';
+                        return `
+                            <div class="mt-4 pt-3 border-t border-teal-200/80">
+                                <h5 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-table-columns text-teal-700"></i> Comparativa Cláusula por Cláusula vs Estándar de Mercado
+                                </h5>
+                                <div class="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs bg-white">
+                                    <table class="w-full text-left text-xs border-collapse">
+                                        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                                            <tr>
+                                                <th class="p-2.5">Cláusula</th>
+                                                <th class="p-2.5">Estándar</th>
+                                                <th class="p-2.5">Desviación Detectada</th>
+                                                <th class="p-2.5">Impacto Operativo</th>
+                                                <th class="p-2.5">Nivel Riesgo</th>
+                                                <th class="p-2.5">Cambio Solicitado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${rows}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                ${extraNotice}
+                            </div>
+                        `;
+                    };
+
+                    const renderProformaBlock = (compContent) => `
+                        <div class="space-y-4">
+                            <div class="rounded-lg bg-teal-50/70 border border-teal-200 p-4">
+                                <h4 class="font-bold text-teal-950 text-sm mb-2 flex items-center gap-2">
+                                    <i class="fa-solid fa-file-contract text-teal-700"></i> Dictamen Contractual: ${escapeHtml(detectedType || 'Auditoría IA')}
+                                </h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mb-3">
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Vendedor / Armador (Seller / Owner):</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.vendedor_armador || 'Según documento')}</span>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Comprador / Fletador (Buyer / Charterer):</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.comprador_fletador || 'Según documento')}</span>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Mercancía, Cantidad & Precios:</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.mercancia_cantidad || 'Según documento')}</span>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Incoterm & Puertos:</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.incoterm_puertos || 'Según documento')}</span>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Condiciones de Pago & Monto:</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.condiciones_pago || 'Según documento')}</span>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                        <strong class="text-teal-900 block font-semibold">Jurisdicción & Arbitraje:</strong>
+                                        <span class="text-slate-800 font-medium">${escapeHtml(result.jurisdiccion_arbitraje || 'Según documento')}</span>
+                                    </div>
+                                </div>
+                                ${result.proforma ? `<div class="text-xs text-slate-700 leading-relaxed pt-2.5 border-t border-teal-100">${formatMarkdownBold(result.proforma)}</div>` : ''}
+                                <div id="comparativa-clausulas-slot">${compContent}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    document.getElementById('resProforma').innerHTML = renderProformaBlock(`
+                        <div class="mt-4 pt-3 border-t border-teal-200/80 text-xs text-teal-800 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-notch fa-spin text-teal-600"></i> Analizando cláusulas críticas - Parte 1 (Fase 2/4)...
+                        </div>
+                    `);
+                    document.getElementById('resRiesgos').innerHTML = `
+                        <li class="text-xs text-slate-500 italic flex items-center gap-2 list-none">
+                            <i class="fa-solid fa-circle-notch fa-spin text-red-500"></i> Identificando riesgos críticos - Parte 1 (Fase 2/4)...
+                        </li>
+                    `;
+                    document.getElementById('resClausulas').innerHTML = `
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs text-slate-500 italic flex items-center gap-2">
+                            <i class="fa-solid fa-circle-notch fa-spin text-green-500"></i> Redactando Rider Clauses en inglés (Fase 4/4)...
+                        </div>
+                    `;
+                    document.getElementById('resEstrategia').innerHTML = `
+                        <span class="text-xs text-slate-500 italic flex items-center gap-2">
+                            <i class="fa-solid fa-circle-notch fa-spin text-teal-500"></i> Sintetizando estrategia de negociación (Fase 4/4)...
+                        </span>
+                    `;
+                    document.getElementById('resEmail').value = '// Redactando borrador de respuesta comercial y legal en inglés (Fase 4/4)...';
+
+                    document.getElementById('emptyState')?.classList.add('hidden');
+                    document.getElementById('loadingState')?.classList.add('hidden');
+                    document.getElementById('resultsContent')?.classList.remove('hidden');
+
+                    // FASE 2 (50% — auditStage: 'stage2_clauses_part1'):
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Fase 2/4 (50%)...</span>';
+                    const payloadStage2 = makeStagePayload(
+                        'stage2_clauses_part1',
+                        "Analiza la PARTE 1 del contrato y extrae 3-4 cláusulas críticas (comparativa_clausulas) y los 3 primeros riesgos principales (riesgos):\n\n" + firstHalfText,
+                        { metadata: { tipo_documento: result.tipo_documento_detectado, vendedor: result.vendedor_armador, comprador: result.comprador_fletador, mercancia: result.mercancia_cantidad, incoterm: result.incoterm_puertos, condiciones_pago: result.condiciones_pago, jurisdiccion: result.jurisdiccion_arbitraje } }
+                    );
+                    const data2 = await executeAsyncLegalAudit(payloadStage2);
+                    const jsonText2 = toAuditText(data2?.candidates?.[0]?.content?.parts?.[0]?.text);
+                    if (!jsonText2) throw new Error('La IA no devolvió las cláusulas y riesgos de la Fase 2.');
+                    const result2 = JSON.parse(jsonText2);
+
+                    let allClauses = Array.isArray(result2.comparativa_clausulas) ? [...result2.comparativa_clausulas] : [];
+                    let allRisks = Array.isArray(result2.riesgos) && result2.riesgos.length > 0
+                        ? [...result2.riesgos]
+                        : (Array.isArray(result2.mapa_red_flags) ? [...result2.mapa_red_flags] : []);
+
+                    const compSlot = document.getElementById('comparativa-clausulas-slot');
+                    if (compSlot) {
+                        compSlot.innerHTML = buildComparativaTableHtml(allClauses, `
+                            <div class="mt-2 text-xs text-teal-700 italic flex items-center gap-2">
+                                <i class="fa-solid fa-circle-notch fa-spin text-teal-600"></i> Analizando cláusulas críticas - Parte 2 (Fase 3/4)...
+                            </div>
+                        `);
+                    }
+
+                    document.getElementById('resRiesgos').innerHTML = allRisks.length > 0
+                        ? allRisks.map(r => `<li class="leading-relaxed mb-1.5">${formatMarkdownBold(r)}</li>`).join('') + `
+                            <li class="text-xs text-slate-500 italic flex items-center gap-2 list-none mt-2">
+                                <i class="fa-solid fa-circle-notch fa-spin text-red-500"></i> Analizando riesgos adicionales - Parte 2 (Fase 3/4)...
+                            </li>
+                          `
+                        : '<li class="text-slate-500 italic">Analizando riesgos (Fase 3/4)...</li>';
+
+                    // FASE 3 (75% — auditStage: 'stage3_clauses_part2'):
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Fase 3/4 (75%)...</span>';
+                    const payloadStage3 = makeStagePayload(
+                        'stage3_clauses_part2',
+                        "Analiza la PARTE 2 del contrato y extrae 3-4 cláusulas críticas adicionales (comparativa_clausulas), los siguientes 3 riesgos (riesgos), y si detectas condiciones de pago o arbitraje más precisas, inclúyelas:\n\n" + secondHalfText,
+                        { metadata: { tipo_documento: result.tipo_documento_detectado, vendedor: result.vendedor_armador, comprador: result.comprador_fletador } }
+                    );
+                    const data3 = await executeAsyncLegalAudit(payloadStage3);
+                    const jsonText3 = toAuditText(data3?.candidates?.[0]?.content?.parts?.[0]?.text);
+                    if (!jsonText3) throw new Error('La IA no devolvió las cláusulas y riesgos de la Fase 3.');
+                    const result3 = JSON.parse(jsonText3);
+
+                    if (Array.isArray(result3.comparativa_clausulas)) {
+                        allClauses.push(...result3.comparativa_clausulas);
+                    }
+                    const stage3Risks = Array.isArray(result3.riesgos) && result3.riesgos.length > 0
+                        ? result3.riesgos
+                        : (Array.isArray(result3.mapa_red_flags) ? result3.mapa_red_flags : []);
+                    if (stage3Risks.length > 0) {
+                        allRisks.push(...stage3Risks);
+                    }
+
+                    // Actualizar condiciones_pago o jurisdiccion si Fase 3 aportó datos más específicos
+                    if (result3.condiciones_pago && result3.condiciones_pago.trim() && result3.condiciones_pago !== 'Según documento') {
+                        result.condiciones_pago = result3.condiciones_pago;
+                    }
+                    if (result3.jurisdiccion_arbitraje && result3.jurisdiccion_arbitraje.trim() && result3.jurisdiccion_arbitraje !== 'Según documento') {
+                        result.jurisdiccion_arbitraje = result3.jurisdiccion_arbitraje;
+                    }
+
+                    // Re-renderizar Proforma con los metadatos posiblemente actualizados y la tabla completa de 6-8 cláusulas
+                    document.getElementById('resProforma').innerHTML = renderProformaBlock(
+                        buildComparativaTableHtml(allClauses, `
+                            <div class="mt-2 text-xs text-teal-700 italic flex items-center gap-2">
+                                <i class="fa-solid fa-circle-notch fa-spin text-teal-600"></i> Redactando Rider Clauses y estrategia de negociación (Fase 4/4)...
+                            </div>
+                        `)
+                    );
+
+                    // Re-renderizar Riesgos con los 5-6 riesgos completos
+                    document.getElementById('resRiesgos').innerHTML = allRisks.length > 0
+                        ? allRisks.map(r => `<li class="leading-relaxed mb-1.5">${formatMarkdownBold(r)}</li>`).join('')
+                        : '<li class="text-slate-500 italic">No se identificaron riesgos adicionales.</li>';
+
+                    // FASE 4 (100% — auditStage: 'stage4_mitigation'):
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i><span>Fase 4/4 (90%)...</span>';
+                    const mitigationPrompt = `Genera las 3 cláusulas Rider de protección en inglés, la estrategia de negociación y el borrador de email en inglés basándote en esta auditoría:
+
+TIPO DOCUMENTO: ${result.tipo_documento_detectado}
+VENDEDOR / ARMADOR: ${result.vendedor_armador}
+COMPRADOR / FLETADOR: ${result.comprador_fletador}
+MERCANCÍA: ${result.mercancia_cantidad}
+INCOTERM / PUERTOS: ${result.incoterm_puertos}
+CONDICIONES DE PAGO: ${result.condiciones_pago}
+JURISDICCIÓN / ARBITRAJE: ${result.jurisdiccion_arbitraje}
+
+RIESGOS DETECTADOS (RED FLAGS):
+${allRisks.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+CLÁUSULAS CRÍTICAS Y DESVIACIONES:
+${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviación: ${c.desviacion || ''} | Riesgo: ${c.riesgo || ''} | Cambio: ${c.cambio_solicitado || ''}`).join('\n')}
+`;
+
+                    const payloadStage4 = makeStagePayload(
+                        'stage4_mitigation',
+                        mitigationPrompt,
+                        { metadata: result, risks: allRisks, clauses: allClauses }
+                    );
+                    const data4 = await executeAsyncLegalAudit(payloadStage4);
+                    const jsonText4 = toAuditText(data4?.candidates?.[0]?.content?.parts?.[0]?.text);
+                    if (!jsonText4) throw new Error('La IA no devolvió la estrategia y cláusulas de la Fase 4.');
+                    const result4 = JSON.parse(jsonText4);
+
+                    result.clausulas = Array.isArray(result4.clausulas) ? result4.clausulas : [];
+                    result.estrategia = result4.estrategia || '';
+                    result.email = result4.email || '';
+                    result.comparativa_clausulas = allClauses;
+                    result.riesgos = allRisks;
+                    result.mapa_red_flags = allRisks;
+
+                    // Quitar spinner final de la tabla comparativa
+                    const finalCompSlot = document.getElementById('comparativa-clausulas-slot');
+                    if (finalCompSlot) {
+                        finalCompSlot.innerHTML = buildComparativaTableHtml(allClauses, '');
+                    }
+                }
+                detectedType = toAuditText(result.tipo_documento_detectado);
                 const isContractAudit = /GENCON|ASBATANKVOY|P[oó]liza|Recap|Charter|Fletamento/i.test(detectedType);
                 const contractAuditHtml = toAuditText(result.auditoria_contrato_html);
                 const operationalAuditHtml = toAuditText(result.auditoria_operativa_html || result.auditoria_fletador || result.auditoria_armador);
@@ -57381,34 +58009,142 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     docBadge.classList.remove('hidden');
                 }
 
+                // Modo Contrato / Documento: Ocultar ficha técnica de buque si no hay buque nominado
+                const activeVesselPanel = document.getElementById('audit-active-vessel-panel');
+                const hasNominatedVessel = Boolean(State?.vessel && State?.dwt && !/^(?:No especificado|—|-)$/i.test(String(State.vessel).trim()));
+                if (activeVesselPanel && (!hasNominatedVessel || !/buque|vessel/i.test(detectedType))) {
+                    activeVesselPanel.classList.add('hidden');
+                    activeVesselPanel.style.setProperty('display', 'none', 'important');
+                }
+
+                const vendedor = result.vendedor_armador || '';
+                const comprador = result.comprador_fletador || '';
+                const mercancia = result.mercancia_cantidad || '';
+                const incotermPuertos = result.incoterm_puertos || '';
+                const condicionesPago = result.condiciones_pago || '';
+                const jurisdiccion = result.jurisdiccion_arbitraje || '';
+
+                let comparativaHtml = '';
+                if (Array.isArray(result.comparativa_clausulas) && result.comparativa_clausulas.length > 0) {
+                    const rows = result.comparativa_clausulas.map(item => {
+                        const riesgo = String(item.riesgo || 'Medio').toUpperCase();
+                        const badgeColor = /ALTO|CR[IÍ]TICO/i.test(riesgo)
+                            ? 'bg-rose-100 text-rose-800 border-rose-200'
+                            : (/BAJO/i.test(riesgo) ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200');
+                        return `
+                            <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                                <td class="p-2.5 font-semibold text-slate-800 whitespace-nowrap align-top">${escapeHtml(item.clausula || '—')}</td>
+                                <td class="p-2.5 text-slate-600 align-top">${escapeHtml(item.estandar || '—')}</td>
+                                <td class="p-2.5 text-slate-700 align-top">${escapeHtml(item.desviacion || '—')}</td>
+                                <td class="p-2.5 text-slate-700 align-top">
+                                    ${item.impacto_armador ? `<div><span class="font-semibold text-slate-800">Armador:</span> ${escapeHtml(item.impacto_armador)}</div>` : ''}
+                                    ${item.impacto_fletador ? `<div><span class="font-semibold text-slate-800">Fletador:</span> ${escapeHtml(item.impacto_fletador)}</div>` : ''}
+                                </td>
+                                <td class="p-2.5 align-top whitespace-nowrap">
+                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeColor}">${escapeHtml(item.riesgo || 'Medio')}</span>
+                                </td>
+                                <td class="p-2.5 text-teal-900 font-medium align-top">${escapeHtml(item.cambio_solicitado || '—')}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    comparativaHtml = `
+                        <div class="mt-4 pt-3 border-t border-teal-200/80">
+                            <h5 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                                <i class="fa-solid fa-table-columns text-teal-700"></i> Comparativa Cláusula por Cláusula vs Estándar de Mercado
+                            </h5>
+                            <div class="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs bg-white">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                                        <tr>
+                                            <th class="p-2.5">Cláusula</th>
+                                            <th class="p-2.5">Estándar</th>
+                                            <th class="p-2.5">Desviación Detectada</th>
+                                            <th class="p-2.5">Impacto Operativo</th>
+                                            <th class="p-2.5">Nivel Riesgo</th>
+                                            <th class="p-2.5">Cambio Solicitado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rows}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const proformaHtml = `
+                    <div class="space-y-4">
+                        <div class="rounded-lg bg-teal-50/70 border border-teal-200 p-4">
+                            <h4 class="font-bold text-teal-950 text-sm mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-file-contract text-teal-700"></i> Dictamen Contractual: ${escapeHtml(detectedType || 'Auditoría IA')}
+                            </h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mb-3">
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Vendedor / Armador (Seller / Owner):</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(vendedor || 'Según documento')}</span>
+                                </div>
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Comprador / Fletador (Buyer / Charterer):</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(comprador || 'Según documento')}</span>
+                                </div>
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Mercancía, Cantidad & Precios:</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(mercancia || 'Según documento')}</span>
+                                </div>
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Incoterm & Puertos:</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(incotermPuertos || 'Según documento')}</span>
+                                </div>
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Condiciones de Pago & Monto:</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(condicionesPago || 'Según documento')}</span>
+                                </div>
+                                <div class="bg-white p-2.5 rounded border border-teal-100 shadow-2xs">
+                                    <strong class="text-teal-900 block font-semibold">Jurisdicción & Arbitraje:</strong>
+                                    <span class="text-slate-800 font-medium">${escapeHtml(jurisdiccion || 'Según documento')}</span>
+                                </div>
+                            </div>
+                            ${result.proforma ? `<div class="text-xs text-slate-700 leading-relaxed pt-2.5 border-t border-teal-100">${formatMarkdownBold(result.proforma)}</div>` : ''}
+                            ${comparativaHtml}
+                        </div>
+                    </div>
+                `;
+
                 const reportContainer = document.getElementById('contenedor-informe-pdf');
                 const excelDownloadContainer = document.getElementById('excel-download-container');
                 const legacySections = document.querySelectorAll('#resultsContent .legacy-audit-section');
-                const hasMasterContractReport = isContractAudit && contractAuditHtml.trim();
                 if (reportContainer) {
-                    reportContainer.innerHTML = hasMasterContractReport
-                        ? contractAuditHtml
-                        : (operationalAuditHtml ? `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 text-sm text-slate-700 leading-relaxed">${operationalAuditHtml}</div>` : '');
+                    reportContainer.innerHTML = '';
                 }
-                legacySections.forEach(section => section.classList.toggle('hidden', hasMasterContractReport || Boolean(operationalAuditHtml)));
+                // Las 5 tarjetas se muestran siempre pobladas con los datos reales de la IA
+                legacySections.forEach(section => section.classList.remove('hidden'));
                 if (excelDownloadContainer) {
                     excelDownloadContainer.classList.toggle('hidden', !laytimeExcelData.length);
                 }
 
-                document.getElementById('resProforma').innerHTML = armadorAudit;
-                const auditRisks = Array.isArray(result.riesgos) ? result.riesgos : [];
+                document.getElementById('resProforma').innerHTML = proformaHtml;
+                const auditRisks = Array.isArray(result.riesgos) && result.riesgos.length > 0 
+                    ? result.riesgos 
+                    : (Array.isArray(result.mapa_red_flags) ? result.mapa_red_flags : []);
                 const auditClauses = Array.isArray(result.clausulas) ? result.clausulas : [];
-                document.getElementById('resRiesgos').innerHTML = fletadorAudit ? `<li>${fletadorAudit}</li>` : auditRisks.map(r => `<li>${formatMarkdownBold(r)}</li>`).join('');
-                document.getElementById('resClausulas').innerHTML = auditClauses.map(c => `
-                    <div class="bg-slate-50 p-4 rounded border border-slate-200">
-                        <p class="text-sm font-mono text-slate-800 whitespace-pre-wrap">${formatMarkdownBold(c)}</p>
-                    </div>
-                `).join('');
+                document.getElementById('resRiesgos').innerHTML = auditRisks.length > 0
+                    ? auditRisks.map(r => `<li class="leading-relaxed mb-1.5">${formatMarkdownBold(r)}</li>`).join('')
+                    : (fletadorAudit ? `<li>${fletadorAudit}</li>` : '<li class="text-slate-500 italic">No se identificaron riesgos críticos.</li>');
+                document.getElementById('resClausulas').innerHTML = auditClauses.length > 0
+                    ? auditClauses.map((c, idx) => `
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-2xs">
+                            <strong class="text-xs font-bold text-slate-800 block mb-1">Cláusula de Protección #${idx + 1}</strong>
+                            <p class="text-xs font-mono text-slate-800 whitespace-pre-wrap leading-relaxed">${formatMarkdownBold(c)}</p>
+                        </div>
+                    `).join('')
+                    : '<p class="text-xs text-slate-500 italic">Sin cláusulas adicionales.</p>';
 
                 document.getElementById('resEstrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
                     : formatMarkdownBold(result.estrategia || '');
-                document.getElementById('resEmail').value = toAuditText(result.email);
+                document.getElementById('resEmail').value = toAuditText(result.email || '');
 
                 // Actualizar identificador de referencia y rellenar vista imprimible
                 const ref = getSafeActiveContractRef();
@@ -57419,12 +58155,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 document.getElementById('print-audit-date').innerText = currentDate;
                 document.getElementById('print-audit-est-id').innerText = fullRefId;
                 
-                document.getElementById('print-audit-proforma').innerHTML = hasMasterContractReport
-                    ? contractAuditHtml
-                    : (operationalAuditHtml || armadorAudit);
-                document.getElementById('print-audit-riesgos').innerHTML = hasMasterContractReport || operationalAuditHtml
-                    ? ''
-                    : (fletadorAudit ? `<li>${fletadorAudit}</li>` : auditRisks.map(r => `<li>${formatMarkdownBold(r)}</li>`).join(''));
+                document.getElementById('print-audit-proforma').innerHTML = proformaHtml;
+                document.getElementById('print-audit-riesgos').innerHTML = auditRisks.map(r => `<li>${formatMarkdownBold(r)}</li>`).join('');
                 document.getElementById('print-audit-clausulas').innerHTML = auditClauses.map(c => `
                     <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 8px;">
                         <p style="font-size: 8.5pt; color: #1e293b; font-family: monospace; white-space: pre-wrap; margin: 0;">${formatMarkdownBold(c)}</p>
@@ -57433,7 +58165,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 document.getElementById('print-audit-estrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
                     : formatMarkdownBold(result.estrategia || '');
-                document.getElementById('print-audit-email').innerText = toAuditText(result.email);
+                document.getElementById('print-audit-email').innerText = toAuditText(result.email || '');
 
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('resultsContent').classList.remove('hidden');
@@ -57441,10 +58173,28 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             } catch (error) {
                 console.error(error);
-                document.getElementById('errorBox').innerText = error.message;
-                document.getElementById('errorBox').classList.remove('hidden');
-                document.getElementById('loadingState').classList.add('hidden');
-                document.getElementById('emptyState').classList.remove('hidden');
+                const errorBox = document.getElementById('errorBox');
+                if (errorBox) {
+                    errorBox.innerText = error.message || 'Error durante la auditoría.';
+                    errorBox.classList.remove('hidden');
+                    try { errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+                }
+                document.getElementById('loadingState')?.classList.add('hidden');
+                document.getElementById('emptyState')?.classList.add('hidden');
+                document.getElementById('resultsContent')?.classList.remove('hidden');
+                const reportContainer = document.getElementById('contenedor-informe-pdf');
+                if (reportContainer) {
+                    reportContainer.innerHTML = `
+                        <div class="rounded-xl border border-red-300 bg-red-50 p-6 text-red-900 shadow-sm animate-fadeIn">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i class="fa-solid fa-triangle-exclamation text-xl text-red-600"></i>
+                                <h3 class="font-bold text-base text-red-800">Error durante la Auditoría del Contrato</h3>
+                            </div>
+                            <p class="text-sm text-red-700 leading-relaxed">${escapeHtml(error.message || 'No se pudo completar la auditoría.')}</p>
+                            <p class="text-xs text-red-500 mt-2">Verifica la conexión con el servicio de IA o inténtalo de nuevo.</p>
+                        </div>
+                    `;
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalBtnHtml;
