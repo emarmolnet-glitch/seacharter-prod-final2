@@ -48949,9 +48949,54 @@ function scheduleReactiveEngine() {
             document.getElementById('ai-modal').classList.remove('hidden', 'pointer-events-none');
         }
 
+        function closeExecutiveReport() {
+            const reportRoot = document.getElementById('voyage-executive-report-root');
+            if (reportRoot) {
+                reportRoot.classList.add('hidden', 'pointer-events-none');
+                reportRoot.style.setProperty('display', 'none', 'important');
+                reportRoot.style.setProperty('pointer-events', 'none', 'important');
+            }
+            const aiModal = document.getElementById('ai-modal');
+            if (aiModal) {
+                aiModal.classList.add('hidden', 'pointer-events-none');
+                aiModal.style.setProperty('display', 'none', 'important');
+                aiModal.style.setProperty('pointer-events', 'none', 'important');
+            }
+            if (typeof window.mountVoyageExecutiveReport === 'function') {
+                try {
+                    window.mountVoyageExecutiveReport(reportRoot || document.getElementById('voyage-executive-report-root'), {
+                        isOpen: false,
+                        isClientMode: Boolean(window.isExecutiveClientMode),
+                        voyageData: window.State
+                    });
+                } catch (e) {
+                    console.warn('Error in closeExecutiveReport mount:', e);
+                }
+            }
+            document.body.classList.remove('is-printing-modal', 'print-report-mode', 'print-client-mode', 'printing-executive-report', 'overflow-hidden');
+            document.body.style.overflow = '';
+            window.isPrinting = false;
+            window.isExecutiveReportOpen = false;
+
+            document.querySelectorAll('#btn-executive-report, #btn-executive-report-summary, #btn-mode-exec, #btn-mode-tech, [data-executive-report-action]').forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('pointer-events-none', 'opacity-50');
+                btn.style.pointerEvents = 'auto';
+            });
+        }
+        window.closeExecutiveReport = closeExecutiveReport;
+
         function closeAIModal() {
-            document.getElementById('ai-modal').classList.remove('light-mode');
-            document.getElementById('ai-modal').classList.add('hidden', 'pointer-events-none');
+            if (typeof window.closeExecutiveReport === 'function') {
+                window.closeExecutiveReport();
+            }
+            const modal = document.getElementById('ai-modal');
+            if (modal) {
+                modal.classList.remove('light-mode');
+                modal.classList.add('hidden', 'pointer-events-none');
+                modal.style.setProperty('display', 'none', 'important');
+                modal.style.setProperty('pointer-events', 'none', 'important');
+            }
         }
 
         // --- FUNCIONES DEL MODAL FAQ Y MANUAL DE USUARIO ---
@@ -52400,16 +52445,31 @@ Example:
         window.toggleExecutiveReportLanguage = toggleExecutiveReportLanguage;
 
         function setExecutiveClientMode(clientMode) {
+            window.isPrinting = false;
+            document.body.classList.remove('is-printing-modal', 'print-report-mode', 'print-client-mode', 'printing-executive-report', 'overflow-hidden');
+            document.body.style.overflow = '';
+            document.querySelectorAll('#btn-executive-report, #btn-executive-report-summary, #btn-mode-exec, #btn-mode-tech, [data-executive-report-action]').forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('pointer-events-none', 'opacity-50');
+                btn.style.pointerEvents = 'auto';
+            });
             window.isExecutiveClientMode = Boolean(clientMode);
             if (typeof window.mountVoyageExecutiveReport === 'function') {
-                const reportRoot = document.getElementById('voyage-executive-report-root');
-                if (reportRoot) {
-                    window.mountVoyageExecutiveReport(reportRoot, {
-                        isClientMode: window.isExecutiveClientMode,
-                        voyageData: window.State
-                    });
-                    return;
+                let reportRoot = document.getElementById('voyage-executive-report-root');
+                if (!reportRoot) {
+                    reportRoot = document.createElement('div');
+                    reportRoot.id = 'voyage-executive-report-root';
+                    document.body.appendChild(reportRoot);
                 }
+                reportRoot.classList.remove('hidden', 'pointer-events-none');
+                reportRoot.style.setProperty('display', 'block', 'important');
+                reportRoot.style.setProperty('pointer-events', 'auto', 'important');
+                window.mountVoyageExecutiveReport(reportRoot, {
+                    isOpen: true,
+                    isClientMode: window.isExecutiveClientMode,
+                    voyageData: window.State
+                });
+                return;
             }
             const reportMode = typeof getOperacionModo === 'function' ? getOperacionModo() : 'SPOT';
             if (reportMode === 'COA') {
@@ -52530,6 +52590,16 @@ Example:
         }
 
         function generateExecutiveReport() {
+            window.isPrinting = false;
+            window.isExecutiveReportOpen = true;
+            document.body.classList.remove('is-printing-modal', 'print-report-mode', 'print-client-mode', 'printing-executive-report', 'overflow-hidden');
+            document.body.style.overflow = '';
+            document.querySelectorAll('#btn-executive-report, #btn-executive-report-summary, #btn-mode-exec, #btn-mode-tech, [data-executive-report-action]').forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('pointer-events-none', 'opacity-50');
+                btn.style.pointerEvents = 'auto';
+            });
+
             if (typeof runEngine === 'function') runEngine();
             if (State.coreValidation?.blocked) {
                 alert(`Kill-switch activo:\n- ${State.coreValidation.messages.join('\n- ')}`);
@@ -52576,6 +52646,9 @@ Example:
                     reportRoot.id = 'voyage-executive-report-root';
                     document.body.appendChild(reportRoot);
                 }
+                reportRoot.classList.remove('hidden', 'pointer-events-none');
+                reportRoot.style.setProperty('display', 'block', 'important');
+                reportRoot.style.setProperty('pointer-events', 'auto', 'important');
                 window.mountVoyageExecutiveReport(reportRoot, {
                     isOpen: true,
                     isClientMode: Boolean(window.isExecutiveClientMode),
@@ -53244,6 +53317,12 @@ Example:
             document.getElementById('ai-modal-loader').classList.add('hidden');
             document.getElementById('ai-modal-content').innerHTML = reportHTML;
             document.getElementById('ai-modal-content').classList.remove('hidden');
+            const aiModal = document.getElementById('ai-modal');
+            if (aiModal) {
+                aiModal.classList.remove('hidden', 'pointer-events-none');
+                aiModal.style.setProperty('display', 'flex', 'important');
+                aiModal.style.setProperty('pointer-events', 'auto', 'important');
+            }
             if (typeof window.mountVisualStowageInExecutiveModal === 'function') {
                 try {
                     window.mountVisualStowageInExecutiveModal('voyage-visual-stowage-container', { state: State });
@@ -70090,7 +70169,23 @@ ${allClauses.map((c, i) => `${i + 1}. ClÃ¡usula: ${c.clausula || ''} | DesviaciÃ
                 ? (isClient ? 'SeaCharter Core PRO - Client Report' : 'SeaCharter Core PRO - Executive Report')
                 : (isClient ? 'SeaCharter Core PRO - Reporte Cliente' : 'SeaCharter Core PRO - Reporte Ejecutivo');
             
+            function cleanupPrint() {
+                document.body.classList.remove('is-printing-modal', 'print-report-mode', 'print-client-mode', 'printing-executive-report', 'overflow-hidden');
+                document.body.style.overflow = '';
+                window.isPrinting = false;
+                document.title = originalTitle;
+                document.querySelectorAll('#btn-executive-report, #btn-executive-report-summary, #btn-mode-exec, #btn-mode-tech, [data-executive-report-action]').forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('pointer-events-none', 'opacity-50');
+                    btn.style.pointerEvents = 'auto';
+                });
+                window.removeEventListener('afterprint', cleanupPrint);
+            }
+
+            window.addEventListener('afterprint', cleanupPrint);
+
             // ImpresiÃ³n NO destructiva: nunca clona ni altera el innerHTML para no destruir React ni el DOM del croquis
+            window.isPrinting = true;
             document.body.classList.add('is-printing-modal');
             document.body.classList.add('print-report-mode');
             if (isClient) {
@@ -70100,13 +70195,11 @@ ${allClauses.map((c, i) => `${i + 1}. ClÃ¡usula: ${c.clausula || ''} | DesviaciÃ
             }
 
             setTimeout(() => {
-                window.print();
-                setTimeout(() => {
-                    document.body.classList.remove('is-printing-modal');
-                    document.body.classList.remove('print-report-mode');
-                    document.body.classList.remove('print-client-mode');
-                    document.title = originalTitle;
-                }, 500);
+                try {
+                    window.print();
+                } finally {
+                    setTimeout(cleanupPrint, 600);
+                }
             }, 50);
         }
 

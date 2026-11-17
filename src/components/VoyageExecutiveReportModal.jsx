@@ -207,9 +207,16 @@ export default function VoyageExecutiveReportModal({
     }
 
     const cleanup = () => {
-      document.body.classList.remove('is-printing-modal');
-      document.body.classList.remove('print-client-mode');
+      document.body.classList.remove(
+        'is-printing-modal',
+        'print-report-mode',
+        'print-client-mode',
+        'printing-executive-report',
+        'overflow-hidden'
+      );
+      document.body.style.overflow = '';
       isPrintingRef.current = false;
+      window.isPrinting = false;
       setPrintPending(false);
       window.removeEventListener('afterprint', cleanup);
     };
