@@ -23,8 +23,10 @@ test("extractInlineDataParts extracts inlineData objects", () => {
 });
 
 test("ocr-extract serverless function is configured correctly", () => {
-  assert.match(ocrSource, /path:\s*["']\/api\/ocr-extract["']/);
+  assert.match(ocrSource, /path:\s*\[?\s*["']\/api\/ocr-extract["']/);
   assert.match(ocrSource, /gemini-2\.5-flash/);
+  assert.match(ocrSource, /gemini-2\.0-flash/);
+  assert.match(ocrSource, /gemini-1\.5-flash/);
   assert.match(ocrSource, /inlineData/);
   assert.match(ocrSource, /cleanBase64/);
 });
