@@ -175,6 +175,15 @@ export interface CandidateEvaluationInput {
   navStatusRaw?: string | number | null;
   destination?: string | null;
   reportedEta?: string | null;
+  loadCondition?: {
+    status: string;
+    color: string;
+    draftRatio: number;
+    currentDraftMeters: number;
+    maxDraftMeters: number;
+    label: string;
+  };
+  loadStatusLabel?: string;
 }
 
 export function evaluateMathematicalMatch(
@@ -610,6 +619,53 @@ export default async function handler(req: Request, _context: Context) {
       const beamMeters = rawBeam > 0 ? rawBeam : (loaMeters > 0 ? Math.round(loaMeters / 6.3) : 0);
       const draftMeters = rawDraft > 0 ? rawDraft : (beamMeters > 0 ? Number((beamMeters * 0.42).toFixed(2)) : 0);
 
+      // 1. Lee como calado AIS en vivo únicamente campos AIS, nunca dbRow.draft_meters
+      let currentDraftMeters = Number(
+        ship.draught ?? ship.currentDraft ?? ship.current_draft ?? ship.MaximumStaticDraught ?? ship.draught_average ?? 0
+      );
+
+      // 2. Define maxDraftMeters como el calado estructural de verano
+      const maxDraftMeters = Number(dbRow?.draft_meters ?? ship.max_draft ?? ship.summer_draft ?? draftMeters ?? 0);
+
+      // 3. Si el calado AIS en vivo viene en 0 o es idéntico a maxDraftMeters por falta de mensaje estático Tipo 5, infiere calado operativo
+      const shipSpeed = Number(ship.speed ?? ship.sog ?? ship.speedKnots ?? 0);
+      const isFondeadero = /anchor|fonde|rada/i.test(String(ship.navStatusRaw || ship.navStatus || ship.navigational_status || ship.nav_status || ship.navigationStatus || ship.destination || ""))
+        || Number(ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus) === 1
+        || (distPolNm <= 25);
+
+      if (maxDraftMeters > 0 && (currentDraftMeters === 0 || Math.abs(currentDraftMeters - maxDraftMeters) < 0.01)) {
+        if (
+          ship.loadState === 'BALLAST' ||
+          /FOR ORDERS|F\/O|OPEN|ORDERS|TBN/i.test(String(ship.destination || '')) ||
+          (shipSpeed < 1.0 && isFondeadero)
+        ) {
+          currentDraftMeters = Number((maxDraftMeters * 0.62).toFixed(2));
+        }
+      }
+
+      // 4. Calcula para cada buque el objeto loadCondition
+      const draftRatio = maxDraftMeters > 0 && currentDraftMeters > 0 ? (currentDraftMeters / maxDraftMeters) : 0;
+      let status = "CARGADO";
+      let color = "slate";
+
+      if ((draftRatio > 0 && draftRatio <= 0.68) || ship.loadState === 'BALLAST') {
+        status = "VACÍO EN LASTRE";
+        color = "emerald";
+      } else if (draftRatio > 0.68 && Number(ship.speed ?? shipSpeed ?? 0) < 1.0) {
+        status = "DESCARGANDO EN POL";
+        color = "amber";
+      }
+
+      const loadStatusLabel = `${status} (${currentDraftMeters.toFixed(2)}m / ${maxDraftMeters.toFixed(2)}m · ${Math.round(draftRatio * 100)}%)`;
+      const loadCondition = {
+        status,
+        color,
+        draftRatio,
+        currentDraftMeters,
+        maxDraftMeters,
+        label: loadStatusLabel,
+      };
+
       candidateMap.set(effectiveImo, {
         imo: effectiveImo,
         name: String(dbRow?.vessel_name || ship.vessel_name || ship.vesselName || ship.name || `MV VESSEL ${effectiveImo}`).toUpperCase(),
@@ -625,19 +681,18 @@ export default async function handler(req: Request, _context: Context) {
         flag: String(dbRow?.flag || ship.flag || "🌍"),
         latitude: lat,
         longitude: lon,
-        speedKnots: Number(ship.sog ?? ship.speed ?? ship.speedKnots ?? 0),
+        speedKnots: shipSpeed < 0.5 ? 0.0 : shipSpeed,
         headingDeg: Number(ship.heading || ship.headingDeg || 0),
-        // Calado instantáneo (AIS) y calado máximo (diseño) se mantienen separados:
-        // el motor de apertura necesita el contraste entre ambos para el lastre.
-        currentDraftMeters: Number(
-          ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? ship.draft_meters ?? 0
-        ),
-        maxDraftMeters: draftMeters,
+        // Lee como calado AIS en vivo únicamente Number(ship.draught ?? ship.currentDraft ?? ship.current_draft ?? ship.MaximumStaticDraught ?? ship.draught_average ?? 0)
+        currentDraftMeters,
+        maxDraftMeters,
+        loadCondition,
+        loadStatusLabel,
         navStatusRaw: ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus ?? ship.navStatus ?? null,
         destination: ship.destination ?? ship.destination_port ?? null,
         reportedEta: ship.eta ?? ship.destinationEta ?? null,
-        navStatus: ship.navStatus || (locationContext === "POD" ? "En rada/aproximación POD" : "En aproximación POL"),
-        operationalStatus: locationContext === "POD" ? "EN DESTINO / OPORTUNIDAD BACKHAUL" : "EN APROXIMACIÓN / DISPONIBLE",
+        navStatus: shipSpeed < 0.5 ? "⚓ Fondeado / En espera en puerto" : (ship.navStatus || (locationContext === "POD" ? "En rada/aproximación POD" : `🚢 Navegando hacia zona (${shipSpeed.toFixed(1)} kts)`)),
+        operationalStatus: shipSpeed < 0.5 ? "⚓ Fondeado / En espera en puerto" : (locationContext === "POD" ? "EN DESTINO / OPORTUNIDAD BACKHAUL" : `🚢 Navegando hacia zona (${shipSpeed.toFixed(1)} kts)`),
         distancePolNm: distPolNm,
         distancePodNm: distPodNm,
         locationContext,
@@ -715,8 +770,10 @@ export default async function handler(req: Request, _context: Context) {
           excludedNoiseCategory: null,
           lastSeen: "En Vivo · Transmisión AIS Activa",
           destination: cand.destination ?? null,
-          currentDraftMeters: openness.currentDraftMeters,
-          maxDraftMeters: openness.maxDraftMeters,
+          currentDraftMeters: cand.currentDraftMeters ?? openness.currentDraftMeters,
+          maxDraftMeters: cand.maxDraftMeters ?? openness.maxDraftMeters,
+          loadCondition: cand.loadCondition,
+          loadStatusLabel: cand.loadStatusLabel,
           openness,
         },
         neonDbMaster: {
@@ -735,6 +792,8 @@ export default async function handler(req: Request, _context: Context) {
         },
         technicalEvaluation: math.technicalEvaluation,
         commercialStatus: math.commercialStatusLabel || "",
+        loadCondition: cand.loadCondition,
+        loadStatusLabel: cand.loadStatusLabel || "",
         vesselOpenness: openness,
         estimatedBallastStatus: openness.isBallast,
         estimatedOpenDate: openness.estimatedOpenDate,

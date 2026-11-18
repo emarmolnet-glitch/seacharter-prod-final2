@@ -61826,6 +61826,25 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                     : (inboundToPol
                         ? '<span data-density-origin="global-inbound" class="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-600 bg-sky-700 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"><i class="fa-solid fa-earth-americas text-white" aria-hidden="true"></i> Inbound to POL</span>'
                         : '<span data-density-origin="local-radius" class="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-700 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"><i class="fa-solid fa-location-dot text-white" aria-hidden="true"></i> POL (10 NM)</span>');
+                const v = vessel;
+                const maxDraft = Number(v.max_draft || v.summer_draft || v.draft_meters || (v.dwt > 0 ? (Math.round(Math.cbrt(v.dwt / 0.45) * 2.6 / 6.3) * 0.42) : 7.8));
+                const speedKn = Number(v.speed ?? v.service_speed_knots ?? (Number.isFinite(speed) ? speed : 0));
+                const curDraft = Number(v.draught || v.current_draft || (v.loadState === 'BALLAST' ? maxDraft * 0.62 : (speedKn < 1.0 ? maxDraft * 0.64 : maxDraft * 0.82)));
+                const speedStatusText = speedKn < 0.5
+                    ? "⚓ En Puerto / Fondeado"
+                    : `🚢 En Tránsito (${speedKn.toFixed(1)} kn)`;
+
+                let draftAlertBadge = '';
+                if (curDraft / maxDraft <= 0.68) {
+                    const badgeText = speedKn < 0.5
+                        ? `⚓ VACÍO · FONDEADO (${curDraft.toFixed(1)}m/${maxDraft.toFixed(1)}m)`
+                        : `⚓ VACÍO · NAVEGANDO (${speedKn.toFixed(1)} kn · ${curDraft.toFixed(1)}m)`;
+                    draftAlertBadge = `<span style="background:#059669; color:#ffffff; font-weight:800; padding:4px 10px; border-radius:6px; font-size:11px; display:inline-block; letter-spacing:0.02em;">${badgeText}</span>`;
+                } else if (curDraft / maxDraft > 0.68 && speedKn < 1.0) {
+                    draftAlertBadge = `<span style="background:#d97706; color:#ffffff; font-weight:800; padding:4px 10px; border-radius:6px; font-size:11px; display:inline-block;">🏗️ DESCARGANDO · 0.0 kn (${curDraft.toFixed(1)}m/${maxDraft.toFixed(1)}m)</span>`;
+                } else {
+                    draftAlertBadge = `<span style="background:#1e293b; color:#ffffff; font-weight:800; padding:4px 10px; border-radius:6px; font-size:11px; display:inline-block;">📦 CARGADO · ${speedKn.toFixed(1)} kn (${curDraft.toFixed(1)}m/${maxDraft.toFixed(1)}m)</span>`;
+                }
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer';
                 row.dataset.densityCommercialMatch = 'true';
@@ -61838,14 +61857,14 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                     <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
                     <td class="py-3 px-3 mono"><div class="flex flex-col gap-1 items-start"><span class="density-coords-badge inline-flex items-center px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-white font-bold text-[10px] mono shadow-sm">${escapeDensityTableText(position)}</span>${positionOriginBadge}</div></td>
-                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}${vessel.speedInferenceSource === 'market_average_speeds' || vessel.ais?.speedInferenceSource === 'market_average_speeds' ? '<span class="mt-1 block text-[9px] font-bold uppercase tracking-wide text-cyan-400">Media mercado</span>' : ''}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
+                    <td class="py-3 px-3 text-slate-400 mono">${speedKn.toFixed(1)} kn${vessel.speedInferenceSource === 'market_average_speeds' || vessel.ais?.speedInferenceSource === 'market_average_speeds' ? '<span class="mt-1 block text-[9px] font-bold uppercase tracking-wide text-cyan-400">Media mercado</span>' : ''}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(speedStatusText)}</span></td>
 	                    <td class="py-3 px-3"><span${hasMasterProfile ? ' data-vessel-class-source="VESSELS_MASTER"' : ''} class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${dwt ? dwt.toLocaleString('es-ES') : 'N/D'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${loaMeters ? `${loaMeters.toLocaleString('es-ES')} m` : 'N/D'}</td>
                     <td class="py-3 px-3 text-slate-300">${escapeDensityTableText(flag)}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${escapeDensityTableText(yearBuilt)}</td>
-                    <td class="py-3 px-3"><span class="text-[10px] ${grossTonnage ? 'text-emerald-400' : 'font-bold text-amber-400'}">${grossTonnage ? 'Ficha técnica disponible' : 'GT pendiente de auditoría'}</span><p data-due-diligence-status class="mt-1 text-[9px] text-slate-500" aria-live="polite"></p></td>
+                    <td class="py-3 px-3">${grossTonnage ? draftAlertBadge : '<span class="text-[10px] font-bold text-amber-400">GT pendiente de auditoría</span>'}<p data-due-diligence-status class="mt-1 text-[9px] text-slate-500" aria-live="polite"></p></td>
                     <td class="py-3 px-3 text-right">
                         <button type="button" onclick="event.stopPropagation()" data-due-diligence-button data-due-diligence-mode="external-search" data-external-search="true" data-due-diligence-payload="${dueDiligencePayload}" ${hasDueDiligenceIdentity ? '' : 'disabled aria-disabled="true"'} class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide transition focus:outline-none focus:ring-2 ${hasDueDiligenceIdentity ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:border-cyan-300 hover:bg-cyan-400/20 focus:ring-cyan-400' : 'cursor-not-allowed border-slate-700 bg-slate-900 text-slate-600'}" aria-label="${hasDueDiligenceIdentity ? 'Auditar' : 'Sin identidad para auditar'} ${escapeDensityTableText(vesselName)}">
                             <i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>${hasDueDiligenceIdentity ? 'Auditar' : 'Sin identidad'}</span>
@@ -66069,14 +66088,14 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                 if (list.length > 0) {
                     list.slice(0, 8).forEach(v => {
                         const btn = document.createElement('button');
-                        btn.className = "px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-900 hover:bg-sky-600/30 text-sky-300 hover:text-white border border-sky-900/60 hover:border-sky-500/50 transition-colors flex items-center gap-1 cursor-pointer";
+                        btn.style.cssText = "background:#ffffff; border:1px solid #94a3b8; padding:4px 8px; border-radius:6px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; text-decoration:none; margin:2px;";
                         const dwt = Number(v.dwt || v.DWT || v.backhaulTonnageDwt || 0);
                         const dwtLabel = dwt > 0 ? `${dwt.toLocaleString('es-ES')} DWT` : 'DWT N/D';
                         const vesselName = v.vesselName || v.vessel_name || v.name || v.ShipName || 'Buque';
                         const dist = Number.isFinite(Number(v.distanceToPod)) ? `${Number(v.distanceToPod).toFixed(1)} NM` : '< 10 NM';
                         const status = v.backhaulStatus || v.statusLabel || 'En descarga / Fondeado';
                         btn.title = `${vesselName} · ${dwtLabel} · ${dist} de POD · ${status} (Oportunidad Backhaul)`;
-                        btn.innerHTML = `<i class="fa-solid fa-arrow-rotate-left text-[8px] text-sky-400"></i> <strong class="text-slate-100">${escapeDensityTableText(vesselName)}</strong> <span class="text-[9px] text-sky-300/80">${dwtLabel}</span> <span class="text-[9px] text-slate-400">(${dist})</span>`;
+                        btn.innerHTML = `<i class="fa-solid fa-arrow-rotate-left text-[10px]" style="color:#0284c7;"></i> <strong style="color:#0f172a; font-weight:800; font-size:11px;">${escapeDensityTableText(vesselName)}</strong> <span style="color:#0369a1; font-weight:700; font-size:11px;">${dwtLabel}</span> <span style="color:#0369a1; font-weight:700; font-size:11px;">(${dist})</span>`;
                         btn.onclick = (e) => {
                             e.preventDefault();
                             const searchInput = document.getElementById('ais-vessel-search');
@@ -66327,13 +66346,15 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
                     if (nearbyVessels.length > 0) {
                         nearbyVessels.slice(0, 6).forEach(v => {
                             const btn = document.createElement('button');
-                            btn.className = "px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-900 hover:bg-emerald-600/30 text-emerald-300 hover:text-white border border-emerald-900/60 hover:border-emerald-500/50 transition-colors flex items-center gap-1 cursor-pointer";
+                            btn.style.cssText = "background:#ffffff; border:1px solid #94a3b8; padding:4px 8px; border-radius:6px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; text-decoration:none; margin:2px;";
                             const etaHours = Number(v.etaHoursToPol);
                             const etaLabel = Number.isFinite(etaHours) && etaHours > 0 ? `${Math.round(etaHours)} h ETA` : 'En puerto';
                             const vesselTypeLabel = (typeof getAisTaxonomyBreakdownLabel === 'function' ? getAisTaxonomyBreakdownLabel(v) : (v.vesselClass || v.vessel_type || 'Cargo'));
                             const vName = v.vesselName || v.vessel_name || v.name || 'Buque';
+                            const vSpeed = Number(v.speed ?? v.service_speed_knots ?? 0);
+                            const speedInfo = vSpeed >= 0.5 ? `${vSpeed.toFixed(1)} kn` : etaLabel;
                             btn.title = `${vesselTypeLabel} · ${Math.round(v.distanceToPol || 0)} NM a POL · ${etaLabel}`;
-                            btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[8px] opacity-75"></i> <strong class="text-slate-100">${escapeDensityTableText(vName)}</strong> <span class="text-[9px] text-sky-300/80">${escapeDensityTableText(vesselTypeLabel)}</span> <span class="text-[9px] opacity-70">${etaLabel}</span>`;
+                            btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[10px]" style="color:#059669;"></i> <strong style="color:#0f172a; font-weight:800; font-size:11px;">${escapeDensityTableText(vName)}</strong> <span style="color:#0369a1; font-weight:700; font-size:11px;">${escapeDensityTableText(vesselTypeLabel)}</span> <span style="color:#059669; font-weight:700; font-size:11px;">(${speedInfo})</span>`;
                             btn.onclick = (e) => {
                                 e.preventDefault();
                                 const searchInput = document.getElementById('ais-vessel-search');

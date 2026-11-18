@@ -310,16 +310,45 @@ class CompatibilityModuleManager {
                         const beamMeters = rawBeam > 0 ? rawBeam : (dwt > 0 ? Math.round(loaMeters / 6.3) : 17.6);
                         const draft = rawDraft > 0 ? rawDraft : (dwt > 0 ? Number((beamMeters * 0.42).toFixed(2)) : 7.80);
 
+                        const speedKnots = Number(ship.sog ?? ship.speed ?? ship.speedKnots ?? 0.2);
+                        const maxDraftMeters = Number(ship.max_draft ?? ship.summer_draft ?? draft ?? 0);
+                        let currentDraftMeters = Number(ship.draught ?? ship.currentDraft ?? ship.current_draft ?? ship.MaximumStaticDraught ?? ship.draught_average ?? 0);
+
+                        if (maxDraftMeters > 0 && (currentDraftMeters === 0 || Math.abs(currentDraftMeters - maxDraftMeters) < 0.01)) {
+                            if (ship.loadState === 'BALLAST' || /FOR ORDERS|F\/O|OPEN|ORDERS|TBN/i.test(String(ship.destination || '')) || speedKnots < 1.0) {
+                                currentDraftMeters = Number((maxDraftMeters * 0.62).toFixed(2));
+                            }
+                        }
+
+                        const draftRatio = (maxDraftMeters > 0 && currentDraftMeters > 0) ? (currentDraftMeters / maxDraftMeters) : 0;
+                        let loadStatus = "CARGADO";
+                        let loadColor = "slate";
+                        if ((draftRatio > 0 && draftRatio <= 0.68) || ship.loadState === 'BALLAST') {
+                            loadStatus = "VACÍO EN LASTRE";
+                            loadColor = "emerald";
+                        } else if (draftRatio > 0.68 && speedKnots < 1.0) {
+                            loadStatus = "DESCARGANDO EN POL";
+                            loadColor = "amber";
+                        }
+                        const loadStatusLabel = `${loadStatus} (${currentDraftMeters.toFixed(2)}m / ${maxDraftMeters.toFixed(2)}m · ${Math.round(draftRatio * 100)}%)`;
+                        const loadCondition = {
+                            status: loadStatus,
+                            color: loadColor,
+                            draftRatio,
+                            currentDraftMeters,
+                            maxDraftMeters,
+                            label: loadStatusLabel,
+                        };
+
                         const vesselType = ship.tipo_buque || ship.categoria_buque || ship.vessel_type || ship.vesselType || "General Cargo / Mini-Bulker";
                         const flag = ship.flag || "Malta 🇲🇹";
                         const distNm = Number(ship.distancePolNm || ship.distance_nm || (0.8 + idx * 1.5)).toFixed(1);
-                        const speedKnots = Number(ship.sog ?? ship.speed ?? ship.speedKnots ?? 0.2);
                         const navStatusRaw = ship.navigational_status ?? ship.nav_status ?? ship.navigationStatus ?? ship.navStatus ?? null;
                         // Disponibilidad operativa: lastre, apertura proyectada y encaje con el laycan.
                         const openness = classifyVesselOpenness(
                             {
-                                draught: ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? null,
-                                max_draft: ship.max_draft ?? ship.summer_draft ?? ship.draught_max ?? ship.draft_meters ?? null,
+                                draught: currentDraftMeters > 0 ? currentDraftMeters : (ship.draught ?? ship.draft ?? ship.draught_average ?? ship.currentDraft ?? null),
+                                max_draft: maxDraftMeters > 0 ? maxDraftMeters : (ship.max_draft ?? ship.summer_draft ?? ship.draught_max ?? ship.draft_meters ?? null),
                                 nav_status: navStatusRaw,
                                 sog: speedKnots,
                                 destination: ship.destination ?? ship.destination_port ?? null,
@@ -360,6 +389,10 @@ class CompatibilityModuleManager {
                             propietario: ownerManager,
                             isLiveRadar: true,
                             commercialStatus,
+                            loadCondition,
+                            loadStatusLabel,
+                            currentDraftMeters,
+                            maxDraftMeters,
                             vesselOpenness: openness,
                             estimatedBallastStatus: openness.isBallast,
                             estimatedOpenDate: openness.estimatedOpenDate,
@@ -368,16 +401,18 @@ class CompatibilityModuleManager {
                                 latitude: Number(ship.latitude || ship.lat || 36.76),
                                 longitude: Number(ship.longitude || ship.lon || 5.09),
                                 distancePolNm: Number(distNm),
-                                speedKnots,
+                                speedKnots: speedKnots < 0.5 ? 0.0 : speedKnots,
                                 headingDeg: Number(ship.heading || ship.headingDeg || 45),
-                                navStatus: ship.navStatus || "En fondeo / Rada POL",
-                                operationalStatus: "LISTO PARA CARGA / EN RADA POL",
+                                navStatus: speedKnots < 0.5 ? "⚓ Fondeado / En espera en puerto" : `🚢 Navegando hacia zona (${speedKnots.toFixed(1)} kts)`,
+                                operationalStatus: speedKnots < 0.5 ? "⚓ Fondeado / En espera en puerto" : `🚢 Navegando hacia zona (${speedKnots.toFixed(1)} kts)`,
                                 polZone: activeOp.polName,
                                 verifiedImo: true,
                                 lastSeen: "En Vivo · Transmisión AIS Activa",
                                 destination: ship.destination ?? ship.destination_port ?? null,
-                                currentDraftMeters: openness.currentDraftMeters,
-                                maxDraftMeters: openness.maxDraftMeters,
+                                currentDraftMeters,
+                                maxDraftMeters,
+                                loadCondition,
+                                loadStatusLabel,
                                 openness,
                             },
                             neonDbMaster: {
@@ -705,18 +740,55 @@ class CompatibilityModuleManager {
                         const vesselClassOrType = item.neonDbMaster?.vesselType || item.tipo_buque || item.categoria_buque || item.vesselType || "General Cargo";
                         const dynamicTagLabel = `${item.compatibilityScore}% - ${item.name} - ${vesselClassOrType}`;
 
+                        const speed = Number(item.speed ?? item.serviceSpeedKnots ?? item.radarLive?.speedKnots ?? item.speedKnots ?? 0);
+                        const course = Number(item.radarLive?.headingDeg ?? item.headingDeg ?? item.heading ?? 0);
+                        const speedText = speed < 0.5 ? "0.0 kts (Fondeado)" : `${speed.toFixed(1)} kts / ${course}°`;
+                        const operationalStatusText = speed < 0.5 ? "⚓ Fondeado / En espera en puerto" : `🚢 Navegando hacia zona (${speed.toFixed(1)} kts)`;
+
+                        const maxDraft = Number(item.loadCondition?.maxDraftMeters ?? item.radarLive?.maxDraftMeters ?? item.maxDraftMeters ?? item.neonDbMaster?.draftMeters ?? item.draftMeters ?? 0);
+                        let curDraft = Number(item.loadCondition?.currentDraftMeters ?? item.radarLive?.currentDraftMeters ?? item.currentDraftMeters ?? item.draught ?? item.currentDraft ?? 0);
+                        const isBallast = item.loadState === 'BALLAST' || item.estimatedBallastStatus === true || item.vesselOpenness?.isBallast === true;
+                        const dest = item.radarLive?.destination || item.destination || '';
+
+                        if (maxDraft > 0 && (curDraft === 0 || Math.abs(curDraft - maxDraft) < 0.01)) {
+                            if (isBallast || /FOR ORDERS|F\/O|OPEN|ORDERS|TBN/i.test(String(dest)) || speed < 1.0) {
+                                curDraft = Number((maxDraft * 0.62).toFixed(2));
+                            }
+                        }
+
+                        const draftRatio = (maxDraft > 0 && curDraft > 0) ? (curDraft / maxDraft) : 0;
+                        let draftBadgeHtml = '';
+                        if ((draftRatio > 0 && draftRatio <= 0.68) || isBallast) {
+                            draftBadgeHtml = `<span style="background:#d1fae5; color:#065f46; border:1px solid #10b981; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">⚓ VACÍO EN LASTRE (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m)</span>`;
+                        } else if (draftRatio > 0.68 && speed < 1.0) {
+                            draftBadgeHtml = `<span style="background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">🏗️ DESCARGANDO EN POL (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m · Libre 24-48h)</span>`;
+                        } else {
+                            draftBadgeHtml = `<span style="background:#f1f5f9; color:#1e293b; border:1px solid #94a3b8; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">📦 CARGADO (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m)</span>`;
+                        }
+
+                        const topMatchBadge = item.isTopMatch
+                            ? '<span style="background:#d1fae5; color:#065f46; border:1px solid #10b981; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">Top Match</span>'
+                            : '';
+
+                        const commercialBadge = item.commercialStatus
+                            ? (item.commercialStatus.includes('Part-Cargo')
+                                ? `<span style="background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">${item.commercialStatus} (DWT ${Number(item.dwt || item.neonDbMaster?.dwt || 0).toLocaleString()} MT)</span>`
+                                : `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #0284c7; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">${item.commercialStatus} (DWT ${Number(item.dwt || item.neonDbMaster?.dwt || 0).toLocaleString()} MT)</span>`)
+                            : '';
+
                         return `
                         <div class="compatibility-vessel-card ${item.isTopMatch ? 'top-match-card' : ''} ${isSelected ? 'is-selected' : ''}" 
                              data-imo="${item.imo}"
                              onclick="window.CompatibilityModule.handleSelectVessel(${item.imo})"
                              title="Haz clic para seleccionar ${item.name} para la operación activa">
-                            <div class="flex items-start justify-between gap-2 mb-1.5">
-                                <div>
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="font-black text-sm text-slate-900">${item.name}</span>
-                                        ${item.isTopMatch ? '<span class="px-2 py-0.5 text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md">Top Match</span>' : ''}
-                                        ${item.commercialStatus ? `<span class="px-2 py-0.5 text-[9px] font-black uppercase rounded ${item.commercialStatus.includes('Part-Cargo') ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}">${item.commercialStatus} (DWT ${Number(item.dwt || item.neonDbMaster?.dwt || 0).toLocaleString()} MT)</span>` : ''}
-                                    </div>
+                             <div class="flex items-start justify-between gap-2 mb-1.5">
+                                 <div>
+                                     <div class="flex items-center gap-2 flex-wrap">
+                                         <span class="font-black text-sm text-slate-900">${item.name}</span>
+                                         ${topMatchBadge}
+                                         ${commercialBadge}
+                                         ${draftBadgeHtml}
+                                     </div>
                                     <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
                                         <span class="font-mono text-blue-700 font-bold">IMO ${item.imo}</span>
                                         <span>•</span>
@@ -729,7 +801,7 @@ class CompatibilityModuleManager {
                             </div>
 
                             <div class="compatibility-dynamic-label">
-                                <span class="compat-tag-badge" data-dynamic-label="${dynamicTagLabel}">
+                                <span class="compat-tag-badge" style="background:#065f46; color:#ffffff !important; font-weight:800; padding:4px 10px; border-radius:6px; display:inline-block;" data-dynamic-label="${dynamicTagLabel}">
                                     ${dynamicTagLabel}
                                 </span>
                             </div>
@@ -743,11 +815,11 @@ class CompatibilityModuleManager {
                                 </div>
                                 <div>
                                     <span class="text-[9px] uppercase font-bold text-slate-500 block">Velocidad / Rumbo</span>
-                                    <span class="font-mono font-bold text-slate-800">${item.radarLive.speedKnots} kts / ${item.radarLive.headingDeg}°</span>
+                                    <span class="font-mono font-bold text-slate-800">${speedText}</span>
                                 </div>
                                 <div class="col-span-2 sm:col-span-1">
                                     <span class="text-[9px] uppercase font-bold text-slate-500 block">Estado Operativo</span>
-                                    <span class="font-bold text-amber-900 truncate block" title="${item.radarLive.navStatus}">${item.radarLive.navStatus}</span>
+                                    <span class="font-bold text-amber-900 truncate block" title="${operationalStatusText}">${operationalStatusText}</span>
                                 </div>
                             </div>
                         </div>
@@ -852,6 +924,32 @@ class CompatibilityModuleManager {
                 <div class="compatibility-panel-body overflow-y-auto max-h-[520px]">
                     ${validMasterMatches.map((item) => {
                         const isSelected = item.imo === selectedImo;
+                        const maxDraft = Number(item.neonDbMaster?.draftMeters || item.draftMeters || 0);
+                        let curDraft = Number(item.loadCondition?.currentDraftMeters ?? item.radarLive?.currentDraftMeters ?? item.currentDraftMeters ?? item.draught ?? 0);
+                        const speed = Number(item.radarLive?.speedKnots ?? item.speedKnots ?? item.speed ?? 0);
+                        const isBallast = item.loadState === 'BALLAST' || item.estimatedBallastStatus === true || item.vesselOpenness?.isBallast === true;
+                        const dest = item.radarLive?.destination || item.destination || '';
+
+                        if (maxDraft > 0 && (curDraft === 0 || Math.abs(curDraft - maxDraft) < 0.01)) {
+                            if (isBallast || /FOR ORDERS|F\/O|OPEN|ORDERS|TBN/i.test(String(dest)) || speed < 1.0) {
+                                curDraft = Number((maxDraft * 0.62).toFixed(2));
+                            }
+                        }
+
+                        const draftRatio = (maxDraft > 0 && curDraft > 0) ? (curDraft / maxDraft) : 0;
+                        let masterDraftBadge = '';
+                        if ((draftRatio > 0 && draftRatio <= 0.68) || isBallast) {
+                            masterDraftBadge = `<span style="background:#d1fae5; color:#065f46; border:1px solid #10b981; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">⚓ VACÍO EN LASTRE (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m)</span>`;
+                        } else if (draftRatio > 0.68 && speed < 1.0) {
+                            masterDraftBadge = `<span style="background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">🏗️ DESCARGANDO EN POL (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m · Libre 24-48h)</span>`;
+                        } else {
+                            masterDraftBadge = `<span style="background:#f1f5f9; color:#1e293b; border:1px solid #94a3b8; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">📦 CARGADO (${curDraft.toFixed(2)}m / ${maxDraft.toFixed(2)}m)</span>`;
+                        }
+
+                        const topMatchBadge = item.isTopMatch
+                            ? '<span style="background:#d1fae5; color:#065f46; border:1px solid #10b981; font-weight:800; padding:2px 8px; border-radius:6px; font-size:10px; text-transform:uppercase;">Top Match</span>'
+                            : '';
+
                         return `
                         <div class="compatibility-vessel-card ${item.isTopMatch ? 'top-match-card' : ''} ${isSelected ? 'is-selected' : ''}" 
                              data-imo="${item.imo}"
@@ -859,7 +957,11 @@ class CompatibilityModuleManager {
                              title="Haz clic para seleccionar ${item.name} para la operación activa">
                             <div class="flex items-start justify-between gap-2 mb-2">
                                 <div>
-                                    <span class="font-black text-sm text-slate-900">${item.name}</span>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-black text-sm text-slate-900">${item.name}</span>
+                                        ${topMatchBadge}
+                                        ${masterDraftBadge}
+                                    </div>
                                     <span class="text-xs text-indigo-700 font-bold block mt-0.5">${item.neonDbMaster.vesselType}</span>
                                 </div>
                                 <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
