@@ -117,10 +117,61 @@ export function extractImoAndReference(data) {
 }
 
 /**
+ * Hydrates a vessel object reading source_payload.h15_technical_sheet / h15_technical_sheet,
+ * prioritizing DWT, speeds, consumptions, cubic capacities and gears.
+ */
+export function hydrateVesselH15(rawVessel) {
+  if (!rawVessel || typeof rawVessel !== 'object') return rawVessel;
+  const h15 = rawVessel.h15_technical_sheet
+    || rawVessel.source_payload?.h15_technical_sheet
+    || {};
+  const caps = (h15.capacities && typeof h15.capacities === 'object') ? h15.capacities : {};
+  const grainCap = caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? rawVessel.grain_cubic_m3 ?? rawVessel.capacities?.grain_cubic_m3 ?? rawVessel.grain_capacity;
+  const baleCap = caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? rawVessel.bale_cubic_m3 ?? rawVessel.capacities?.bale_cubic_m3 ?? rawVessel.bale_capacity;
+  const hasGears = h15.has_gears !== undefined ? h15.has_gears : (rawVessel.has_gears !== undefined ? rawVessel.has_gears : rawVessel.hasGears);
+  const dwt = h15.dwt ?? rawVessel.dwt ?? rawVessel.DWT;
+  const serviceSpeed = h15.service_speed_knots ?? rawVessel.service_speed_knots ?? rawVessel.serviceSpeedKnots ?? rawVessel.speed;
+  const ecoSpeed = h15.eco_speed_knots ?? rawVessel.eco_speed_knots;
+  const vlsfoDesign = h15.vlsfo_sea_design_mt_day ?? rawVessel.vlsfo_sea_design_mt_day;
+  const vlsfoEco = h15.vlsfo_sea_eco_mt_day ?? rawVessel.vlsfo_sea_eco_mt_day;
+  const vlsfoBallast = h15.vlsfo_sea_ballast_mt_day ?? rawVessel.vlsfo_sea_ballast_mt_day;
+  const mgoWorking = h15.mgo_port_working_mt_day ?? rawVessel.mgo_port_working_mt_day;
+  const mgoIdle = h15.mgo_port_idle_mt_day ?? rawVessel.mgo_port_idle_mt_day;
+
+  const consSea = vlsfoDesign ?? vlsfoEco ?? rawVessel.cons_sea ?? rawVessel.fuel_consumption_laden;
+  const consPort = mgoWorking ?? rawVessel.cons_port ?? rawVessel.fuel_consumption_port;
+  const consBallast = vlsfoBallast ?? rawVessel.cons_ballast ?? rawVessel.fuel_consumption_ballast ?? consSea;
+
+  return {
+    ...rawVessel,
+    h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : (rawVessel.h15_technical_sheet || null),
+    vessel_type_normalized: h15.vessel_type_normalized || rawVessel.vessel_type_normalized || null,
+    dwt: dwt !== undefined && dwt !== null ? Number(dwt) : rawVessel.dwt,
+    service_speed_knots: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.service_speed_knots,
+    eco_speed_knots: ecoSpeed !== undefined && ecoSpeed !== null ? Number(ecoSpeed) : rawVessel.eco_speed_knots,
+    vlsfo_sea_design_mt_day: vlsfoDesign !== undefined && vlsfoDesign !== null ? Number(vlsfoDesign) : null,
+    vlsfo_sea_eco_mt_day: vlsfoEco !== undefined && vlsfoEco !== null ? Number(vlsfoEco) : null,
+    vlsfo_sea_ballast_mt_day: vlsfoBallast !== undefined && vlsfoBallast !== null ? Number(vlsfoBallast) : null,
+    mgo_port_working_mt_day: mgoWorking !== undefined && mgoWorking !== null ? Number(mgoWorking) : null,
+    mgo_port_idle_mt_day: mgoIdle !== undefined && mgoIdle !== null ? Number(mgoIdle) : null,
+    cons_sea: consSea !== undefined && consSea !== null ? Number(consSea) : null,
+    cons_port: consPort !== undefined && consPort !== null ? Number(consPort) : null,
+    cons_ballast: consBallast !== undefined && consBallast !== null ? Number(consBallast) : null,
+    spd_ballast: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.spd_ballast,
+    spd_laden: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.spd_laden,
+    grain_cubic_m3: grainCap !== undefined && grainCap !== null ? Number(grainCap) : null,
+    bale_cubic_m3: baleCap !== undefined && baleCap !== null ? Number(baleCap) : null,
+    has_gears: hasGears !== undefined ? hasGears : null,
+  };
+}
+
+/**
  * Reusable IMO hydration engine: updates React state, VoyageStore, GlobalStore and triggers fetchVesselByImo/fetchVesselSpecs.
  */
 export function executeImoHydration(imoValue) {
-  const cleanImo = String(imoValue || '').trim();
+  const candidateObj = typeof imoValue === 'object' && imoValue !== null ? imoValue : null;
+  const rawImo = candidateObj?.imo || candidateObj?.imo_number || candidateObj?.numero_imo || imoValue;
+  const cleanImo = String(rawImo || '').trim();
   if (!cleanImo || !/^\d{7}$/.test(cleanImo)) return false;
 
   const referenceManager = typeof window !== 'undefined'
@@ -152,7 +203,12 @@ export function executeImoHydration(imoValue) {
       window.handleManualVesselUpdate('imo', cleanImo);
     }
 
-    const vesselData = { imo: cleanImo, imo_number: cleanImo, imoNumber: cleanImo };
+    let vesselData = hydrateVesselH15({
+      ...(candidateObj || {}),
+      imo: cleanImo,
+      imo_number: cleanImo,
+      imoNumber: cleanImo
+    });
 
     // 2. Sincronización en Contexto Global / Zustand / VoyageStore
     if (typeof window !== 'undefined' && typeof window.patchSection2Vessel === 'function') {
@@ -178,13 +234,34 @@ export function executeImoHydration(imoValue) {
           .then((res) => res.json())
           .then((payload) => {
             if (payload?.success && payload.vessel) {
-              window.openVesselDetailDrawer(payload.vessel, 'Data Bridge (Neon DB)');
+              const fullVessel = hydrateVesselH15(payload.vessel);
+              window.openVesselDetailDrawer(fullVessel, 'Data Bridge (Neon DB)');
+              try {
+                const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+                vStore?.patchSection2Vessel?.(fullVessel);
+              } catch (_) {}
+              if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
+                window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
+              }
+              if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
+                window.applyDataBridgePayloadToCalculator({ ...payload, vessel: fullVessel });
+              }
+              if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
+                window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
+              }
+              if (typeof window.runEngine === 'function') {
+                window.runEngine();
+              }
+              if (window.SeaCharterVoyageCostController?.recalculate) {
+                window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
+              }
             } else {
-              window.openVesselDetailDrawer({ imo: cleanImo, imo_number: cleanImo }, 'Data Bridge (Broadcast)');
+              window.openVesselDetailDrawer(vesselData, 'Data Bridge (Broadcast)');
             }
           })
           .catch(() => {
-            window.openVesselDetailDrawer({ imo: cleanImo, imo_number: cleanImo }, 'Data Bridge (Broadcast)');
+            window.openVesselDetailDrawer(vesselData, 'Data Bridge (Broadcast)');
           });
       } else {
         const fetchFn = (window.fetchVesselSpecs || window.fetchVesselByImo);
@@ -195,7 +272,7 @@ export function executeImoHydration(imoValue) {
             .then((res) => res.json())
             .then((payload) => {
               if (payload?.success && payload.vessel) {
-                const fullVessel = payload.vessel;
+                const fullVessel = hydrateVesselH15(payload.vessel);
                 try {
                   const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
                   vStore?.patchSection2Vessel?.(fullVessel);
@@ -205,10 +282,16 @@ export function executeImoHydration(imoValue) {
                   window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
                 }
                 if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
-                  window.applyDataBridgePayloadToCalculator(payload);
+                  window.applyDataBridgePayloadToCalculator({ ...payload, vessel: fullVessel });
                 }
                 if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
                   window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
+                }
+                if (typeof window.runEngine === 'function') {
+                  window.runEngine();
+                }
+                if (window.SeaCharterVoyageCostController?.recalculate) {
+                  window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
                 }
               }
             })

@@ -16,7 +16,21 @@ export function resolveVesselStowageProfile(vesselType = '', vesselClass = '', s
  */
 export function buildVoyageStowagePlan(voyageState = {}) {
   const cargoTons = Number(voyageState.cargo || voyageState.cargoQty || 0);
-  const dwt = Number(voyageState.dwt || 32000);
+  const h15 = voyageState.h15_technical_sheet
+    || voyageState.source_payload?.h15_technical_sheet
+    || voyageState.vessel?.h15_technical_sheet
+    || voyageState.vessel?.source_payload?.h15_technical_sheet
+    || {};
+  const h15Capacities = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
+  const vesselTypeNormalized = String(
+    h15.vessel_type_normalized
+    || voyageState.vessel_type_normalized
+    || voyageState.vessel?.vessel_type_normalized
+    || ''
+  ).toLowerCase();
+  const isTanker = vesselTypeNormalized === 'tanker';
+
+  const dwt = Number(h15.dwt || voyageState.dwt || 32000);
   const vesselType = resolveReportVessel(voyageState).type;
   const rawShipType = vesselType;
   const vesselClass = vesselType;
@@ -25,7 +39,13 @@ export function buildVoyageStowagePlan(voyageState = {}) {
   const cargoVolumeCbm = Number(voyageState.cargoVolume || voyageState.volumeCbm || Math.round(cargoTons * stowageFactor * 100) / 100);
 
   const profile = resolveVesselStowageProfile(resolveReportVessel(voyageState).operationalType, vesselClass, voyageState.shipProfile || rawShipType);
-  const isGeared = globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared;
+  const baseIsGeared = globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared;
+  const isGeared = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : baseIsGeared);
+
+  const h15Grain = Number(h15Capacities.grain_cubic_m3 ?? h15.grain_cubic_m3);
+  const h15Bale = Number(h15Capacities.bale_cubic_m3 ?? h15.bale_cubic_m3);
+  const grainCapacityCbm = isTanker ? 0 : (Number.isFinite(h15Grain) && h15Grain > 0 ? h15Grain : (Math.round(dwt * 1.25) || 30300));
+  const baleCapacityCbm = isTanker ? 0 : (Number.isFinite(h15Bale) && h15Bale > 0 ? h15Bale : 0);
 
   let holds = [];
   let weatherDeck = {
@@ -149,9 +169,10 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     },
     hydrodynamicsAndSafety: {
       totalVolumeOccupiedCbm: cargoVolumeCbm,
-      grainCapacityCbm: Math.round(dwt * 1.25) || 30300,
-      volumeUtilizationShipPct: dwt > 0 ? Math.min(100, (cargoVolumeCbm / (dwt * 1.25)) * 100) : 0,
-      isCubicCapacityExceeded: cargoVolumeCbm > dwt * 1.25,
+      grainCapacityCbm,
+      baleCapacityCbm,
+      volumeUtilizationShipPct: grainCapacityCbm > 0 ? Math.min(100, (cargoVolumeCbm / grainCapacityCbm) * 100) : 0,
+      isCubicCapacityExceeded: grainCapacityCbm > 0 ? cargoVolumeCbm > grainCapacityCbm : false,
       maxFloorPressureTm2: dwt > 0 ? Math.min(20, Math.max(10, (cargoTons / dwt) * 16)) : 14.5,
       maxFloorAllowableTm2: 20.0,
       isPermissibleLoadExceeded: false,
@@ -161,10 +182,23 @@ export function buildVoyageStowagePlan(voyageState = {}) {
       type: vesselType,
       selectedType: voyageState.vesselType,
       operationalType: resolveReportVessel(voyageState).operationalType,
-      isGeared: globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared,
+      isGeared,
       profile,
       dwt,
+      vessel_type_normalized: vesselTypeNormalized || null,
+      service_speed_knots: Number(h15.service_speed_knots) || null,
+      eco_speed_knots: Number(h15.eco_speed_knots) || null,
+      vlsfo_sea_design_mt_day: Number(h15.vlsfo_sea_design_mt_day) || null,
+      vlsfo_sea_eco_mt_day: Number(h15.vlsfo_sea_eco_mt_day) || null,
+      vlsfo_sea_ballast_mt_day: Number(h15.vlsfo_sea_ballast_mt_day) || null,
+      mgo_port_working_mt_day: Number(h15.mgo_port_working_mt_day) || null,
+      mgo_port_idle_mt_day: Number(h15.mgo_port_idle_mt_day) || null,
+      grain_cubic_m3: grainCapacityCbm,
+      bale_cubic_m3: baleCapacityCbm,
+      h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : null,
     },
-    executiveJustification: justification,
+    executiveJustification: isTanker
+      ? [...justification, 'Buque Tanque: capacidades de carga seca y grúas de a bordo anuladas.']
+      : justification,
   };
 }
