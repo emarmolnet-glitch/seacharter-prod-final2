@@ -38282,53 +38282,52 @@ setVesselProfileCompletenessBadge(completeness);
                 setInputValue('vessel-flag', flag);
             }
             if (yearBuilt > 0) {
-                setInputValue('vessel-identity-year', yearBuilt);
-            }
+               setInputValue('vessel-identity-year', yearBuilt);
 
-            const h15 = raw.h15_technical_sheet || raw.source_payload?.h15_technical_sheet || {};
-            const h15Caps = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
-            const vesselTypeNormalized = h15.vessel_type_normalized || raw.vessel_type_normalized || null;
-            const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
+const h15 = raw.h15_technical_sheet || raw.source_payload?.h15_technical_sheet || {};
+const h15Caps = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
+const vesselTypeNormalized = h15.vessel_type_normalized || raw.vessel_type_normalized || null;
+const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
 
-            const seaConsVal = Number(h15.vlsfo_sea_design_mt_day ?? h15.vlsfo_sea_eco_mt_day ?? raw.fuel_consumption_laden ?? raw.cons_sea ?? raw.consSea);
-            const portConsVal = Number(h15.mgo_port_working_mt_day ?? raw.fuel_consumption_port ?? raw.cons_port ?? raw.consPort);
-            const anchorageConsVal = Number(h15.mgo_port_idle_mt_day ?? raw.cons_anchorage ?? raw.consumo_fondeo_td ?? raw.consumo_anchorage_td);
-            const grainCubicVal = isTanker ? 0 : Number(h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? raw.grain_cubic_m3);
-            const baleCubicVal = isTanker ? 0 : Number(h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? raw.bale_cubic_m3);
-            const hasGearsVal = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : (raw.has_gears !== undefined ? Boolean(raw.has_gears) : null));
+const seaConsVal = Number(h15.vlsfo_sea_design_mt_day ?? h15.vlsfo_sea_eco_mt_day ?? raw.fuel_consumption_laden ?? raw.cons_sea ?? raw.consSea);
+const portConsVal = Number(h15.mgo_port_working_mt_day ?? raw.fuel_consumption_port ?? raw.cons_port ?? raw.consPort);
+const anchorageConsVal = Number(h15.mgo_port_idle_mt_day ?? raw.cons_anchorage ?? raw.consumo_fondeo_td ?? raw.consumo_anchorage_td);
+const grainCubicVal = isTanker ? 0 : Number(h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? raw.grain_cubic_m3);
+const baleCubicVal = isTanker ? 0 : Number(h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? raw.bale_cubic_m3);
+const hasGearsVal = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : (raw.has_gears !== undefined ? Boolean(raw.has_gears) : null));
 
-            const consSeaEl = document.getElementById('cons-sea');
-            const consPortEl = document.getElementById('cons-port');
-            const consAnchorageEl = document.getElementById('cons-anchorage');
+const consSeaEl = document.getElementById('cons-sea');
+const consPortEl = document.getElementById('cons-port');
+const consAnchorageEl = document.getElementById('cons-anchorage');
 
-            const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
-            const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
-            const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
+const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
+const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
+const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
 
-            if (!isUserOverrideSea && Number.isFinite(seaConsVal) && seaConsVal > 0) {
-                setInputValue('cons-sea', seaConsVal);
-                State.cons_sea = seaConsVal;
-                State.consSea = seaConsVal;
-                State.consumo_mar_td = seaConsVal;
-            }
-            if (!isUserOverridePort && Number.isFinite(portConsVal) && portConsVal > 0) {
-                setInputValue('cons-port', portConsVal);
-                State.cons_port = portConsVal;
-                State.consPort = portConsVal;
-                State.consumo_puerto_td = portConsVal;
-            }
-            if (!isUserOverrideAnchorage && Number.isFinite(anchorageConsVal) && anchorageConsVal > 0) {
-                setInputValue('cons-anchorage', anchorageConsVal);
-                State.cons_anchorage = anchorageConsVal;
-                State.consAnchorage = anchorageConsVal;
-                State.consumo_fondeo_td = anchorageConsVal;
-            }
+if (!isUserOverrideSea && Number.isFinite(seaConsVal) && seaConsVal > 0) {
+    setInputValue('cons-sea', seaConsVal);
+    State.cons_sea = seaConsVal;
+    State.consSea = seaConsVal;
+    State.consumo_mar_td = seaConsVal;
+}
+if (!isUserOverridePort && Number.isFinite(portConsVal) && portConsVal > 0) {
+    setInputValue('cons-port', portConsVal);
+    State.cons_port = portConsVal;
+    State.consPort = portConsVal;
+    State.consumo_puerto_td = portConsVal;
+}
+if (!isUserOverrideAnchorage && Number.isFinite(anchorageConsVal) && anchorageConsVal > 0) {
+    setInputValue('cons-anchorage', anchorageConsVal);
+    State.cons_anchorage = anchorageConsVal;
+    State.consAnchorage = anchorageConsVal;
+    State.consumo_fondeo_td = anchorageConsVal;
+}
 
-            if (Object.keys(h15).length > 0) State.h15_technical_sheet = h15;
-            if (vesselTypeNormalized) State.vessel_type_normalized = vesselTypeNormalized;
-            if (Number.isFinite(grainCubicVal) && grainCubicVal > 0) State.grain_cubic_m3 = grainCubicVal;
-            if (Number.isFinite(baleCubicVal) && baleCubicVal > 0) State.bale_cubic_m3 = baleCubicVal;
-            if (hasGearsVal !== null) State.has_gears = hasGearsVal;
+if (Object.keys(h15).length > 0) State.h15_technical_sheet = h15;
+if (vesselTypeNormalized) State.vessel_type_normalized = vesselTypeNormalized;
+if (Number.isFinite(grainCubicVal) && grainCubicVal > 0) State.grain_cubic_m3 = grainCubicVal;
+if (Number.isFinite(baleCubicVal) && baleCubicVal > 0) State.bale_cubic_m3 = baleCubicVal;
+if (hasGearsVal !== null) State.has_gears = hasGearsVal;
 
             // 2. Patch State / SeaCharterStore without wiping activeReference or commercial terms
             if (name) {
