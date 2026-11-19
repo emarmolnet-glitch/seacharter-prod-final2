@@ -762,9 +762,65 @@
 
     function applyTechnicalFallbacks(state) {
         const canalEfectivo = detectEffectiveCanal(state);
-        const dwt = toNumber(state.capacidad_dwt);
-        const effectiveState = { ...state, canal_efectivo: canalEfectivo, canal_seleccionado: canalEfectivo };
+        const h15 = state.h15_technical_sheet
+            || state.source_payload?.h15_technical_sheet
+            || (typeof root !== 'undefined' ? (root.State?.h15_technical_sheet || root.State?.source_payload?.h15_technical_sheet || root.GlobalStore?.activeVessel?.h15_technical_sheet || root.GlobalStore?.activeVessel?.source_payload?.h15_technical_sheet || root.GlobalStore?.calculatorVessel?.h15_technical_sheet || root.GlobalStore?.calculatorVessel?.source_payload?.h15_technical_sheet) : null);
+        const h15Caps = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
+        const vesselTypeNormalized = String(
+            state.vessel_type_normalized
+            || h15?.vessel_type_normalized
+            || (typeof root !== 'undefined' ? (root.State?.vessel_type_normalized || root.GlobalStore?.activeVessel?.vessel_type_normalized || root.GlobalStore?.calculatorVessel?.vessel_type_normalized) : '')
+        ).toLowerCase();
+        const isTanker = vesselTypeNormalized === 'tanker';
+
+        const dwt = toNumber(h15?.dwt ?? state.capacidad_dwt);
+        const effectiveState = {
+            ...state,
+            vessel_type_normalized: vesselTypeNormalized || state.vessel_type_normalized,
+            canal_efectivo: canalEfectivo,
+            canal_seleccionado: canalEfectivo
+        };
         const fallbacks = {};
+
+        const consSeaEl = typeof document !== 'undefined' ? document.getElementById('cons-sea') : null;
+        const consPortEl = typeof document !== 'undefined' ? document.getElementById('cons-port') : null;
+        const consAnchorageEl = typeof document !== 'undefined' ? document.getElementById('cons-anchorage') : null;
+
+        const isUserOverrideSea = state.user_override_cons_sea || consSeaEl?.dataset?.userOverride === 'true';
+        const isUserOverridePort = state.user_override_cons_port || consPortEl?.dataset?.userOverride === 'true';
+        const isUserOverrideAnchorage = state.user_override_cons_anchorage || consAnchorageEl?.dataset?.userOverride === 'true';
+
+        // Aplicar consumos y capacidades H15 priorizando valores reales de h15 si no hay override explícito del usuario
+        if (h15) {
+            const h15SeaCons = toNumber(h15.vlsfo_sea_design_mt_day || h15.vlsfo_sea_eco_mt_day);
+            if (h15SeaCons > 0 && (!isUserOverrideSea || toNumber(effectiveState.consumo_mar_td) <= 0)) {
+                effectiveState.consumo_mar_td = h15SeaCons;
+                effectiveState.vlsfo_sea_design_mt_day = toNumber(h15.vlsfo_sea_design_mt_day || h15SeaCons);
+            }
+            const h15PortCons = toNumber(h15.mgo_port_working_mt_day);
+            if (h15PortCons > 0 && (!isUserOverridePort || toNumber(effectiveState.consumo_puerto_td) <= 0)) {
+                effectiveState.consumo_puerto_td = h15PortCons;
+                effectiveState.mgo_port_working_mt_day = h15PortCons;
+            }
+            const h15AnchorageCons = toNumber(h15.mgo_port_idle_mt_day);
+            if (h15AnchorageCons > 0 && (!isUserOverrideAnchorage || toNumber(effectiveState.consumo_fondeo_td) <= 0)) {
+                effectiveState.consumo_fondeo_td = h15AnchorageCons;
+                effectiveState.mgo_port_idle_mt_day = h15AnchorageCons;
+            }
+            if (h15.has_gears !== undefined) {
+                effectiveState.has_gears = Boolean(h15.has_gears);
+            }
+            if (!isTanker) {
+                const grain = h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3;
+                if (grain !== undefined && grain !== null) {
+                    effectiveState.grain_cubic_m3 = toNumber(grain);
+                }
+                const bale = h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3;
+                if (bale !== undefined && bale !== null) {
+                    effectiveState.bale_cubic_m3 = toNumber(bale);
+                }
+            }
+        }
 
         if (dwt > 0 && toNumber(effectiveState.tonelaje_neto) <= 0) {
             const estimated = estimateNetTonnage(dwt, canalEfectivo);
@@ -780,18 +836,37 @@
             fallbacks.calado_actual = estimated;
         }
 
-        if (dwt > 0 && toNumber(effectiveState.crane_swl_mt) <= 0) {
-            const estimated = estimateCraneSwl(dwt);
-            if (estimated > 0) {
-                effectiveState.crane_swl_mt = estimated;
-                fallbacks.crane_swl_mt = estimated;
-            }
-        }
+        if (isTanker) {
+            // Anula cubicajes de carga seca y grúas de carga seca
+            effectiveState.crane_swl_mt = 0;
+            effectiveState.grab_capacity_cbm = 0;
+            effectiveState.grain_cubic_m3 = 0;
+            effectiveState.bale_cubic_m3 = 0;
+            effectiveState.has_gears = false;
+            effectiveState.gruas_operativas_pol = 0;
+            effectiveState.gruas_operativas_pod = 0;
+        } else {
+            const hasGears = effectiveState.has_gears !== undefined ? Boolean(effectiveState.has_gears) : true;
+            if (!hasGears) {
+                effectiveState.crane_swl_mt = 0;
+                effectiveState.grab_capacity_cbm = 0;
+                effectiveState.gruas_operativas_pol = 0;
+                effectiveState.gruas_operativas_pod = 0;
+            } else {
+                if (dwt > 0 && toNumber(effectiveState.crane_swl_mt) <= 0) {
+                    const estimated = estimateCraneSwl(dwt);
+                    if (estimated > 0) {
+                        effectiveState.crane_swl_mt = estimated;
+                        fallbacks.crane_swl_mt = estimated;
+                    }
+                }
 
-        if (toNumber(effectiveState.grab_capacity_cbm) <= 0) {
-            const estimated = estimateGrabCapacity();
-            effectiveState.grab_capacity_cbm = estimated;
-            fallbacks.grab_capacity_cbm = estimated;
+                if (toNumber(effectiveState.grab_capacity_cbm) <= 0) {
+                    const estimated = estimateGrabCapacity();
+                    effectiveState.grab_capacity_cbm = estimated;
+                    fallbacks.grab_capacity_cbm = estimated;
+                }
+            }
         }
 
         const opexEl = typeof document !== 'undefined' ? document.getElementById('opex-daily') : null;
@@ -882,6 +957,22 @@
         const pesoPieza = toNumber(state.peso_pieza_mt);
         const ciclosHora = toNumber(state.ciclos_hora_grua);
         const requiresPieceInputs = normalizeCargoType(state.tipo_carga) === 'acero';
+        const isTanker = String(state.vessel_type_normalized || '').toLowerCase() === 'tanker';
+
+        if (isTanker || (state.has_gears === false && craneSwl <= 0)) {
+            return {
+                densidad_carga: densidadCarga,
+                peso_carga_ciclo: 0,
+                tara_cuchara: 0,
+                peso_total_izado: 0,
+                peso_pieza_mt: 0,
+                ciclos_hora_grua: 0,
+                missing_piece_inputs: false,
+                piece_overload: false,
+                overload: false
+            };
+        }
+
         const pesoCargaCiclo = grabCapacity * densidadCarga;
         const taraCuchara = grabCapacity * 0.4;
         const pesoTotalIzado = pesoCargaCiclo + taraCuchara;
@@ -1567,18 +1658,35 @@
         }
 
         readState() {
+            const h15 = (typeof root !== 'undefined' && root.State?.h15_technical_sheet)
+                || (typeof root !== 'undefined' && root.State?.source_payload?.h15_technical_sheet)
+                || (typeof root !== 'undefined' && root.GlobalStore?.activeVessel?.h15_technical_sheet)
+                || (typeof root !== 'undefined' && root.GlobalStore?.activeVessel?.source_payload?.h15_technical_sheet)
+                || (typeof root !== 'undefined' && root.GlobalStore?.calculatorVessel?.h15_technical_sheet)
+                || (typeof root !== 'undefined' && root.GlobalStore?.calculatorVessel?.source_payload?.h15_technical_sheet)
+                || null;
+            const h15Caps = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
+            const vesselTypeNormalized = String(
+                h15?.vessel_type_normalized
+                || (typeof root !== 'undefined' && (root.State?.vessel_type_normalized || root.GlobalStore?.activeVessel?.vessel_type_normalized || root.GlobalStore?.calculatorVessel?.vessel_type_normalized))
+                || ''
+            ).toLowerCase();
+            const isTanker = vesselTypeNormalized === 'tanker';
+
             const seaDays = toNumber((this.el('res-days-ballast')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 toNumber((this.el('res-days-laden')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 this.readNumber('factor-clima');
             const cargoTons = this.readNumber('cargo-qty');
             const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
             const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
-            const cranesPol = portMethodUsesCranes(metodoEstiba)
+            const rawCranesPol = portMethodUsesCranes(metodoEstiba)
                 ? (root.readNumeroGruasPuerto ? root.readNumeroGruasPuerto('pol') : Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 1)))
                 : 1;
-            const cranesPod = portMethodUsesCranes(metodoDescarga)
+            const rawCranesPod = portMethodUsesCranes(metodoDescarga)
                 ? (root.readNumeroGruasPuerto ? root.readNumeroGruasPuerto('pod') : Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 1)))
                 : 1;
+            const cranesPol = isTanker ? 0 : rawCranesPol;
+            const cranesPod = isTanker ? 0 : rawCranesPod;
             const nominalPol = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoEstiba) : getRealPortRate(metodoEstiba);
             const nominalPod = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoDescarga) : getRealPortRate(metodoDescarga);
             const tipoCarga = toText(this.el('cargo-type')?.value);
@@ -1592,6 +1700,15 @@
             const realPodRate = this.readNumber('rate-disch') || suggestedPodRate;
             const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method, craneCount) => calculatePortDaysByStowage(tons, method, rate, tipoCarga, craneCount));
             const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba, cranesPol) + calculatePortDays(cargoTons, realPodRate, metodoDescarga, cranesPod);
+            const rawConsSea = this.readNumber('cons-sea');
+            const consSea = rawConsSea > 0 ? rawConsSea : (h15 && Number(h15.vlsfo_sea_design_mt_day) > 0 ? Number(h15.vlsfo_sea_design_mt_day) : 0);
+            const rawConsPort = this.readNumber('cons-port');
+            const consPort = rawConsPort > 0 ? rawConsPort : (h15 && Number(h15.mgo_port_working_mt_day) > 0 ? Number(h15.mgo_port_working_mt_day) : 0);
+            const rawConsAnchorage = this.readNumber('cons-anchorage');
+            const consAnchorage = rawConsAnchorage > 0 ? rawConsAnchorage : (h15 && Number(h15.mgo_port_idle_mt_day) > 0 ? Number(h15.mgo_port_idle_mt_day) : 0);
+            const craneSwl = isTanker ? 0 : this.readPossiblyEstimatedNumber('crane-swl-mt');
+            const grabCap = isTanker ? 0 : this.readPossiblyEstimatedNumber('grab-capacity-cbm');
+
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
@@ -1606,11 +1723,11 @@
                 factor_estiba: this.readNumber('cargo-sf'),
                 capacidad_dwt: this.readNumber('vessel-dwt'),
                 has_scrubber: Boolean(this.el('vessel-has-scrubber')?.checked),
-                consumo_mar_td: this.readNumber('cons-sea'),
+                consumo_mar_td: consSea,
                 precio_vlsfo: this.readNumber('price-sea'),
                 precio_ifo380: this.readNumber('price-ifo'),
-                consumo_puerto_td: this.readNumber('cons-port'),
-                consumo_fondeo_td: this.readNumber('cons-anchorage'),
+                consumo_puerto_td: consPort,
+                consumo_fondeo_td: consAnchorage,
                 consumo_auxiliar_fondeo_td: this.readNumber('cons-anchorage-aux') || 2.0,
                 precio_mgo: this.readNumber('price-port'),
                 opex_fijo_diario: this.readPossiblyEstimatedNumber('opex-daily'),
@@ -1625,14 +1742,19 @@
                 tonelaje_neto: this.readPossiblyEstimatedNumber('vessel-net-tonnage'),
                 max_summer_draft: this.readNumber('vessel-draft'),
                 calado_actual: this.readPossiblyEstimatedNumber('current-draft'),
-                crane_swl_mt: this.readPossiblyEstimatedNumber('crane-swl-mt'),
+                crane_swl_mt: craneSwl,
                 peso_pieza_mt: this.readNumber('peso-pieza-mt'),
                 ciclos_hora_grua: this.readNumber('ciclos-hora-grua'),
                 gruas_operativas_pol: cranesPol,
                 gruas_operativas_pod: cranesPod,
-                grab_capacity_cbm: this.readPossiblyEstimatedNumber('grab-capacity-cbm'),
+                grab_capacity_cbm: grabCap,
                 canal_seleccionado: toText(this.el('selected-canal')?.value) || 'Auto',
-                charter_party_standard: toText(this.el('charter-party-standard')?.value) || 'GENCON'
+                charter_party_standard: toText(this.el('charter-party-standard')?.value) || 'GENCON',
+                vessel_type_normalized: vesselTypeNormalized || null,
+                h15_technical_sheet: h15,
+                grain_cubic_m3: isTanker ? 0 : (toNumber(h15Caps.grain_cubic_m3 ?? h15?.grain_cubic_m3) || 0),
+                bale_cubic_m3: isTanker ? 0 : (toNumber(h15Caps.bale_cubic_m3 ?? h15?.bale_cubic_m3) || 0),
+                has_gears: isTanker ? false : (h15?.has_gears !== undefined ? Boolean(h15.has_gears) : undefined),
             };
         }
 
