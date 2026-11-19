@@ -792,30 +792,30 @@
 
         // Aplicar consumos y capacidades H15 priorizando valores reales de h15 si no hay override explícito del usuario
         if (h15) {
-            const h15SeaCons = toNumber(h15.vlsfo_sea_design_mt_day || h15.vlsfo_sea_eco_mt_day);
-            if (h15SeaCons > 0 && (!isUserOverrideSea || toNumber(effectiveState.consumo_mar_td) <= 0)) {
+            const h15SeaCons = toNumber(h15.vlsfo_sea_design_mt_day || h15.vlsfo_sea_eco_mt_day || state.fuel_consumption_laden);
+            if (h15SeaCons > 0 && !isUserOverrideSea) {
                 effectiveState.consumo_mar_td = h15SeaCons;
                 effectiveState.vlsfo_sea_design_mt_day = toNumber(h15.vlsfo_sea_design_mt_day || h15SeaCons);
             }
-            const h15PortCons = toNumber(h15.mgo_port_working_mt_day);
-            if (h15PortCons > 0 && (!isUserOverridePort || toNumber(effectiveState.consumo_puerto_td) <= 0)) {
+            const h15PortCons = toNumber(h15.mgo_port_working_mt_day || state.fuel_consumption_port);
+            if (h15PortCons > 0 && !isUserOverridePort) {
                 effectiveState.consumo_puerto_td = h15PortCons;
                 effectiveState.mgo_port_working_mt_day = h15PortCons;
             }
-            const h15AnchorageCons = toNumber(h15.mgo_port_idle_mt_day);
-            if (h15AnchorageCons > 0 && (!isUserOverrideAnchorage || toNumber(effectiveState.consumo_fondeo_td) <= 0)) {
+            const h15AnchorageCons = toNumber(h15.mgo_port_idle_mt_day || state.cons_anchorage || state.consumo_fondeo_td);
+            if (h15AnchorageCons > 0 && !isUserOverrideAnchorage) {
                 effectiveState.consumo_fondeo_td = h15AnchorageCons;
                 effectiveState.mgo_port_idle_mt_day = h15AnchorageCons;
             }
             if (h15.has_gears !== undefined) {
-                effectiveState.has_gears = Boolean(h15.has_gears);
+                effectiveState.has_gears = isTanker ? false : Boolean(h15.has_gears);
             }
             if (!isTanker) {
-                const grain = h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3;
+                const grain = h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? state.grain_cubic_m3;
                 if (grain !== undefined && grain !== null) {
                     effectiveState.grain_cubic_m3 = toNumber(grain);
                 }
-                const bale = h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3;
+                const bale = h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? state.bale_cubic_m3;
                 if (bale !== undefined && bale !== null) {
                     effectiveState.bale_cubic_m3 = toNumber(bale);
                 }

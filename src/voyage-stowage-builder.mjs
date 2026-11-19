@@ -31,19 +31,18 @@ export function buildVoyageStowagePlan(voyageState = {}) {
   const isTanker = vesselTypeNormalized === 'tanker';
 
   const dwt = Number(h15.dwt || voyageState.dwt || 32000);
-  const vesselType = resolveReportVessel(voyageState).type;
-  const rawShipType = vesselType;
-  const vesselClass = vesselType;
+  const reportVessel = resolveReportVessel(voyageState);
+  const vesselType = reportVessel.type;
   const cargoType = voyageState.cargoType || 'Granel Sólido (Dry Bulk)';
   const stowageFactor = Number(voyageState.stowageFactor || voyageState.stowage_factor || 1.35) || 1.35;
   const cargoVolumeCbm = Number(voyageState.cargoVolume || voyageState.volumeCbm || Math.round(cargoTons * stowageFactor * 100) / 100);
 
-  const profile = resolveVesselStowageProfile(resolveReportVessel(voyageState).operationalType, vesselClass, voyageState.shipProfile || rawShipType);
+  const profile = resolveVesselStowageProfile(reportVessel.operationalType, vesselType, voyageState.shipProfile || vesselType);
   const baseIsGeared = globalThis.FixtureOperatingProfile.resolve(voyageState).isGeared;
-  const isGeared = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : baseIsGeared);
+  const isGeared = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : (voyageState.has_gears !== undefined ? Boolean(voyageState.has_gears) : baseIsGeared));
 
-  const h15Grain = Number(h15Capacities.grain_cubic_m3 ?? h15.grain_cubic_m3);
-  const h15Bale = Number(h15Capacities.bale_cubic_m3 ?? h15.bale_cubic_m3);
+  const h15Grain = Number(h15Capacities.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? voyageState.grain_cubic_m3);
+  const h15Bale = Number(h15Capacities.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? voyageState.bale_cubic_m3);
   const grainCapacityCbm = isTanker ? 0 : (Number.isFinite(h15Grain) && h15Grain > 0 ? h15Grain : (Math.round(dwt * 1.25) || 30300));
   const baleCapacityCbm = isTanker ? 0 : (Number.isFinite(h15Bale) && h15Bale > 0 ? h15Bale : 0);
 
@@ -181,18 +180,18 @@ export function buildVoyageStowagePlan(voyageState = {}) {
     vesselModel: {
       type: vesselType,
       selectedType: voyageState.vesselType,
-      operationalType: resolveReportVessel(voyageState).operationalType,
+      operationalType: reportVessel.operationalType,
       isGeared,
       profile,
       dwt,
       vessel_type_normalized: vesselTypeNormalized || null,
-      service_speed_knots: Number(h15.service_speed_knots) || null,
-      eco_speed_knots: Number(h15.eco_speed_knots) || null,
-      vlsfo_sea_design_mt_day: Number(h15.vlsfo_sea_design_mt_day) || null,
-      vlsfo_sea_eco_mt_day: Number(h15.vlsfo_sea_eco_mt_day) || null,
-      vlsfo_sea_ballast_mt_day: Number(h15.vlsfo_sea_ballast_mt_day) || null,
-      mgo_port_working_mt_day: Number(h15.mgo_port_working_mt_day) || null,
-      mgo_port_idle_mt_day: Number(h15.mgo_port_idle_mt_day) || null,
+      service_speed_knots: Number(h15.service_speed_knots ?? voyageState.service_speed_knots) || null,
+      eco_speed_knots: Number(h15.eco_speed_knots ?? voyageState.eco_speed_knots) || null,
+      vlsfo_sea_design_mt_day: Number(h15.vlsfo_sea_design_mt_day ?? voyageState.vlsfo_sea_design_mt_day ?? voyageState.fuel_consumption_laden) || null,
+      vlsfo_sea_eco_mt_day: Number(h15.vlsfo_sea_eco_mt_day ?? voyageState.vlsfo_sea_eco_mt_day) || null,
+      vlsfo_sea_ballast_mt_day: Number(h15.vlsfo_sea_ballast_mt_day ?? voyageState.vlsfo_sea_ballast_mt_day ?? voyageState.fuel_consumption_ballast) || null,
+      mgo_port_working_mt_day: Number(h15.mgo_port_working_mt_day ?? voyageState.mgo_port_working_mt_day ?? voyageState.fuel_consumption_port) || null,
+      mgo_port_idle_mt_day: Number(h15.mgo_port_idle_mt_day ?? voyageState.mgo_port_idle_mt_day ?? voyageState.cons_anchorage) || null,
       grain_cubic_m3: grainCapacityCbm,
       bale_cubic_m3: baleCapacityCbm,
       h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : null,
