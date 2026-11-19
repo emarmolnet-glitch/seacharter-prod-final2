@@ -13,11 +13,17 @@ export default async (req: Request) => {
     });
   } catch (error) {
     const controlled = error instanceof AisCoordinatorError;
-    if (!controlled) console.error("[ais-live-position] Shadow AIS request failed.");
+    if (!controlled) console.error("[ais-live-position] Shadow AIS request failed.", error);
+    let errorMessage = controlled ? error.message : "AIS live position request failed";
+    let errorCode = controlled ? error.code : "AIS_INTERNAL_ERROR";
+    if (errorMessage.includes("Datalastic")) {
+      errorMessage = "No fue posible obtener posición AIS en vivo en este momento.";
+      errorCode = "AIS_POSITION_UNAVAILABLE";
+    }
     return Response.json({
       success: false,
-      error: controlled ? error.message : "AIS live position request failed",
-      code: controlled ? error.code : "AIS_INTERNAL_ERROR",
+      error: errorMessage,
+      code: errorCode,
       details: controlled ? error.details : undefined,
     }, {
       status: controlled ? error.status : 500,

@@ -1268,31 +1268,58 @@ window.addEventListener('ais:consumption-updated', () => {
     }
 });
 
+function hasTrackingVesselCoordinates(vessel) {
+    if (!vessel || typeof vessel !== 'object') return false;
+    const lat = Number(vessel.latitude ?? vessel.lat ?? vessel.position?.lat ?? vessel.position?.latitude);
+    const lon = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? vessel.position?.lng ?? vessel.position?.longitude);
+    return Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lon) && lon >= -180 && lon <= 180;
+}
+
 async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
     const imo = getTrackingVesselImo(vessel, fallbackQuery);
     if (!imo) return vessel;
-    const response = await fetch(getApiUrl(`/api/internal/ais/live-position?imo=${encodeURIComponent(imo)}`), {
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-        signal,
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'No fue posible recuperar la posición AIS coordinada.');
+    try {
+        const response = await fetch(getApiUrl(`/api/internal/ais/live-position?imo=${encodeURIComponent(imo)}`), {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success || !payload.data) {
+            const errorMsg = String(payload?.error || '');
+            console.warn('[tracking-live] Live position coordinator unavailable; keeping vessel profile.', errorMsg);
+            if (hasTrackingVesselCoordinates(vessel) || errorMsg.includes('Datalastic')) {
+                return vessel;
+            }
+            throw new Error(payload?.error || 'No fue posible recuperar la posición AIS coordinada.');
+        }
+        const latitude = Number(payload.data.latitude);
+        const longitude = Number(payload.data.longitude);
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+            || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+            if (hasTrackingVesselCoordinates(vessel)) return vessel;
+            throw new Error('La respuesta AIS no contiene coordenadas válidas.');
+        }
+        window.DatalasticConsumptionLog?.recordFromMeta({
+            module: 'Tracking',
+            action: 'Consultar posición AIS en vivo',
+            meta: payload.meta || {},
+        });
+        void refreshAisConsumptionMonitor();
+        return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
+    } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        if (hasTrackingVesselCoordinates(vessel)) {
+            console.warn('[tracking-live] AIS live coordinator failed; keeping existing vessel position from AISstream/DB.', err?.message || err);
+            return vessel;
+        }
+        const msg = String(err?.message || '');
+        if (msg.includes('Datalastic')) {
+            console.warn('[tracking-live] Suppressing Datalastic rejection; keeping vessel profile.', msg);
+            return vessel;
+        }
+        throw err;
     }
-    const latitude = Number(payload.data.latitude);
-    const longitude = Number(payload.data.longitude);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
-        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-        throw new Error('La respuesta AIS no contiene coordenadas válidas.');
-    }
-    window.DatalasticConsumptionLog?.recordFromMeta({
-        module: 'Tracking',
-        action: 'Consultar posición AIS en vivo',
-        meta: payload.meta || {},
-    });
-    void refreshAisConsumptionMonitor();
-    return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
 }
 
 function cacheTrackingTelemetry(query, vessel) {
@@ -1323,7 +1350,13 @@ async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
             throw new Error(payload.error || 'No se encontró el buque solicitado.');
         }
         if (payload.found === false || !payload.vessel) return payload;
-        const vessel = await fetchCoordinatorLivePosition(payload.vessel, query);
+        let vessel = payload.vessel;
+        try {
+            vessel = await fetchCoordinatorLivePosition(payload.vessel, query);
+        } catch (coordError) {
+            console.warn('[tracking-live] Live position coordinator unavailable; continuing with vessel profile.', coordError?.message || coordError);
+            vessel = payload.vessel;
+        }
         cacheTrackingTelemetry(query, vessel);
         hasFetchedMapData.current.add(requestKey);
         return { ...payload, vessel };
@@ -1445,10 +1478,14 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
         if (error?.name === 'AbortError') return;
         if (silent && trackingState.basicVessel) return;
         trackingState.basicVessel = null;
-        trackingStore.getState().failVesselSearch(error?.message || 'No fue posible consultar el buque.');
+        const rawMessage = String(error?.message || '');
+        const message = rawMessage.includes('Datalastic')
+            ? 'No hay señal AIS en vivo en este momento; mostrando datos disponibles.'
+            : (rawMessage || 'No fue posible consultar el buque.');
+        trackingStore.getState().failVesselSearch(message);
         if (!trackingState.data) syncBasicVesselMap();
         document.getElementById('tracking-ais-vessel').textContent = query;
-        document.getElementById('tracking-ais-details').textContent = error?.message || 'No fue posible consultar el buque.';
+        document.getElementById('tracking-ais-details').textContent = message;
         document.getElementById('tracking-ais-position').textContent = '';
         document.getElementById('tracking-ais-navigation').textContent = '';
         document.getElementById('tracking-ais-time').textContent = '';
