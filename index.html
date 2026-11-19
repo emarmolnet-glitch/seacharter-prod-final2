@@ -38076,108 +38076,90 @@ return {
                 mmsi: profileVessel.mmsi || selectedIdentity.mmsi || null,
             };
             const vessel = applyResolvedVesselToCalculator(mergedVessel, mergedVessel.vessel_name || '');
-            const clearMissing = { clearWhenMissing: true };
-            const seaConsVal = Number.isFinite(vessel.cons_sea) && vessel.cons_sea > 0 ? vessel.cons_sea : (Number.isFinite(vessel.vlsfo_sea_design_mt_day) && vessel.vlsfo_sea_design_mt_day > 0 ? vessel.vlsfo_sea_design_mt_day : (Number.isFinite(vessel.fuel_consumption_laden) && vessel.fuel_consumption_laden > 0 ? vessel.fuel_consumption_laden : null));
-            const portConsVal = Number.isFinite(vessel.cons_port) && vessel.cons_port > 0 ? vessel.cons_port : (Number.isFinite(vessel.mgo_port_working_mt_day) && vessel.mgo_port_working_mt_day > 0 ? vessel.mgo_port_working_mt_day : (Number.isFinite(vessel.fuel_consumption_port) && vessel.fuel_consumption_port > 0 ? vessel.fuel_consumption_port : null));
-            const anchorageConsVal = Number.isFinite(vessel.cons_anchorage) && vessel.cons_anchorage > 0 ? vessel.cons_anchorage : (Number.isFinite(vessel.mgo_port_idle_mt_day) && vessel.mgo_port_idle_mt_day > 0 ? vessel.mgo_port_idle_mt_day : null);
+const clearMissing = { clearWhenMissing: true };
 
-            const consSeaEl = document.getElementById('cons-sea');
-            const consPortEl = document.getElementById('cons-port');
-            const consAnchorageEl = document.getElementById('cons-anchorage');
+const seaConsVal = Number.isFinite(vessel.cons_sea) && vessel.cons_sea > 0
+    ? vessel.cons_sea
+    : (Number.isFinite(vessel.vlsfo_sea_design_mt_day) && vessel.vlsfo_sea_design_mt_day > 0
+        ? vessel.vlsfo_sea_design_mt_day
+        : (Number.isFinite(vessel.fuel_consumption_laden) && vessel.fuel_consumption_laden > 0 ? vessel.fuel_consumption_laden : null));
 
-            const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
-            const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
-            const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
+const portConsVal = Number.isFinite(vessel.cons_port) && vessel.cons_port > 0
+    ? vessel.cons_port
+    : (Number.isFinite(vessel.mgo_port_working_mt_day) && vessel.mgo_port_working_mt_day > 0
+        ? vessel.mgo_port_working_mt_day
+        : (Number.isFinite(vessel.fuel_consumption_port) && vessel.fuel_consumption_port > 0 ? vessel.fuel_consumption_port : null));
 
-            const hydratedFields = [
-                setDataBridgeHydratedValue('nombre-buque-calculadora', vessel.vessel_name),
-                setDataBridgeHydratedValue('vessel-identity-imo', vessel.imo),
-                setDataBridgeHydratedValue('vessel-dwt', vessel.dwt, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('vessel-identity-dwt', vessel.dwt, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('vessel-identity-gt', vessel.gt || vessel.gross_tonnage, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('vessel-loa', vessel.loa || vessel.loa_meters, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('vessel-identity-loa', vessel.loa || vessel.loa_meters, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('vessel-identity-beam', vessel.beam || vessel.beam_meters, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('vessel-draft', vessel.draft || vessel.draft_meters, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('vessel-net-tonnage', vessel.net_tonnage, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('vessel-flag', vessel.flag, clearMissing),
-                setDataBridgeHydratedValue('vessel-identity-flag', vessel.flag, clearMissing),
-                setDataBridgeHydratedValue('vessel-identity-year', vessel.year_built, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast ?? vessel.service_speed_knots, { numeric: true }),
-                setDataBridgeHydratedValue('spd-laden', vessel.spd_laden ?? vessel.service_speed_knots, { numeric: true }),
-                !isUserOverrideSea ? setDataBridgeHydratedValue('cons-sea', seaConsVal, { ...clearMissing, numeric: true }) : false,
-                !isUserOverridePort ? setDataBridgeHydratedValue('cons-port', portConsVal, { ...clearMissing, numeric: true }) : false,
-                !isUserOverrideAnchorage ? setDataBridgeHydratedValue('cons-anchorage', anchorageConsVal, { numeric: true }) : false,
-            ];
-            applyDataBridgePayloadToCalculator(mergedVessel);
-            if (document.getElementById('opex-daily')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
-            if (document.getElementById('pda-pol')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
-            if (document.getElementById('pda-pod')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
-            if (document.getElementById('price-sea')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
-            if (vessel.has_scrubber !== null && vessel.has_scrubber !== undefined && typeof setVesselScrubber === 'function') {
-                setVesselScrubber(vessel.has_scrubber, false);
-                markDataBridgeHydratedField(document.getElementById('vessel-has-scrubber-yes')?.closest('[role="radiogroup"]'));
-                hydratedFields.push(true);
-            } else {
-                clearVesselScrubberSelection();
-            }
-            if (vessel.vessel_class || vessel.vessel_type) {
-                State.class = vessel.vessel_class || vessel.vessel_type;
-                const classBadge = document.getElementById('vessel-badge');
-                if (classBadge) classBadge.textContent = State.class;
-            }
-            State.dwt = Number(vessel.dwt) || 0;
-            State.draft = Number(vessel.draft || vessel.draft_meters) || 0;
-            State.loa = Number(vessel.loa || vessel.loa_meters) || 0;
-            State.beam = Number(vessel.beam || vessel.beam_meters) || 0;
-            State.gt = Number(vessel.gt || vessel.gross_tonnage) || 0;
-            State.yearBuilt = Number(vessel.year_built) || null;
-            State.hasScrubber = vessel.has_scrubber ?? null;
-            if (!isUserOverrideSea && seaConsVal !== null) {
-                State.cons_sea = seaConsVal;
-                State.consSea = seaConsVal;
-                State.consumo_mar_td = seaConsVal;
-            }
-            if (!isUserOverridePort && portConsVal !== null) {
-                State.cons_port = portConsVal;
-                State.consPort = portConsVal;
-                State.consumo_puerto_td = portConsVal;
-            }
-            if (!isUserOverrideAnchorage && anchorageConsVal !== null) {
-                State.cons_anchorage = anchorageConsVal;
-                State.consAnchorage = anchorageConsVal;
-                State.consumo_fondeo_td = anchorageConsVal;
-            }
-            if (vessel.h15_technical_sheet) State.h15_technical_sheet = vessel.h15_technical_sheet;
-            if (vessel.vessel_type_normalized) State.vessel_type_normalized = vessel.vessel_type_normalized;
-            if (vessel.grain_cubic_m3) State.grain_cubic_m3 = vessel.grain_cubic_m3;
-            if (vessel.bale_cubic_m3) State.bale_cubic_m3 = vessel.bale_cubic_m3;
-            if (vessel.has_gears !== undefined && vessel.has_gears !== null) State.has_gears = vessel.has_gears;
-            if (vessel.service_speed_knots) State.service_speed_knots = vessel.service_speed_knots;
-            if (vessel.eco_speed_knots) State.eco_speed_knots = vessel.eco_speed_knots;
-            if (vessel.vlsfo_sea_design_mt_day) State.vlsfo_sea_design_mt_day = vessel.vlsfo_sea_design_mt_day;
-            if (vessel.vlsfo_sea_eco_mt_day) State.vlsfo_sea_eco_mt_day = vessel.vlsfo_sea_eco_mt_day;
-            if (vessel.vlsfo_sea_ballast_mt_day) State.vlsfo_sea_ballast_mt_day = vessel.vlsfo_sea_ballast_mt_day;
-            if (vessel.mgo_port_working_mt_day) State.mgo_port_working_mt_day = vessel.mgo_port_working_mt_day;
-            if (vessel.mgo_port_idle_mt_day) State.mgo_port_idle_mt_day = vessel.mgo_port_idle_mt_day;
-            State.vesselDwtFixed = State.dwt > 0;
-            updateSection2LocalState('vessel-dwt', State.dwt > 0 ? String(State.dwt) : '');
-            updateSection2LocalState('vessel-draft', State.draft > 0 ? String(State.draft) : '');
-            updateSection2LocalState('vessel-loa', State.loa > 0 ? String(State.loa) : '');
-            updateSection2LocalState('vessel-identity-beam', State.beam > 0 ? String(State.beam) : '');
-            window.recordVerifiedVesselClass?.(vessel);
-            if (window.GlobalStore) {
-                window.GlobalStore.activeVessel = vessel;
-                window.GlobalStore.calculatorVessel = vessel;
-            }
-            if (typeof handleFlagOrPscChange === 'function' && vessel.flag) handleFlagOrPscChange();
-            if (typeof runEngine === 'function') runEngine();
-            if (window.SeaCharterVoyageCostController?.recalculate) {
-                window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
-            }
-            const completeness = getVesselProfileCompleteness(vessel);
-            if (hydratedFields.some(Boolean)) setDataBridgeHydrationBadge(true, vessel.vessel_name || vessel.vesselName || '');
-            setVesselProfileCompletenessBadge(completeness);
+const anchorageConsVal = Number.isFinite(vessel.cons_anchorage) && vessel.cons_anchorage > 0
+    ? vessel.cons_anchorage
+    : (Number.isFinite(vessel.mgo_port_idle_mt_day) && vessel.mgo_port_idle_mt_day > 0 ? vessel.mgo_port_idle_mt_day : null);
+
+const consSeaEl = document.getElementById('cons-sea');
+const consPortEl = document.getElementById('cons-port');
+const consAnchorageEl = document.getElementById('cons-anchorage');
+
+const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
+const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
+const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
+
+const hydratedFields = [
+    setDataBridgeHydratedValue('nombre-buque-calculadora', vessel.vessel_name),
+    setDataBridgeHydratedValue('vessel-identity-imo', vessel.imo),
+    setDataBridgeHydratedValue('vessel-identity-year', vessel.year_built, { ...clearMissing, numeric: true, round: true }),
+    setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast ?? vessel.service_speed_knots, { numeric: true }),
+    setDataBridgeHydratedValue('spd-laden', vessel.spd_laden ?? vessel.service_speed_knots, { numeric: true }),
+    !isUserOverrideSea ? setDataBridgeHydratedValue('cons-sea', seaConsVal, { ...clearMissing, numeric: true }) : false,
+    !isUserOverridePort ? setDataBridgeHydratedValue('cons-port', portConsVal, { ...clearMissing, numeric: true }) : false,
+    !isUserOverrideAnchorage ? setDataBridgeHydratedValue('cons-anchorage', anchorageConsVal, { numeric: true }) : false,
+];
+
+applyDataBridgePayloadToCalculator(mergedVessel);
+if (document.getElementById('opex-daily')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
+
+State.gt = Number(vessel.gt || vessel.gross_tonnage) || 0;
+State.yearBuilt = Number(vessel.year_built) || null;
+State.hasScrubber = vessel.has_scrubber ?? null;
+
+if (!isUserOverrideSea && seaConsVal !== null) {
+    State.cons_sea = seaConsVal;
+    State.consSea = seaConsVal;
+    State.consumo_mar_td = seaConsVal;
+}
+if (!isUserOverridePort && portConsVal !== null) {
+    State.cons_port = portConsVal;
+    State.consPort = portConsVal;
+    State.consumo_puerto_td = portConsVal;
+}
+if (!isUserOverrideAnchorage && anchorageConsVal !== null) {
+    State.cons_anchorage = anchorageConsVal;
+    State.consAnchorage = anchorageConsVal;
+    State.consumo_fondeo_td = anchorageConsVal;
+}
+if (vessel.h15_technical_sheet) State.h15_technical_sheet = vessel.h15_technical_sheet;
+if (vessel.vessel_type_normalized) State.vessel_type_normalized = vessel.vessel_type_normalized;
+if (vessel.grain_cubic_m3) State.grain_cubic_m3 = vessel.grain_cubic_m3;
+if (vessel.bale_cubic_m3) State.bale_cubic_m3 = vessel.bale_cubic_m3;
+if (vessel.has_gears !== undefined && vessel.has_gears !== null) State.has_gears = vessel.has_gears;
+if (vessel.service_speed_knots) State.service_speed_knots = vessel.service_speed_knots;
+if (vessel.eco_speed_knots) State.eco_speed_knots = vessel.eco_speed_knots;
+if (vessel.vlsfo_sea_design_mt_day) State.vlsfo_sea_design_mt_day = vessel.vlsfo_sea_design_mt_day;
+if (vessel.vlsfo_sea_eco_mt_day) State.vlsfo_sea_eco_mt_day = vessel.vlsfo_sea_eco_mt_day;
+if (vessel.vlsfo_sea_ballast_mt_day) State.vlsfo_sea_ballast_mt_day = vessel.vlsfo_sea_ballast_mt_day;
+if (vessel.mgo_port_working_mt_day) State.mgo_port_working_mt_day = vessel.mgo_port_working_mt_day;
+if (vessel.mgo_port_idle_mt_day) State.mgo_port_idle_mt_day = vessel.mgo_port_idle_mt_day;
+
+State.vesselDwtFixed = State.dwt > 0;
+updateSection2LocalState('vessel-dwt', State.dwt > 0 ? String(State.dwt) : '');
+updateSection2LocalState('vessel-draft', State.draft > 0 ? String(State.draft) : '');
+
+if (typeof handleFlagOrPscChange === 'function' && vessel.flag) handleFlagOrPscChange();
+if (typeof runEngine === 'function') runEngine();
+if (window.SeaCharterVoyageCostController?.recalculate) {
+    window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
+}
+const completeness = getVesselProfileCompleteness(vessel);
+if (hydratedFields.some(Boolean)) setDataBridgeHydrationBadge(true, vessel.vessel_name || vessel.vesselName || '');
+setVesselProfileCompletenessBadge(completeness);
             vessel.profileCompleteness = completeness;
             vessel.profileStatus = completeness.complete ? 'COMPLETE' : 'PARTIAL';
             return vessel;
