@@ -37482,6 +37482,7 @@ function createRouteAnchorElement(type) {
             const hasGears = normalizeVesselBoolean(h15.has_gears ?? source.has_gears ?? source.hasGears ?? metadata.HasGears);
             const vesselClass = source.vessel_class || source.vesselClass || source.commercial_class || source.commercialClass || source.vessel_type || source.vesselType || null;
             const vesselTypeNormalized = h15.vessel_type_normalized || source.vessel_type_normalized || null;
+            const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
 
             return {
                 ...source,
@@ -37513,11 +37514,11 @@ function createRouteAnchorElement(type) {
                 eco_speed_knots: Number.isFinite(ecoSpeed) && ecoSpeed > 0 ? ecoSpeed : null,
                 spd_ballast: Number.isFinite(ballastSpeed) && ballastSpeed > 0 ? ballastSpeed : null,
                 spd_laden: Number.isFinite(ladenSpeed) && ladenSpeed > 0 ? ladenSpeed : null,
-                vlsfo_sea_design_mt_day: Number.isFinite(vlsfoDesign) && vlsfoDesign > 0 ? vlsfoDesign : null,
+                vlsfo_sea_design_mt_day: Number.isFinite(vlsfoDesign) && vlsfoDesign > 0 ? vlsfoDesign : (Number.isFinite(consSea) && consSea > 0 ? consSea : null),
                 vlsfo_sea_eco_mt_day: Number.isFinite(vlsfoEco) && vlsfoEco > 0 ? vlsfoEco : null,
-                vlsfo_sea_ballast_mt_day: Number.isFinite(vlsfoBallast) && vlsfoBallast > 0 ? vlsfoBallast : null,
-                mgo_port_working_mt_day: Number.isFinite(mgoWorking) && mgoWorking > 0 ? mgoWorking : null,
-                mgo_port_idle_mt_day: Number.isFinite(mgoIdle) && mgoIdle > 0 ? mgoIdle : null,
+                vlsfo_sea_ballast_mt_day: Number.isFinite(vlsfoBallast) && vlsfoBallast > 0 ? vlsfoBallast : (Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null),
+                mgo_port_working_mt_day: Number.isFinite(mgoWorking) && mgoWorking > 0 ? mgoWorking : (Number.isFinite(consPort) && consPort > 0 ? consPort : null),
+                mgo_port_idle_mt_day: Number.isFinite(mgoIdle) && mgoIdle > 0 ? mgoIdle : (Number.isFinite(consAnchorage) && consAnchorage > 0 ? consAnchorage : null),
                 cons_sea: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
                 cons_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
                 cons_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
@@ -37525,10 +37526,10 @@ function createRouteAnchorElement(type) {
                 fuel_consumption_laden: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
                 fuel_consumption_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
                 fuel_consumption_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
-                grain_cubic_m3: Number.isFinite(grainCubicM3) && grainCubicM3 > 0 ? grainCubicM3 : null,
-                bale_cubic_m3: Number.isFinite(baleCubicM3) && baleCubicM3 > 0 ? baleCubicM3 : null,
+                grain_cubic_m3: isTanker ? 0 : (Number.isFinite(grainCubicM3) && grainCubicM3 > 0 ? grainCubicM3 : null),
+                bale_cubic_m3: isTanker ? 0 : (Number.isFinite(baleCubicM3) && baleCubicM3 > 0 ? baleCubicM3 : null),
                 owner_manager: ownerManager,
-                has_gears: hasGears,
+                has_gears: isTanker ? false : hasGears,
                 has_scrubber: hasScrubber,
             };
         }
@@ -38079,9 +38080,18 @@ function createRouteAnchorElement(type) {
             };
             const vessel = applyResolvedVesselToCalculator(mergedVessel, mergedVessel.vessel_name || '');
             const clearMissing = { clearWhenMissing: true };
-            const seaConsVal = Number.isFinite(vessel.cons_sea) && vessel.cons_sea > 0 ? vessel.cons_sea : (Number.isFinite(vessel.vlsfo_sea_design_mt_day) && vessel.vlsfo_sea_design_mt_day > 0 ? vessel.vlsfo_sea_design_mt_day : null);
-            const portConsVal = Number.isFinite(vessel.cons_port) && vessel.cons_port > 0 ? vessel.cons_port : (Number.isFinite(vessel.mgo_port_working_mt_day) && vessel.mgo_port_working_mt_day > 0 ? vessel.mgo_port_working_mt_day : null);
+            const seaConsVal = Number.isFinite(vessel.cons_sea) && vessel.cons_sea > 0 ? vessel.cons_sea : (Number.isFinite(vessel.vlsfo_sea_design_mt_day) && vessel.vlsfo_sea_design_mt_day > 0 ? vessel.vlsfo_sea_design_mt_day : (Number.isFinite(vessel.fuel_consumption_laden) && vessel.fuel_consumption_laden > 0 ? vessel.fuel_consumption_laden : null));
+            const portConsVal = Number.isFinite(vessel.cons_port) && vessel.cons_port > 0 ? vessel.cons_port : (Number.isFinite(vessel.mgo_port_working_mt_day) && vessel.mgo_port_working_mt_day > 0 ? vessel.mgo_port_working_mt_day : (Number.isFinite(vessel.fuel_consumption_port) && vessel.fuel_consumption_port > 0 ? vessel.fuel_consumption_port : null));
             const anchorageConsVal = Number.isFinite(vessel.cons_anchorage) && vessel.cons_anchorage > 0 ? vessel.cons_anchorage : (Number.isFinite(vessel.mgo_port_idle_mt_day) && vessel.mgo_port_idle_mt_day > 0 ? vessel.mgo_port_idle_mt_day : null);
+
+            const consSeaEl = document.getElementById('cons-sea');
+            const consPortEl = document.getElementById('cons-port');
+            const consAnchorageEl = document.getElementById('cons-anchorage');
+
+            const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
+            const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
+            const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
+
             const hydratedFields = [
                 setDataBridgeHydratedValue('nombre-buque-calculadora', vessel.vessel_name),
                 setDataBridgeHydratedValue('vessel-identity-imo', vessel.imo),
@@ -38098,9 +38108,9 @@ function createRouteAnchorElement(type) {
                 setDataBridgeHydratedValue('vessel-identity-year', vessel.year_built, { ...clearMissing, numeric: true, round: true }),
                 setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast ?? vessel.service_speed_knots, { numeric: true }),
                 setDataBridgeHydratedValue('spd-laden', vessel.spd_laden ?? vessel.service_speed_knots, { numeric: true }),
-                setDataBridgeHydratedValue('cons-sea', seaConsVal, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('cons-port', portConsVal, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('cons-anchorage', anchorageConsVal, { numeric: true }),
+                !isUserOverrideSea ? setDataBridgeHydratedValue('cons-sea', seaConsVal, { ...clearMissing, numeric: true }) : false,
+                !isUserOverridePort ? setDataBridgeHydratedValue('cons-port', portConsVal, { ...clearMissing, numeric: true }) : false,
+                !isUserOverrideAnchorage ? setDataBridgeHydratedValue('cons-anchorage', anchorageConsVal, { numeric: true }) : false,
             ];
             applyDataBridgePayloadToCalculator(mergedVessel);
             if (document.getElementById('opex-daily')?.dataset?.dataBridgeLocked === 'true') hydratedFields.push(true);
@@ -38126,17 +38136,17 @@ function createRouteAnchorElement(type) {
             State.gt = Number(vessel.gt || vessel.gross_tonnage) || 0;
             State.yearBuilt = Number(vessel.year_built) || null;
             State.hasScrubber = vessel.has_scrubber ?? null;
-            if (seaConsVal !== null) {
+            if (!isUserOverrideSea && seaConsVal !== null) {
                 State.cons_sea = seaConsVal;
                 State.consSea = seaConsVal;
                 State.consumo_mar_td = seaConsVal;
             }
-            if (portConsVal !== null) {
+            if (!isUserOverridePort && portConsVal !== null) {
                 State.cons_port = portConsVal;
                 State.consPort = portConsVal;
                 State.consumo_puerto_td = portConsVal;
             }
-            if (anchorageConsVal !== null) {
+            if (!isUserOverrideAnchorage && anchorageConsVal !== null) {
                 State.cons_anchorage = anchorageConsVal;
                 State.consAnchorage = anchorageConsVal;
                 State.consumo_fondeo_td = anchorageConsVal;
@@ -38295,6 +38305,51 @@ function createRouteAnchorElement(type) {
             if (yearBuilt > 0) {
                 setInputValue('vessel-identity-year', yearBuilt);
             }
+
+            const h15 = raw.h15_technical_sheet || raw.source_payload?.h15_technical_sheet || {};
+            const h15Caps = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
+            const vesselTypeNormalized = h15.vessel_type_normalized || raw.vessel_type_normalized || null;
+            const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
+
+            const seaConsVal = Number(h15.vlsfo_sea_design_mt_day ?? h15.vlsfo_sea_eco_mt_day ?? raw.fuel_consumption_laden ?? raw.cons_sea ?? raw.consSea);
+            const portConsVal = Number(h15.mgo_port_working_mt_day ?? raw.fuel_consumption_port ?? raw.cons_port ?? raw.consPort);
+            const anchorageConsVal = Number(h15.mgo_port_idle_mt_day ?? raw.cons_anchorage ?? raw.consumo_fondeo_td ?? raw.consumo_anchorage_td);
+            const grainCubicVal = isTanker ? 0 : Number(h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? raw.grain_cubic_m3);
+            const baleCubicVal = isTanker ? 0 : Number(h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? raw.bale_cubic_m3);
+            const hasGearsVal = isTanker ? false : (h15.has_gears !== undefined ? Boolean(h15.has_gears) : (raw.has_gears !== undefined ? Boolean(raw.has_gears) : null));
+
+            const consSeaEl = document.getElementById('cons-sea');
+            const consPortEl = document.getElementById('cons-port');
+            const consAnchorageEl = document.getElementById('cons-anchorage');
+
+            const isUserOverrideSea = consSeaEl?.dataset?.userOverride === 'true';
+            const isUserOverridePort = consPortEl?.dataset?.userOverride === 'true';
+            const isUserOverrideAnchorage = consAnchorageEl?.dataset?.userOverride === 'true';
+
+            if (!isUserOverrideSea && Number.isFinite(seaConsVal) && seaConsVal > 0) {
+                setInputValue('cons-sea', seaConsVal);
+                State.cons_sea = seaConsVal;
+                State.consSea = seaConsVal;
+                State.consumo_mar_td = seaConsVal;
+            }
+            if (!isUserOverridePort && Number.isFinite(portConsVal) && portConsVal > 0) {
+                setInputValue('cons-port', portConsVal);
+                State.cons_port = portConsVal;
+                State.consPort = portConsVal;
+                State.consumo_puerto_td = portConsVal;
+            }
+            if (!isUserOverrideAnchorage && Number.isFinite(anchorageConsVal) && anchorageConsVal > 0) {
+                setInputValue('cons-anchorage', anchorageConsVal);
+                State.cons_anchorage = anchorageConsVal;
+                State.consAnchorage = anchorageConsVal;
+                State.consumo_fondeo_td = anchorageConsVal;
+            }
+
+            if (Object.keys(h15).length > 0) State.h15_technical_sheet = h15;
+            if (vesselTypeNormalized) State.vessel_type_normalized = vesselTypeNormalized;
+            if (Number.isFinite(grainCubicVal) && grainCubicVal > 0) State.grain_cubic_m3 = grainCubicVal;
+            if (Number.isFinite(baleCubicVal) && baleCubicVal > 0) State.bale_cubic_m3 = baleCubicVal;
+            if (hasGearsVal !== null) State.has_gears = hasGearsVal;
 
             // 2. Patch State / SeaCharterStore without wiping activeReference or commercial terms
             if (name) {

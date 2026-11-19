@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { HashRouter, HashRouter as BrowserRouter } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import { ForwarderWorkspace } from './components/ForwarderWorkspace.jsx';
 import {
   default as GlobalMadreDrawer,
@@ -15,6 +15,10 @@ import {
   ejecutarEscaneoCompleto
 } from './components/GlobalMadreDrawer';
 import { getApiUrl } from './utils/apiConfig.js';
+import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
+import { I18nContext, I18nProvider, useI18n } from './context/I18nContext.jsx';
+
+const BrowserRouter = HashRouter;
 
 /**
  * Normalizes reference identifiers for cross-module session matching.
@@ -138,14 +142,18 @@ export function hydrateVesselH15(rawVessel) {
   const mgoWorking = h15.mgo_port_working_mt_day ?? rawVessel.mgo_port_working_mt_day;
   const mgoIdle = h15.mgo_port_idle_mt_day ?? rawVessel.mgo_port_idle_mt_day;
 
-  const consSea = vlsfoDesign ?? vlsfoEco ?? rawVessel.cons_sea ?? rawVessel.fuel_consumption_laden;
-  const consPort = mgoWorking ?? rawVessel.cons_port ?? rawVessel.fuel_consumption_port;
-  const consBallast = vlsfoBallast ?? rawVessel.cons_ballast ?? rawVessel.fuel_consumption_ballast ?? consSea;
+  const consSea = vlsfoDesign ?? vlsfoEco ?? rawVessel.fuel_consumption_laden ?? rawVessel.cons_sea;
+  const consPort = mgoWorking ?? rawVessel.fuel_consumption_port ?? rawVessel.cons_port;
+  const consBallast = vlsfoBallast ?? rawVessel.fuel_consumption_ballast ?? rawVessel.cons_ballast ?? consSea;
+  const consAnchorage = mgoIdle ?? rawVessel.cons_anchorage ?? rawVessel.consumo_fondeo_td ?? rawVessel.consumo_anchorage_td;
+
+  const vesselTypeNormalized = h15.vessel_type_normalized || rawVessel.vessel_type_normalized || null;
+  const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
 
   return {
     ...rawVessel,
     h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : (rawVessel.h15_technical_sheet || null),
-    vessel_type_normalized: h15.vessel_type_normalized || rawVessel.vessel_type_normalized || null,
+    vessel_type_normalized: vesselTypeNormalized,
     dwt: dwt !== undefined && dwt !== null ? Number(dwt) : rawVessel.dwt,
     service_speed_knots: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.service_speed_knots,
     eco_speed_knots: ecoSpeed !== undefined && ecoSpeed !== null ? Number(ecoSpeed) : rawVessel.eco_speed_knots,
@@ -157,12 +165,81 @@ export function hydrateVesselH15(rawVessel) {
     cons_sea: consSea !== undefined && consSea !== null ? Number(consSea) : null,
     cons_port: consPort !== undefined && consPort !== null ? Number(consPort) : null,
     cons_ballast: consBallast !== undefined && consBallast !== null ? Number(consBallast) : null,
+    cons_anchorage: consAnchorage !== undefined && consAnchorage !== null ? Number(consAnchorage) : null,
+    fuel_consumption_laden: consSea !== undefined && consSea !== null ? Number(consSea) : null,
+    fuel_consumption_ballast: consBallast !== undefined && consBallast !== null ? Number(consBallast) : null,
+    fuel_consumption_port: consPort !== undefined && consPort !== null ? Number(consPort) : null,
     spd_ballast: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.spd_ballast,
     spd_laden: serviceSpeed !== undefined && serviceSpeed !== null ? Number(serviceSpeed) : rawVessel.spd_laden,
-    grain_cubic_m3: grainCap !== undefined && grainCap !== null ? Number(grainCap) : null,
-    bale_cubic_m3: baleCap !== undefined && baleCap !== null ? Number(baleCap) : null,
-    has_gears: hasGears !== undefined ? hasGears : null,
+    grain_cubic_m3: isTanker ? 0 : (grainCap !== undefined && grainCap !== null ? Number(grainCap) : null),
+    bale_cubic_m3: isTanker ? 0 : (baleCap !== undefined && baleCap !== null ? Number(baleCap) : null),
+    has_gears: isTanker ? false : (hasGears !== undefined ? hasGears : null),
   };
+}
+
+export function applyHydrationConsumptions(vessel) {
+  if (!vessel || typeof document === 'undefined') return;
+  const consSeaEl = document.getElementById('cons-sea');
+  const consPortEl = document.getElementById('cons-port');
+  const consAnchorageEl = document.getElementById('cons-anchorage');
+
+  const seaVal = Number(vessel.cons_sea ?? vessel.vlsfo_sea_design_mt_day ?? vessel.fuel_consumption_laden);
+  const portVal = Number(vessel.cons_port ?? vessel.mgo_port_working_mt_day ?? vessel.fuel_consumption_port);
+  const anchorageVal = Number(vessel.cons_anchorage ?? vessel.mgo_port_idle_mt_day);
+
+  if (consSeaEl && consSeaEl.dataset?.userOverride !== 'true' && Number.isFinite(seaVal) && seaVal > 0) {
+    consSeaEl.value = String(seaVal);
+    consSeaEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (typeof window !== 'undefined' && window.State) {
+      window.State.cons_sea = seaVal;
+      window.State.consSea = seaVal;
+      window.State.consumo_mar_td = seaVal;
+    }
+  }
+
+  if (consPortEl && consPortEl.dataset?.userOverride !== 'true' && Number.isFinite(portVal) && portVal > 0) {
+    consPortEl.value = String(portVal);
+    consPortEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (typeof window !== 'undefined' && window.State) {
+      window.State.cons_port = portVal;
+      window.State.consPort = portVal;
+      window.State.consumo_puerto_td = portVal;
+    }
+  }
+
+  if (consAnchorageEl && consAnchorageEl.dataset?.userOverride !== 'true' && Number.isFinite(anchorageVal) && anchorageVal > 0) {
+    consAnchorageEl.value = String(anchorageVal);
+    consAnchorageEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (typeof window !== 'undefined' && window.State) {
+      window.State.cons_anchorage = anchorageVal;
+      window.State.consAnchorage = anchorageVal;
+      window.State.consumo_fondeo_td = anchorageVal;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    if (vessel.h15_technical_sheet && window.State) {
+      window.State.h15_technical_sheet = vessel.h15_technical_sheet;
+    }
+    if (vessel.vessel_type_normalized && window.State) {
+      window.State.vessel_type_normalized = vessel.vessel_type_normalized;
+    }
+    if (vessel.grain_cubic_m3 && window.State) {
+      window.State.grain_cubic_m3 = vessel.grain_cubic_m3;
+    }
+    if (vessel.bale_cubic_m3 && window.State) {
+      window.State.bale_cubic_m3 = vessel.bale_cubic_m3;
+    }
+    if (vessel.has_gears !== undefined && window.State) {
+      window.State.has_gears = vessel.has_gears;
+    }
+    if (typeof window.runEngine === 'function') {
+      window.runEngine();
+    }
+    if (window.SeaCharterVoyageCostController?.recalculate) {
+      window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
+    }
+  }
 }
 
 /**
@@ -209,6 +286,7 @@ export function executeImoHydration(imoValue) {
       imo_number: cleanImo,
       imoNumber: cleanImo
     });
+    applyHydrationConsumptions(vesselData);
 
     // 2. Sincronización en Contexto Global / Zustand / VoyageStore
     if (typeof window !== 'undefined' && typeof window.patchSection2Vessel === 'function') {
@@ -226,6 +304,32 @@ export function executeImoHydration(imoValue) {
       }
     }
 
+    const syncHydrated = (targetVessel, rawPayload) => {
+      const fullVessel = hydrateVesselH15(targetVessel);
+      applyHydrationConsumptions(fullVessel);
+      try {
+        const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
+        vStore?.patchSection2Vessel?.(fullVessel);
+      } catch (_) {}
+      if (window.GlobalStore) {
+        window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
+        window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
+      }
+      if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
+        window.applyDataBridgePayloadToCalculator({ ...(rawPayload || {}), vessel: fullVessel });
+      }
+      if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
+        window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
+      }
+      if (typeof window.runEngine === 'function') {
+        window.runEngine();
+      }
+      if (window.SeaCharterVoyageCostController?.recalculate) {
+        window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
+      }
+      return fullVessel;
+    };
+
     // 3. Ejecutar la función o abrir el VesselDetailDrawer para revisión del fletador
     if (typeof window !== 'undefined') {
       if (typeof window.openVesselDetailDrawer === 'function') {
@@ -234,28 +338,8 @@ export function executeImoHydration(imoValue) {
           .then((res) => res.json())
           .then((payload) => {
             if (payload?.success && payload.vessel) {
-              const fullVessel = hydrateVesselH15(payload.vessel);
+              const fullVessel = syncHydrated(payload.vessel, payload);
               window.openVesselDetailDrawer(fullVessel, 'Data Bridge (Neon DB)');
-              try {
-                const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
-                vStore?.patchSection2Vessel?.(fullVessel);
-              } catch (_) {}
-              if (window.GlobalStore) {
-                window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
-                window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
-              }
-              if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
-                window.applyDataBridgePayloadToCalculator({ ...payload, vessel: fullVessel });
-              }
-              if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
-                window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
-              }
-              if (typeof window.runEngine === 'function') {
-                window.runEngine();
-              }
-              if (window.SeaCharterVoyageCostController?.recalculate) {
-                window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
-              }
             } else {
               window.openVesselDetailDrawer(vesselData, 'Data Bridge (Broadcast)');
             }
@@ -272,27 +356,7 @@ export function executeImoHydration(imoValue) {
             .then((res) => res.json())
             .then((payload) => {
               if (payload?.success && payload.vessel) {
-                const fullVessel = hydrateVesselH15(payload.vessel);
-                try {
-                  const vStore = window.VoyageStore?.getState?.() || window.useVoyageStore?.getState?.();
-                  vStore?.patchSection2Vessel?.(fullVessel);
-                } catch (_) {}
-                if (window.GlobalStore) {
-                  window.GlobalStore.activeVessel = { ...(window.GlobalStore.activeVessel || {}), ...fullVessel };
-                  window.GlobalStore.calculatorVessel = { ...(window.GlobalStore.calculatorVessel || {}), ...fullVessel };
-                }
-                if (typeof window.applyDataBridgePayloadToCalculator === 'function') {
-                  window.applyDataBridgePayloadToCalculator({ ...payload, vessel: fullVessel });
-                }
-                if (typeof window.applyDataBridgeHydrationToCalculator === 'function') {
-                  window.applyDataBridgeHydrationToCalculator(fullVessel, { imo: cleanImo, imo_number: cleanImo });
-                }
-                if (typeof window.runEngine === 'function') {
-                  window.runEngine();
-                }
-                if (window.SeaCharterVoyageCostController?.recalculate) {
-                  window.SeaCharterVoyageCostController.recalculate({ renderTotals: true });
-                }
+                syncHydrated(payload.vessel, payload);
               }
             })
             .catch(() => {});
@@ -737,9 +801,6 @@ export function useHeaderVisibility(defaultVisible = true) {
   return { isHeaderVisible: true, setIsHeaderVisible, toggleHeader };
 }
 
-import { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef } from './context/ProjectContext.jsx';
-import { I18nContext, I18nProvider, useI18n } from './context/I18nContext.jsx';
-
 export default function App(props) {
   const [isMadreOpen, setIsMadreOpen] = useState(false);
   const [lang, setLang] = useState(() => {
@@ -945,7 +1006,7 @@ export function TopNav() {
   );
 }
 
-export { HashRouter, HashRouter as BrowserRouter };
+export { HashRouter, BrowserRouter };
 export { I18nContext, I18nProvider, useI18n };
 export { ProjectProvider, ProjectContext, useProject, useProjectRef, generateRandomProjectRef };
 export {
