@@ -105,4 +105,85 @@ export function serializeVesselRecord(record) {
     ?? vlsfoSeaEco
     ?? toPositiveNumber(record.fuelConsumptionLaden ?? record.fuel_consumption_laden ?? record.consSea ?? record.cons_sea);
   const fuelConsumptionBallast = vlsfoSeaBallast
-    ?? toPositiveNumber(record.fuelConsumptionBallast ?? record.fuel_consumption_ballast ?? record.consBallast ??
+    ?? toPositiveNumber(record.fuelConsumptionBallast ?? record.fuel_consumption_ballast ?? record.consBallast ?? record.cons_ballast)
+    ?? fuelConsumptionLaden;
+  const fuelConsumptionPort = mgoPortWorking
+    ?? toPositiveNumber(record.fuelConsumptionPort ?? record.fuel_consumption_port ?? record.consPort ?? record.cons_port);
+  const consAnchorage = mgoPortIdle
+    ?? toPositiveNumber(record.consAnchorage ?? record.cons_anchorage ?? record.consumo_fondeo_td);
+
+  const grainCubicM3 = isTanker
+    ? 0
+    : toPositiveNumber(h15Caps.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? record.grainCubicM3 ?? record.grain_cubic_m3);
+  const baleCubicM3 = isTanker
+    ? 0
+    : toPositiveNumber(h15Caps.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? record.baleCubicM3 ?? record.bale_cubic_m3);
+
+  const ownerManager = record.ownerManager ?? record.owner_manager ?? record.manager ?? null;
+  const vesselClass = record.vesselClass ?? record.vessel_class ?? record.commercialClass ?? record.commercial_class ?? record.vesselType ?? record.vessel_type ?? null;
+  const commercialClass = record.commercialClass ?? record.commercial_class ?? record.vesselClass ?? record.vessel_class ?? record.vesselType ?? record.vessel_type ?? null;
+  const rawHasGears = h15.has_gears ?? record.hasGears ?? record.has_gears ?? null;
+  const hasGears = isTanker ? false : rawHasGears;
+  const hasScrubber = record.hasScrubber ?? record.has_scrubber ?? null;
+
+  return {
+    imo: record.imoNumber ?? record.imo_number ?? null,
+    imo_number: record.imoNumber ?? record.imo_number ?? null,
+    mmsi: record.mmsi,
+    vessel_name: record.vesselName ?? record.vessel_name ?? null,
+    vesselName: record.vesselName ?? record.vessel_name ?? null,
+    dwt: toPositiveNumber(h15.dwt) ?? record.dwt,
+    latitude: record.latitude,
+    longitude: record.longitude,
+    vessel_type: record.vesselType ?? record.vessel_type ?? null,
+    vessel_type_normalized: vesselTypeNormalized,
+    vessel_class: vesselClass,
+    commercial_class: commercialClass,
+    draft_meters: record.draftMeters ?? record.draft_meters ?? record.draft ?? null,
+    draft: record.draftMeters ?? record.draft_meters ?? record.draft ?? null,
+    flag: record.flag,
+    call_sign: record.callSign ?? record.call_sign ?? null,
+    year_built: record.yearBuilt ?? record.year_built ?? null,
+    built_year: record.yearBuilt ?? record.year_built ?? null,
+    gross_tonnage: record.grossTonnage ?? record.gross_tonnage ?? record.gt ?? null,
+    gt: record.grossTonnage ?? record.gross_tonnage ?? record.gt ?? null,
+    net_tonnage: record.netTonnage ?? record.net_tonnage ?? record.nt ?? null,
+    loa_meters: record.loaMeters ?? record.loa_meters ?? record.loa ?? null,
+    loa: record.loaMeters ?? record.loa_meters ?? record.loa ?? null,
+    beam_meters: record.beamMeters ?? record.beam_meters ?? record.beam ?? null,
+    beam: record.beamMeters ?? record.beam_meters ?? record.beam ?? null,
+    last_port: record.lastPort ?? record.last_port ?? null,
+    eta: record.eta instanceof Date ? record.eta.toISOString() : record.eta,
+    service_speed_knots: serviceSpeed,
+    serviceSpeedKnots: serviceSpeed,
+    eco_speed_knots: ecoSpeed,
+    spd_laden: speedLaden,
+    speed_laden: speedLaden,
+    spd_ballast: speedBallast,
+    speed_ballast: speedBallast,
+    vlsfo_sea_design_mt_day: vlsfoSeaDesign ?? fuelConsumptionLaden,
+    vlsfo_sea_eco_mt_day: vlsfoSeaEco,
+    vlsfo_sea_ballast_mt_day: vlsfoSeaBallast ?? fuelConsumptionBallast,
+    mgo_port_working_mt_day: mgoPortWorking ?? fuelConsumptionPort,
+    mgo_port_idle_mt_day: mgoPortIdle ?? consAnchorage,
+    fuel_consumption_laden: fuelConsumptionLaden,
+    fuel_consumption_ballast: fuelConsumptionBallast,
+    fuel_consumption_port: fuelConsumptionPort,
+    cons_sea: fuelConsumptionLaden,
+    cons_port: fuelConsumptionPort,
+    cons_ballast: fuelConsumptionBallast,
+    cons_anchorage: consAnchorage,
+    grain_cubic_m3: grainCubicM3,
+    bale_cubic_m3: baleCubicM3,
+    owner_manager: ownerManager,
+    ownerManager,
+    gestor: ownerManager,
+    has_gears: hasGears,
+    hasGears,
+    has_scrubber: hasScrubber,
+    hasScrubber,
+    h15_technical_sheet: hasH15 ? h15 : null,
+    audit_status: record.auditStatus ?? record.audit_status ?? null,
+    data_source: record.dataSource ?? record.data_source ?? "vessels_master",
+  };
+}
