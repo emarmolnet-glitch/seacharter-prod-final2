@@ -37436,103 +37436,100 @@ function createRouteAnchorElement(type) {
             if (!candidate || typeof candidate !== 'object') return null;
             const ais = candidate.ais && typeof candidate.ais === 'object' ? candidate.ais : {};
             const nestedVessel = candidate.vessel && typeof candidate.vessel === 'object' ? candidate.vessel : {};
-            const source = { ...ais, ...nestedVessel, ...candidate };
-            const metadata = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
-            const h15 = source.h15_technical_sheet
-                || source.source_payload?.h15_technical_sheet
-                || candidate.source_payload?.h15_technical_sheet
-                || candidate.h15_technical_sheet
-                || nestedVessel.source_payload?.h15_technical_sheet
-                || nestedVessel.h15_technical_sheet
-                || {};
-            const h15Capacities = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
-            const imoDigits = String(source.imo || source.imo_number || source.numero_imo || source.IMO || metadata.IMO || '').replace(/\D/g, '');
-            const mmsiDigits = String(source.mmsi || source.MMSI || metadata.MMSI || '').replace(/\D/g, '');
-            const vesselName = readVesselTechnicalField(source, ['vessel_name', 'vesselName', 'name', 'ShipName']) || '';
-            const dwt = Number(h15.dwt ?? source.dwt ?? source.DWT ?? metadata.DWT);
-            const yearBuilt = Number(h15.year_built ?? source.year_built ?? source.built_year ?? source.yearBuilt ?? source.builtYear ?? source.ano_construccion ?? metadata.Year_Built);
-            const gt = Number(h15.gross_tonnage ?? source.gt ?? source.gross_tonnage ?? source.grossTonnage ?? metadata.GT);
-            const netTonnage = Number(h15.net_tonnage ?? source.net_tonnage ?? source.netTonnage ?? source.nt ?? metadata.NT);
-            const loa = Number(h15.loa_meters ?? source.loa ?? source.loa_meters ?? source.loaMeters ?? metadata.LOA);
-            const beam = Number(h15.beam_meters ?? source.beam ?? source.beam_meters ?? source.beamMeters ?? metadata.Beam);
-            const draft = Number(h15.draft_meters ?? source.draft ?? source.draft_meters ?? source.Draft);
-            const dwcc = Number(source.dwcc ?? source.dwcc_mt ?? source.cargo_capacity ?? source.cargo_capacity_mt ?? source.deadweight_cargo_capacity ?? metadata.DWCC);
+const source = { ...ais, ...nestedVessel, ...candidate };
+const metadata = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
+const h15 = source.h15_technical_sheet
+    || source.source_payload?.h15_technical_sheet
+    || candidate.source_payload?.h15_technical_sheet
+    || candidate.h15_technical_sheet
+    || nestedVessel.source_payload?.h15_technical_sheet
+    || nestedVessel.h15_technical_sheet
+    || {};
+const h15Capacities = (h15 && typeof h15.capacities === 'object') ? h15.capacities : {};
 
-            const serviceSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.speed);
-            const ecoSpeed = Number(h15.eco_speed_knots ?? source.eco_speed_knots ?? source.ecoSpeedKnots);
-            const ballastSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_ballast ?? source.speed_ballast ?? source.ballastSpeed);
-            const ladenSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_laden ?? source.speed_laden ?? source.ladenSpeed);
+const imoDigits = String(source.imo || source.imo_number || source.numero_imo || source.IMO || metadata.IMO || '').replace(/\D/g, '');
+const mmsiDigits = String(source.mmsi || source.MMSI || metadata.MMSI || '').replace(/\D/g, '');
+const vesselName = readVesselTechnicalField(source, ['vessel_name', 'vesselName', 'name', 'ShipName']) || '';
 
-            const vlsfoDesign = Number(h15.vlsfo_sea_design_mt_day);
-            const vlsfoEco = Number(h15.vlsfo_sea_eco_mt_day);
-            const vlsfoBallast = Number(h15.vlsfo_sea_ballast_mt_day);
-            const mgoWorking = Number(h15.mgo_port_working_mt_day);
-            const mgoIdle = Number(h15.mgo_port_idle_mt_day);
+const dwt = Number(h15.dwt ?? source.dwt ?? source.DWT ?? metadata.DWT);
+const yearBuilt = Number(h15.year_built ?? source.year_built ?? source.built_year ?? source.yearBuilt ?? source.builtYear ?? source.ano_construccion ?? metadata.Year_Built);
+const gt = Number(h15.gross_tonnage ?? source.gt ?? source.gross_tonnage ?? source.grossTonnage ?? metadata.GT);
+const netTonnage = Number(h15.net_tonnage ?? source.net_tonnage ?? source.netTonnage ?? source.nt ?? metadata.NT);
+const loa = Number(h15.loa_meters ?? source.loa ?? source.loa_meters ?? source.loaMeters ?? metadata.LOA);
+const beam = Number(h15.beam_meters ?? source.beam ?? source.beam_meters ?? source.beamMeters ?? metadata.Beam);
+const draft = Number(h15.draft_meters ?? source.draft ?? source.draft_meters ?? source.Draft);
+const dwcc = Number(source.dwcc ?? source.dwcc_mt ?? source.cargo_capacity ?? source.cargo_capacity_mt ?? source.deadweight_cargo_capacity ?? metadata.DWCC);
 
-            const consSea = Number(h15.vlsfo_sea_design_mt_day ?? h15.vlsfo_sea_eco_mt_day ?? source.vlsfo_sea_design_mt_day ?? source.vlsfo_sea_eco_mt_day ?? source.fuel_consumption_laden ?? source.cons_sea ?? source.consSea ?? metadata.FuelConsumption ?? metadata.Daily_Consumption);
-            const consPort = Number(h15.mgo_port_working_mt_day ?? source.mgo_port_working_mt_day ?? source.fuel_consumption_port ?? source.cons_port ?? source.consPort ?? metadata.PortConsumption ?? metadata.Daily_Port_Consumption);
-            const consBallast = Number(h15.vlsfo_sea_ballast_mt_day ?? source.vlsfo_sea_ballast_mt_day ?? source.fuel_consumption_ballast ?? source.cons_ballast ?? source.consBallast ?? consSea);
-            const consAnchorage = Number(h15.mgo_port_idle_mt_day ?? source.mgo_port_idle_mt_day ?? source.cons_anchorage ?? source.consumo_fondeo_td ?? source.consumo_anchorage_td);
+const serviceSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.speed);
+const ecoSpeed = Number(h15.eco_speed_knots ?? source.eco_speed_knots ?? source.ecoSpeedKnots);
+const ballastSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_ballast ?? source.speed_ballast ?? source.ballastSpeed);
+const ladenSpeed = Number(h15.service_speed_knots ?? source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_laden ?? source.speed_laden ?? source.ladenSpeed);
 
-            const grainCubicM3 = Number(h15Capacities.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? source.grain_cubic_m3 ?? source.grain_capacity_cbm ?? source.grain_capacity ?? source.grainCapacity ?? source.capacities?.grain_cubic_m3);
-            const baleCubicM3 = Number(h15Capacities.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? source.bale_cubic_m3 ?? source.bale_capacity_cbm ?? source.bale_capacity ?? source.baleCapacity ?? source.capacities?.bale_cubic_m3);
+const vlsfoDesign = Number(h15.vlsfo_sea_design_mt_day);
+const vlsfoEco = Number(h15.vlsfo_sea_eco_mt_day);
+const vlsfoBallast = Number(h15.vlsfo_sea_ballast_mt_day);
+const mgoWorking = Number(h15.mgo_port_working_mt_day);
+const mgoIdle = Number(h15.mgo_port_idle_mt_day);
 
-            const ownerManager = String(source.owner_manager || source.ownerManager || source.gestor || source.manager || metadata.Owner || metadata.Manager || metadata.CommercialManager || '').trim() || null;
-            const hasScrubber = normalizeVesselBoolean(source.has_scrubber ?? source.hasScrubber ?? source.scrubber ?? metadata.HasScrubber);
-            const hasGears = normalizeVesselBoolean(h15.has_gears ?? source.has_gears ?? source.hasGears ?? metadata.HasGears);
-            const vesselClass = source.vessel_class || source.vesselClass || source.commercial_class || source.commercialClass || source.vessel_type || source.vesselType || null;
-            const vesselTypeNormalized = h15.vessel_type_normalized || source.vessel_type_normalized || null;
-            const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
+const consSea = Number(h15.vlsfo_sea_design_mt_day ?? h15.vlsfo_sea_eco_mt_day ?? source.vlsfo_sea_design_mt_day ?? source.vlsfo_sea_eco_mt_day ?? source.fuel_consumption_laden ?? source.cons_sea ?? source.consSea ?? metadata.FuelConsumption ?? metadata.Daily_Consumption);
+const consPort = Number(h15.mgo_port_working_mt_day ?? source.mgo_port_working_mt_day ?? source.fuel_consumption_port ?? source.cons_port ?? source.consPort ?? metadata.PortConsumption ?? metadata.Daily_Port_Consumption);
+const consBallast = Number(h15.vlsfo_sea_ballast_mt_day ?? source.vlsfo_sea_ballast_mt_day ?? source.fuel_consumption_ballast ?? source.cons_ballast ?? source.consBallast ?? consSea);
+const consAnchorage = Number(h15.mgo_port_idle_mt_day ?? source.mgo_port_idle_mt_day ?? source.cons_anchorage ?? source.consumo_fondeo_td ?? source.consumo_anchorage_td);
 
-            return {
-                ...source,
-                h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : (source.h15_technical_sheet || null),
-                vessel_type_normalized: vesselTypeNormalized,
-                vessel_name: vesselName,
-                vesselName,
-                imo: imoDigits.length === 7 ? imoDigits : null,
-                imo_number: imoDigits.length === 7 ? imoDigits : null,
-                mmsi: mmsiDigits.length === 9 ? mmsiDigits : (source.mmsi || null),
-                dwt: Number.isFinite(dwt) && dwt > 0 ? dwt : null,
-                gt: Number.isFinite(gt) && gt > 0 ? gt : null,
-                net_tonnage: Number.isFinite(netTonnage) && netTonnage > 0 ? netTonnage : null,
-                loa: Number.isFinite(loa) && loa > 0 ? loa : null,
-                loa_meters: Number.isFinite(loa) && loa > 0 ? loa : null,
-                beam: Number.isFinite(beam) && beam > 0 ? beam : null,
-                beam_meters: Number.isFinite(beam) && beam > 0 ? beam : null,
-                dwcc: Number.isFinite(dwcc) && dwcc > 0 ? dwcc : null,
-                year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
-                built_year: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
-                flag: readVesselTechnicalField(source, ['flag', 'Flag', 'bandera']),
-                draft: Number.isFinite(draft) && draft > 0 ? draft : (source.draft ?? source.draft_meters ?? source.Draft ?? null),
-                draft_meters: Number.isFinite(draft) && draft > 0 ? draft : (source.draft_meters ?? source.draft ?? source.Draft ?? null),
-                vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
-                vessel_class: vesselClass,
-                commercial_class: vesselClass,
-                specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
-                service_speed_knots: Number.isFinite(serviceSpeed) && serviceSpeed > 0 ? serviceSpeed : null,
-                eco_speed_knots: Number.isFinite(ecoSpeed) && ecoSpeed > 0 ? ecoSpeed : null,
-                spd_ballast: Number.isFinite(ballastSpeed) && ballastSpeed > 0 ? ballastSpeed : null,
-                spd_laden: Number.isFinite(ladenSpeed) && ladenSpeed > 0 ? ladenSpeed : null,
-                vlsfo_sea_design_mt_day: Number.isFinite(vlsfoDesign) && vlsfoDesign > 0 ? vlsfoDesign : (Number.isFinite(consSea) && consSea > 0 ? consSea : null),
-                vlsfo_sea_eco_mt_day: Number.isFinite(vlsfoEco) && vlsfoEco > 0 ? vlsfoEco : null,
-                vlsfo_sea_ballast_mt_day: Number.isFinite(vlsfoBallast) && vlsfoBallast > 0 ? vlsfoBallast : (Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null),
-                mgo_port_working_mt_day: Number.isFinite(mgoWorking) && mgoWorking > 0 ? mgoWorking : (Number.isFinite(consPort) && consPort > 0 ? consPort : null),
-                mgo_port_idle_mt_day: Number.isFinite(mgoIdle) && mgoIdle > 0 ? mgoIdle : (Number.isFinite(consAnchorage) && consAnchorage > 0 ? consAnchorage : null),
-                cons_sea: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
-                cons_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
-                cons_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
-                cons_anchorage: Number.isFinite(consAnchorage) && consAnchorage > 0 ? consAnchorage : null,
-                fuel_consumption_laden: Number.isFinite(consSea) && consSea > 0 ? consSea : null,
-                fuel_consumption_ballast: Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null,
-                fuel_consumption_port: Number.isFinite(consPort) && consPort > 0 ? consPort : null,
-                grain_cubic_m3: isTanker ? 0 : (Number.isFinite(grainCubicM3) && grainCubicM3 > 0 ? grainCubicM3 : null),
-                bale_cubic_m3: isTanker ? 0 : (Number.isFinite(baleCubicM3) && baleCubicM3 > 0 ? baleCubicM3 : null),
-                owner_manager: ownerManager,
-                has_gears: isTanker ? false : hasGears,
-                has_scrubber: hasScrubber,
-            };
-        }
+const grainCubicM3 = Number(h15Capacities.grain_cubic_m3 ?? h15.grain_cubic_m3 ?? source.grain_cubic_m3 ?? source.grain_capacity_cbm ?? source.grain_capacity ?? source.grainCapacity ?? source.capacities?.grain_cubic_m3);
+const baleCubicM3 = Number(h15Capacities.bale_cubic_m3 ?? h15.bale_cubic_m3 ?? source.bale_cubic_m3 ?? source.bale_capacity_cbm ?? source.bale_capacity ?? source.baleCapacity ?? source.capacities?.bale_cubic_m3);
+
+const ownerManager = String(source.owner_manager || source.ownerManager || source.gestor || source.manager || metadata.Owner || metadata.Manager || metadata.CommercialManager || '').trim() || null;
+const hasScrubber = normalizeVesselBoolean(source.has_scrubber ?? source.hasScrubber ?? source.scrubber ?? metadata.HasScrubber);
+const rawHasGears = normalizeVesselBoolean(h15.has_gears ?? source.has_gears ?? source.hasGears ?? metadata.HasGears);
+const vesselClass = source.vessel_class || source.vesselClass || source.commercial_class || source.commercialClass || source.vessel_type || source.vesselType || null;
+const vesselTypeNormalized = h15.vessel_type_normalized || source.vessel_type_normalized || null;
+const isTanker = String(vesselTypeNormalized || '').toLowerCase() === 'tanker';
+
+const resolvedDraft = Number.isFinite(draft) && draft > 0 ? draft : (source.draft ?? source.draft_meters ?? source.Draft ?? null);
+const resolvedSea = Number.isFinite(consSea) && consSea > 0 ? consSea : null;
+const resolvedPort = Number.isFinite(consPort) && consPort > 0 ? consPort : null;
+const resolvedBallast = Number.isFinite(consBallast) && consBallast > 0 ? consBallast : null;
+const resolvedAnchorage = Number.isFinite(consAnchorage) && consAnchorage > 0 ? consAnchorage : null;
+
+return {
+    ...source,
+    h15_technical_sheet: Object.keys(h15).length > 0 ? h15 : (source.h15_technical_sheet || null),
+    vessel_type_normalized: vesselTypeNormalized,
+    vessel_name: vesselName,
+    vesselName,
+    imo: imoDigits.length === 7 ? imoDigits : null,
+    year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
+    built_year: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
+    flag: readVesselTechnicalField(source, ['flag', 'Flag', 'bandera']),
+    draft: resolvedDraft,
+    draft_meters: resolvedDraft,
+    vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
+    vessel_class: vesselClass,
+    commercial_class: vesselClass,
+    specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
+    service_speed_knots: Number.isFinite(serviceSpeed) && serviceSpeed > 0 ? serviceSpeed : null,
+    eco_speed_knots: Number.isFinite(ecoSpeed) && ecoSpeed > 0 ? ecoSpeed : null,
+    spd_ballast: Number.isFinite(ballastSpeed) && ballastSpeed > 0 ? ballastSpeed : null,
+    spd_laden: Number.isFinite(ladenSpeed) && ladenSpeed > 0 ? ladenSpeed : null,
+    vlsfo_sea_design_mt_day: Number.isFinite(vlsfoDesign) && vlsfoDesign > 0 ? vlsfoDesign : resolvedSea,
+    vlsfo_sea_eco_mt_day: Number.isFinite(vlsfoEco) && vlsfoEco > 0 ? vlsfoEco : null,
+    vlsfo_sea_ballast_mt_day: Number.isFinite(vlsfoBallast) && vlsfoBallast > 0 ? vlsfoBallast : resolvedBallast,
+    mgo_port_working_mt_day: Number.isFinite(mgoWorking) && mgoWorking > 0 ? mgoWorking : resolvedPort,
+    mgo_port_idle_mt_day: Number.isFinite(mgoIdle) && mgoIdle > 0 ? mgoIdle : resolvedAnchorage,
+    cons_sea: resolvedSea,
+    cons_port: resolvedPort,
+    cons_ballast: resolvedBallast,
+    cons_anchorage: resolvedAnchorage,
+    fuel_consumption_laden: resolvedSea,
+    fuel_consumption_ballast: resolvedBallast,
+    fuel_consumption_port: resolvedPort,
+    grain_cubic_m3: isTanker ? 0 : (Number.isFinite(grainCubicM3) && grainCubicM3 > 0 ? grainCubicM3 : null),
+    bale_cubic_m3: isTanker ? 0 : (Number.isFinite(baleCubicM3) && baleCubicM3 > 0 ? baleCubicM3 : null),
+    owner_manager: ownerManager,
+    has_gears: isTanker ? false : rawHasGears,
+    has_scrubber: hasScrubber,
+};
 
         let currentDrawerVessel = null;
 
