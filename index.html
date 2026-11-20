@@ -12151,7 +12151,7 @@
                                         </span>
                                     </label>
                                     <div class="mt-1 flex items-center rounded border border-slate-300 bg-white px-2">
-                                        <input type="number" id="market-calibration-factor" class="w-full bg-transparent py-1 text-right text-xs font-bold text-slate-900 outline-none" value="1.00" min="0.50" max="1.50" step="0.01" oninput="runEngine()">
+                                        <input type="number" id="market-calibration-factor" class="w-full bg-transparent py-1 text-right text-xs font-bold text-slate-900 outline-none" value="1.00" min="0.50" max="1.50" step="0.05" oninput="runEngine()">
                                         <span class="ml-1 text-[10px] font-bold text-slate-400">x</span>
                                     </div>
                                 </div>
@@ -19035,6 +19035,7 @@
             charterPartyStandard: "GENCON",
             costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0, totalCosts: 0,
             emissionsCO2: 0, euCarbonPrice: 80, etsRouteFactor: 0, etsCost: 0, etsCostPMT: 0,
+            marketCalibrationFactor: 1,
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
             freightRate: 0, freightSell: 0,
             contractFreightGross: null,
@@ -19991,9 +19992,11 @@
                     'cost-plus-daily-opex', 'cost-plus-target-margin', 'cost-plus-days-sea', 'cost-plus-days-port',
                     'cost-plus-bunker-cost', 'cost-plus-port-costs', 'cost-plus-cargo-volume', 'cost-plus-contingency-days',
                     'inverse-days-sea', 'inverse-days-port', 'inverse-bunker-cost', 'inverse-port-costs', 'inverse-cargo-volume', 'inverse-bunker-daily-port',
-                    'market-calibration-factor', 'dispatch-pct', 'laycan-dias-libres'
+                    'dispatch-pct', 'laycan-dias-libres'
                 ];
                 zeroIds.forEach((id) => setInputValue(id, 0));
+                setInputValue('market-calibration-factor', '1.00');
+                State.marketCalibrationFactor = 1;
                 setInputValue('project-handling-mode', 'direct-lift');
                 setInputValue('margin-owner', 0);
                 setInputValue('margin-charterer', 0);
@@ -73753,6 +73756,11 @@ ${allClauses.map((c, i) => `${i + 1}. Cl√°usula: ${c.clausula || ''} | Desviaci√
             return null;
         }
 
+        if (typeof window !== 'undefined') {
+            window.getVesselClass = getVesselClass;
+            window.getMarketSpeedVesselClass = getMarketSpeedVesselClass;
+        }
+
         function clearBallastMarketSpeedDefault() {
             const input = document.getElementById('spd-ballast');
             if (input) input.dataset.marketDefault = 'false';
@@ -73888,12 +73896,37 @@ ${allClauses.map((c, i) => `${i + 1}. Cl√°usula: ${c.clausula || ''} | Desviaci√
             if (inverseCard) inverseCard.classList.toggle('hidden', !useReverseTceCalculator);
             if (costPlusCard) costPlusCard.classList.toggle('hidden', useReverseTceCalculator);
 
+            const standardClass = getMarketSpeedVesselClass(vesselClass.categoryName);
             if (status) {
                 status.textContent = `Clase detectada: ${vesselClass.categoryName} (${vesselDwt.toLocaleString('en-US')} DWT).`;
+                status.dataset.vesselClass = standardClass || '';
             }
             if (badge) {
                 badge.textContent = `‚úÖ Clase detectada: ${vesselClass.categoryName} | Modo: ${vesselClass.type}`;
-                badge.className = 'rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm';
+                badge.dataset.vesselClass = standardClass || '';
+            }
+            const routerCard = document.getElementById('vessel-pricing-router-card');
+            if (routerCard) {
+                routerCard.dataset.vesselClass = standardClass || '';
+                routerCard.dataset.categoryName = vesselClass.categoryName;
+            }
+
+            if (typeof window !== 'undefined') {
+                window.currentVesselPricingCategory = currentVesselPricingCategory;
+                window.currentVesselPricingClass = vesselClass;
+                window.currentVesselStandardClass = standardClass;
+                if (typeof window.refreshBalticSpotReferenceFromRouter === 'function') {
+                    window.refreshBalticSpotReferenceFromRouter();
+                } else if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('VESSEL_PRICING_ROUTER_UPDATED', {
+                        detail: {
+                            vesselCategory: vesselClass.categoryName,
+                            standardClass: standardClass,
+                            dwt: vesselDwt,
+                            type: vesselClass.type
+                        }
+                    }));
+                }
             }
 
             if (window.dossierSnapshotLocked || isRestoringAuditSession) return;
