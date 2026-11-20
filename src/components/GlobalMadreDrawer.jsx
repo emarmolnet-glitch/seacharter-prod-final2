@@ -819,6 +819,77 @@ function hasRealCalculatorData() {
 }
 
 /**
+ * Detecta si el mensaje del usuario es un saludo o cortesía breve sin intención analítica.
+ * Directriz de Gobernanza SeaCharter:
+ * Saludos simples (hola, buenas, buenos días, hi, hello, gracias, ok, < 20 caracteres sin intención analítica)
+ * deben enrutarse SIEMPRE al chat estándar, sin scanMode: "audit_critical".
+ */
+function isSimpleGreetingOrCourtesy(text) {
+  if (!text || typeof text !== 'string') return false;
+
+  const clean = text
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[¡!¿?.,;:()_`"'~#*\/\\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!clean) return false;
+
+  // Si supera 30 caracteres, no es una cortesía breve
+  if (clean.length > 30) return false;
+
+  // Palabras analíticas u operativas marítimas que indican intención de consulta o cálculo
+  const analyticalKeywords = [
+    'flete', 'freight', 'demurrage', 'laytime', 'laycan', 'bunker', 'mgo', 'vlsfo',
+    'pda', 'clausula', 'riesgo', 'risk', 'buque', 'vessel', 'pol', 'pod', 'carga',
+    'cargo', 'ton', 'tce', 'margen', 'profit', 'audita', 'analiza', 'revisa', 'calcula',
+    'escan', 'scan', 'dwt', 'despacho', 'descuento', 'puerto', 'port', 'tarifa',
+    'comision', 'broker', 'fio', 'fiost', 'gencon', 'asbatankvoy', 'recap', 'contrato',
+    'coste', 'cost', 'precio', 'price', 'speed', 'velocidad'
+  ];
+
+  if (analyticalKeywords.some(kw => clean.includes(kw))) {
+    return false;
+  }
+
+  // Patrones directos de saludos y cortesías comunes
+  const greetingPatterns = [
+    /^hola(\s+(madre|amiga|equipo|asistente))?$/i,
+    /^buenas(\s+(tardes|noches|dias))?$/i,
+    /^buen(os)?\s+(dias?|tardes?|noches?)$/i,
+    /^buen\s+dia$/i,
+    /^hola\s+buen(os)?\s+(dias?|tardes?|noches?)$/i,
+    /^hola\s+buenas(\s+(tardes|noches|dias))?$/i,
+    /^(hi|hello|hey|howdy)(\s+(madre|there))?$/i,
+    /^(gracias|muchas\s+gracias|mil\s+gracias|thanks|thank\s+you)(\s+madre)?$/i,
+    /^(ok|okay|vale|de\s+acuerdo|entendido|perfecto|listo|bien)$/i,
+    /^(adios|chao|bye|hasta\s+luego|hasta\s+pronto)$/i,
+    /^(saludos|que\s+tal|como\s+estas?|como\s+va|todo\s+bien)(\s+madre)?$/i
+  ];
+
+  if (greetingPatterns.some(regex => regex.test(clean))) {
+    return true;
+  }
+
+  // Si tiene menos de 20 caracteres y consiste en tokens conocidos de cortesía
+  if (clean.length < 20) {
+    const tokens = clean.split(' ').filter(Boolean);
+    const commonGreetingTokens = new Set([
+      'hola', 'buenas', 'buenos', 'buen', 'dia', 'dias', 'tarde', 'tardes', 'noche', 'noches',
+      'hi', 'hello', 'hey', 'madre', 'gracias', 'ok', 'okay', 'vale', 'perfecto', 'saludos',
+      'que', 'tal', 'como', 'estas', 'va', 'bien', 'chao', 'adios', 'bye', 'si', 'no'
+    ]);
+    if (tokens.length > 0 && tokens.every(t => commonGreetingTokens.has(t))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Captura dinámica del contexto completo de auditoría/documento (sin truncado por scroll).
  * Extrae toda la información del módulo activo, tablas, métricas, bloques y texto en memoria.
  */
@@ -875,54 +946,6 @@ function extractDynamicAuditContext() {
     }
   }
 
-  // 2. documentName (nombre del archivo, referencia o título del expediente)
-  let documentName = null;
-  if (typeof window !== 'undefined' && window.State?.uploadedFile?.name) {
-    documentName = window.State.uploadedFile.name;
-  } else {
-    const docPreview = document.getElementById('docPreviewText');
-    if (docPreview && docPreview.textContent?.trim()) {
-      documentName = docPreview.textContent.trim();
-    } else {
-      const quickRef = document.getElementById('quick-ref');
-      if (quickRef && quickRef.value?.trim()) {
-        documentName = quickRef.value.trim();
-      } else if (typeof window !== 'undefined' && (window.activeDossier?.reference || window.State?.contractReference || window.State?.reference || window.activeVoyage?.reference)) {
-        documentName = window.activeDossier?.reference || window.State?.contractReference || window.State?.reference || window.activeVoyage?.reference;
-      }
-    }
-  }
-
-  // 3. documentType (tipo detectado por el módulo si existe, o null)
-  let documentType = null;
-  const docBadge = document.getElementById('doc-badge');
-  if (docBadge && docBadge.textContent?.trim()) {
-    documentType = docBadge.textContent.trim();
-  } else if (typeof window !== 'undefined' && window.State?.detectedDocumentType) {
-    documentType = window.State.detectedDocumentType;
-  } else if (typeof window !== 'undefined' && window.State?.charterPartyStandard) {
-    documentType = window.State.charterPartyStandard;
-  } else if (moduloActual === 'gencon') {
-    documentType = 'GENCON';
-  } else if (moduloActual === 'asbatankvoy') {
-    documentType = 'ASBATANKVOY';
-  } else if (moduloActual === 'dossiers') {
-    documentType = 'CHARTER DOSSIER';
-  } else if (moduloActual === 'decisiones') {
-    documentType = 'DECISION SUPPORT AUDIT';
-  } else if (moduloActual === 'forwarders') {
-    documentType = 'FORWARDING PROJECT';
-  } else if (rawDocumentText) {
-    const upperText = rawDocumentText.toUpperCase();
-    if (upperText.includes('GENCON')) documentType = 'GENCON';
-    else if (upperText.includes('ASBATANKVOY')) documentType = 'ASBATANKVOY';
-    else if (upperText.includes('FIXTURE RECAP')) documentType = 'FIXTURE RECAP';
-    else if (upperText.includes('BILL OF LADING')) documentType = 'BILL OF LADING';
-    else if (upperText.includes('STATEMENT OF FACTS') || upperText.includes('SOF')) documentType = 'STATEMENT OF FACTS';
-    else if (upperText.includes('TIME CHARTER')) documentType = 'TIME CHARTER';
-    else if (upperText.includes('VOYAGE CHARTER')) documentType = 'VOYAGE CHARTER';
-  }
-
   // Comprobar si existe un documento o informe en el módulo de Auditoría IA (#auditoria / visor de auditoría)
   const isAuditViewActive = Boolean(
     moduloActual === 'auditoria' ||
@@ -955,6 +978,52 @@ function extractDynamicAuditContext() {
   );
 
   const hasAuditDocOrReport = isAuditViewActive || hasAuditDocumentInMemory || Boolean(rawDocumentText);
+
+  // 2. documentName (nombre del archivo, referencia o título del expediente)
+  let documentName = null;
+  if (typeof window !== 'undefined' && window.State?.uploadedFile?.name) {
+    documentName = window.State.uploadedFile.name;
+  } else {
+    const docPreview = document.getElementById('docPreviewText');
+    if (docPreview && docPreview.textContent?.trim()) {
+      documentName = docPreview.textContent.trim();
+    } else if (hasAuditDocOrReport) {
+      const quickRef = document.getElementById('quick-ref');
+      const qVal = quickRef && quickRef.value?.trim();
+      if (qVal && !/^RDM\/\d{4}-0000$/i.test(qVal)) {
+        documentName = qVal;
+      } else if (typeof window !== 'undefined') {
+        const ref = window.activeDossier?.reference || window.State?.contractReference || window.State?.reference || window.activeVoyage?.reference;
+        if (ref && !/^RDM\/\d{4}-0000$/i.test(ref)) {
+          documentName = ref;
+        }
+      }
+    }
+  }
+
+  // 3. documentType (tipo detectado por el módulo si existe, o null)
+  let documentType = null;
+  const docBadge = document.getElementById('doc-badge');
+  if (docBadge && docBadge.textContent?.trim()) {
+    documentType = docBadge.textContent.trim();
+  } else if (typeof window !== 'undefined' && window.State?.detectedDocumentType) {
+    documentType = window.State.detectedDocumentType;
+  } else if (typeof window !== 'undefined' && window.State?.charterPartyStandard) {
+    documentType = window.State.charterPartyStandard;
+  } else if (moduloActual === 'gencon' && hasAuditDocOrReport) {
+    documentType = 'GENCON';
+  } else if (moduloActual === 'asbatankvoy' && hasAuditDocOrReport) {
+    documentType = 'ASBATANKVOY';
+  } else if (rawDocumentText) {
+    const upperText = rawDocumentText.toUpperCase();
+    if (upperText.includes('GENCON')) documentType = 'GENCON';
+    else if (upperText.includes('ASBATANKVOY')) documentType = 'ASBATANKVOY';
+    else if (upperText.includes('FIXTURE RECAP')) documentType = 'FIXTURE RECAP';
+    else if (upperText.includes('BILL OF LADING')) documentType = 'BILL OF LADING';
+    else if (upperText.includes('STATEMENT OF FACTS') || upperText.includes('SOF')) documentType = 'STATEMENT OF FACTS';
+    else if (upperText.includes('TIME CHARTER')) documentType = 'TIME CHARTER';
+    else if (upperText.includes('VOYAGE CHARTER')) documentType = 'VOYAGE CHARTER';
+  }
 
   // Selector del contenedor: Cuando exista documento o informe de Auditoría IA,
   // extraer EXCLUSIVAMENTE del contenedor del visor de auditoría.
@@ -1132,20 +1201,72 @@ function extractDynamicAuditContext() {
 }
 
 /**
- * Valida si existe un documento, expediente o informe auditado cargado en el módulo activo
+ * Valida si existe un documento, expediente o informe auditado cargado en el módulo activo.
+ * Directriz de Gobernanza SeaCharter:
+ * 1. NO VINCULAR EXPEDIENTES VACÍOS AL ARRANCAR: Nunca auto-vincular expedientes por defecto
+ *    (ej. RDM/2026-0000 o estado inicial vacío) sin rawDocumentText ni auditoría previa.
+ * 2. Requiere contenido real comprobable: texto íntegro (> 20 chars), auditoría previa en memoria,
+ *    o dictámenes y cláusulas reales en el visor de auditoría.
  */
 function hasActiveDocumentOrAudit(payload) {
   if (!payload) return false;
+
+  const rawText = (payload.rawDocumentText || '').trim();
+  const hasRealRawText = rawText.length > 20;
+
+  const hasPriorAudit = Boolean(
+    payload.fullAuditData?.madreUltimaAuditoria ||
+    payload.fullAuditData?.carrierOfferAudit ||
+    payload.fullAuditData?.commercialNpl ||
+    (typeof window !== 'undefined' && (
+      window.madreUltimaAuditoria ||
+      window.SeaCharterCarrierOfferAudit ||
+      window.lastCommercialNplPayload ||
+      window.activeAuditResult ||
+      window.lastAuditData
+    ))
+  );
+
+  const isAuditModule = payload.fullAuditData?.modulo_activo === 'auditoria';
+  const hasAuditTables = Boolean(
+    isAuditModule &&
+    Array.isArray(payload.fullAuditData?.tablas) &&
+    payload.fullAuditData.tablas.some(t => t.rows && t.rows.length > 0)
+  );
+
+  const hasAuditAlerts = Boolean(
+    isAuditModule &&
+    Array.isArray(payload.fullAuditData?.alertas) &&
+    payload.fullAuditData.alertas.length > 0
+  );
+
+  const hasDocumentInMemory = Boolean(
+    typeof window !== 'undefined' && (
+      window.State?.uploadedFile?.text ||
+      (window.State?.uploadedFile?.name && (hasRealRawText || hasPriorAudit)) ||
+      window.State?.rawDocumentText ||
+      window.activeDocumentText
+    )
+  );
+
+  const docName = (payload.documentName || '').trim();
+  const isDefaultOrEmptyRef = !docName ||
+    docName === 'Documento en memoria' ||
+    /^RDM\/\d{4}-0000$/i.test(docName) ||
+    /^RDM\/\d{4}-TBN$/i.test(docName);
+
+  // Si es un expediente por defecto (RDM/2026-0000) o sin nombre, NUNCA auto-vincular sin texto real ni auditoría previa
+  if (isDefaultOrEmptyRef && !hasRealRawText && !hasPriorAudit) {
+    return false;
+  }
+
+  // Requiere contenido real comprobable
   return Boolean(
-    (payload.rawDocumentText && payload.rawDocumentText.trim().length > 0) ||
-    payload.documentType ||
-    (payload.documentName && payload.documentName !== 'Documento en memoria') ||
-    (payload.fullAuditData?.tablas?.length > 0) ||
-    (payload.fullAuditData?.bloques?.length > 0) ||
-    (payload.fullAuditData?.madreUltimaAuditoria) ||
-    (payload.fullAuditData?.carrierOfferAudit) ||
-    (payload.fullAuditData?.commercialNpl) ||
-    (payload.fullAuditData?.modulo_activo === 'auditoria')
+    hasRealRawText ||
+    hasPriorAudit ||
+    hasAuditTables ||
+    hasAuditAlerts ||
+    (hasDocumentInMemory && !isDefaultOrEmptyRef)
   );
 }
 
@@ -1380,6 +1501,7 @@ if (typeof window !== 'undefined') {
   window.hasRealCalculatorData = hasRealCalculatorData;
   window.extractDynamicAuditContext = extractDynamicAuditContext;
   window.hasActiveDocumentOrAudit = hasActiveDocumentOrAudit;
+  window.isSimpleGreetingOrCourtesy = isSimpleGreetingOrCourtesy;
   window.triggerLaserScanEffect = triggerLaserScanEffect;
   window.ejecutarEscaneoVisual = ejecutarEscaneoVisual;
   window.ejecutarEfectoLaserScan = ejecutarEfectoLaserScan;
@@ -1662,6 +1784,12 @@ export function GlobalMadreDrawer({
     setIsLoading(true);
 
     const isScanCommand = SCAN_COMMAND_REGEX.test(queryText);
+    const checkGreeting = (typeof isSimpleGreetingOrCourtesy === 'function')
+      ? isSimpleGreetingOrCourtesy
+      : (typeof window !== 'undefined' && typeof window.isSimpleGreetingOrCourtesy === 'function')
+        ? window.isSimpleGreetingOrCourtesy
+        : (txt) => Boolean(txt && /^(?:hola|buenas|buenos\s+dias|hi|hello|gracias|ok)\b/i.test(String(txt).trim()));
+    const isGreeting = checkGreeting(queryText);
     const focusQuestionFromScan = typeof scanFocusQuestionRef !== 'undefined' ? scanFocusQuestionRef?.current : null;
     if (typeof scanFocusQuestionRef !== 'undefined' && scanFocusQuestionRef) {
       scanFocusQuestionRef.current = null;
@@ -1674,13 +1802,23 @@ export function GlobalMadreDrawer({
       }
     } catch (_) {}
 
-    const hasNewAudit = Boolean(extractedAudit && typeof hasActiveDocumentOrAudit === 'function' && hasActiveDocumentOrAudit(extractedAudit));
+    // NO VINCULAR EXPEDIENTES VACÍOS AL ARRANCAR:
+    // El chip y estado de documento vinculado SOLO se activa cuando el usuario pulsa explícitamente Escanear
+    // o haya cargado/analizado un documento con contenido real (nunca en saludos ni estados iniciales vacíos).
+    const hasNewAudit = Boolean(
+      !isGreeting &&
+      extractedAudit &&
+      typeof hasActiveDocumentOrAudit === 'function' &&
+      hasActiveDocumentOrAudit(extractedAudit)
+    );
     let effectiveAudit = typeof activeAuditContextRef !== 'undefined' ? activeAuditContextRef?.current : null;
     if (hasNewAudit && extractedAudit) {
       effectiveAudit = extractedAudit;
       setActiveAuditContext(extractedAudit);
     }
-    const hasCriticalAudit = Boolean(effectiveAudit);
+    // SALUDOS SIMPLES SIEMPRE AL CHAT ESTÁNDAR:
+    // Si el mensaje es un saludo o cortesía breve, se envía SIEMPRE como chat normal (sin scanMode: "audit_critical")
+    const hasCriticalAudit = Boolean(effectiveAudit && !isGreeting);
 
     let scanData = null;
     if (SCAN_COMMAND_REGEX.test(queryText)) {
@@ -2180,6 +2318,7 @@ export {
   playNeuralMotherVoice,
   extractDynamicAuditContext,
   hasActiveDocumentOrAudit,
+  isSimpleGreetingOrCourtesy,
   MarkdownMessage,
   CopyReportButton
 };
