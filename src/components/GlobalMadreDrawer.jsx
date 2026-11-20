@@ -20,7 +20,8 @@ export const SEACHARTER_DOM_DICTIONARY = {
   "calculadora": { "contenedor": "#view-estimator", "inputs": ["#port-ballast", "#port-pol", "#port-pod", "#dist-ballast", "#dist-laden", "#dist-total", "#spd-ballast", "#spd-laden", "#nombre-buque-calculadora", "#vessel-dwt", "#cargo-type", "#cargo-qty", "#cargo-sf", "#rate-load", "#rate-disch", "#price-sea", "#price-port", "#pda-pol", "#pda-pod", "#opex-daily", "#margin-charterer", "#margin-owner", "#freight-rate", "#freight-sell", "#demurrage-rate"], "metricas": ["#res-days-sea-total", "#res-days-port", "#res-days-total", "#res-cost-bunker", "#res-cost-pda", "#res-cost-opex", "#res-cost-total", "#res-breakeven", "#res-sug-charterer", "#res-net-profit-charterer", "#res-tce-label", "#negotiation-spread-pmt"] },
   "dossiers": { "contenedor": "#view-dossiers", "inputs": ["#dossiers-search", "#quick-ref"], "metricas": ["#dossiers-count", "#dossiers-table-body"] },
   "decisiones": { "contenedor": "#view-decisiones", "inputs": ["#input-jwlaPremiumUSD", "#input-ballastDays", "#input-freight-all-in", "#input-sim-speed", "#input-sim-loadrate", "#input-sim-bunker-price"], "metricas": ["#badge-jwc-risk", "#section-flete-all-in-gross", "#card-laycan", "#card-loadrate", "#card-financial", "#madre-offcanvas-veredicto-val"] },
-  "agenda": { "contenedor": "#market-directory-shell", "inputs": ["#market-directory-search", "#market-contact-company", "#market-contact-name", "#market-contact-role", "#market-contact-country", "#market-contact-imo-input"], "metricas": ["#market-directory-summary", "#market-directory-list"] }
+  "agenda": { "contenedor": "#market-directory-shell", "inputs": ["#market-directory-search", "#market-contact-company", "#market-contact-name", "#market-contact-role", "#market-contact-country", "#market-contact-imo-input"], "metricas": ["#market-directory-summary", "#market-directory-list"] },
+  "auditoria": { "contenedor": "#view-auditor", "inputs": ["#fileUpload", "#recapInput", "#carrier-offer-name"], "metricas": ["#doc-badge", "#audit-report-ref-id", "#resProforma", "#resRiesgos", "#resEstrategia"] }
 };
 
 /**
@@ -29,7 +30,15 @@ export const SEACHARTER_DOM_DICTIONARY = {
 export function detectarModuloActual() {
   if (typeof document === 'undefined') return 'calculadora';
 
-  // 1. Mapa activo (¡Subido al principio para evitar falsos positivos con decisiones!)
+  // 1. Auditoría IA activa (#view-auditor, #view-auditoria, #auditoria)
+  try {
+    const viewAuditor = document.querySelector('#view-auditor, #view-auditoria, #auditoria');
+    if (viewAuditor && (!viewAuditor.classList.contains('hidden') || viewAuditor.classList.contains('active-block') || viewAuditor.classList.contains('active-flex') || viewAuditor.style.display === 'block' || viewAuditor.style.display === 'flex')) {
+      return 'auditoria';
+    }
+  } catch (_) {}
+
+  // 2. Mapa activo (¡Subido al principio para evitar falsos positivos con decisiones!)
   try {
     const viewMap = document.querySelector('#view-map');
     if (viewMap && (!viewMap.classList.contains('hidden') || viewMap.classList.contains('active-block') || viewMap.classList.contains('active-flex'))) {
@@ -37,7 +46,7 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 2. Estimador / Calculadora activo
+  // 3. Estimador / Calculadora activo
   try {
     const viewEstimator = document.querySelector('#view-estimator');
     if (viewEstimator && (!viewEstimator.classList.contains('hidden') || viewEstimator.classList.contains('active-block') || viewEstimator.classList.contains('active-flex'))) {
@@ -45,7 +54,7 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 3. Agenda de Brokers abierta (modal/drawer)
+  // 4. Agenda de Brokers abierta (modal/drawer)
   try {
     const agendaShell = document.querySelector('#market-directory-shell');
     if (agendaShell && !agendaShell.hasAttribute('hidden') && agendaShell.getAttribute('aria-hidden') !== 'true' && agendaShell.style.display !== 'none') {
@@ -53,7 +62,7 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 4. Decisiones DSS activo
+  // 5. Decisiones DSS activo
   try {
     const viewDecisiones = document.querySelector('#view-decisiones');
     if (viewDecisiones && (!viewDecisiones.classList.contains('hidden') || viewDecisiones.classList.contains('active-block') || viewDecisiones.classList.contains('active-flex'))) {
@@ -61,7 +70,7 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 5. Dossiers activo
+  // 6. Dossiers activo
   try {
     const viewDossiers = document.querySelector('#view-dossiers');
     if (viewDossiers && !viewDossiers.classList.contains('hidden')) {
@@ -69,7 +78,7 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 6. Cuartel General / Radar AIS activo
+  // 7. Cuartel General / Radar AIS activo
   try {
     const viewAis = document.querySelector('#view-ais');
     if (viewAis && (!viewAis.classList.contains('hidden') || viewAis.classList.contains('active-block') || viewAis.classList.contains('active-flex'))) {
@@ -77,23 +86,26 @@ export function detectarModuloActual() {
     }
   } catch (_) {}
 
-  // 7. Market Intel activo
+  // 8. Market Intel activo
   try {
     const currentTab = typeof window !== 'undefined' ? (window.currentTab || window.activeTab) : null;
     if (currentTab === 'market_intel') return 'market_intel';
   } catch (_) {}
 
-  // 8. Chequeo por tab global si existe
+  // 9. Chequeo por tab global si existe
   if (typeof window !== 'undefined') {
     const tab = window.currentTab || window.activeTab;
     const tabMap = {
       ais: 'cuartel_general',
       map: 'mapa',
       estimator: 'calculadora',
+      calc: 'calculadora',
       dossiers: 'dossiers',
       decisiones: 'decisiones',
       agenda: 'agenda',
-      market_intel: 'market_intel'
+      market_intel: 'market_intel',
+      auditor: 'auditoria',
+      auditoria: 'auditoria'
     };
     if (tab && tabMap[tab]) return tabMap[tab];
     if (tab && SEACHARTER_DOM_DICTIONARY[tab]) return tab;
@@ -128,7 +140,9 @@ export function capturarDomModuloActivo(moduloIdOpcional) {
           dossier: 'dossiers',
           decision: 'decisiones',
           contacts: 'agenda',
-          directory: 'agenda'
+          directory: 'agenda',
+          auditor: 'auditoria',
+          auditoria: 'auditoria'
         };
         if (aliasMap[moduloKey]) moduloKey = aliasMap[moduloKey];
       }
@@ -781,6 +795,30 @@ async function ejecutarEscaneoDosTiempos(basePayload) {
 }
 
 /**
+ * Valida si el usuario ha introducido datos operativos reales en la calculadora
+ */
+function hasRealCalculatorData() {
+  if (typeof hasOperationalInputData === 'function' && hasOperationalInputData()) {
+    return true;
+  }
+  if (typeof document !== 'undefined') {
+    const realInputs = [
+      '#cargo-qty', '#rate-load', '#rate-disch', '#freight-rate', '#freight-sell',
+      '#dist-ballast', '#dist-laden', '#price-sea', '#price-port', '#pda-pol', '#pda-pod'
+    ];
+    for (const sel of realInputs) {
+      try {
+        const el = document.querySelector(sel);
+        const raw = el?.value != null ? String(el.value).trim() : '';
+        const val = parseFloat(raw.replace(/[^0-9.]/g, ''));
+        if (raw !== '' && Number.isFinite(val) && val > 0) return true;
+      } catch (_) {}
+    }
+  }
+  return false;
+}
+
+/**
  * Captura dinámica del contexto completo de auditoría/documento (sin truncado por scroll).
  * Extrae toda la información del módulo activo, tablas, métricas, bloques y texto en memoria.
  */
@@ -804,8 +842,6 @@ function extractDynamicAuditContext() {
 
   // Detección del módulo actual y su contenedor
   const moduloActual = typeof detectarModuloActual === 'function' ? detectarModuloActual() : 'calculadora';
-  const containerSelector = SEACHARTER_DOM_DICTIONARY[moduloActual]?.contenedor || `#view-${moduloActual}`;
-  const containerEl = document.querySelector(containerSelector) || document.querySelector('.view-section:not(.hidden)') || document.body;
 
   // 1. rawDocumentText (texto íntegro del documento en memoria, limitado a 25.000 caracteres máximo)
   let rawDocumentText = '';
@@ -832,17 +868,11 @@ function extractDynamicAuditContext() {
     }
   }
 
-  if (!rawDocumentText && containerEl) {
-    const textareas = containerEl.querySelectorAll('textarea');
-    for (const ta of textareas) {
-      if (ta.value && ta.value.trim().length > 30) {
-        rawDocumentText = ta.value;
-        break;
-      }
+  if (!rawDocumentText) {
+    const pdfReportEl = document.getElementById('contenedor-informe-pdf');
+    if (pdfReportEl && pdfReportEl.innerText?.trim()) {
+      rawDocumentText = pdfReportEl.innerText.trim();
     }
-  }
-  if (rawDocumentText) {
-    rawDocumentText = rawDocumentText.trim().slice(0, 25000);
   }
 
   // 2. documentName (nombre del archivo, referencia o título del expediente)
@@ -893,9 +923,72 @@ function extractDynamicAuditContext() {
     else if (upperText.includes('VOYAGE CHARTER')) documentType = 'VOYAGE CHARTER';
   }
 
+  // Comprobar si existe un documento o informe en el módulo de Auditoría IA (#auditoria / visor de auditoría)
+  const isAuditViewActive = Boolean(
+    moduloActual === 'auditoria' ||
+    (typeof document !== 'undefined' && (
+      Boolean(document.querySelector('#view-auditor:not(.hidden), #view-auditor.active-flex, #view-auditor.active-block, #view-auditoria:not(.hidden), #auditoria:not(.hidden)')) ||
+      Boolean(document.querySelector('#resultsContent:not(.hidden)')) ||
+      Boolean(document.querySelector('#docPreviewContainer:not(.hidden)'))
+    ))
+  );
+
+  const hasAuditDocumentInMemory = Boolean(
+    (typeof window !== 'undefined' && (
+      window.State?.uploadedFile?.text ||
+      window.State?.uploadedFile?.name ||
+      window.State?.rawDocumentText ||
+      window.activeDocumentText ||
+      window.rawDocumentText ||
+      window.madreUltimaAuditoria ||
+      window.SeaCharterCarrierOfferAudit ||
+      window.lastCommercialNplPayload ||
+      window.activeAuditResult ||
+      window.lastAuditData
+    )) ||
+    (typeof document !== 'undefined' && (
+      (document.getElementById('recapInput')?.value?.trim()?.length || 0) > 20 ||
+      document.getElementById('docPreviewText')?.textContent?.trim() ||
+      (document.getElementById('contenedor-informe-pdf')?.textContent?.trim()?.length || 0) > 20 ||
+      (document.getElementById('resProforma')?.textContent?.trim()?.length || 0) > 20
+    ))
+  );
+
+  const hasAuditDocOrReport = isAuditViewActive || hasAuditDocumentInMemory || Boolean(rawDocumentText);
+
+  // Selector del contenedor: Cuando exista documento o informe de Auditoría IA,
+  // extraer EXCLUSIVAMENTE del contenedor del visor de auditoría.
+  const visorAuditoria = typeof document !== 'undefined' ? (
+    document.querySelector('#resultsContent:not(.hidden)') ||
+    document.querySelector('#contenedor-informe-pdf') ||
+    document.querySelector('.audit-results-panel') ||
+    document.querySelector('#resultsContent') ||
+    document.querySelector('#view-auditor') ||
+    document.querySelector('#view-auditoria') ||
+    document.querySelector('#auditoria')
+  ) : null;
+
+  const containerSelector = SEACHARTER_DOM_DICTIONARY[moduloActual]?.contenedor || `#view-${moduloActual}`;
+  const containerEl = (hasAuditDocOrReport && visorAuditoria)
+    ? visorAuditoria
+    : (document.querySelector(containerSelector) || document.querySelector('.view-section:not(.hidden)') || document.body);
+
+  if (!rawDocumentText && containerEl) {
+    const textareas = containerEl.querySelectorAll('textarea');
+    for (const ta of textareas) {
+      if (ta.value && ta.value.trim().length > 30) {
+        rawDocumentText = ta.value;
+        break;
+      }
+    }
+  }
+  if (rawDocumentText) {
+    rawDocumentText = rawDocumentText.trim().slice(0, 25000);
+  }
+
   // 4. fullAuditData (serialización completa de todos los bloques, alertas, métricas, tablas y pestañas)
   const fullAuditData = {
-    modulo_activo: moduloActual,
+    modulo_activo: hasAuditDocOrReport ? 'auditoria' : moduloActual,
     bloques: [],
     alertas: [],
     metricas: [],
@@ -903,12 +996,21 @@ function extractDynamicAuditContext() {
     pestanas: []
   };
 
+  const isElementVisible = (el) => {
+    if (!el) return false;
+    if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return false;
+    if (el.classList?.contains('hidden')) return false;
+    if (el.closest?.('.hidden, [hidden], [style*="display: none"], [style*="display:none"]')) return false;
+    return true;
+  };
+
   if (containerEl) {
-    // A. Tablas (recorrer todas las tablas, incluso colapsadas u ocultas por scroll)
+    // A. Tablas (recorrer todas las tablas visibles del contenedor de auditoría)
     const tables = containerEl.querySelectorAll('table');
     tables.forEach((tbl, idx) => {
+      if (!isElementVisible(tbl)) return;
       const headers = Array.from(tbl.querySelectorAll('th')).map(th => th.textContent?.trim() || '');
-      const rows = Array.from(tbl.querySelectorAll('tbody tr, tr')).filter(tr => tr.querySelectorAll('td').length > 0).map(tr =>
+      const rows = Array.from(tbl.querySelectorAll('tbody tr, tr')).filter(tr => tr.querySelectorAll('td').length > 0 && isElementVisible(tr)).map(tr =>
         Array.from(tr.querySelectorAll('td')).map(td => td.textContent?.trim() || '')
       );
       if (headers.length > 0 || rows.length > 0) {
@@ -920,18 +1022,25 @@ function extractDynamicAuditContext() {
       }
     });
 
-    // B. Alertas
+    // B. Alertas (filtrar alertas ocultas o avisos por defecto de calculadora vacía)
     const alertEls = containerEl.querySelectorAll('.alert, [role="alert"], [class*="border-red"], [class*="border-amber"], [class*="border-teal"], [class*="bg-red-50"], [class*="bg-amber-50"]');
     alertEls.forEach((el) => {
+      if (!isElementVisible(el)) return;
       const txt = el.textContent?.trim();
-      if (txt && txt.length > 5 && txt.length < 500 && !fullAuditData.alertas.includes(txt)) {
+      if (
+        txt && txt.length > 5 && txt.length < 500 &&
+        !txt.includes('NOTICE: THIS VESSEL IS NOT COMPATIBLE') &&
+        !txt.includes('Faltan datos operativos') &&
+        !fullAuditData.alertas.includes(txt)
+      ) {
         fullAuditData.alertas.push(txt);
       }
     });
 
-    // C. Métricas y KPIs
+    // C. Métricas y KPIs visibles
     const metricEls = containerEl.querySelectorAll('.kpi, [id*="kpi"], [id*="res-"], [id*="badge"], .metric');
     metricEls.forEach((el) => {
+      if (!isElementVisible(el)) return;
       const label = el.getAttribute('aria-label') || el.getAttribute('data-label') || el.previousElementSibling?.textContent?.trim() || '';
       const val = (el.value != null ? el.value : el.textContent)?.trim();
       if (val && val.length < 100) {
@@ -943,9 +1052,10 @@ function extractDynamicAuditContext() {
       }
     });
 
-    // D. Bloques y Secciones colapsables o expandidas
-    const sections = containerEl.querySelectorAll('[data-collapsible-section], .ai-work-card, section, article, .audit-collapsible-panel');
+    // D. Bloques y Secciones visibles
+    const sections = containerEl.querySelectorAll('[data-collapsible-section], .ai-work-card, section, article, .audit-collapsible-panel, .legacy-audit-section');
     sections.forEach((sec, idx) => {
+      if (!isElementVisible(sec)) return;
       const title = sec.querySelector('h1, h2, h3, h4, [data-collapsible-title]')?.textContent?.trim() || `Bloque ${idx + 1}`;
       const content = sec.textContent?.trim();
       if (content && content.length > 20) {
@@ -956,9 +1066,10 @@ function extractDynamicAuditContext() {
       }
     });
 
-    // E. Pestañas / Tabs
+    // E. Pestañas / Tabs visibles
     const tabs = containerEl.querySelectorAll('.tab, [role="tab"], .tab-item, [data-tab]');
     tabs.forEach((tab) => {
+      if (!isElementVisible(tab)) return;
       const tabName = tab.textContent?.trim();
       const isActive = tab.classList.contains('active') || tab.getAttribute('aria-selected') === 'true';
       if (tabName) {
@@ -980,11 +1091,35 @@ function extractDynamicAuditContext() {
     }
   }
 
-  // 5. activeScreenContext (cálculo de viaje, ruta, precios, condiciones o parámetros activos en pantalla)
-  const activeScreenContext = {
-    ...(typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {}),
-    ...(typeof window !== 'undefined' ? (window.State || {}) : {})
-  };
+  // 5. activeScreenContext: aislar cuando hay auditoría documental activa
+  // Deja activeScreenContext vacío ({}) salvo que el usuario tenga datos reales introducidos en la calculadora
+  let activeScreenContext = {};
+
+  if (hasAuditDocOrReport) {
+    if (hasRealCalculatorData()) {
+      const liveContext = typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {};
+      const liveState = typeof window !== 'undefined' ? (window.State || {}) : {};
+      activeScreenContext = {
+        ...liveContext,
+        ...liveState
+      };
+      if (activeScreenContext.captura_dom?.alertas) {
+        delete activeScreenContext.captura_dom.alertas;
+      }
+      if (typeof activeScreenContext.elementos_visibles === 'string') {
+        activeScreenContext.elementos_visibles = activeScreenContext.elementos_visibles
+          .replace(/.*NOTICE: THIS VESSEL IS NOT COMPATIBLE.*\n?/gi, '')
+          .replace(/.*Faltan datos operativos.*\n?/gi, '');
+      }
+    } else {
+      activeScreenContext = {};
+    }
+  } else {
+    activeScreenContext = {
+      ...(typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {}),
+      ...(typeof window !== 'undefined' ? (window.State || {}) : {})
+    };
+  }
 
   return {
     documentType: documentType || null,
@@ -1006,9 +1141,11 @@ function hasActiveDocumentOrAudit(payload) {
     payload.documentType ||
     (payload.documentName && payload.documentName !== 'Documento en memoria') ||
     (payload.fullAuditData?.tablas?.length > 0) ||
+    (payload.fullAuditData?.bloques?.length > 0) ||
     (payload.fullAuditData?.madreUltimaAuditoria) ||
     (payload.fullAuditData?.carrierOfferAudit) ||
-    (payload.fullAuditData?.commercialNpl)
+    (payload.fullAuditData?.commercialNpl) ||
+    (payload.fullAuditData?.modulo_activo === 'auditoria')
   );
 }
 
@@ -1047,6 +1184,47 @@ function CopyReportButton({ text }) {
   );
 }
 
+function isTableSeparator(line) {
+  if (!line || typeof line !== 'string') return false;
+  const trimmed = line.trim();
+  if (!trimmed.includes('-')) return false;
+  let inner = trimmed;
+  if (inner.startsWith('|')) inner = inner.slice(1);
+  if (inner.endsWith('|')) inner = inner.slice(0, -1);
+  const cells = inner.split('|').map(c => c.trim());
+  if (cells.length === 0) return false;
+  return cells.every(c => /^:?-{1,}:?$/.test(c));
+}
+
+function parseTableAlignments(separatorLine) {
+  let inner = separatorLine.trim();
+  if (inner.startsWith('|')) inner = inner.slice(1);
+  if (inner.endsWith('|')) inner = inner.slice(0, -1);
+  return inner.split('|').map(c => {
+    const trimmed = c.trim();
+    const left = trimmed.startsWith(':');
+    const right = trimmed.endsWith(':');
+    if (left && right) return 'text-center';
+    if (right) return 'text-right';
+    return 'text-left';
+  });
+}
+
+function splitRowCells(line) {
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+  return trimmed.split('|').map(c => c.trim());
+}
+
+function isTableRow(line) {
+  if (!line || typeof line !== 'string') return false;
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return false;
+  if (trimmed.startsWith('#') || /^[-*•]\s+/.test(trimmed) || /^---{1,}$/.test(trimmed)) return false;
+  return true;
+}
+
 /**
  * Componente para renderizar formato Markdown estructurado (tablas responsivas, negritas, listas y títulos)
  */
@@ -1055,7 +1233,6 @@ function MarkdownMessage({ content }) {
 
   const lines = String(content).split('\n');
   const elements = [];
-  let currentTable = null;
   let currentList = null;
 
   const renderFormattedInline = (str) => {
@@ -1067,36 +1244,6 @@ function MarkdownMessage({ content }) {
       }
       return part;
     });
-  };
-
-  const flushTable = (key) => {
-    if (!currentTable) return null;
-    const { headers, rows } = currentTable;
-    currentTable = null;
-    return (
-      <div key={`table-${key}`} className="my-2.5 overflow-x-auto rounded-lg border border-gray-200 shadow-2xs">
-        <table className="min-w-full divide-y divide-gray-200 text-xs">
-          {headers.length > 0 && (
-            <thead className="bg-slate-100 font-bold text-slate-800">
-              <tr>
-                {headers.map((h, i) => (
-                  <th key={i} className="px-2.5 py-1.5 text-left font-bold text-slate-800 border-b border-gray-200">{h}</th>
-                ))}
-              </tr>
-            </thead>
-          )}
-          <tbody className="divide-y divide-gray-100 bg-white">
-            {rows.map((row, rIdx) => (
-              <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white hover:bg-slate-50/60' : 'bg-slate-50/40 hover:bg-slate-50/80'}>
-                {row.map((cell, cIdx) => (
-                  <td key={cIdx} className="px-2.5 py-1 text-slate-700 font-normal">{renderFormattedInline(cell)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
   };
 
   const flushList = (key) => {
@@ -1116,24 +1263,66 @@ function MarkdownMessage({ content }) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Detección de filas de tabla Markdown (| ... | ... |)
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
-      if (cells.every(c => /^:?-+:?$/.test(c))) {
-        continue;
+    // 1. Detección de Tabla GFM estándar (con o sin barras iniciales/finales, y con separadores |---| o |:---|)
+    if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      if (currentList) elements.push(flushList(i));
+
+      const headers = splitRowCells(line);
+      const alignments = parseTableAlignments(lines[i + 1]);
+      const rows = [];
+      i++; // Avanzar sobre la línea separadora
+
+      // Capturar todas las filas consecutivas de la tabla
+      while (i + 1 < lines.length && isTableRow(lines[i + 1]) && !isTableSeparator(lines[i + 1])) {
+        i++;
+        const rowCells = splitRowCells(lines[i]);
+        while (rowCells.length < headers.length) {
+          rowCells.push('');
+        }
+        rows.push(rowCells);
       }
-      if (!currentTable) {
-        if (currentList) elements.push(flushList(i));
-        currentTable = { headers: cells, rows: [] };
-      } else {
-        currentTable.rows.push(cells);
-      }
+
+      elements.push(
+        <div key={`table-${i}`} className="overflow-x-auto my-2 rounded-lg border border-gray-200 shadow-2xs">
+          <table className="min-w-full divide-y divide-gray-200 text-xs border-collapse">
+            {headers.length > 0 && (
+              <thead className="bg-slate-100 font-bold text-slate-800">
+                <tr>
+                  {headers.map((h, hIdx) => (
+                    <th
+                      key={hIdx}
+                      className={`px-3 py-2 ${alignments[hIdx] || 'text-left'} font-bold text-slate-800 border-b border-gray-200 text-xs uppercase tracking-wider bg-slate-100`}
+                    >
+                      {renderFormattedInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {rows.map((row, rIdx) => (
+                <tr
+                  key={rIdx}
+                  className={rIdx % 2 === 0 ? 'bg-white hover:bg-slate-50/60 transition-colors' : 'bg-slate-50/40 hover:bg-slate-50/80 transition-colors'}
+                >
+                  {row.map((cell, cIdx) => (
+                    <td
+                      key={cIdx}
+                      className={`px-3 py-2 ${alignments[cIdx] || 'text-left'} text-slate-700 font-normal border-b border-gray-100 align-top`}
+                    >
+                      {renderFormattedInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
       continue;
-    } else if (currentTable) {
-      elements.push(flushTable(i));
     }
 
-    // Listas con viñetas
+    // 2. Listas con viñetas
     if (/^[-*•]\s+/.test(trimmed)) {
       const itemText = trimmed.replace(/^[-*•]\s+/, '');
       if (!currentList) {
@@ -1146,13 +1335,13 @@ function MarkdownMessage({ content }) {
       elements.push(flushList(i));
     }
 
-    // Separadores ---
+    // 3. Separadores ---
     if (/^---{1,}$/.test(trimmed)) {
       elements.push(<hr key={i} className="my-2.5 border-gray-200" />);
       continue;
     }
 
-    // Encabezados Markdown
+    // 4. Encabezados Markdown
     if (trimmed.startsWith('### ')) {
       elements.push(<h4 key={i} className="font-bold text-xs sm:text-sm text-slate-900 mt-2 mb-1">{renderFormattedInline(trimmed.replace('### ', ''))}</h4>);
       continue;
@@ -1178,7 +1367,6 @@ function MarkdownMessage({ content }) {
     );
   }
 
-  if (currentTable) elements.push(flushTable('end'));
   if (currentList) elements.push(flushList('end'));
 
   return <div className="space-y-0.5 text-xs text-slate-800 leading-relaxed font-sans">{elements}</div>;
@@ -1189,6 +1377,7 @@ if (typeof window !== 'undefined') {
   window.capturarDomModuloActivo = capturarDomModuloActivo;
   window.detectarModuloActual = detectarModuloActual;
   window.getCoreProUIContext = getCoreProUIContext;
+  window.hasRealCalculatorData = hasRealCalculatorData;
   window.extractDynamicAuditContext = extractDynamicAuditContext;
   window.hasActiveDocumentOrAudit = hasActiveDocumentOrAudit;
   window.triggerLaserScanEffect = triggerLaserScanEffect;
@@ -1580,6 +1769,9 @@ export function GlobalMadreDrawer({
         : (isScanCommand ? "" : textToProcess);
       payload.userFocusQuestion = focusQuestion;
       payload.userLanguage = effectiveAudit.userLanguage || (typeof localStorage !== 'undefined' && (localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang'))) || "es";
+      if (!effectiveAudit.activeScreenContext || Object.keys(effectiveAudit.activeScreenContext).length === 0) {
+        payload.contexto_ui = {};
+      }
     }
 
     const contextoUI = payload.contexto_ui || {};
@@ -1979,6 +2171,7 @@ export {
   compactPayload,
   SCAN_COMMAND_REGEX,
   hasOperationalInputData,
+  hasRealCalculatorData,
   PENDING_OPERATION_MESSAGE,
   ejecutarEscaneoCompleto,
   ejecutarEscaneoDosTiempos,
