@@ -365,10 +365,7 @@ async function playNeuralMotherVoice(textToSpeak, playback = {}) {
         'Content-Type': 'application/json',
         'Accept': 'audio/mpeg' 
       },
-      body: JSON.stringify({ 
-        text: textToSpeak,
-        origen: "Sea Charter"
-      })
+      body: JSON.stringify({ text: textToSpeak })
     });
 
     if (!response.ok) {
@@ -409,6 +406,10 @@ async function playNeuralMotherVoice(textToSpeak, playback = {}) {
       await audioCtx.close();
       playback.onEnded?.(source);
       return null;
+    }
+    
+    if (audioCtx.state === 'suspended') {
+      try { await audioCtx.resume(); } catch (_) {}
     }
     
     source.start(0);
@@ -779,11 +780,417 @@ async function ejecutarEscaneoDosTiempos(basePayload) {
   return await responseFase2.json().catch(() => ({}));
 }
 
+/**
+ * Captura dinámica del contexto completo de auditoría/documento (sin truncado por scroll).
+ * Extrae toda la información del módulo activo, tablas, métricas, bloques y texto en memoria.
+ */
+function extractDynamicAuditContext() {
+  if (typeof document === 'undefined') {
+    return {
+      documentType: null,
+      documentName: null,
+      fullAuditData: {},
+      rawDocumentText: '',
+      activeScreenContext: {},
+      userLanguage: 'es'
+    };
+  }
+
+  // Idioma activo de la interfaz de SeaCharter
+  const userLanguage = (typeof localStorage !== 'undefined' && (localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang'))) ||
+    document.getElementById('language-selector')?.value ||
+    (typeof window !== 'undefined' && window.currentExecutiveReportLang) ||
+    'es';
+
+  // Detección del módulo actual y su contenedor
+  const moduloActual = typeof detectarModuloActual === 'function' ? detectarModuloActual() : 'calculadora';
+  const containerSelector = SEACHARTER_DOM_DICTIONARY[moduloActual]?.contenedor || `#view-${moduloActual}`;
+  const containerEl = document.querySelector(containerSelector) || document.querySelector('.view-section:not(.hidden)') || document.body;
+
+  // 1. rawDocumentText (texto íntegro del documento en memoria, limitado a 25.000 caracteres máximo)
+  let rawDocumentText = '';
+  if (typeof window !== 'undefined') {
+    if (window.State?.uploadedFile?.text) {
+      rawDocumentText = window.State.uploadedFile.text;
+    } else if (window.State?.rawDocumentText) {
+      rawDocumentText = window.State.rawDocumentText;
+    } else if (window.activeDocumentText) {
+      rawDocumentText = window.activeDocumentText;
+    } else if (window.rawDocumentText) {
+      rawDocumentText = window.rawDocumentText;
+    } else if (window.State?.contractText) {
+      rawDocumentText = window.State.contractText;
+    } else if (window.activeDossier?.contractText || window.activeDossier?.rawText) {
+      rawDocumentText = window.activeDossier.contractText || window.activeDossier.rawText;
+    }
+  }
+
+  if (!rawDocumentText) {
+    const recapEl = document.getElementById('recapInput');
+    if (recapEl && recapEl.value) {
+      rawDocumentText = recapEl.value;
+    }
+  }
+
+  if (!rawDocumentText && containerEl) {
+    const textareas = containerEl.querySelectorAll('textarea');
+    for (const ta of textareas) {
+      if (ta.value && ta.value.trim().length > 30) {
+        rawDocumentText = ta.value;
+        break;
+      }
+    }
+  }
+  if (rawDocumentText) {
+    rawDocumentText = rawDocumentText.trim().slice(0, 25000);
+  }
+
+  // 2. documentName (nombre del archivo, referencia o título del expediente)
+  let documentName = null;
+  if (typeof window !== 'undefined' && window.State?.uploadedFile?.name) {
+    documentName = window.State.uploadedFile.name;
+  } else {
+    const docPreview = document.getElementById('docPreviewText');
+    if (docPreview && docPreview.textContent?.trim()) {
+      documentName = docPreview.textContent.trim();
+    } else {
+      const quickRef = document.getElementById('quick-ref');
+      if (quickRef && quickRef.value?.trim()) {
+        documentName = quickRef.value.trim();
+      } else if (typeof window !== 'undefined' && (window.activeDossier?.reference || window.State?.contractReference || window.State?.reference || window.activeVoyage?.reference)) {
+        documentName = window.activeDossier?.reference || window.State?.contractReference || window.State?.reference || window.activeVoyage?.reference;
+      }
+    }
+  }
+
+  // 3. documentType (tipo detectado por el módulo si existe, o null)
+  let documentType = null;
+  const docBadge = document.getElementById('doc-badge');
+  if (docBadge && docBadge.textContent?.trim()) {
+    documentType = docBadge.textContent.trim();
+  } else if (typeof window !== 'undefined' && window.State?.detectedDocumentType) {
+    documentType = window.State.detectedDocumentType;
+  } else if (typeof window !== 'undefined' && window.State?.charterPartyStandard) {
+    documentType = window.State.charterPartyStandard;
+  } else if (moduloActual === 'gencon') {
+    documentType = 'GENCON';
+  } else if (moduloActual === 'asbatankvoy') {
+    documentType = 'ASBATANKVOY';
+  } else if (moduloActual === 'dossiers') {
+    documentType = 'CHARTER DOSSIER';
+  } else if (moduloActual === 'decisiones') {
+    documentType = 'DECISION SUPPORT AUDIT';
+  } else if (moduloActual === 'forwarders') {
+    documentType = 'FORWARDING PROJECT';
+  } else if (rawDocumentText) {
+    const upperText = rawDocumentText.toUpperCase();
+    if (upperText.includes('GENCON')) documentType = 'GENCON';
+    else if (upperText.includes('ASBATANKVOY')) documentType = 'ASBATANKVOY';
+    else if (upperText.includes('FIXTURE RECAP')) documentType = 'FIXTURE RECAP';
+    else if (upperText.includes('BILL OF LADING')) documentType = 'BILL OF LADING';
+    else if (upperText.includes('STATEMENT OF FACTS') || upperText.includes('SOF')) documentType = 'STATEMENT OF FACTS';
+    else if (upperText.includes('TIME CHARTER')) documentType = 'TIME CHARTER';
+    else if (upperText.includes('VOYAGE CHARTER')) documentType = 'VOYAGE CHARTER';
+  }
+
+  // 4. fullAuditData (serialización completa de todos los bloques, alertas, métricas, tablas y pestañas)
+  const fullAuditData = {
+    modulo_activo: moduloActual,
+    bloques: [],
+    alertas: [],
+    metricas: [],
+    tablas: [],
+    pestanas: []
+  };
+
+  if (containerEl) {
+    // A. Tablas (recorrer todas las tablas, incluso colapsadas u ocultas por scroll)
+    const tables = containerEl.querySelectorAll('table');
+    tables.forEach((tbl, idx) => {
+      const headers = Array.from(tbl.querySelectorAll('th')).map(th => th.textContent?.trim() || '');
+      const rows = Array.from(tbl.querySelectorAll('tbody tr, tr')).filter(tr => tr.querySelectorAll('td').length > 0).map(tr =>
+        Array.from(tr.querySelectorAll('td')).map(td => td.textContent?.trim() || '')
+      );
+      if (headers.length > 0 || rows.length > 0) {
+        fullAuditData.tablas.push({
+          id: tbl.id || `tabla_${idx + 1}`,
+          headers,
+          rows
+        });
+      }
+    });
+
+    // B. Alertas
+    const alertEls = containerEl.querySelectorAll('.alert, [role="alert"], [class*="border-red"], [class*="border-amber"], [class*="border-teal"], [class*="bg-red-50"], [class*="bg-amber-50"]');
+    alertEls.forEach((el) => {
+      const txt = el.textContent?.trim();
+      if (txt && txt.length > 5 && txt.length < 500 && !fullAuditData.alertas.includes(txt)) {
+        fullAuditData.alertas.push(txt);
+      }
+    });
+
+    // C. Métricas y KPIs
+    const metricEls = containerEl.querySelectorAll('.kpi, [id*="kpi"], [id*="res-"], [id*="badge"], .metric');
+    metricEls.forEach((el) => {
+      const label = el.getAttribute('aria-label') || el.getAttribute('data-label') || el.previousElementSibling?.textContent?.trim() || '';
+      const val = (el.value != null ? el.value : el.textContent)?.trim();
+      if (val && val.length < 100) {
+        fullAuditData.metricas.push({
+          id: el.id || '',
+          etiqueta: label,
+          valor: val
+        });
+      }
+    });
+
+    // D. Bloques y Secciones colapsables o expandidas
+    const sections = containerEl.querySelectorAll('[data-collapsible-section], .ai-work-card, section, article, .audit-collapsible-panel');
+    sections.forEach((sec, idx) => {
+      const title = sec.querySelector('h1, h2, h3, h4, [data-collapsible-title]')?.textContent?.trim() || `Bloque ${idx + 1}`;
+      const content = sec.textContent?.trim();
+      if (content && content.length > 20) {
+        fullAuditData.bloques.push({
+          titulo: title,
+          resumen: content.slice(0, 500)
+        });
+      }
+    });
+
+    // E. Pestañas / Tabs
+    const tabs = containerEl.querySelectorAll('.tab, [role="tab"], .tab-item, [data-tab]');
+    tabs.forEach((tab) => {
+      const tabName = tab.textContent?.trim();
+      const isActive = tab.classList.contains('active') || tab.getAttribute('aria-selected') === 'true';
+      if (tabName) {
+        fullAuditData.pestanas.push({ nombre: tabName, activa: isActive });
+      }
+    });
+  }
+
+  // Integración de auditorías en memoria si existen
+  if (typeof window !== 'undefined') {
+    if (window.madreUltimaAuditoria) {
+      fullAuditData.madreUltimaAuditoria = window.madreUltimaAuditoria;
+    }
+    if (window.SeaCharterCarrierOfferAudit) {
+      fullAuditData.carrierOfferAudit = window.SeaCharterCarrierOfferAudit;
+    }
+    if (window.lastCommercialNplPayload) {
+      fullAuditData.commercialNpl = window.lastCommercialNplPayload;
+    }
+  }
+
+  // 5. activeScreenContext (cálculo de viaje, ruta, precios, condiciones o parámetros activos en pantalla)
+  const activeScreenContext = {
+    ...(typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {}),
+    ...(typeof window !== 'undefined' ? (window.State || {}) : {})
+  };
+
+  return {
+    documentType: documentType || null,
+    documentName: documentName || (rawDocumentText ? 'Documento en memoria' : null),
+    fullAuditData,
+    rawDocumentText: rawDocumentText || '',
+    activeScreenContext: activeScreenContext || {},
+    userLanguage
+  };
+}
+
+/**
+ * Valida si existe un documento, expediente o informe auditado cargado en el módulo activo
+ */
+function hasActiveDocumentOrAudit(payload) {
+  if (!payload) return false;
+  return Boolean(
+    (payload.rawDocumentText && payload.rawDocumentText.trim().length > 0) ||
+    payload.documentType ||
+    (payload.documentName && payload.documentName !== 'Documento en memoria') ||
+    (payload.fullAuditData?.tablas?.length > 0) ||
+    (payload.fullAuditData?.madreUltimaAuditoria) ||
+    (payload.fullAuditData?.carrierOfferAudit) ||
+    (payload.fullAuditData?.commercialNpl)
+  );
+}
+
+/**
+ * Botón sutil para copiar el informe de auditoría al portapapeles
+ */
+function CopyReportButton({ text }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (_) {}
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 hover:bg-teal-50 px-2 py-0.5 rounded transition-all cursor-pointer"
+      title="Copiar informe al portapapeles"
+    >
+      <span>{copied ? '✓ Copiado' : '📋 Copiar informe'}</span>
+    </button>
+  );
+}
+
+/**
+ * Componente para renderizar formato Markdown estructurado (tablas responsivas, negritas, listas y títulos)
+ */
+function MarkdownMessage({ content }) {
+  if (!content) return null;
+
+  const lines = String(content).split('\n');
+  const elements = [];
+  let currentTable = null;
+  let currentList = null;
+
+  const renderFormattedInline = (str) => {
+    if (!str) return '';
+    const parts = String(str).split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return <strong key={idx} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const flushTable = (key) => {
+    if (!currentTable) return null;
+    const { headers, rows } = currentTable;
+    currentTable = null;
+    return (
+      <div key={`table-${key}`} className="my-2.5 overflow-x-auto rounded-lg border border-gray-200 shadow-2xs">
+        <table className="min-w-full divide-y divide-gray-200 text-xs">
+          {headers.length > 0 && (
+            <thead className="bg-slate-100 font-bold text-slate-800">
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} className="px-2.5 py-1.5 text-left font-bold text-slate-800 border-b border-gray-200">{h}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {rows.map((row, rIdx) => (
+              <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white hover:bg-slate-50/60' : 'bg-slate-50/40 hover:bg-slate-50/80'}>
+                {row.map((cell, cIdx) => (
+                  <td key={cIdx} className="px-2.5 py-1 text-slate-700 font-normal">{renderFormattedInline(cell)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const flushList = (key) => {
+    if (!currentList) return null;
+    const items = currentList;
+    currentList = null;
+    return (
+      <ul key={`list-${key}`} className="my-1.5 space-y-0.5 list-disc list-inside">
+        {items.map((item, idx) => (
+          <li key={idx} className="text-xs leading-relaxed text-slate-800">{renderFormattedInline(item)}</li>
+        ))}
+      </ul>
+    );
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Detección de filas de tabla Markdown (| ... | ... |)
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+      if (cells.every(c => /^:?-+:?$/.test(c))) {
+        continue;
+      }
+      if (!currentTable) {
+        if (currentList) elements.push(flushList(i));
+        currentTable = { headers: cells, rows: [] };
+      } else {
+        currentTable.rows.push(cells);
+      }
+      continue;
+    } else if (currentTable) {
+      elements.push(flushTable(i));
+    }
+
+    // Listas con viñetas
+    if (/^[-*•]\s+/.test(trimmed)) {
+      const itemText = trimmed.replace(/^[-*•]\s+/, '');
+      if (!currentList) {
+        currentList = [itemText];
+      } else {
+        currentList.push(itemText);
+      }
+      continue;
+    } else if (currentList) {
+      elements.push(flushList(i));
+    }
+
+    // Separadores ---
+    if (/^---{1,}$/.test(trimmed)) {
+      elements.push(<hr key={i} className="my-2.5 border-gray-200" />);
+      continue;
+    }
+
+    // Encabezados Markdown
+    if (trimmed.startsWith('### ')) {
+      elements.push(<h4 key={i} className="font-bold text-xs sm:text-sm text-slate-900 mt-2 mb-1">{renderFormattedInline(trimmed.replace('### ', ''))}</h4>);
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      elements.push(<h3 key={i} className="font-bold text-sm text-slate-900 mt-2.5 mb-1 border-b border-gray-200 pb-0.5">{renderFormattedInline(trimmed.replace('## ', ''))}</h3>);
+      continue;
+    }
+    if (trimmed.startsWith('# ')) {
+      elements.push(<h2 key={i} className="font-extrabold text-sm sm:text-base text-slate-900 mt-3 mb-1.5">{renderFormattedInline(trimmed.replace('# ', ''))}</h2>);
+      continue;
+    }
+
+    if (!trimmed) {
+      elements.push(<div key={i} className="h-1" />);
+      continue;
+    }
+
+    elements.push(
+      <p key={i} className="leading-relaxed my-0.5 text-xs text-slate-800 break-words">
+        {renderFormattedInline(line)}
+      </p>
+    );
+  }
+
+  if (currentTable) elements.push(flushTable('end'));
+  if (currentList) elements.push(flushList('end'));
+
+  return <div className="space-y-0.5 text-xs text-slate-800 leading-relaxed font-sans">{elements}</div>;
+}
+
 if (typeof window !== 'undefined') {
   window.SEACHARTER_DOM_DICTIONARY = SEACHARTER_DOM_DICTIONARY;
   window.capturarDomModuloActivo = capturarDomModuloActivo;
   window.detectarModuloActual = detectarModuloActual;
   window.getCoreProUIContext = getCoreProUIContext;
+  window.extractDynamicAuditContext = extractDynamicAuditContext;
+  window.hasActiveDocumentOrAudit = hasActiveDocumentOrAudit;
   window.triggerLaserScanEffect = triggerLaserScanEffect;
   window.ejecutarEscaneoVisual = ejecutarEscaneoVisual;
   window.ejecutarEfectoLaserScan = ejecutarEfectoLaserScan;
@@ -807,6 +1214,7 @@ export function GlobalMadreDrawer({
   const [isMadreOpen, setIsMadreOpen] = useState(isOpen);
   const [internalIsMuted, setInternalIsMuted] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [activeAuditContext, setActiveAuditContext] = useState(null);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -826,6 +1234,9 @@ export function GlobalMadreDrawer({
   const currentAudioRef = useRef(null);
   const playbackVersionRef = useRef(0);
   const voiceStateRef = useRef({ muted: false, open: isOpen });
+  const activeAuditContextRef = useRef(null);
+  activeAuditContextRef.current = typeof activeAuditContext !== 'undefined' ? activeAuditContext : null;
+  const scanFocusQuestionRef = useRef(null);
   const isMuted = controlledIsMuted !== undefined ? controlledIsMuted : internalIsMuted;
   voiceStateRef.current = { muted: isMuted, open: isMadreOpen };
 
@@ -904,10 +1315,19 @@ export function GlobalMadreDrawer({
       stopCurrentAudio();
     };
 
+    const handleScanEvent = (e) => {
+      setIsMadreOpen(true);
+      const question = e?.detail?.userFocusQuestion ?? inputValue;
+      if (typeof handleScan === 'function') {
+        handleScan(null, question);
+      }
+    };
+
     window.addEventListener('madre:toggle', handleToggle);
     window.addEventListener('madre:open', handleOpen);
     window.addEventListener('madre:wake-word', handleWakeWord);
     window.addEventListener('madre:close', handleCloseEvent);
+    window.addEventListener('madre:scan', handleScanEvent);
 
     // EXPOSE TO GLOBAL WINDOW SO HTML BUTTON CAN FIRE IT
     if (typeof window !== 'undefined') {
@@ -921,6 +1341,12 @@ export function GlobalMadreDrawer({
       };
       window.closeMadreDrawer = handleCloseEvent;
       window.toggleMadreDrawer = handleToggle;
+      window.scanMadreScreen = (question) => {
+        setIsMadreOpen(true);
+        if (typeof handleScan === 'function') {
+          handleScan(null, question);
+        }
+      };
       window.getCoreProUIContext = getCoreProUIContext;
       window.buildMotherExecutiveScript = buildMotherExecutiveScript;
       window.playNeuralMotherVoice = playNeuralMotherVoice;
@@ -931,9 +1357,10 @@ export function GlobalMadreDrawer({
       window.removeEventListener('madre:open', handleOpen);
       window.removeEventListener('madre:wake-word', handleWakeWord);
       window.removeEventListener('madre:close', handleCloseEvent);
+      window.removeEventListener('madre:scan', handleScanEvent);
       stopCurrentAudio();
     };
-  }, []);
+  }, [inputValue]);
 
   const speakText = async (text, stateForVoice = null) => {
     if (voiceStateRef.current.muted || !voiceStateRef.current.open) return;
@@ -974,6 +1401,8 @@ export function GlobalMadreDrawer({
   const toggleMute = handleMuteToggle;
 
   const handleReset = () => {
+    setActiveAuditContext(null);
+    scanFocusQuestionRef.current = null;
     if (typeof onReset === 'function') {
       onReset();
     }
@@ -1043,11 +1472,29 @@ export function GlobalMadreDrawer({
     setInputValue('');
     setIsLoading(true);
 
-    // Si la consulta solicita escaneo o análisis de pantalla, dispara el efecto láser visual y ejecuta escaneo
     const isScanCommand = SCAN_COMMAND_REGEX.test(queryText);
+    const focusQuestionFromScan = typeof scanFocusQuestionRef !== 'undefined' ? scanFocusQuestionRef?.current : null;
+    if (typeof scanFocusQuestionRef !== 'undefined' && scanFocusQuestionRef) {
+      scanFocusQuestionRef.current = null;
+    }
+
+    let extractedAudit = null;
+    try {
+      if (typeof extractDynamicAuditContext === 'function') {
+        extractedAudit = extractDynamicAuditContext();
+      }
+    } catch (_) {}
+
+    const hasNewAudit = Boolean(extractedAudit && typeof hasActiveDocumentOrAudit === 'function' && hasActiveDocumentOrAudit(extractedAudit));
+    let effectiveAudit = typeof activeAuditContextRef !== 'undefined' ? activeAuditContextRef?.current : null;
+    if (hasNewAudit && extractedAudit) {
+      effectiveAudit = extractedAudit;
+      setActiveAuditContext(extractedAudit);
+    }
+    const hasCriticalAudit = Boolean(effectiveAudit);
 
     let scanData = null;
-    if (isScanCommand) {
+    if (SCAN_COMMAND_REGEX.test(queryText)) {
       triggerLaserScanEffect();
       try {
         if (typeof window !== 'undefined' && typeof window.ejecutarEscaneoCompleto === 'function') {
@@ -1059,30 +1506,28 @@ export function GlobalMadreDrawer({
         console.warn('[MADRE Scan] Error al ejecutar escaneo completo:', scanErr);
       }
 
-      if (!hasOperationalInputData()) {
-        const pendingMessage = typeof getScanPendingMessage === 'function'
-          ? getScanPendingMessage(typeof window !== 'undefined' ? window.State : {})
-          : PENDING_OPERATION_MESSAGE;
-        if (pendingMessage) {
-          const pendingAssistantMessage = {
-            id: Date.now() + 1,
-            sender: 'assistant',
-            role: 'assistant',
-            text: pendingMessage,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-          setMessages((prev) => [...prev, pendingAssistantMessage]);
-          setIsLoading(false);
-          (async () => {
-            try {
-              if (voiceRequestVersion !== playbackVersionRef.current) return;
-              await speakText(pendingMessage, typeof window !== 'undefined' ? window.State : {});
-            } catch (voiceErr) {
-              console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
-            }
-          })();
-          return;
-        }
+      const pendingMessage = (typeof getScanPendingMessage === 'function')
+        ? getScanPendingMessage(typeof window !== 'undefined' ? window.State : {})
+        : null;
+      if (pendingMessage && !hasCriticalAudit) {
+        const pendingAssistantMessage = {
+          id: Date.now() + 1,
+          sender: 'assistant',
+          role: 'assistant',
+          text: pendingMessage,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, pendingAssistantMessage]);
+        setIsLoading(false);
+        (async () => {
+          try {
+            if (voiceRequestVersion !== playbackVersionRef.current) return;
+            await speakText(pendingMessage, typeof window !== 'undefined' ? window.State : {});
+          } catch (voiceErr) {
+            console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
+          }
+        })();
+        return;
       }
     }
 
@@ -1126,6 +1571,16 @@ export function GlobalMadreDrawer({
       },
       contexto_ui: getCoreProUIContext()
     };
+
+    if (hasCriticalAudit && effectiveAudit) {
+      payload.scanMode = "audit_critical";
+      payload.auditPayload = effectiveAudit;
+      const focusQuestion = focusQuestionFromScan !== null
+        ? focusQuestionFromScan
+        : (isScanCommand ? "" : textToProcess);
+      payload.userFocusQuestion = focusQuestion;
+      payload.userLanguage = effectiveAudit.userLanguage || (typeof localStorage !== 'undefined' && (localStorage.getItem('seacharter_lang') || localStorage.getItem('rodahmar_lang'))) || "es";
+    }
 
     const contextoUI = payload.contexto_ui || {};
     payload.pol = contextoUI.pol || '';
@@ -1321,61 +1776,37 @@ export function GlobalMadreDrawer({
       commodity: payload.commodity || payload.contexto_ui?.commodity || ''
     };
 
+    if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
+      let finalReply = buildMotherExecutiveScript(stateForVoice);
+      void finalReply;
+    }
+
     try {
       let data = {};
 
-      if (isScanCommand) {
-        // Opción A: Enrutar por arquitectura "Dos Tiempos" (Fase 1 digestión de contexto -> Fase 2 análisis)
-        if (typeof ejecutarEscaneoDosTiempos === 'function') {
-          data = await ejecutarEscaneoDosTiempos(payload);
-        } else {
-          const responseFase1 = await fetch(MADRE_API_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ ...payload, fase: 1 }),
-          });
-          const dataFase1 = await responseFase1.json().catch(() => ({}));
-          const sessionId = dataFase1?.session_id || dataFase1?.referenciaMadre || 'REF-MADRE-ACTIVA';
-          const responseFase2 = await fetch(MADRE_API_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ ...payload, fase: 2, session_id: sessionId }),
-          });
-          data = await responseFase2.json().catch(() => ({}));
-        }
-      } else {
-        // Opción B: Chat Ligero / Conversacional (Bypass de Contexto Pesado con is_conversational: true)
-        payload.is_conversational = true;
+      const response = await fetch(MADRE_API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-        const response = await fetch(MADRE_API_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
+      }
 
-        try {
-          data = await response.json();
-        } catch (jsonErr) {
-          console.warn('[MADRE] Advertencia: La respuesta no es JSON puro o está vacía.', jsonErr);
-        }
-
-        if (!response.ok) {
-          throw new Error(`Error HTTP: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
       }
 
       // Mostrar el resultado real del servidor, procesando el veredicto comercial y operativo unificado
-      let finalReply = formatMotherVerdict(data, stateForVoice);
+      const finalReply = data.respuesta || data.reply || formatMotherVerdict(data, stateForVoice);
       if (typeof window !== 'undefined' && data && (data.veredicto_general || data.reporte_estrategico)) {
         window.madreUltimaAuditoria = data;
-      }
-      if (SCAN_COMMAND_REGEX.test(queryText) && !/(?:mercado|market|spot)/i.test(queryText)) {
-        if (!finalReply || finalReply.trim() === '') {
-          finalReply = buildMotherExecutiveScript(stateForVoice);
-        }
       }
       if (typeof finalReply !== 'string' || !finalReply.trim()) {
         throw new Error('MADRE no devolvió una respuesta válida.');
@@ -1392,11 +1823,11 @@ export function GlobalMadreDrawer({
       setMessages((prev) => [...prev, assistantMessage]);
 
       // 2. Disparar la voz de MADRE de forma totalmente independiente
-      // Usamos una función autoejecutable (IIFE) asíncrona para que no bloquee ni dispare el catch principal
       (async () => {
         try {
           if (voiceRequestVersion !== playbackVersionRef.current) return;
-          await speakText(finalReply, stateForVoice);
+          const textToVocalize = data.voiceSummary || data.mensaje_voz || finalReply;
+          await speakText(textToVocalize, stateForVoice);
         } catch (voiceErr) {
           console.warn('[MADRE Voice] Reproducción de voz omitida o fallida:', voiceErr);
         }
@@ -1428,10 +1859,12 @@ export function GlobalMadreDrawer({
     await handleSendMessage(queryText);
   };
 
-  const handleScan = async (e) => {
+  const handleScan = async (e, forcedQuestion = null) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
+    const questionToFocus = typeof forcedQuestion === 'string' ? forcedQuestion : inputValue;
+    scanFocusQuestionRef.current = questionToFocus ? questionToFocus.trim() : "";
     await handleSubmit(e, "Escanear y auditar pantalla Core PRO");
   };
 
@@ -1449,6 +1882,7 @@ export function GlobalMadreDrawer({
           <div className="flex flex-row items-center gap-2 shrink-0 pointer-events-none">
             <img src="/MADRE.png" alt="MADRE" className="w-6 h-6 rounded-full shadow-sm shrink-0" />
             <span className="font-bold text-sm text-gray-800">MADRE</span>
+            <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full">Cerebro Central</span>
           </div>
 
           <div className="madre-header-controls flex flex-row items-center justify-end gap-1.5 shrink-0">
@@ -1475,12 +1909,39 @@ export function GlobalMadreDrawer({
           
         </header>
 
+        {/* ETIQUETA VISUAL DISCRETA DE DOCUMENTO VINCULADO (MEMORIA DE SESIÓN) */}
+        {activeAuditContext && (
+          <div className="bg-teal-50 border-b border-teal-100 px-3 py-1.5 flex items-center justify-between text-xs text-teal-900">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-teal-600 font-bold">📄</span>
+              <span className="truncate">Documento vinculado: <strong>{activeAuditContext.documentName || activeAuditContext.documentType || 'Expediente Activo'}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveAuditContext(null)}
+              className="text-teal-700 hover:text-teal-950 font-bold ml-2 px-1 hover:bg-teal-100 rounded cursor-pointer shrink-0"
+              title="Desvincular documento de la sesión"
+            >
+              [x]
+            </button>
+          </div>
+        )}
+
         {/* CUERPO DEL CHAT LIMPIO */}
         <div className="overflow-y-auto max-h-[60vh] min-h-[300px] bg-gray-50 p-4 flex flex-col gap-3">
           {messages.map((m) => (
             <div key={m.id} className={`flex flex-col w-full ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed whitespace-pre-wrap font-medium p-3 rounded-xl shadow-sm border ${m.sender === 'user' ? 'bg-blue-50 border border-blue-100 text-gray-800' : m.isError ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border border-gray-200 text-gray-800'}`}>
-                {m.text}
+              <div className={`text-xs max-w-[90%] sm:max-w-[88%] leading-relaxed font-medium p-3 rounded-xl shadow-sm border ${m.sender === 'user' ? 'bg-blue-50 border border-blue-100 text-gray-800 whitespace-pre-wrap' : m.isError ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                {m.sender === 'assistant' && !m.isError ? (
+                  <>
+                    <MarkdownMessage content={m.text} />
+                    <div className="mt-2 pt-1 border-t border-gray-100 flex justify-end">
+                      <CopyReportButton text={m.text} />
+                    </div>
+                  </>
+                ) : (
+                  m.text
+                )}
               </div>
             </div>
           ))}
@@ -1523,7 +1984,11 @@ export {
   ejecutarEscaneoDosTiempos,
   buildMotherExecutiveScript,
   formatMotherVerdict,
-  playNeuralMotherVoice
+  playNeuralMotherVoice,
+  extractDynamicAuditContext,
+  hasActiveDocumentOrAudit,
+  MarkdownMessage,
+  CopyReportButton
 };
 
 export default GlobalMadreDrawer;

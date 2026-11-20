@@ -989,6 +989,20 @@ export function TopNav() {
         <div className="header-actions-right flex items-center gap-2 shrink-0">
           <button
             type="button"
+            id="btn-madre-scan-header"
+            onClick={() => {
+              if (window.scanMadreScreen) window.scanMadreScreen();
+              else window.dispatchEvent(new CustomEvent('madre:scan'));
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-semibold bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50 hover:border-emerald-400/50"
+            title="Escanear y auditar pantalla con MADRE"
+            aria-label="Escanear y auditar pantalla con MADRE"
+          >
+            <span className="text-emerald-400 font-bold">⚡</span>
+            <span className="hidden sm:inline">Escanear</span>
+          </button>
+          <button
+            type="button"
             id="btn-madre-trigger"
             onClick={() => setIsMadreOpen(!isMadreOpen)}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer font-sans text-xs font-bold"

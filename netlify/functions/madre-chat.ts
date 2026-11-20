@@ -16,21 +16,63 @@ export const DIRECTIVA_DSS = "MANDATO CRÍTICO 4 (PROTECCIÓN ALL-IN): El 'Flete
 export function buildStrategicPayload(body: any) {
   const ui = body?.contexto_ui || body?.contexto || body?.context || {};
   const floor = Number(ui.allInRateGross);
-  if (!Number.isFinite(floor) || floor <= 0) return body;
-  
+  const isAuditCritical = body?.scanMode === 'audit_critical';
+  const userLang = body?.userLanguage || 'es';
+
   // INYECCIÓN DE IDIOMA EN EL PAYLOAD
-  const reglaIdioma = "DIRECTIVA SUPREMA: ERES UN ASISTENTE 100% HISPANOHABLANTE. TODA TU RESPUESTA, AUDITORÍA Y FIXTURE RECAP DEBEN REDACTARSE EN ESPAÑOL NEUTRO. NO USES INGLÉS SALVO SIGLAS CANÓNICAS (EJ. DWT, ETA).";
+  let reglaIdioma = "DIRECTIVA SUPREMA: ERES UN ASISTENTE 100% HISPANOHABLANTE. TODA TU RESPUESTA, AUDITORÍA Y FIXTURE RECAP DEBEN REDACTARSE EN ESPAÑOL NEUTRO. NO USES INGLÉS SALVO SIGLAS CANÓNICAS (EJ. DWT, ETA).";
+  if (isAuditCritical) {
+    const langDesc = userLang === 'en' ? 'inglés' : userLang === 'fr' ? 'francés' : 'español';
+    reglaIdioma = `DIRECTIVA DE IDIOMA PARA AUDITORÍA CRÍTICA: El idioma preferente de la interfaz es ${langDesc} (${userLang}). Respeta este idioma y permite explícitamente responder, asesorar o redactar propuestas, informes o correos en el idioma específicamente solicitado en la consulta o instrucción del usuario (userFocusQuestion / prompt), por ejemplo si solicita redactar en inglés o cualquier otro idioma.`;
+  }
+
+  // Si viene en scanMode audit_critical o con auditPayload, garantizar mensajeUsuario no vacío
+  let userMsg = body?.mensajeUsuario || body?.mensaje || body?.message || body?.prompt || '';
+  if (!userMsg && isAuditCritical) {
+    const docName = body?.auditPayload?.documentName || 'Documento en pantalla';
+    const focusQ = body?.userFocusQuestion || '';
+    userMsg = focusQ ? focusQ : `Auditar y analizar exhaustivamente el documento en pantalla: ${docName}`;
+  }
+
+  if (!Number.isFinite(floor) || floor <= 0) {
+    if (isAuditCritical || userMsg) {
+      return {
+        ...body,
+        mensajeUsuario: userMsg || body?.mensajeUsuario,
+        prompt: userMsg || body?.prompt,
+        message: userMsg || body?.message,
+        systemInstruction: [body?.systemInstruction, reglaIdioma].filter(Boolean).join('\n')
+      };
+    }
+    return body;
+  }
   
   const context = { ...ui, allInRateGross: floor, flete_all_in_gross_usd_mt: floor,
     directiva_dss: DIRECTIVA_DSS };
   const mandate = `${reglaIdioma}\n\n${DIRECTIVA_DSS}\nFlete ALL-IN GROSS: USD ${floor.toFixed(2)}/MT (JWC, lastre y comisiones incluidos).`;
   
   return { ...body, contexto_ui: context, contexto: context,
-    systemInstruction: [body.systemInstruction, mandate].filter(Boolean).join('\n'),
-    mensajeUsuario: [body.mensajeUsuario || body.mensaje || body.message || body.prompt, mandate].filter(Boolean).join('\n') };
+    systemInstruction: [body?.systemInstruction, mandate].filter(Boolean).join('\n'),
+    mensajeUsuario: [userMsg || body?.mensajeUsuario || body?.mensaje || body?.message || body?.prompt, mandate].filter(Boolean).join('\n') };
 }
 
 export function buildLocalVerdict(body: any, reason: string) {
+  if (body?.scanMode === 'audit_critical' || body?.auditPayload) {
+    const docName = body?.auditPayload?.documentName || 'Documento en pantalla';
+    const docType = body?.auditPayload?.documentType || 'Expediente auditado';
+    const focusQ = body?.userFocusQuestion ? ` Consulta de usuario: "${body.userFocusQuestion}".` : '';
+    const reply = `MADRE · Auditoría crítica local de ${docName} (${docType}).${focusQ} Evaluación paramétrica sincronizada. La conexión remota experta arrojó "${reason}"; verifique cláusulas operativas, demoras y condiciones de flete antes de firmar.`;
+    const voice = `Auditoría local completada para ${docName}. Se recomienda validar cláusulas y flete antes de la confirmación operativa.`;
+    return {
+      success: true, fallback: true, source: 'local', fallback_reason: reason,
+      veredicto_general: 'requiere_revision', provisional: true,
+      documentName: docName, documentType: docType,
+      respuesta: reply, reply, message: reply, text: reply, response: reply,
+      voiceSummary: voice, mensaje_voz: voice,
+      escaneo_procesado: true, timestamp: new Date().toISOString()
+    };
+  }
+
   const ui = body?.contexto_ui || body?.contexto || body?.context || {};
   const blocks = ui.escaneo_estructurado?.bloques || ui.modulos_1_a_10 || {};
   const finitePositive = (...values: any[]) => {
@@ -49,18 +91,22 @@ export function buildLocalVerdict(body: any, reason: string) {
   const reply = complete
     ? `MADRE · Veredicto local provisional: ${verdict === 'desfavorable' ? 'flete inferior al break-even' : 'requiere revisión operativa'}. Carga: ${cargo} MT. Break-even: $${breakEven.toFixed(2)}/MT. Flete: $${freight.toFixed(2)}/MT. Margen sobre flete: ${margin!.toFixed(1)}%. Validar costes, ritmos en puerto y cláusulas antes del cierre. La evaluación remota no está disponible.`
     : 'MADRE · Evaluación local pendiente de datos: confirme carga, break-even y flete de venta positivos en la calculadora. La evaluación remota no está disponible; no se puede confirmar la viabilidad comercial.';
+  const voice = complete
+    ? `Veredicto local: margen del ${margin!.toFixed(1)}% sobre flete.`
+    : 'Evaluación local pendiente de datos en la calculadora.';
   return {
     success: true, fallback: true, source: 'local', fallback_reason: reason,
     veredicto_general: verdict, provisional: true,
     metrics: { cargo_mt: cargo, break_even_usd_mt: breakEven, freight_usd_mt: freight, margin_pct: margin },
     respuesta: reply, reply, message: reply, text: reply, response: reply,
+    voiceSummary: voice, mensaje_voz: voice,
     escaneo_procesado: false, bloques_auditados: 0, timestamp: new Date().toISOString()
   };
 }
 
 // The deadline includes receiving/parsing the body, not just receiving headers.
 // Promise.race also protects against a transport that ignores AbortSignal.
-export async function requestVerdict(body: any, fetchImpl = fetch, timeoutMs = AI_TIMEOUT_MS) {
+export async function requestVerdict(body: any, fetchImpl = fetch, timeoutMs = (body?.scanMode === 'audit_critical' ? 24_000 : AI_TIMEOUT_MS)) {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -80,7 +126,8 @@ export async function requestVerdict(body: any, fetchImpl = fetch, timeoutMs = A
       const reply = [data?.respuesta, data?.reply, data?.texto_preformateado, data?.message, data?.text, data?.response]
         .find(value => typeof value === 'string' && value.trim());
       if (data?.success === false || !reply) throw new Error('upstream_invalid_response');
-      return { ...data, success: true, respuesta: reply, reply };
+      const voiceSummary = data?.voiceSummary || data?.mensaje_voz || data?.resumen_voz || '';
+      return { ...data, success: true, respuesta: reply, reply, ...(voiceSummary ? { voiceSummary } : {}) };
     })();
     return await Promise.race([remote, deadline]);
   } catch (error) {
