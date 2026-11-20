@@ -19,13 +19,65 @@ function formatDate(value) {
   }).format(date);
 }
 
+function normalizeVesselClass(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'desconocido' || normalized === 'unknown' || normalized === 'clase no detectada') {
+    return '';
+  }
+  if (normalized.includes('cape') || normalized.includes('vloc') || normalized.includes('vlcc')) return 'Capesize';
+  if (normalized.includes('panamax') || normalized.includes('kamsar')) return 'Panamax';
+  if (normalized.includes('supra') || normalized.includes('ultra')) return 'Supramax';
+  if (normalized.includes('handy')) return 'Handysize';
+  return '';
+}
+
 function getSelectedVesselClass() {
+  // 1. Prioritize explicitly selected vessel in vessel-badge if it maps to a standard class
   const badge = document.getElementById('vessel-badge');
-  const vesselType = String((badge?.textContent === 'Cement Carrier' ? badge?.dataset?.operationalClass : badge?.textContent) || '').trim().toLowerCase();
-  if (vesselType.includes('cape')) return 'Capesize';
-  if (vesselType.includes('panamax') || vesselType.includes('kamsar')) return 'Panamax';
-  if (vesselType.includes('supra') || vesselType.includes('ultra')) return 'Supramax';
-  if (vesselType.includes('handy')) return 'Handysize';
+  const badgeRaw = badge?.textContent === 'Cement Carrier' ? badge?.dataset?.operationalClass : badge?.textContent;
+  const badgeClass = normalizeVesselClass(badgeRaw);
+  if (badgeClass) return badgeClass;
+
+  // 2. Synchronize with DWT Pricing Router (card dataset, badge dataset, status text, window category)
+  const routerBadge = document.getElementById('vessel-pricing-router-badge');
+  const routerStatus = document.getElementById('vessel-pricing-router-status');
+  const routerCard = document.getElementById('vessel-pricing-router-card');
+  const routerCandidates = [
+    routerCard?.dataset?.vesselClass,
+    routerBadge?.dataset?.vesselClass,
+    routerStatus?.dataset?.vesselClass,
+    typeof window !== 'undefined' ? window.currentVesselStandardClass : null,
+    typeof window !== 'undefined' ? window.currentVesselPricingCategory : null,
+    typeof window !== 'undefined' ? window.currentVesselPricingClass?.categoryName : null,
+    routerBadge?.textContent,
+    routerStatus?.textContent,
+  ];
+  for (const candidate of routerCandidates) {
+    const candidateClass = normalizeVesselClass(candidate);
+    if (candidateClass) return candidateClass;
+  }
+
+  // 3. Fallback to State if detected
+  if (typeof window !== 'undefined' && window.State) {
+    const stateClass = normalizeVesselClass(window.State.class || window.State.detectedVesselSegment);
+    if (stateClass) return stateClass;
+  }
+
+  // 4. Derive from vessel DWT input if standard class (>= 15,000 MT)
+  const dwtInput = document.getElementById('vessel-dwt');
+  const dwtVal = Number(dwtInput?.value || (typeof window !== 'undefined' && window.State?.dwt) || 0);
+  if (dwtVal >= 15000) {
+    if (typeof window !== 'undefined' && typeof window.getVesselClass === 'function') {
+      const pricingObj = window.getVesselClass(dwtVal);
+      const cls = normalizeVesselClass(pricingObj?.categoryName);
+      if (cls) return cls;
+    }
+    if (dwtVal < 35000) return 'Handysize';
+    if (dwtVal < 65000) return 'Supramax';
+    if (dwtVal < 85000) return 'Panamax';
+    return 'Capesize';
+  }
+
   return '';
 }
 
@@ -79,8 +131,9 @@ function renderBdi(snapshot) {
 }
 
 function renderTceSpot(snapshot) {
+  const activeSnapshot = snapshot || latestSnapshot || (typeof window !== 'undefined' ? (window.MarketIntelligenceHydration?.getSnapshot?.() || window.State?.marketSnapshot) : null);
   const vesselClass = getSelectedVesselClass();
-  const tceSpot = vesselClass ? snapshot?.tceSpotByClass?.[vesselClass] : null;
+  const tceSpot = vesselClass ? (activeSnapshot?.tceSpotByClass?.[vesselClass] || activeSnapshot?.tceSpotByClass?.[vesselClass.toLowerCase()]) : null;
   setText('tce-spot-theoretical-class', vesselClass || 'Clase no detectada');
   setText(
     'tce-spot-theoretical-value',
@@ -118,7 +171,7 @@ function renderTceSpot(snapshot) {
 
   if (typeof window !== 'undefined') {
     if (window.State) {
-      window.State.marketSnapshot = snapshot;
+      window.State.marketSnapshot = activeSnapshot || snapshot;
       if (Number.isFinite(Number(tceSpot?.theoreticalSpotTce)) && Number(tceSpot.theoreticalSpotTce) > 0) {
         window.State.theoreticalSpotTce = Number(tceSpot.theoreticalSpotTce);
       }
@@ -142,28 +195,61 @@ function renderSnapshot(snapshot) {
   renderTceSpot(latestSnapshot);
 }
 
-function refreshWhenVesselTypeChanges() {
-  const vesselType = String(document.getElementById('vessel-badge')?.textContent || '').trim();
-  if (vesselType === lastObservedVesselType) return;
-  lastObservedVesselType = vesselType;
+function refreshWhenVesselTypeChanges(force = false) {
+  const currentClass = getSelectedVesselClass();
+  const rawBadge = String(document.getElementById('vessel-badge')?.textContent || '').trim();
+  const routerBadge = String(document.getElementById('vessel-pricing-router-badge')?.textContent || '').trim();
+  const routerStatus = String(document.getElementById('vessel-pricing-router-status')?.textContent || '').trim();
+  const dwtVal = String(document.getElementById('vessel-dwt')?.value || '').trim();
+  const signature = `${currentClass}|${rawBadge}|${routerBadge}|${routerStatus}|${dwtVal}`;
+  if (!force && signature === lastObservedVesselType) return;
+  lastObservedVesselType = signature;
   renderTceSpot(latestSnapshot);
 }
 
 function initializeBalticSpotReference() {
   const hydration = window.MarketIntelligenceHydration;
   const vesselBadge = document.getElementById('vessel-badge');
+  const routerStatus = document.getElementById('vessel-pricing-router-status');
+  const routerBadge = document.getElementById('vessel-pricing-router-badge');
+  const vesselDwt = document.getElementById('vessel-dwt');
 
   if (vesselBadge) {
-    new MutationObserver(refreshWhenVesselTypeChanges).observe(vesselBadge, {
+    new MutationObserver(() => refreshWhenVesselTypeChanges()).observe(vesselBadge, {
       childList: true,
       characterData: true,
       subtree: true,
     });
   }
 
-  window.addEventListener('CALCULATION_EVENT', refreshWhenVesselTypeChanges);
+  if (routerStatus) {
+    new MutationObserver(() => refreshWhenVesselTypeChanges()).observe(routerStatus, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  }
+
+  if (routerBadge) {
+    new MutationObserver(() => refreshWhenVesselTypeChanges()).observe(routerBadge, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  }
+
+  if (vesselDwt) {
+    vesselDwt.addEventListener('input', () => refreshWhenVesselTypeChanges());
+    vesselDwt.addEventListener('change', () => refreshWhenVesselTypeChanges());
+  }
+
+  window.addEventListener('CALCULATION_EVENT', () => refreshWhenVesselTypeChanges());
+  window.addEventListener('VESSEL_PRICING_ROUTER_UPDATED', () => refreshWhenVesselTypeChanges(true));
+  window.addEventListener('seacharter:dwt-pricing-router-updated', () => refreshWhenVesselTypeChanges(true));
   window.refreshBalticSpotReference = () => hydration?.refresh({ force: true });
-  lastObservedVesselType = String(vesselBadge?.textContent || '').trim();
+  window.refreshBalticSpotReferenceFromRouter = () => refreshWhenVesselTypeChanges(true);
+  window.renderTceSpotBalticReference = () => renderTceSpot(latestSnapshot);
+  lastObservedVesselType = '';
 
   if (!hydration) {
     renderSnapshot(null);

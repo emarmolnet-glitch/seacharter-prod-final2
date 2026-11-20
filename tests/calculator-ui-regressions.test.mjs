@@ -166,3 +166,88 @@ test('renders BDI and final TCE Spot from the shared hydration snapshot', async 
     globalThis.MutationObserver = originalMutationObserver;
   }
 });
+
+test('initializes market calibration factor input with 1.00, step 0.05, min 0.50, max 1.50', () => {
+  assert.match(indexSource, /id="market-calibration-factor"[\s\S]*?value="1\.00"[\s\S]*?min="0\.50"[\s\S]*?max="1\.50"[\s\S]*?step="0\.05"/);
+  assert.match(indexSource, /setInputValue\('market-calibration-factor',\s*'1\.00'\)/);
+  assert.doesNotMatch(indexSource, /'inverse-bunker-daily-port',\s*'market-calibration-factor'/);
+});
+
+test('synchronizes TCE Spot Teórico with DWT Pricing Router when standard class is detected', async () => {
+  const elements = new Map([
+    ['vessel-badge', { textContent: 'Desconocido' }],
+    ['vessel-dwt', { value: '28000', addEventListener() {} }],
+    ['vessel-pricing-router-status', { textContent: 'Clase detectada: Handysize / Small Tanker (28,000 DWT).' }],
+    ['vessel-pricing-router-badge', { textContent: '✅ Clase detectada: Handysize / Small Tanker | Modo: TCE Inverso' }],
+    ['vessel-pricing-router-card', { dataset: { vesselClass: 'Handysize' } }],
+    ['port-pol', { value: '', addEventListener() {} }],
+    ['port-pod', { value: '', addEventListener() {} }],
+    ['baltic-spot-index', { textContent: '', className: '' }],
+    ['baltic-spot-value', { textContent: '', className: '' }],
+    ['baltic-spot-variation', { textContent: '', className: '', hidden: false }],
+    ['baltic-spot-status', { textContent: '', className: '' }],
+    ['baltic-spot-updated', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-class', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-value', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-updated', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-fuel', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-spread', { textContent: '', className: '' }],
+    ['tce-spot-theoretical-status', { textContent: '', className: '' }],
+  ]);
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const originalMutationObserver = globalThis.MutationObserver;
+
+  try {
+    globalThis.window = {
+      addEventListener() {},
+      currentVesselPricingCategory: 'Handysize / Small Tanker',
+      currentVesselStandardClass: 'Handysize',
+      MarketIntelligenceHydration: {
+        subscribe(callback) {
+          callback({
+            status: 'ready',
+            snapshot: {
+              status: 'ready',
+              bdi: { value: 2302, changeValue: -18, changePct: -0.78, updatedAt: '2026-08-26T09:45:00Z', status: 'LIVE' },
+              tceSpotByClass: {
+                Handysize: {
+                  theoreticalSpotTce: 18712,
+                  spreadUsd: 412,
+                  spreadPct: 2.25,
+                  fuelLabel: 'VLSFO Standard',
+                  algorithmLabel: 'ALGORITMO LIVE VLSFO',
+                  updatedAt: '2026-08-26T09:42:00Z',
+                },
+                Supramax: {
+                  theoreticalSpotTce: 21500,
+                  spreadUsd: 300,
+                  spreadPct: 1.41,
+                  fuelLabel: 'VLSFO Standard',
+                  algorithmLabel: 'ALGORITMO LIVE VLSFO',
+                  updatedAt: '2026-08-26T09:42:00Z',
+                },
+              },
+            },
+          });
+        },
+        refresh() {},
+      },
+    };
+    globalThis.document = {
+      readyState: 'complete',
+      getElementById: (id) => elements.get(id) || null,
+    };
+    globalThis.MutationObserver = class {
+      observe() {}
+    };
+    await import(`data:text/javascript,${encodeURIComponent(balticSpotSource)}#${Date.now()}`);
+
+    assert.equal(elements.get('tce-spot-theoretical-class').textContent, 'Handysize');
+    assert.equal(elements.get('tce-spot-theoretical-value').textContent, '$18,712');
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+    globalThis.MutationObserver = originalMutationObserver;
+  }
+});
