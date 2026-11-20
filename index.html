@@ -10049,6 +10049,18 @@
 
         <!-- DERECHA: BOTONES DE ACCIÓN (FAQ, OWN/CHR, COLAPSAR) -->
         <div class="header-actions-right flex items-center gap-1.5 shrink-0">
+          <!-- Botón Escanear Pantalla MADRE en Cabecera -->
+          <button
+            id="madre-topbar-scan-button"
+            type="button"
+            class="relative flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50 hover:border-emerald-400 text-xs font-semibold cursor-pointer mr-1 transition-all"
+            title="Escanear pantalla con MADRE"
+            aria-label="Escanear pantalla con MADRE"
+            onclick="if(window.scanMadreScreen) window.scanMadreScreen(); else window.dispatchEvent(new CustomEvent('madre:scan'));"
+          >
+            <span class="text-emerald-400 font-bold">⚡</span>
+            <span class="hidden md:inline">Escanear</span>
+          </button>
           <!-- Disparador MADRE -->
           <button
             id="madre-topbar-button"
@@ -56376,9 +56388,11 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                         textarea.value = extractedText.trim();
                     }
 
+                    const finalPdfText = (fullTranscribedText && fullTranscribedText.trim()) || (extractedText && extractedText.trim()) || textarea.value || "";
                     State.uploadedFile = {
                         name: fileName,
                         type: 'application/pdf',
+                        text: finalPdfText,
                         base64: "",
                         dataUrl: dataUrl,
                         file: file,
@@ -56387,15 +56401,30 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                         isLarge: isLarge,
                         ocrCompleted: isOcrCompleted
                     };
+                    State.rawDocumentText = finalPdfText;
+                    window.activeDocumentText = finalPdfText;
+                    window.rawDocumentText = finalPdfText;
                 } else if (fileExtension === 'docx') {
                     extractedText = await extractTextFromWord(file);
                     textarea.value = extractedText;
+                    State.uploadedFile = { name: fileName, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', text: extractedText, file };
+                    State.rawDocumentText = extractedText;
+                    window.activeDocumentText = extractedText;
+                    window.rawDocumentText = extractedText;
                 } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
                     extractedText = await extractTextFromExcel(file);
                     textarea.value = extractedText;
+                    State.uploadedFile = { name: fileName, type: 'application/vnd.ms-excel', text: extractedText, file };
+                    State.rawDocumentText = extractedText;
+                    window.activeDocumentText = extractedText;
+                    window.rawDocumentText = extractedText;
                 } else if (fileExtension === 'txt' || fileExtension === 'md' || fileExtension === 'csv') {
                     extractedText = await extractTextFromTxt(file);
                     textarea.value = extractedText;
+                    State.uploadedFile = { name: fileName, type: 'text/plain', text: extractedText, file };
+                    State.rawDocumentText = extractedText;
+                    window.activeDocumentText = extractedText;
+                    window.rawDocumentText = extractedText;
                 } else if ((file.type && file.type.startsWith('image/')) || imageExtensions.includes(fileExtension)) {
                     // For images, read as base64 Data URL and save in State
                     const dataUrl = await new Promise((resolve, reject) => {
@@ -56445,6 +56474,14 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     }
                 } else {
                     throw new Error("Formato no soportado. Sube PDF, Word (.docx), Excel (.xlsx, .xls), texto (.txt, .csv, .md) o fotografías (.png, .jpg, .jpeg, .webp, .gif).");
+                }
+
+                const finalSyncedText = State.uploadedFile?.text || State.rawDocumentText || window.activeDocumentText || textarea?.value || "";
+                if (finalSyncedText) {
+                    State.rawDocumentText = finalSyncedText;
+                    window.activeDocumentText = finalSyncedText;
+                    window.rawDocumentText = finalSyncedText;
+                    if (State.uploadedFile) State.uploadedFile.text = finalSyncedText;
                 }
 
                 showDocPreview('file', fileName);
@@ -73058,7 +73095,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
         }
 
         function syncMarketIntelToInverseTce(vesselCategory = currentVesselPricingCategory) {
-            if (window.dossierSnapshotLocked) return false;
+            if (typeof window !== 'undefined' && window.dossierSnapshotLocked) return false;
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
             const marketInput = document.getElementById(`market-intel-${String(vesselClass).toLowerCase()}-tc`);
             const tceInput = document.getElementById('inverse-tce-target');
@@ -73076,7 +73113,7 @@ ${allClauses.map((c, i) => `${i + 1}. Cláusula: ${c.clausula || ''} | Desviaci�
         }
 
         function applyMarketLatestToInverseTce(record, vesselCategory = currentVesselPricingCategory) {
-            if (window.dossierSnapshotLocked) return false;
+            if (typeof window !== 'undefined' && window.dossierSnapshotLocked) return false;
             const tceInput = document.getElementById('inverse-tce-target');
             const vesselClass = getMarketSpeedVesselClass(vesselCategory);
             if (syncMarketIntelToInverseTce(vesselCategory)) return true;
