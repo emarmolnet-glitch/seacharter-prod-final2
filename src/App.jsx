@@ -887,6 +887,9 @@ export function AppLayout({ children }) {
   );
 }
 
+export const SHOW_HEADER_BRIDGE_BADGE = false;
+export const SHOW_HEADER_FAQ = false;
+
 /**
  * Top Navigation Bar (TopNav) component displaying corporate branding,
  * vessel search input, and the active project reference input.
@@ -952,7 +955,9 @@ export function TopNav() {
 
         {/* CENTRO: STATUS BRIDGE, BUSCADOR IMO, VOYAGE REF */}
         <div className="header-center hidden md:flex items-center gap-2 md:gap-3 flex-1 justify-center max-w-3xl mx-2 md:mx-4">
-          <div id="connection-status-root" className="hidden md:flex shrink-0"></div>
+          {SHOW_HEADER_BRIDGE_BADGE && (
+            <div id="connection-status-root" className="hidden md:flex shrink-0"></div>
+          )}
 
           {/* BUSCADOR DIRECTO DE BUQUES */}
           <div id="header-vessel-search-container" className="hidden md:inline-flex relative items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs shadow-2xs flex-1 min-w-[160px] focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-sky-500 transition-all">
@@ -967,6 +972,23 @@ export function TopNav() {
               placeholder="Buscar buque por nombre o IMO..."
               aria-label="Buscar buque en base de datos"
             />
+            <button
+              type="button"
+              id="header-vessel-search-btn"
+              onClick={() => {
+                const val = document.getElementById('header-vessel-search-input')?.value;
+                if (typeof window !== 'undefined' && typeof window.handleHeaderVesselSearch === 'function') {
+                  window.handleHeaderVesselSearch(val);
+                }
+              }}
+              className="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-bold px-2 py-0.5 rounded transition shrink-0 cursor-pointer"
+              title="Buscar buque en Data Bridge / Neon"
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
           </div>
 
           {/* SELECTOR REFERENCIA DE VIAJE / EXPEDIENTE ACTIVO */}
@@ -986,7 +1008,7 @@ export function TopNav() {
         </div>
 
         {/* DERECHA: BOTONES DE ACCIÓN / DISPARADOR MADRE */}
-        <div className="header-actions-right flex items-center gap-2 shrink-0">
+        <div className="header-actions-right flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             id="btn-madre-scan-header"
@@ -1012,6 +1034,65 @@ export function TopNav() {
           >
             <img src="/MADRE.png" alt="MADRE" className="w-5 h-5 rounded-full object-cover animate-pulse shadow-[0_0_8px_rgba(45,212,191,0.8)]" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
             <span style={{ color: '#5eead4' }}>MADRE</span>
+          </button>
+
+          {/* Botón FAQ / Manual */}
+          {SHOW_HEADER_FAQ && (
+            <button
+              id="btn-open-faq-modal"
+              type="button"
+              onClick={() => typeof window !== 'undefined' && window.openFaqModal && window.openFaqModal()}
+              className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer h-8 shrink-0"
+              title="Manual de Usuario y Referencia Técnica (FAQ)"
+              aria-label="Abrir Manual de Usuario y FAQ"
+            >
+              <svg className="w-3.5 h-3.5 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>FAQ</span>
+            </button>
+          )}
+
+          {/* OWN / CHR Switch */}
+          <div id="global-view-mode-switch" className="relative z-20 inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-2xs h-8" role="group" aria-label="Perspectiva de negocio">
+            <button
+              type="button"
+              id="btn-view-mode-owner"
+              className="inline-flex w-8 sm:w-9 items-center justify-center rounded-md py-1 leading-none text-slate-700 font-bold"
+              onClick={() => typeof window !== 'undefined' && window.setGlobalViewMode && window.setGlobalViewMode('owner')}
+              aria-pressed="true"
+              title="Vista Armador (Shipowner)"
+            >
+              <span aria-hidden="true" className="text-[10px] font-bold tracking-wider uppercase">OWN</span>
+              <span className="sr-only">Vista Armador</span>
+            </button>
+            <button
+              type="button"
+              id="btn-view-mode-charterer"
+              className="inline-flex w-8 sm:w-9 items-center justify-center rounded-md py-1 leading-none text-slate-700 font-bold"
+              onClick={() => typeof window !== 'undefined' && window.setGlobalViewMode && window.setGlobalViewMode('charterer')}
+              aria-pressed="false"
+              title="Vista Fletador (Charterer)"
+            >
+              <span aria-hidden="true" className="text-[10px] font-bold tracking-wider uppercase">CHR</span>
+              <span className="sr-only">Vista Fletador</span>
+            </button>
+          </div>
+
+          {/* Botón Colapsar Cabecera de Navegación */}
+          <button
+            type="button"
+            id="btn-collapse-header"
+            className="header-toggle-collapse-btn inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 shadow-2xs cursor-pointer transition-all shrink-0 focus:outline-none"
+            onClick={() => typeof window !== 'undefined' && window.toggleHeaderVisibility && window.toggleHeaderVisibility()}
+            title="Ocultar barra de navegación (Alt+H)"
+            aria-label="Ocultar barra de navegación"
+            aria-expanded="true"
+          >
+            <i className="fa-solid fa-chevron-up text-xs" aria-hidden="true"></i>
+            <span className="sr-only">Ocultar navegación</span>
           </button>
         </div>
       </header>
