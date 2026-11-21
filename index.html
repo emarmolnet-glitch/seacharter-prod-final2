@@ -1858,6 +1858,10 @@
             isolation: isolate;
         }
 
+        #connection-status-root:empty {
+            display: none !important;
+        }
+
         .connection-status-bar::before {
             content: "";
             position: absolute;
@@ -10085,12 +10089,38 @@
             />
             <span class="sr-only">MADRE</span>
           </button>
+            <!-- Script de Gobernanza de Renderizado de Cabecera -->
+            <script>
+                const SHOW_HEADER_BRIDGE_BADGE = false;
+                const SHOW_HEADER_FAQ = false;
+                window.SHOW_HEADER_BRIDGE_BADGE = SHOW_HEADER_BRIDGE_BADGE;
+                window.SHOW_HEADER_FAQ = SHOW_HEADER_FAQ;
+                (function syncHeaderVisibilityFlags() {
+                    function applyFlags() {
+                        const faqBtn = document.getElementById('btn-open-faq-modal');
+                        if (faqBtn) {
+                            faqBtn.style.setProperty('display', SHOW_HEADER_FAQ ? 'inline-flex' : 'none', 'important');
+                        }
+                        const bridgeRoot = document.getElementById('connection-status-root');
+                        if (bridgeRoot) {
+                            bridgeRoot.style.setProperty('display', SHOW_HEADER_BRIDGE_BADGE ? 'flex' : 'none', 'important');
+                        }
+                    }
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyFlags);
+                    } else {
+                        applyFlags();
+                    }
+                })();
+            </script>
+
             <!-- Botón FAQ / Manual -->
             <button
                 id="btn-open-faq-modal"
                 type="button"
                 onclick="openFaqModal()"
                 class="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer h-8 shrink-0"
+                style="display: none !important;"
                 title="Manual de Usuario y Referencia Técnica (FAQ)"
                 aria-label="Abrir Manual de Usuario y FAQ"
             >
