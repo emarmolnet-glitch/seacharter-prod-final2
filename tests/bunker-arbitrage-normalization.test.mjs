@@ -272,6 +272,17 @@ test('renderBunkerArbitrageSuggestions cleans feedback and renders cards with ne
 
   // Antwerp card validation
   const antwerpCard = resultsContainer.children[0];
+  assert.equal(
+    antwerpCard.className,
+    'group inline-flex flex-wrap items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50/90 px-3.5 py-2.5 text-left text-xs font-bold text-slate-900 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'
+  );
+  assert.equal(antwerpCard.children[0].className, 'fa-solid fa-gas-pump text-emerald-700');
+  assert.equal(antwerpCard.children[1].className, 'font-bold text-slate-900');
+  const expectedBadgeClass = 'rounded border border-emerald-400/80 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-900';
+  assert.equal(antwerpCard.children[2].className, expectedBadgeClass);
+  assert.equal(antwerpCard.children[3].className, expectedBadgeClass);
+  assert.equal(antwerpCard.children[4].className, expectedBadgeClass);
+
   const antwerpTexts = antwerpCard.children.map(c => c.textContent).join(' ');
   assert.ok(antwerpTexts.includes('Antwerp'));
   assert.ok(antwerpTexts.includes('10,400'));
@@ -281,6 +292,16 @@ test('renderBunkerArbitrageSuggestions cleans feedback and renders cards with ne
 
   // Rotterdam card validation
   const rotterdamCard = resultsContainer.children[1];
+  assert.equal(
+    rotterdamCard.className,
+    'group inline-flex flex-wrap items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50/90 px-3.5 py-2.5 text-left text-xs font-bold text-slate-900 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'
+  );
+  assert.equal(rotterdamCard.children[0].className, 'fa-solid fa-gas-pump text-emerald-700');
+  assert.equal(rotterdamCard.children[1].className, 'font-bold text-slate-900');
+  assert.equal(rotterdamCard.children[2].className, expectedBadgeClass);
+  assert.equal(rotterdamCard.children[3].className, expectedBadgeClass);
+  assert.equal(rotterdamCard.children[4].className, expectedBadgeClass);
+
   const rotterdamTexts = rotterdamCard.children.map(c => c.textContent).join(' ');
   assert.ok(rotterdamTexts.includes('Rotterdam'));
   assert.ok(rotterdamTexts.includes('10,900'));

@@ -40172,27 +40172,27 @@ function createRouteAnchorElement(type) {
 
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'group inline-flex flex-wrap items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-950/40 px-3.5 py-2.5 text-left text-xs font-bold text-emerald-100 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-900/60 focus:outline-none focus:ring-2 focus:ring-emerald-400';
+                button.className = 'group inline-flex flex-wrap items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50/90 px-3.5 py-2.5 text-left text-xs font-bold text-slate-900 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-600';
                 button.setAttribute('aria-label', `Aplicar sugerencia de repostaje en ${portName}`);
 
                 const icon = document.createElement('i');
-                icon.className = 'fa-solid fa-gas-pump text-emerald-400';
+                icon.className = 'fa-solid fa-gas-pump text-emerald-700';
                 icon.setAttribute('aria-hidden', 'true');
 
                 const title = document.createElement('span');
-                title.className = 'font-bold text-emerald-100';
+                title.className = 'font-bold text-slate-900';
                 title.textContent = `Repostar en ${portName}: +$${Math.round(netBenefit).toLocaleString('en-US')} neto`;
 
                 const badgeDeviation = document.createElement('span');
-                badgeDeviation.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300';
+                badgeDeviation.className = 'rounded border border-emerald-400/80 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-900';
                 badgeDeviation.textContent = `${Math.round(deviationNm).toLocaleString('en-US')} NM desvío`;
 
                 const badgeDays = document.createElement('span');
-                badgeDays.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300';
+                badgeDays.className = 'rounded border border-emerald-400/80 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-900';
                 badgeDays.textContent = `+${extraDays.toFixed(2)} d`;
 
                 const badgePrice = document.createElement('span');
-                badgePrice.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200';
+                badgePrice.className = 'rounded border border-emerald-400/80 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-900';
                 badgePrice.textContent = `$${bunkerPrice.toFixed(2)}/MT`;
 
                 button.append(icon, title, badgeDeviation, badgeDays, badgePrice);
