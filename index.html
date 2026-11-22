@@ -39996,7 +39996,11 @@ function createRouteAnchorElement(type) {
         }
 
         function buildBunkerArbitragePayload() {
-            const route = readBunkerArbitrageRoute();
+            const rawRoute = readBunkerArbitrageRoute();
+            const route = rawRoute;
+            const routeCoords = Array.isArray(rawRoute)
+                ? rawRoute
+                : (Array.isArray(rawRoute?.coordinates) ? rawRoute.coordinates : []);
             const hasScrubber = vesselHasScrubber();
             const fuelGrade = hasScrubber ? 'IFO380' : 'VLSFO';
             const seaConsumptionDaily = Math.max(0, Number(State.seaConsumptionDaily) || parseFloat(document.getElementById('cons-sea')?.value) || 0);
@@ -40018,16 +40022,27 @@ function createRouteAnchorElement(type) {
                 ? parseFloat(document.getElementById('price-ifo')?.value) || 0
                 : parseFloat(document.getElementById('price-sea')?.value) || 0;
 
+            const geoJsonCoords = routeCoords.map(([lat, lon]) => [lon, lat]);
+
             return {
-                route,
-                maritime_route: route.coordinates,
-                waypoints: route.coordinates,
+                route: geoJsonCoords,
+                maritime_route: geoJsonCoords,
+                waypoints: geoJsonCoords,
+                coordinate_order: 'lon_lat',
+                pol: rawRoute?.pol || State.pol || document.getElementById('port-pol')?.value || '',
+                pod: rawRoute?.pod || State.pod || document.getElementById('port-pod')?.value || '',
+                distance_nm: Number(rawRoute?.distance_nm) || 0,
                 required_bunker_volume_mt: requiredBunkerVolume,
                 bunker_volume: requiredBunkerVolume,
+                volume_required: requiredBunkerVolume,
                 tce_daily_usd: tceDaily,
+                tce_daily: tceDaily,
                 opex_daily_usd: opexDaily,
+                opex_daily: opexDaily,
                 sea_consumption_daily_mt: seaConsumptionDaily,
+                daily_consumption: seaConsumptionDaily,
                 pol_bunker_price_usd_mt: polBunkerPrice,
+                origin_price: polBunkerPrice,
                 fuel_grade: fuelGrade
             };
         }
@@ -40149,7 +40164,7 @@ function createRouteAnchorElement(type) {
                 const suggestions = normalizeBunkerArbitrageSuggestions(data);
                 renderBunkerArbitrageSuggestions(suggestions);
                 if (suggestions.length === 0) {
-                    setBunkerArbitrageFeedback('No se encontraron desvíos rentables para la ruta y condiciones actuales.');
+                    setBunkerArbitrageFeedback('No hay desvíos más baratos que el puerto de origen con los precios vigentes.', 'info');
                 }
             } catch (error) {
                 console.error('Error buscando arbitraje de bunkers:', error);
