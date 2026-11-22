@@ -636,9 +636,14 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
   let response;
 
   try {
+    const activeSessionVessel = typeof getActiveSessionVessel === "function" ? getActiveSessionVessel() : null;
     if (attachedFiles.length > 0) {
       const formData = new FormData();
       const sanitized = sanitizePayloadForAI(requestPayload);
+      if (activeSessionVessel) {
+        sanitized.activeVessel = activeSessionVessel;
+        sanitized.sessionVessel = activeSessionVessel;
+      }
       sanitized.uiLanguage = uiLanguage;
       formData.append("body", JSON.stringify(sanitized));
       formData.append("uiLanguage", uiLanguage);
@@ -654,6 +659,10 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
       });
     } else {
       const sanitizedPayload = sanitizePayloadForAI(requestPayload);
+      if (activeSessionVessel) {
+        sanitizedPayload.activeVessel = activeSessionVessel;
+        sanitizedPayload.sessionVessel = activeSessionVessel;
+      }
       sanitizedPayload.contexto = sanitizeAiContextValue(collectChatContext());
       if (sanitizedPayload.contexto && typeof sanitizedPayload.contexto === "object") {
         sanitizedPayload.contexto.uiLanguage = uiLanguage;
@@ -696,12 +705,127 @@ async function requestAssistantResponse(userText, historyElement, signal, attach
     console.error("❌ [Cerebro.ia/API] Respuesta marcada como error", payload);
     throw new Error(payload?.error || "No pude conectar con el asistente en este momento.");
   }
-  return normalizeDataBridgeAssistantResponse(payload);
+  return normalizeDataBridgeAssistantResponse(payload, userText);
 }
 
-function normalizeDataBridgeAssistantResponse(payload) {
+export function getActiveSessionVessel() {
+  if (typeof window !== "undefined" && window.__ACTIVE_SESSION_VESSEL__) {
+    const v = window.__ACTIVE_SESSION_VESSEL__;
+    const imo = String(v.imo || v.imo_number || v.imoNumber || "").replace(/\D/g, "");
+    if (imo.length === 7) {
+      const rawName = String(v.vesselName || v.vessel_name || v.name || "").trim();
+      const vesselName = rawName && rawName.toUpperCase() !== "TBN" && rawName.toUpperCase() !== "TBA"
+        ? rawName
+        : `Buque (IMO ${imo})`;
+      return {
+        imo,
+        vesselName,
+        source: v.source || "DataBridge"
+      };
+    }
+  }
+
+  const store = (typeof window !== "undefined" && window.GlobalStore) || {};
+  const state = (typeof window !== "undefined" && window.State) || {};
+  const voyageDraft = (typeof window !== "undefined" && window.VoyageDraftStore?.getState?.()?.draft?.vessel) || {};
+  const calcVessel = store.calculatorVessel || store.activeVessel || {};
+  const pdaPending = (typeof window !== "undefined" && window.pendingPdaVesselConfirmation?.actual) || {};
+
+  const imoInput = typeof document !== "undefined"
+    ? (document.getElementById("vessel-identity-imo")?.value || document.getElementById("imo")?.value || "")
+    : "";
+  const nameInput = typeof document !== "undefined"
+    ? (document.getElementById("nombre-buque-calculadora")?.value || document.getElementById("vessel-name")?.value || "")
+    : "";
+
+  let rawImo = String(
+    state.imo ||
+    calcVessel.imo ||
+    calcVessel.imo_number ||
+    pdaPending.imo ||
+    pdaPending.imo_number ||
+    voyageDraft.imo ||
+    imoInput ||
+    ""
+  ).replace(/\D/g, "");
+
+  let rawName = String(
+    state.vesselName ||
+    state.vessel ||
+    calcVessel.vessel_name ||
+    calcVessel.vesselName ||
+    pdaPending.vessel_name ||
+    pdaPending.vesselName ||
+    voyageDraft.vesselName ||
+    voyageDraft.name ||
+    nameInput ||
+    ""
+  ).trim();
+
+  let source = calcVessel.source || store.activeVesselSource || "DataBridge";
+
+  // Subtitle fallback: #pda-vessel-confirmation-subtitle
+  if (rawImo.length !== 7 && typeof document !== "undefined") {
+    const subtitleEl = document.getElementById("pda-vessel-confirmation-subtitle");
+    const subText = subtitleEl?.textContent || "";
+    const imoMatch = subText.match(/IMO\s*(\d{7})/i);
+    if (imoMatch) {
+      rawImo = imoMatch[1];
+      const parts = subText.split("·");
+      if (parts[0] && !rawName) {
+        rawName = parts[0].trim();
+      }
+      source = "DataBridge";
+    }
+  }
+
+  if (rawImo.length === 7) {
+    const vesselName = rawName && rawName.toUpperCase() !== "TBN" && rawName.toUpperCase() !== "TBA"
+      ? rawName
+      : `Buque (IMO ${rawImo})`;
+    return {
+      imo: rawImo,
+      vesselName,
+      source
+    };
+  }
+  return null;
+}
+
+export function reconcileCerebroImoText(text, promptText = "", sessionVessel = null) {
+  if (!text || typeof text !== "string") return text;
+  const activeVessel = sessionVessel || (typeof getActiveSessionVessel === "function" ? getActiveSessionVessel() : null);
+  const promptHasImo = /\b\d{7}\b/.test(promptText);
+
+  const imoLineRegex = /[✅☑️✔•*-]*\s*(?:Inyectar\s+)?IMO(?:\s*OK)?:\s*No detectado(?:[^\n\r]*)/i;
+
+  if (imoLineRegex.test(text)) {
+    if (!promptHasImo && activeVessel?.imo) {
+      const vesselLabel = activeVessel.vesselName && activeVessel.vesselName.toUpperCase() !== "TBN" && activeVessel.vesselName.toUpperCase() !== "TBA"
+        ? activeVessel.vesselName
+        : `IMO ${activeVessel.imo}`;
+      return text.replace(imoLineRegex, `✅ Buque en sesión: ${vesselLabel} (IMO ${activeVessel.imo})`);
+    }
+    if (!promptHasImo && !activeVessel?.imo) {
+      return text.replace(imoLineRegex, "Inyectar IMO OK: No detectado (estimación con buque genérico)");
+    }
+  }
+
+  return text;
+}
+
+function normalizeDataBridgeAssistantResponse(payload, promptText = "") {
   console.group("🔎 [Cerebro.ia/Normalización] Evaluando respuesta");
   console.log("Objeto completo:", payload);
+  const candidateKeys = ["informe", "reply", "message", "respuesta", "response", "answer", "content", "result"];
+  candidateKeys.forEach((key) => {
+    if (typeof payload?.[key] === "string") {
+      payload[key] = reconcileCerebroImoText(payload[key], promptText);
+    }
+    if (typeof payload?.data?.[key] === "string") {
+      payload.data[key] = reconcileCerebroImoText(payload.data[key], promptText);
+    }
+  });
   const candidates = [
     payload?.informe,
     payload?.reply,
@@ -721,7 +845,10 @@ function normalizeDataBridgeAssistantResponse(payload) {
     payload?.data?.result,
     typeof payload === "string" ? payload : null,
   ];
-  const respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  let respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  if (respuesta) {
+    respuesta = reconcileCerebroImoText(respuesta, promptText);
+  }
   const rawAction = payload?.action ?? payload?.data?.action ?? null;
   const actionPayload = payload?.payload ?? payload?.data?.payload ?? null;
   const projectCargoCandidate = payload?.projectCargo || payload?.data?.projectCargo || payload?.payload?.projectCargo || payload?.data?.payload?.projectCargo;
@@ -3260,7 +3387,8 @@ const fileInput = root.querySelector("#sca-file-input");
         console.log("La respuesta no contiene una acción ejecutable.");
       }
 
-      const textoVisible = actionResult?.message || actionableResponse.visibleText || "Acción completada.";
+      const rawVisible = actionResult?.message || actionableResponse.visibleText || "Acción completada.";
+      const textoVisible = reconcileCerebroImoText(rawVisible, userText);
       replaceWithAssistantMessage(
         thinkingMessage,
         textoVisible,
