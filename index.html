@@ -17052,50 +17052,80 @@
                         </div>
                         
                         <!-- Inline form to add a new vessel, initially hidden -->
-                        <div id="add-vessel-form" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 space-y-3 mb-3">
-                            <h5 class="text-[10px] font-bold text-slate-300 uppercase">Nuevo Buque / New Vessel Specs</h5>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="col-span-2">
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Nombre / Name</label>
-                                    <div class="flex gap-1.5 mt-1">
-                                        <input type="text" id="add-v-name" class="flex-1 bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. Ocean Star">
-                                        <button id="btn-comp-autofill-specs" onclick="autoFillVesselSpecsForComparison()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1 shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Extraer datos con IA / AI Extract Data">
-                                            <i class="fa-solid fa-wand-magic-sparkles text-white"></i> Extraer Datos
-                                        </button>
-                                    </div>
+                        <div id="add-vessel-form" class="hidden bg-white border border-slate-300 rounded-lg p-3 space-y-3 mb-3 shadow-sm">
+                            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                                <h5 class="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-ship text-blue-600"></i> Nuevo Buque / New Vessel Specs
+                                </h5>
+                                <span class="text-[10px] text-slate-500 font-medium">Baltic / WhatsApp / Neon</span>
+                            </div>
+
+                            <!-- Bloque Pegar descripción / Ship's Particulars -->
+                            <div class="bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <label for="add-v-raw-particulars" class="block text-[10px] font-bold text-slate-700 uppercase flex items-center gap-1">
+                                        <i class="fa-solid fa-paste text-blue-600"></i> Pegar descripción / Ship's Particulars (Email, WhatsApp, Baltic)
+                                    </label>
+                                    <span class="text-[9px] text-slate-500">Determinista + IA</span>
                                 </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">DWT</label>
-                                    <input type="number" id="add-v-dwt" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 15000">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Año Construcción / Built</label>
-                                    <input type="number" id="add-v-year-built" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 2020">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Clase / Class</label>
-                                    <input type="text" id="add-v-class" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. Handysize">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Vel. Lastre (kt)</label>
-                                    <input type="number" step="0.1" id="add-v-spd-ballast" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 12.5">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Vel. Carga (kt)</label>
-                                    <input type="number" step="0.1" id="add-v-spd-laden" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 11.5">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Cons. Mar (t/d)</label>
-                                    <input type="number" step="0.1" id="add-v-cons-sea" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 12.0">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Cons. Puerto (t/d)</label>
-                                    <input type="number" step="0.1" id="add-v-cons-port" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 1.5">
+                                <textarea id="add-v-raw-particulars" rows="3" class="w-full bg-white border border-slate-300 rounded p-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono resize-y" placeholder="Pega aquí la descripción del buque (ej. M/V BBC UKRAINE, IMO 9811983, Built 2021, 12500 DWT, 13.5 kt on 14.5 mt VLSFO, port 1.8 mt MGO)..."></textarea>
+                                <div class="flex justify-end">
+                                    <button type="button" id="btn-comp-autofill-specs" onclick="autoFillVesselSpecsForComparison()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[11px] font-bold px-3 py-1.5 rounded transition flex items-center gap-1.5 shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Extraer datos desde texto / Baltic Description">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-white"></i> Extraer desde texto
+                                    </button>
                                 </div>
                             </div>
-                            <div class="flex justify-end gap-2 pt-2">
-                                <button id="btn-comp-cancel-add" onclick="toggleAddVesselForm()" class="btn-comp-secondary bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] border border-[#cbd5e1] text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #f1f5f9 !important; color: #0f172a !important; border: 1px solid #cbd5e1 !important;">Cancelar</button>
-                                <button id="btn-comp-save-vessel" onclick="saveNewVesselFromUI()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;">Guardar</button>
+
+                            <!-- Campos del buque -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Nombre / Name</label>
+                                    <input type="text" id="add-v-name" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Ocean Star">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">IMO (7 dígitos)</label>
+                                    <input type="text" id="add-v-imo" maxlength="7" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono" placeholder="e.g. 9811983">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">DWT</label>
+                                    <input type="number" id="add-v-dwt" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 15000">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Año Construcción / Built</label>
+                                    <input type="number" id="add-v-year-built" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 2020">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Clase / Class</label>
+                                    <input type="text" id="add-v-class" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Handysize">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Vel. Lastre (kt)</label>
+                                    <input type="number" step="0.1" id="add-v-spd-ballast" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Vel. Carga (kt)</label>
+                                    <input type="number" step="0.1" id="add-v-spd-laden" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 11.5">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Cons. Mar (t/d)</label>
+                                    <input type="number" step="0.1" id="add-v-cons-sea" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.0">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-800 uppercase">Cons. Puerto (t/d)</label>
+                                    <input type="number" step="0.1" id="add-v-cons-port" class="w-full bg-white border border-slate-300 rounded p-1 text-xs text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 1.5">
+                                </div>
+                            </div>
+
+                            <!-- Footer botones y checkbox Neon -->
+                            <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                                <label class="flex items-center gap-1.5 text-[11px] font-medium text-slate-800 cursor-pointer select-none">
+                                    <input type="checkbox" id="add-v-save-neon" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    Guardar / actualizar en Base de Datos (Neon)
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" id="btn-comp-cancel-add" onclick="toggleAddVesselForm()" class="btn-comp-secondary bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] border border-[#cbd5e1] text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #f1f5f9 !important; color: #0f172a !important; border: 1px solid #cbd5e1 !important;">Cancelar</button>
+                                    <button type="button" id="btn-comp-save-vessel" onclick="saveNewVesselFromUI()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;">Guardar</button>
+                                </div>
                             </div>
                         </div>
 
@@ -51712,189 +51742,135 @@ function scheduleReactiveEngine() {
         }
 
         async function autoFillVesselSpecsForComparison() {
-            let vesselName = document.getElementById('add-v-name').value.trim();
-            if (!vesselName) {
-                alert("Por favor, introduce un nombre de buque.");
+            const rawParticularsEl = document.getElementById('add-v-raw-particulars');
+            const rawText = rawParticularsEl ? rawParticularsEl.value.trim() : '';
+            const nameEl = document.getElementById('add-v-name');
+            const vesselName = nameEl ? nameEl.value.trim() : '';
+            const imoEl = document.getElementById('add-v-imo');
+            const imoVal = imoEl ? imoEl.value.trim() : '';
+
+            if (!rawText && !vesselName && !imoVal) {
+                showToast("⚠️ Pega la descripción del buque o introduce su nombre/IMO.", false, "warning");
                 return;
             }
 
-            // Absorb the data from Section 2 & 3
-            const elDwt = document.getElementById('vessel-dwt');
-            const elSpdBallast = document.getElementById('spd-ballast');
-            const elSpdLaden = document.getElementById('spd-laden');
-            const elConsSea = document.getElementById('cons-sea');
-            const elConsPort = document.getElementById('cons-port');
+            const btn = document.getElementById('btn-comp-autofill-specs') || document.querySelector('button[onclick="autoFillVesselSpecsForComparison()"]');
+            let originalContent = '';
+            if (btn) {
+                originalContent = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-white"></i> Extrayendo...';
+                btn.disabled = true;
+            }
 
-            const absorbedDwt = elDwt ? elDwt.value.trim() : '';
-            const absorbedSpdBallast = elSpdBallast ? elSpdBallast.value.trim() : '';
-            const absorbedSpdLaden = elSpdLaden ? elSpdLaden.value.trim() : '';
-            const absorbedConsSea = elConsSea ? elConsSea.value.trim() : '';
-            const absorbedConsPort = elConsPort ? elConsPort.value.trim() : '';
-
-            const btn = document.querySelector('button[onclick="autoFillVesselSpecsForComparison()"]');
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            btn.disabled = true;
-
-            showToast("Extrayendo especificaciones del buque con IA...");
+            showToast("🔍 Extrayendo especificaciones del buque...");
 
             try {
-                const response = await fetch('/api/ship-search', {
+                const response = await fetch('/api/vessel-particulars-ingest', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ ship_name: vesselName })
+                    body: JSON.stringify({
+                        action: 'parse',
+                        rawText: rawText,
+                        vesselName: vesselName || imoVal
+                    })
                 });
 
-                if (!response.ok) {
-                    throw new Error("La búsqueda de buques falló");
+                const data = await response.json().catch(() => null);
+
+                if (!response.ok || !data || !data.success || !data.vessel) {
+                    const errorMsg = data?.error || `Error en el servidor (${response.status})`;
+                    showToast(`❌ Error al extraer datos: ${errorMsg}`);
+                    return;
                 }
 
-                const data = await response.json();
-                
-                // 1. Populate the comparison add form fields
-                if (data.Vessel_Name && data.Vessel_Name !== 'N/A') {
-                    document.getElementById('add-v-name').value = data.Vessel_Name;
+                const v = data.vessel;
+                let extractedCount = 0;
+
+                // 1. Populate form fields
+                if (v.vessel_name && v.vessel_name !== 'Unknown Vessel') {
+                    if (nameEl) nameEl.value = v.vessel_name;
+                    extractedCount++;
                 }
-                
-                // Set DWT: prioritize absorbed value from Section 2
-                if (absorbedDwt && !isNaN(parseFloat(absorbedDwt))) {
-                    document.getElementById('add-v-dwt').value = Math.round(parseFloat(absorbedDwt));
-                } else if (data.DWT && data.DWT !== 'N/A') {
-                    document.getElementById('add-v-dwt').value = Math.round(data.DWT);
+                if (v.imo_number) {
+                    if (imoEl) imoEl.value = String(v.imo_number).replace(/\D/g, '').slice(0, 7);
+                    extractedCount++;
                 }
-                
-                let vClass = 'Handysize';
-                const finalDwt = parseFloat(document.getElementById('add-v-dwt').value);
-                if (!isNaN(finalDwt)) {
+                if (v.dwt) {
+                    const dwtEl = document.getElementById('add-v-dwt');
+                    if (dwtEl) dwtEl.value = Math.round(Number(v.dwt));
+                    extractedCount++;
+                }
+                if (v.year_built) {
+                    const ybEl = document.getElementById('add-v-year-built');
+                    if (ybEl) ybEl.value = v.year_built;
+                    extractedCount++;
+                }
+                if (v.vessel_type || v.vessel_class) {
+                    const classEl = document.getElementById('add-v-class');
+                    if (classEl) classEl.value = v.vessel_type || v.vessel_class;
+                    extractedCount++;
+                } else if (v.dwt) {
+                    const finalDwt = parseFloat(v.dwt);
+                    let vClass = 'Handysize';
                     if (finalDwt < 10000) vClass = 'Coaster';
                     else if (finalDwt < 25000) vClass = 'Handysize';
                     else if (finalDwt < 40000) vClass = 'Handymax';
                     else if (finalDwt < 65000) vClass = 'Supramax';
                     else if (finalDwt < 100000) vClass = 'Panamax';
                     else vClass = 'Capesize';
-                } else if (data.Vessel_Class && data.Vessel_Class !== 'N/A') {
-                    vClass = data.Vessel_Class;
+                    const classEl = document.getElementById('add-v-class');
+                    if (classEl) classEl.value = vClass;
                 }
-                document.getElementById('add-v-class').value = vClass;
-
-                // Set speeds: prioritize absorbed values from Section 2
-                if (absorbedSpdBallast && !isNaN(parseFloat(absorbedSpdBallast))) {
-                    document.getElementById('add-v-spd-ballast').value = parseFloat(absorbedSpdBallast).toFixed(1);
-                } else if (data.Speed_Ballast && data.Speed_Ballast !== 'N/A') {
-                    document.getElementById('add-v-spd-ballast').value = parseFloat(data.Speed_Ballast).toFixed(1);
-                } else {
-                    document.getElementById('add-v-spd-ballast').value = "12.5";
+                if (v.spd_ballast != null) {
+                    const spdBallastEl = document.getElementById('add-v-spd-ballast');
+                    if (spdBallastEl) spdBallastEl.value = parseFloat(v.spd_ballast).toFixed(1);
+                    extractedCount++;
                 }
-
-                if (absorbedSpdLaden && !isNaN(parseFloat(absorbedSpdLaden))) {
-                    document.getElementById('add-v-spd-laden').value = parseFloat(absorbedSpdLaden).toFixed(1);
-                } else if (data.Speed_Laden && data.Speed_Laden !== 'N/A') {
-                    document.getElementById('add-v-spd-laden').value = parseFloat(data.Speed_Laden).toFixed(1);
-                } else {
-                    document.getElementById('add-v-spd-laden').value = "11.5";
+                if (v.spd_laden != null) {
+                    const spdLadenEl = document.getElementById('add-v-spd-laden');
+                    if (spdLadenEl) spdLadenEl.value = parseFloat(v.spd_laden).toFixed(1);
+                    extractedCount++;
                 }
-
-                // Set consumptions: prioritize absorbed values from Section 3
-                if (absorbedConsSea && !isNaN(parseFloat(absorbedConsSea))) {
-                    document.getElementById('add-v-cons-sea').value = parseFloat(absorbedConsSea).toFixed(1);
-                } else {
-                    let dailyCons = 12.0;
-                    if (data.Cons_Sea && data.Cons_Sea !== 'N/A') {
-                        dailyCons = parseFloat(data.Cons_Sea);
-                    } else {
-                        const consStr = data["Fuel Consumption"] || data.Daily_Consumption || '';
-                        if (consStr && consStr !== 'N/A') {
-                            const parsedCons = parseFloat(consStr.replace(/[^0-9.]/g, ''));
-                            if (!isNaN(parsedCons)) {
-                                dailyCons = parsedCons;
-                            }
-                        }
-                    }
-                    document.getElementById('add-v-cons-sea').value = dailyCons.toFixed(1);
+                if (v.cons_sea != null) {
+                    const consSeaEl = document.getElementById('add-v-cons-sea');
+                    if (consSeaEl) consSeaEl.value = parseFloat(v.cons_sea).toFixed(1);
+                    extractedCount++;
+                }
+                if (v.cons_port != null) {
+                    const consPortEl = document.getElementById('add-v-cons-port');
+                    if (consPortEl) consPortEl.value = parseFloat(v.cons_port).toFixed(1);
+                    extractedCount++;
                 }
 
-                if (absorbedConsPort && !isNaN(parseFloat(absorbedConsPort))) {
-                    document.getElementById('add-v-cons-port').value = parseFloat(absorbedConsPort).toFixed(1);
-                } else if (data.Cons_Port && data.Cons_Port !== 'N/A') {
-                    document.getElementById('add-v-cons-port').value = parseFloat(data.Cons_Port).toFixed(1);
-                } else {
-                    document.getElementById('add-v-cons-port').value = "1.5";
-                }
+                // 2. Preserve auxiliary extracted fields in memory
+                window.__compExtractedParticulars = {
+                    gt: v.gt || v.gross_tonnage || null,
+                    gross_tonnage: v.gt || v.gross_tonnage || null,
+                    net_tonnage: v.nt || v.net_tonnage || null,
+                    loa: v.loa || v.loa_meters || null,
+                    loa_meters: v.loa || v.loa_meters || null,
+                    beam: v.beam || v.beam_meters || null,
+                    beam_meters: v.beam || v.beam_meters || null,
+                    draft: v.draft || v.draft_meters || null,
+                    draft_meters: v.draft || v.draft_meters || null,
+                    dwcc: v.dwcc || null,
+                    flag: v.flag || null,
+                    rawText: rawText || null
+                };
 
-                // 2. Automatically populate Field 2: Vessel & Cargo Specifications / Ship Requirements (Main Estimator)
-                const name = data.Vessel_Name || vesselName;
-                const flag = data.Flag || 'Unknown';
-                const builtYear = data.Year_Built || 'Unknown';
-                const capacity = data.DWT && data.DWT !== 'N/A' ? Math.round(data.DWT) : 'Unknown';
-                const imo = data.IMO || 'Unknown';
-                const loa = data.LOA && data.LOA !== 'N/A' ? (typeof data.LOA === 'string' && data.LOA.endsWith('m') ? data.LOA : `${data.LOA}m`) : 'Unknown';
-                const draft = data.Draft && data.Draft !== 'N/A' ? (typeof data.Draft === 'string' && data.Draft.endsWith('m') ? data.Draft : `${data.Draft}m`) : 'Unknown';
-
-                document.getElementById('vessel-name').value = `${name} (${flag}, ${builtYear}, ${capacity} DWT, IMO: ${imo}, LOA: ${loa}, Draft: ${draft})`;
-                State.vessel = document.getElementById('vessel-name').value;
-
-                if (flag) {
-                    const flagEl = document.getElementById('vessel-flag');
-                    if (flagEl) flagEl.value = flag;
-                }
-                const pscVal = data.PSC_Deficiencies || data.psc_deficiencies || 'low';
-                const pscEl = document.getElementById('vessel-psc');
-                if (pscEl) pscEl.value = pscVal.toLowerCase() === 'frequent' ? 'frequent' : 'low';
-
-                if (data.DWT && data.DWT !== 'N/A') {
-                    document.getElementById('vessel-dwt').value = Math.round(data.DWT);
-                    State.vesselDwtFixed = true;
-                }
-                
-                const finalSpdBallast = parseFloat(document.getElementById('add-v-spd-ballast').value);
-                const finalSpdLaden = parseFloat(document.getElementById('add-v-spd-laden').value);
-                const finalConsSea = parseFloat(document.getElementById('add-v-cons-sea').value);
-                const finalConsPort = parseFloat(document.getElementById('add-v-cons-port').value);
-
-                document.getElementById('spd-ballast').value = isNaN(finalSpdBallast) ? "12.5" : finalSpdBallast.toFixed(1);
-                document.getElementById('spd-laden').value = isNaN(finalSpdLaden) ? "11.5" : finalSpdLaden.toFixed(1);
-                markKnownVesselSpeed('spd-ballast');
-                markKnownVesselSpeed('spd-laden');
-                
-                document.getElementById('cons-sea').value = isNaN(finalConsSea) ? "12.0" : finalConsSea.toFixed(1);
-                document.getElementById('cons-port').value = isNaN(finalConsPort) ? "1.5" : finalConsPort.toFixed(1);
-
-                document.getElementById('vessel-badge').innerText = vClass;
-                State.class = vClass;
-
-                if (data.Specialty_Type && data.Specialty_Type !== 'N/A') {
-                    document.getElementById('gc-add-specialty').value = data.Specialty_Type;
-                    State.userHasEditedSpecialty = false;
-                }
-
-                // Save technical attributes to State
-                if (data.IMO && data.IMO !== 'N/A') State.imo = data.IMO;
-                if (data.LOA && data.LOA !== 'N/A') State.loa = data.LOA;
-                if (data.Draft && data.Draft !== 'N/A') State.draft = data.Draft;
-
-                // Re-calculate daily OPEX based on DWT
-                const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
-                if (dwt > 0) {
-                    const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
-                    const name = (document.getElementById('vessel-name').value || '').trim();
-                    const totalOpexDaily = calculateFixedOpex(dwt, specialty, name);
-                    document.getElementById('opex-daily').value = totalOpexDaily;
-                    
-                    autoCalculateDemurrage(false);
-                }
-
-                // Force calculation engine update
-                runEngine();
-
-                showToast(`🚢 Especificaciones de "${vesselName}" cargadas en el comparador y el estimador!`);
+                const sourceLabel = data.source === 'ai_particulars' ? 'IA Gemini' :
+                                    data.source === 'neon_existing' ? 'Neon DB' : 'Parser Baltic';
+                showToast(`✨ ${extractedCount} campos extraídos con éxito (${sourceLabel}).`);
             } catch (e) {
-                console.error(e);
-                showToast("❌ No se pudieron extraer las especificaciones con IA.");
+                console.error("autoFillVesselSpecsForComparison error:", e);
+                showToast(`❌ Error al extraer especificaciones: ${e.message}`);
             } finally {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
+                if (btn && originalContent) {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -52201,8 +52177,10 @@ function scheduleReactiveEngine() {
             }
         }
 
-        function saveNewVesselFromUI() {
+        async function saveNewVesselFromUI() {
             const name = document.getElementById('add-v-name').value.trim();
+            const imoRaw = (document.getElementById('add-v-imo')?.value || '').trim();
+            const imo = imoRaw.replace(/\D/g, '').slice(0, 7);
             const dwt = parseFirstNumber(document.getElementById('add-v-dwt').value) || 0;
             const yearBuilt = parseFirstNumber(document.getElementById('add-v-year-built')?.value) || null;
             const vClass = document.getElementById('add-v-class').value.trim() || 'Handysize';
@@ -52210,38 +52188,70 @@ function scheduleReactiveEngine() {
             const spdLaden = parseFirstNumber(document.getElementById('add-v-spd-laden').value) || 11.0;
             const consSea = parseFirstNumber(document.getElementById('add-v-cons-sea').value) || 10.0;
             const consPort = parseFirstNumber(document.getElementById('add-v-cons-port').value) || 1.0;
+            const saveToNeon = document.getElementById('add-v-save-neon')?.checked ?? true;
 
             if (!name) {
-                alert("Por favor, ingrese un nombre para el buque.");
+                showToast("⚠️ Por favor, ingrese un nombre para el buque.");
                 return;
             }
 
+            const extra = window.__compExtractedParticulars || {};
+            const rawParticularsEl = document.getElementById('add-v-raw-particulars');
+            const rawText = rawParticularsEl ? rawParticularsEl.value.trim() : (extra.rawText || '');
+
             const newVesselObj = {
                 "vessel_name": name,
+                "vesselName": name,
+                "imo_number": imo || null,
+                "imo": imo || null,
                 "dwt": dwt,
                 "year_built": yearBuilt,
                 "built_year": yearBuilt,
                 "vessel_class": vClass,
+                "vessel_type": vClass,
                 "spd_ballast": spdBallast,
                 "spd_laden": spdLaden,
                 "cons_sea": consSea,
-                "cons_port": consPort
+                "cons_port": consPort,
+                "gt": extra.gt || extra.gross_tonnage || null,
+                "gross_tonnage": extra.gt || extra.gross_tonnage || null,
+                "net_tonnage": extra.net_tonnage || null,
+                "loa": extra.loa || extra.loa_meters || null,
+                "loa_meters": extra.loa || extra.loa_meters || null,
+                "beam": extra.beam || extra.beam_meters || null,
+                "beam_meters": extra.beam || extra.beam_meters || null,
+                "draft": extra.draft || extra.draft_meters || null,
+                "draft_meters": extra.draft || extra.draft_meters || null,
+                "dwcc": extra.dwcc || null,
+                "flag": extra.flag || null
             };
 
             const savedVesselsVal = document.getElementById('comp-saved-vessels').value.trim();
             let savedVessels = [];
             try {
                 savedVessels = JSON.parse(savedVesselsVal);
+                if (!Array.isArray(savedVessels)) savedVessels = [];
             } catch (e) {
                 savedVessels = [];
             }
 
-            savedVessels.push(newVesselObj);
+            // Replace existing vessel if same IMO or same name, else append
+            const existingIdx = imo
+                ? savedVessels.findIndex(v => String(v.imo_number || v.imo || '') === imo)
+                : savedVessels.findIndex(v => (v.vessel_name || v.vesselName || '').toLowerCase() === name.toLowerCase());
+
+            if (existingIdx >= 0) {
+                savedVessels[existingIdx] = { ...savedVessels[existingIdx], ...newVesselObj };
+            } else {
+                savedVessels.push(newVesselObj);
+            }
+
             document.getElementById('comp-saved-vessels').value = JSON.stringify(savedVessels, null, 2);
             localStorage.setItem('rodahmar_saved_vessels', JSON.stringify(savedVessels, null, 2));
 
             // Reset inputs
             document.getElementById('add-v-name').value = '';
+            if (document.getElementById('add-v-imo')) document.getElementById('add-v-imo').value = '';
             document.getElementById('add-v-dwt').value = '';
             if (document.getElementById('add-v-year-built')) document.getElementById('add-v-year-built').value = '';
             document.getElementById('add-v-class').value = '';
@@ -52249,11 +52259,93 @@ function scheduleReactiveEngine() {
             document.getElementById('add-v-spd-laden').value = '';
             document.getElementById('add-v-cons-sea').value = '';
             document.getElementById('add-v-cons-port').value = '';
+            if (rawParticularsEl) rawParticularsEl.value = '';
+            window.__compExtractedParticulars = null;
 
-            // Hide form and re-render
+            // Hide form and re-render selector
             toggleAddVesselForm();
             renderVesselSelector();
-            showToast(`🚢 Buque "${name}" añadido con éxito!`);
+
+            // Neon DB persistence check
+            const hasValidImo = /^\d{7}$/.test(imo);
+            if (saveToNeon && hasValidImo) {
+                try {
+                    const resp = await fetch('/api/vessel-particulars-ingest', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            action: 'upsert',
+                            vessel: newVesselObj,
+                            rawText: rawText
+                        })
+                    });
+
+                    const data = await resp.json().catch(() => null);
+
+                    if (resp.ok && data && data.success) {
+                        const errContainer = document.getElementById('comp-search-results-container');
+                        if (errContainer) errContainer.classList.add('hidden');
+                        showToast(`✅ Buque "${name}" (IMO ${imo}) guardado en tu comparativa y actualizado en Neon.`);
+                    } else {
+                        const errMsg = data?.error || `Error (${resp.status})`;
+                        showToast(`⚠️ Guardado en comparativa local, pero Neon reportó: ${errMsg}`);
+
+                        const errContainer = document.getElementById('comp-search-results-container');
+                        if (errContainer) {
+                            const safeError = String(errMsg).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            errContainer.innerHTML = `
+                                <div class="p-2.5 bg-red-50 border border-red-300 rounded-lg text-red-900 text-xs shadow-sm space-y-1">
+                                    <div class="flex items-center justify-between pb-1 border-b border-red-200">
+                                        <span class="font-bold flex items-center gap-1.5 text-red-800 text-[11px]">
+                                            <i class="fa-solid fa-triangle-exclamation text-red-600"></i> Rechazo de guardado en Neon DB (vessels_master)
+                                        </span>
+                                        <button type="button" onclick="document.getElementById('comp-search-results-container').classList.add('hidden')" class="text-red-500 hover:text-red-700 text-xs px-1">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                    <div class="font-mono text-[10px] break-words text-red-700 bg-red-100/60 p-1.5 rounded">
+                                        ${safeError}
+                                    </div>
+                                    <div class="text-[9px] text-red-600">
+                                        El buque se mantiene disponible en tu comparativa local. Corrige los campos indicados para sincronizar con la base maestra.
+                                    </div>
+                                </div>
+                            `;
+                            errContainer.classList.remove('hidden');
+                        }
+                    }
+                } catch (err) {
+                    console.error("saveNewVesselFromUI Neon upsert error:", err);
+                    showToast(`⚠️ Guardado en comparativa local (error al sincronizar con Neon: ${err.message})`);
+
+                    const errContainer = document.getElementById('comp-search-results-container');
+                    if (errContainer) {
+                        const safeError = String(err.message).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        errContainer.innerHTML = `
+                            <div class="p-2.5 bg-red-50 border border-red-300 rounded-lg text-red-900 text-xs shadow-sm space-y-1">
+                                <div class="flex items-center justify-between pb-1 border-b border-red-200">
+                                    <span class="font-bold flex items-center gap-1.5 text-red-800 text-[11px]">
+                                        <i class="fa-solid fa-triangle-exclamation text-red-600"></i> Error de conexión con Neon DB
+                                    </span>
+                                    <button type="button" onclick="document.getElementById('comp-search-results-container').classList.add('hidden')" class="text-red-500 hover:text-red-700 text-xs px-1">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                <div class="font-mono text-[10px] break-words text-red-700 bg-red-100/60 p-1.5 rounded">
+                                    ${safeError}
+                                </div>
+                            </div>
+                        `;
+                        errContainer.classList.remove('hidden');
+                    }
+                }
+            } else if (saveToNeon && !hasValidImo) {
+                showToast(`ℹ️ Guardado solo en tu comparativa local (añade un IMO de 7 dígitos para subirlo a Neon).`);
+            } else {
+                showToast(`🚢 Buque "${name}" añadido a tu comparativa local.`);
+            }
         }
 
         function deleteVesselFromUI(index) {
