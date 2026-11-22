@@ -1,4 +1,7 @@
 import type { Config } from "@netlify/functions";
+import { extractFlatRoute, normalizeBunkerArbitrageRequestBody } from "./_shared/databridge-routing-helper.mjs";
+
+export { extractFlatRoute, normalizeBunkerArbitrageRequestBody };
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -116,13 +119,21 @@ export default async (req: Request) => {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
 
-  const targetUrl = resolveTargetUrl(new URL(req.url));
+  const requestUrl = new URL(req.url);
+  const forwardPath = getForwardPath(requestUrl);
+
+  const targetUrl = resolveTargetUrl(requestUrl);
   if (!targetUrl) {
     return Response.json({ success: false, error: "Data Bridge target is not configured." }, { status: 503 });
   }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  const body = hasBody ? await req.arrayBuffer() : undefined;
+  let body = hasBody ? await req.arrayBuffer() : undefined;
+
+  if (hasBody && req.method === "POST" && (forwardPath === "routing/bunker-arbitrage" || requestUrl.pathname.endsWith("/routing/bunker-arbitrage"))) {
+    body = normalizeBunkerArbitrageRequestBody(body);
+  }
+
   const forwardHeaders = createForwardHeaders(req, hasBody);
 
   try {
