@@ -40047,26 +40047,66 @@ function createRouteAnchorElement(type) {
             };
         }
 
-        function normalizeBunkerArbitrageSuggestions(payload) {
-            const candidates = Array.isArray(payload)
-                ? payload
-                : (payload?.suggestions || payload?.data?.suggestions || payload?.opportunities || payload?.data || []);
+        function normalizeBunkerArbitrageSuggestions(data) {
+            const candidates = Array.isArray(data)
+                ? data
+                : (data?.suggestions ?? data?.hubs ?? data?.data?.suggestions ?? []);
             if (!Array.isArray(candidates)) return [];
 
-            return candidates.map((candidate, index) => {
-                const portName = String(candidate?.port || candidate?.port_name || candidate?.bunker_port || candidate?.location || '').trim();
-                const netSavings = Number(candidate?.net_savings ?? candidate?.netSavings ?? candidate?.savings_net ?? candidate?.savings);
-                const bunkerPrice = Number(candidate?.bunker_price ?? candidate?.port_bunker_price ?? candidate?.price ?? candidate?.price_usd_mt);
-                const extraDays = Number(candidate?.extra_days ?? candidate?.diversion_days ?? candidate?.days_extra ?? candidate?.deviation_days);
+            return candidates.map((item, index) => {
+                if (!item || typeof item !== 'object') return null;
+
+                const portName = String(item.port_name || item.port || item.location?.name || 'Puerto').trim() || 'Puerto';
+                const hubPrice = Number(item.hub_price ?? item.bunker_price ?? item.price ?? 0);
+                const roundTripDeviationNm = Number(item.round_trip_deviation_nm ?? item.deviation_nm ?? (Number(item.one_way_deviation_nm || 0) * 2));
+                const extraDays = Number(item.extra_days ?? item.extraDays ?? item.diversion_days ?? 0);
+                const grossFuelSavings = Number(item.gross_fuel_savings ?? item.gross_savings ?? 0);
+                const deviationCost = Number(item.deviation_cost ?? item.diversion_cost ?? 0);
+                const netBenefit = Number(item.net_benefit ?? item.net_savings ?? item.netSavings ?? 0);
+
+                let coordinates = null;
+                if (item.location && item.location.latitude != null && item.location.longitude != null) {
+                    coordinates = [Number(item.location.latitude), Number(item.location.longitude)];
+                } else if (Array.isArray(item.coordinates)) {
+                    coordinates = item.coordinates;
+                } else if (item.location && item.location.lat != null && item.location.lon != null) {
+                    coordinates = [Number(item.location.lat), Number(item.location.lon)];
+                } else if (Array.isArray(item.location?.coordinates)) {
+                    coordinates = item.location.coordinates;
+                }
+
                 return {
-                    id: String(candidate?.id || `${portName || 'suggestion'}-${index}`),
-                    portName: portName || 'Puerto alternativo',
-                    netSavings: Number.isFinite(netSavings) ? netSavings : 0,
-                    bunkerPrice: Number.isFinite(bunkerPrice) ? bunkerPrice : 0,
+                    id: String(item.hub_id || item.id || `${portName}-${index}`),
+                    hub_id: item.hub_id || item.id || null,
+                    hubId: item.hub_id || item.id || null,
+                    portName,
+                    port_name: portName,
+                    port: portName,
+                    hubPrice: Number.isFinite(hubPrice) ? hubPrice : 0,
+                    hub_price: Number.isFinite(hubPrice) ? hubPrice : 0,
+                    bunkerPrice: Number.isFinite(hubPrice) ? hubPrice : 0,
+                    roundTripDeviationNm: Number.isFinite(roundTripDeviationNm) ? Math.max(0, roundTripDeviationNm) : 0,
+                    round_trip_deviation_nm: Number.isFinite(roundTripDeviationNm) ? Math.max(0, roundTripDeviationNm) : 0,
+                    deviationNm: Number.isFinite(roundTripDeviationNm) ? Math.max(0, roundTripDeviationNm) : 0,
+                    deviation_nm: Number.isFinite(roundTripDeviationNm) ? Math.max(0, roundTripDeviationNm) : 0,
                     extraDays: Number.isFinite(extraDays) ? Math.max(0, extraDays) : 0,
-                    raw: candidate
+                    extra_days: Number.isFinite(extraDays) ? Math.max(0, extraDays) : 0,
+                    grossFuelSavings: Number.isFinite(grossFuelSavings) ? grossFuelSavings : 0,
+                    gross_fuel_savings: Number.isFinite(grossFuelSavings) ? grossFuelSavings : 0,
+                    deviationCost: Number.isFinite(deviationCost) ? deviationCost : 0,
+                    deviation_cost: Number.isFinite(deviationCost) ? deviationCost : 0,
+                    netBenefit: Number.isFinite(netBenefit) ? netBenefit : 0,
+                    net_benefit: Number.isFinite(netBenefit) ? netBenefit : 0,
+                    netSavings: Number.isFinite(netBenefit) ? netBenefit : 0,
+                    coordinates,
+                    location: item.location || (coordinates ? { latitude: coordinates[0], longitude: coordinates[1] } : null),
+                    fuelGrade: item.fuel_grade || null,
+                    fuel_grade: item.fuel_grade || null,
+                    priceDate: item.price_date || null,
+                    price_date: item.price_date || null,
+                    raw: item
                 };
-            }).filter((suggestion) => suggestion.netSavings > 0 && suggestion.bunkerPrice > 0);
+            }).filter((suggestion) => suggestion && (suggestion.netBenefit > 0 || suggestion.netSavings > 0) && (suggestion.hubPrice > 0 || suggestion.bunkerPrice > 0));
         }
 
         function setBunkerArbitrageFeedback(message, type = 'info') {
@@ -40113,24 +40153,49 @@ function createRouteAnchorElement(type) {
             const container = document.getElementById('bunker-arbitrage-results');
             if (!container) return;
             container.replaceChildren();
-            container.classList.toggle('hidden', suggestions.length === 0);
-            container.classList.toggle('flex', suggestions.length > 0);
 
-            suggestions.forEach((suggestion) => {
+            const list = Array.isArray(suggestions) ? suggestions : [];
+
+            if (list.length > 0) {
+                setBunkerArbitrageFeedback('');
+            }
+
+            container.classList.toggle('hidden', list.length === 0);
+            container.classList.toggle('flex', list.length > 0);
+
+            list.forEach((suggestion) => {
+                const portName = suggestion.portName || suggestion.port_name || 'Puerto';
+                const netBenefit = Number(suggestion.netBenefit ?? suggestion.net_benefit ?? suggestion.netSavings ?? 0);
+                const deviationNm = Number(suggestion.roundTripDeviationNm ?? suggestion.round_trip_deviation_nm ?? suggestion.deviation_nm ?? suggestion.deviationNm ?? 0);
+                const extraDays = Number(suggestion.extraDays ?? suggestion.extra_days ?? 0);
+                const bunkerPrice = Number(suggestion.hubPrice ?? suggestion.hub_price ?? suggestion.bunkerPrice ?? 0);
+
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'group inline-flex items-center gap-2 rounded-full border border-emerald-700 bg-emerald-950/40 px-3 py-2 text-left text-xs font-bold text-emerald-100 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-900/60 focus:outline-none focus:ring-2 focus:ring-emerald-400';
-                button.setAttribute('aria-label', `Aplicar sugerencia de repostaje en ${suggestion.portName}`);
+                button.className = 'group inline-flex flex-wrap items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-950/40 px-3.5 py-2.5 text-left text-xs font-bold text-emerald-100 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-900/60 focus:outline-none focus:ring-2 focus:ring-emerald-400';
+                button.setAttribute('aria-label', `Aplicar sugerencia de repostaje en ${portName}`);
 
                 const icon = document.createElement('i');
                 icon.className = 'fa-solid fa-gas-pump text-emerald-400';
                 icon.setAttribute('aria-hidden', 'true');
-                const text = document.createElement('span');
-                text.textContent = `Sugerencia: Repostar en ${suggestion.portName}. Ahorro Neto: +$${Math.round(suggestion.netSavings).toLocaleString('en-US')}`;
-                const days = document.createElement('span');
-                days.className = 'text-[10px] font-semibold text-emerald-300/80';
-                days.textContent = `+${suggestion.extraDays.toFixed(2)} d`;
-                button.append(icon, text, days);
+
+                const title = document.createElement('span');
+                title.className = 'font-bold text-emerald-100';
+                title.textContent = `Repostar en ${portName}: +$${Math.round(netBenefit).toLocaleString('en-US')} neto`;
+
+                const badgeDeviation = document.createElement('span');
+                badgeDeviation.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300';
+                badgeDeviation.textContent = `${Math.round(deviationNm).toLocaleString('en-US')} NM desvío`;
+
+                const badgeDays = document.createElement('span');
+                badgeDays.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300';
+                badgeDays.textContent = `+${extraDays.toFixed(2)} d`;
+
+                const badgePrice = document.createElement('span');
+                badgePrice.className = 'rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200';
+                badgePrice.textContent = `$${bunkerPrice.toFixed(2)}/MT`;
+
+                button.append(icon, title, badgeDeviation, badgeDays, badgePrice);
                 button.addEventListener('click', () => applyBunkerArbitrageSuggestion(suggestion));
                 container.appendChild(button);
             });
@@ -40181,9 +40246,13 @@ function createRouteAnchorElement(type) {
             window.autoFillBunkers = autoFillBunkers;
             window.syncBunkerIndexMarket = syncBunkerIndexMarket;
             window.searchProfitableBunkerDiversions = searchProfitableBunkerDiversions;
+            window.normalizeBunkerArbitrageSuggestions = normalizeBunkerArbitrageSuggestions;
+            window.renderBunkerArbitrageSuggestions = renderBunkerArbitrageSuggestions;
         }
         if (typeof globalThis !== 'undefined') {
             globalThis.autoFillBunkers = autoFillBunkers;
+            globalThis.normalizeBunkerArbitrageSuggestions = normalizeBunkerArbitrageSuggestions;
+            globalThis.renderBunkerArbitrageSuggestions = renderBunkerArbitrageSuggestions;
         }
 
         function useAlgorithmicFreight(role, options = {}) {
