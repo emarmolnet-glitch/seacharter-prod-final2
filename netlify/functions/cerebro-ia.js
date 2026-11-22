@@ -110,6 +110,42 @@ export function applyOperationalRateOverride(responseObj, promptText = "") {
     return responseObj;
 }
 
+export function reconcileCerebroImoText(text, promptText = "", sessionVessel = null) {
+    if (!text || typeof text !== "string") return text;
+    const imo = String(sessionVessel?.imo || sessionVessel?.imo_number || "").replace(/\D/g, "");
+    const vesselName = String(sessionVessel?.vessel_name || sessionVessel?.vesselName || sessionVessel?.name || "").trim();
+    const promptHasImo = /\b\d{7}\b/.test(promptText || "");
+
+    const imoLineRegex = /[✅☑️✔•*-]*\s*(?:Inyectar\s+)?IMO(?:\s*OK)?:\s*No detectado(?:[^\n\r]*)/i;
+
+    if (imoLineRegex.test(text)) {
+        if (!promptHasImo && imo.length === 7) {
+            const label = vesselName && vesselName.toUpperCase() !== "TBN" && vesselName.toUpperCase() !== "TBA"
+                ? vesselName
+                : `IMO ${imo}`;
+            return text.replace(imoLineRegex, `✅ Buque en sesión: ${label} (IMO ${imo})`);
+        }
+        if (!promptHasImo && (!imo || imo.length !== 7)) {
+            return text.replace(imoLineRegex, "Inyectar IMO OK: No detectado (estimación con buque genérico)");
+        }
+    }
+    return text;
+}
+
+export function applyImoSessionOverride(responseObj, promptText = "", sessionVessel = null) {
+    if (!responseObj || typeof responseObj !== "object") return responseObj;
+    const candidateKeys = ["reply", "respuesta", "message", "informe", "visibleText"];
+    for (const key of candidateKeys) {
+        if (typeof responseObj[key] === "string") {
+            responseObj[key] = reconcileCerebroImoText(responseObj[key], promptText, sessionVessel);
+        }
+        if (responseObj.data && typeof responseObj.data[key] === "string") {
+            responseObj.data[key] = reconcileCerebroImoText(responseObj.data[key], promptText, sessionVessel);
+        }
+    }
+    return responseObj;
+}
+
 export function applyPackagingOverride(responseObj, promptText = "") {
     if (!responseObj || typeof responseObj !== "object") return responseObj;
 
@@ -444,6 +480,7 @@ export async function processRequest(request, context) {
             fetchOptions.body = rawBody;
 
             // Extraer el texto del prompt usando una instancia derivada del buffer para no consumir el stream original
+            let sessionVessel = null;
             if (contentType?.includes("multipart/form-data")) {
                 try {
                     const req = new Request(request.url, {
@@ -459,6 +496,7 @@ export async function processRequest(request, context) {
                             try {
                                 const parsed = JSON.parse(promptText);
                                 promptText = String(parsed.mensaje || parsed.UserContext || promptText);
+                                sessionVessel = parsed?.activeVessel || parsed?.sessionVessel || parsed?.vessel || null;
                             } catch {}
                         }
                     }
@@ -469,11 +507,11 @@ export async function processRequest(request, context) {
                 promptText = extractPromptText(rawBody, contentType);
             }
 
-            // DSS: expose raw tool calculations only; MADRE owns the final report.
-            if (contentType?.includes("application/json")) {
+            if (!sessionVessel && contentType?.includes("application/json")) {
                 try {
                     const text = typeof rawBody === "string" ? rawBody : new TextDecoder().decode(rawBody);
                     const parsed = JSON.parse(text);
+                    sessionVessel = parsed?.activeVessel || parsed?.sessionVessel || parsed?.vessel || parsed?.CalculationData?.calculatorState || parsed?.CalculationData?.voyageDraft?.vessel || parsed?.contexto?.draftVoyage || null;
                     if (parsed?.current_module === "decisiones" || parsed?.currentModule === "decisiones") {
                         const auditResponse = calcularDss(parsed.contexto_ui || parsed.contexto || parsed);
                         return new Response(JSON.stringify(auditResponse), {
@@ -501,6 +539,7 @@ export async function processRequest(request, context) {
             const parsed = JSON.parse(responseData);
             applyPackagingOverride(parsed, promptText);
             applyOperationalRateOverride(parsed, promptText);
+            applyImoSessionOverride(parsed, promptText, sessionVessel);
             finalResponseData = JSON.stringify(parsed);
         } catch {
             // Si la respuesta no es JSON válido, se devuelve intacta

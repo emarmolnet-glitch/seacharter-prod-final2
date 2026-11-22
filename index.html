@@ -37903,6 +37903,14 @@ function createRouteAnchorElement(type) {
 
             renderVesselMasterPreviewCard(vessel);
 
+            if (resolvedImo || resolvedName) {
+                window.__ACTIVE_SESSION_VESSEL__ = {
+                    imo: resolvedImo,
+                    vesselName: resolvedName || fallbackName,
+                    source: 'databridge'
+                };
+            }
+
             dwtInput?.dispatchEvent(new Event('input', { bubbles: true }));
             if (typeof handleDWTChange === 'function' && resolvedDwt > 0) handleDWTChange(true, false);
             if (typeof refreshVesselCompatibilityWarning === 'function') refreshVesselCompatibilityWarning();
@@ -38482,18 +38490,34 @@ function createRouteAnchorElement(type) {
 
         let pendingPdaVesselConfirmation = null;
 
+        function parseFirstNumber(value) {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+            if (!value) return 0;
+            const match = String(value).match(/[-+]?\d+(?:[.,]\d+)?/);
+            if (!match) return 0;
+            const normalized = match[0].replace(',', '.');
+            const parsed = parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        window.parseFirstNumber = parseFirstNumber;
+
         function pdaReadNumber(id) {
             const value = document.getElementById(id)?.value;
             return parseFloat(String(value ?? '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
         }
 
-        function pdaMoney(value) {
+        function formatUSD(value) {
+            const num = Number(value) || 0;
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: 'USD',
-                minimumFractionDigits: 0,
+                minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-            }).format(Number(value) || 0);
+            }).format(num);
+        }
+
+        function pdaMoney(value) {
+            return formatUSD(value);
         }
 
         function pdaMetric(value, unit = '', digits = 0) {
@@ -38520,33 +38544,69 @@ function createRouteAnchorElement(type) {
         }
 
         function calculatePdaFreightPerTon(previousVessel, actualVessel) {
-            const cargoTons = pdaReadNumber('cargo-qty') || Number(State.cargo) || 0;
-            const previousCapacity = getPdaVesselDwcc(previousVessel, cargoTons);
-            const actualCapacity = getPdaVesselDwcc(actualVessel, cargoTons);
+            const cargoDeclared = pdaReadNumber('cargo-qty') || Number(State.cargo) || Number(State.cargoQty) || 0;
+            const previousCapacity = getPdaVesselDwcc(previousVessel, cargoDeclared);
+            const actualCapacity = getPdaVesselDwcc(actualVessel, cargoDeclared);
+
+            // Operative cargo tonnage: limited by DWCC if smaller than declared cargo
+            const operativeCargoPrevious = (previousCapacity.tons > 0 && cargoDeclared > 0)
+                ? Math.min(cargoDeclared, previousCapacity.tons)
+                : (cargoDeclared || previousCapacity.tons || 1);
+            const operativeCargoActual = (actualCapacity.tons > 0 && cargoDeclared > 0)
+                ? Math.min(cargoDeclared, actualCapacity.tons)
+                : (cargoDeclared || actualCapacity.tons || 1);
+
             const freightPolicy = typeof resolveVoyageFreightBase === 'function'
-                ? resolveVoyageFreightBase(cargoTons, Number(previousVessel?.dwt) || previousCapacity.tons)
-                : { freightBaseMT: cargoTons };
-            const billingTons = Math.max(0, Number(freightPolicy.freightBaseMT) || cargoTons || previousCapacity.tons);
-            const ownerRate = pdaReadNumber('freight-rate') || Number(State.freightRate) || 0;
-            const chartererRate = pdaReadNumber('freight-sell') || Number(State.freightSell) || 0;
+                ? resolveVoyageFreightBase(cargoDeclared, Number(previousVessel?.dwt) || previousCapacity.tons)
+                : { freightBaseMT: cargoDeclared };
+            const billingTons = operativeCargoActual;
+
             const commissionPct = Math.min(100, Math.max(0, pdaReadNumber('comm-pct') || Number(State.commPct) || 0));
+            const chartererInputRate = pdaReadNumber('freight-sell') || Number(State.freightSell) || 0;
+            const ownerInputRate = pdaReadNumber('freight-rate') || Number(State.freightRate) || 0;
+
+            // Flete Bruto (Perspectiva Fletador): Coste total del flete por tonelada que paga el fletador
+            let grossFreightPerTon = chartererInputRate > 0
+                ? chartererInputRate
+                : (ownerInputRate > 0 ? ownerInputRate : (Number(State.sugCharterer) || Number(State.sugOwner) || Number(State.breakEven) || 0));
+
+            // Si el armador introdujo una tarifa superior al flete de venta, se armoniza para evitar contradicción
+            if (ownerInputRate > 0 && ownerInputRate > grossFreightPerTon) {
+                grossFreightPerTon = ownerInputRate;
+            }
+
+            // Flete Neto (Perspectiva Armador): Siempre menor o igual al Flete Bruto tras descontar comisión
+            const netFreightPerTon = grossFreightPerTon * (1 - (commissionPct / 100));
+
+            // Totales coherentes usando exactamente el mismo tonelaje operativo (cargoQty / DWCC operativo)
+            const grossFreightTotal = grossFreightPerTon * billingTons;
+            const netFreightTotal = netFreightPerTon * billingTons;
+
+            const ownerRate = grossFreightPerTon;
+            const chartererRate = grossFreightPerTon;
             const ownerNetTotal = billingTons * ownerRate * (1 - (commissionPct / 100));
             const chartererTotal = billingTons * chartererRate;
-            const divideByCapacity = (total, capacity) => capacity > 0 ? total / capacity : 0;
+
             return {
-                cargoTons,
+                cargoTons: cargoDeclared,
                 billingTons,
                 commissionPct,
                 previousCapacity,
                 actualCapacity,
+                operativeCargoPrevious,
+                operativeCargoActual,
+                grossFreightPerTon,
+                netFreightPerTon,
+                grossFreightTotal,
+                netFreightTotal,
                 owner: {
-                    previous: divideByCapacity(ownerNetTotal, previousCapacity.tons),
-                    recalculated: divideByCapacity(ownerNetTotal, actualCapacity.tons),
+                    previous: netFreightPerTon,
+                    recalculated: netFreightPerTon,
                     netTotal: ownerNetTotal
                 },
                 charterer: {
-                    previous: divideByCapacity(chartererTotal, previousCapacity.tons),
-                    recalculated: divideByCapacity(chartererTotal, actualCapacity.tons),
+                    previous: grossFreightPerTon,
+                    recalculated: grossFreightPerTon,
                     total: chartererTotal
                 }
             };
@@ -38621,33 +38681,148 @@ function createRouteAnchorElement(type) {
             return numbers?.length ? Math.max(...numbers.map(Number).filter(Number.isFinite)) : 0;
         }
 
+        const FALLBACK_PORT_LIMITS = {
+            DZBJA: { name: 'Béjaïa (DZ)', unlocode: 'DZBJA', maxDraft: 11.5, maxLoa: 200, maxBeam: 32.2, terminal: 'Muelles comerciales (Graneles y Carga General)' },
+            PTAVE: { name: 'Aveiro (PT)', unlocode: 'PTAVE', maxDraft: 9.5, maxLoa: 180, maxBeam: 28.0, terminal: 'Terminal Norte (Graneles / Carga General) · Calado máx. 9.5m sujeto a marea' },
+            DZORN: { name: 'Orán (DZ)', unlocode: 'DZORN', maxDraft: 11.0, maxLoa: 200, maxBeam: 30.0, terminal: 'Terminal Comercial y Muelle de Graneles' },
+            ESBCN: { name: 'Barcelona (ES)', unlocode: 'ESBCN', maxDraft: 14.5, maxLoa: 300, maxBeam: 45.0, terminal: 'Muelle Adosado / Terminal de Sólidos y Carga General' },
+            DZMOS: { name: 'Mostaganem (DZ)', unlocode: 'DZMOS', maxDraft: 8.8, maxLoa: 165, maxBeam: 24.0, terminal: 'Muelles Interiores (Límite calado / eslora)' },
+            DZALG: { name: 'Algiers / Argel (DZ)', unlocode: 'DZALG', maxDraft: 10.5, maxLoa: 205, maxBeam: 32.0, terminal: 'Terminal Comercial El Djedid / Moulay Slimane' },
+            USTPA: { name: 'Tampa (US)', unlocode: 'USTPA', maxDraft: 10.4, maxLoa: 230, maxBeam: 32.3, terminal: 'Canal principal Tampa Bay (Gálibo aéreo 54.8m)' },
+            USPME: { name: 'Port Manatee (US)', unlocode: 'USPME', maxDraft: 12.2, maxLoa: 250, maxBeam: 35.0, terminal: 'Muelles 6 a 11 (Terminal de Graneles y Carga Pesada)' },
+            ESSAG: { name: 'Sagunto (ES)', unlocode: 'ESSAG', maxDraft: 13.0, maxLoa: 230, maxBeam: 33.0, terminal: 'Muelle Sur / Carga General' },
+            ESVLC: { name: 'Valencia (ES)', unlocode: 'ESVLC', maxDraft: 15.5, maxLoa: 350, maxBeam: 48.0, terminal: 'Terminal Polivalente / Muelle Norte' },
+            ESBIO: { name: 'Bilbao (ES)', unlocode: 'ESBIO', maxDraft: 14.0, maxLoa: 250, maxBeam: 38.0, terminal: 'Muelle Bizkaia / Santurtzi' },
+            MACAS: { name: 'Casablanca (MA)', unlocode: 'MACAS', maxDraft: 11.5, maxLoa: 220, maxBeam: 32.2, terminal: 'Jetée Moulay Youssef / Graneles' },
+            NLRTM: { name: 'Rotterdam (NL)', unlocode: 'NLRTM', maxDraft: 22.0, maxLoa: 400, maxBeam: 60.0, terminal: 'Botlek / Europoort / Maasvlakte' },
+            BEANR: { name: 'Antwerp (BE)', unlocode: 'BEANR', maxDraft: 15.0, maxLoa: 360, maxBeam: 50.0, terminal: 'Delwaidedok / Churchilldok' },
+            USHOU: { name: 'Houston (US)', unlocode: 'USHOU', maxDraft: 13.7, maxLoa: 290, maxBeam: 35.0, terminal: 'Houston Ship Channel / Turning Basin' },
+            ESALG: { name: 'Algeciras (ES)', unlocode: 'ESALG', maxDraft: 16.5, maxLoa: 380, maxBeam: 55.0, terminal: 'Isla Verde Exterior / Campamento' }
+        };
+
+        const PORT_ALIAS_TO_UNLOCODE = {
+            BEJAIA: 'DZBJA',
+            BJA: 'DZBJA',
+            BOUGIE: 'DZBJA',
+            AVEIRO: 'PTAVE',
+            ORAN: 'DZORN',
+            BARCELONA: 'ESBCN',
+            MOSTAGANEM: 'DZMOS',
+            ALGIERS: 'DZALG',
+            ARGEL: 'DZALG',
+            ALGER: 'DZALG',
+            TAMPA: 'USTPA',
+            PORTMANATEE: 'USPME',
+            MANATEE: 'USPME',
+            SAGUNTO: 'ESSAG',
+            VALENCIA: 'ESVLC',
+            BILBAO: 'ESBIO',
+            CASABLANCA: 'MACAS',
+            ROTTERDAM: 'NLRTM',
+            ANTWERP: 'BEANR',
+            AMBERES: 'BEANR',
+            HOUSTON: 'USHOU',
+            ALGECIRAS: 'ESALG'
+        };
+
+        function lookupPortLimits(rawName) {
+            if (!rawName) return null;
+            const cleaned = String(rawName).trim();
+            const normalized = cleaned
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toUpperCase();
+
+            const locodeMatch = normalized.match(/\b([A-Z]{2}[A-Z0-9]{3})\b/);
+            if (locodeMatch && FALLBACK_PORT_LIMITS[locodeMatch[1]]) {
+                return FALLBACK_PORT_LIMITS[locodeMatch[1]];
+            }
+
+            const alphaOnly = normalized.replace(/[^A-Z]/g, '');
+            for (const [alias, code] of Object.entries(PORT_ALIAS_TO_UNLOCODE)) {
+                if (alphaOnly === alias || (alphaOnly.length >= 3 && alphaOnly.includes(alias))) {
+                    return FALLBACK_PORT_LIMITS[code];
+                }
+            }
+
+            return null;
+        }
+
         function getPdaPortRestrictions(inputId, vessel) {
-            const portName = document.getElementById(inputId)?.value || (inputId === 'port-pol' ? 'POL' : 'POD');
+            const portName = document.getElementById(inputId)?.value || (inputId === 'port-pol' ? (State.pol || 'POL') : (State.pod || 'POD'));
             const portInfo = window.currentPortInfoResults?.[inputId] || {};
             const general = portInfo.informacion_general || {};
             const selected = window.selectedPortInfoTerminals?.[inputId] || {};
-            const draftLimit = extractPdaLimit(selected.calado || document.getElementById(`${inputId}-draft`)?.value || general.calado_maximo);
-            const loaLimit = extractPdaLimit(general.restricciones_eslora || portInfo.max_loa || portInfo.loa_maximo);
-            const beamLimit = extractPdaLimit(general.restricciones_manga || portInfo.max_beam || portInfo.manga_maxima);
-            const terminalKnown = Boolean(selected.terminal) || Array.isArray(portInfo.terminales_disponibles);
-            const terminalCompatible = selected.compatible === true || (!selected.terminal && portInfo.terminales_disponibles?.some((terminal) => terminal.compatible !== false));
-            const checks = [
-                { control: 'Calado máximo', actual: Number(vessel.draft || vessel.draft_meters) || 0, limit: draftLimit, unit: ' m', status: draftLimit > 0 ? ((Number(vessel.draft || vessel.draft_meters) || 0) <= draftLimit ? 'pass' : 'fail') : 'pending' },
-                { control: 'Eslora de muelle', actual: Number(vessel.loa || vessel.loa_meters) || 0, limit: loaLimit, unit: ' m', status: loaLimit > 0 ? ((Number(vessel.loa || vessel.loa_meters) || 0) <= loaLimit ? 'pass' : 'fail') : 'pending' },
-                { control: 'Manga / acceso', actual: Number(vessel.beam || vessel.beam_meters) || 0, limit: beamLimit, unit: ' m', status: beamLimit > 0 ? ((Number(vessel.beam || vessel.beam_meters) || 0) <= beamLimit ? 'pass' : 'fail') : 'pending' },
-                { control: 'Acceso a terminal', actualLabel: vessel.vessel_type || vessel.vessel_class || 'Buque comercial', limitLabel: selected.terminal || (terminalKnown ? 'Terminal compatible conocida' : 'Pendiente Port Info'), status: terminalKnown ? (terminalCompatible ? 'pass' : 'fail') : 'pending' }
-            ];
-            return { inputId, portName, checks };
+            const fallback = lookupPortLimits(portName);
+
+            const draftLimit = extractPdaLimit(selected.calado || document.getElementById(`${inputId}-draft`)?.value || general.calado_maximo) || (fallback?.maxDraft || 0);
+            const loaLimit = extractPdaLimit(general.restricciones_eslora || portInfo.max_loa || portInfo.loa_maximo) || (fallback?.maxLoa || 0);
+            const beamLimit = extractPdaLimit(general.restricciones_manga || portInfo.max_beam || portInfo.manga_maxima) || (fallback?.maxBeam || 0);
+
+            const terminalKnown = Boolean(selected.terminal) || Array.isArray(portInfo.terminales_disponibles) || Boolean(fallback?.terminal);
+            const terminalLabel = selected.terminal || fallback?.terminal || (terminalKnown ? 'Terminal compatible conocida' : 'Pendiente Port Info');
+
+            const evaluateDimension = (control, actualVal, limitVal) => {
+                const actual = Number(actualVal) || 0;
+                const limit = Number(limitVal) || 0;
+                if (limit <= 0) {
+                    return { control, actual, limit: 0, unit: ' m', status: 'pending' };
+                }
+                if (actual <= 0) {
+                    return { control, actual: 0, limit, unit: ' m', status: 'pending' };
+                }
+                if (actual > limit) {
+                    return { control, actual, limit, unit: ' m', status: 'fail' };
+                }
+                if (actual >= limit * 0.95) {
+                    return { control, actual, limit, unit: ' m', status: 'attention' };
+                }
+                return { control, actual, limit, unit: ' m', status: 'ok' };
+            };
+
+            const draftCheck = evaluateDimension('Calado máximo', vessel.draft || vessel.draft_meters, draftLimit);
+            const loaCheck = evaluateDimension('Eslora de muelle', vessel.loa || vessel.loa_meters, loaLimit);
+            const beamCheck = evaluateDimension('Manga / acceso', vessel.beam || vessel.beam_meters, beamLimit);
+
+            let terminalStatus = 'pending';
+            if (terminalKnown) {
+                if (draftCheck.status === 'fail' || loaCheck.status === 'fail' || beamCheck.status === 'fail') {
+                    terminalStatus = 'fail';
+                } else if (draftCheck.status === 'attention' || loaCheck.status === 'attention' || beamCheck.status === 'attention') {
+                    terminalStatus = 'attention';
+                } else {
+                    terminalStatus = 'ok';
+                }
+            }
+
+            const terminalCheck = {
+                control: 'Acceso a terminal',
+                actualLabel: vessel.vessel_type || vessel.vessel_class || 'Buque comercial',
+                limitLabel: terminalLabel,
+                status: terminalStatus
+            };
+
+            return { inputId, portName, checks: [draftCheck, loaCheck, beamCheck, terminalCheck] };
         }
 
         function renderPdaStatus(status) {
-            if (status === 'pass') return '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-1 font-black text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>Cumple</span>';
-            if (status === 'fail') return '<span class="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-1 font-black text-red-300"><span class="h-2 w-2 rounded-full bg-red-400"></span>No cumple</span>';
-            return '<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 font-black text-amber-300"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Pendiente dato</span>';
+            if (status === 'ok' || status === 'pass') return '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-1 font-black text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>OK</span>';
+            if (status === 'attention' || status === 'warning') return '<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 font-black text-amber-300"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Atención</span>';
+            if (status === 'fail' || status === 'exceeds') return '<span class="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-1 font-black text-red-300"><span class="h-2 w-2 rounded-full bg-red-400"></span>Excede límite</span>';
+            return '<span class="inline-flex items-center gap-1 rounded-full bg-slate-500/15 px-2 py-1 font-black text-slate-400"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Pendiente dato</span>';
         }
 
         function openPdaVesselConfirmationModal(rawVessel, source = 'databridge') {
             const actual = normalizeCalculatorStoreVessel(rawVessel) || rawVessel;
+            const modalImo = String(actual.imo || actual.imo_number || '').replace(/\D/g, '');
+            const modalName = actual.vessel_name || actual.vesselName || '';
+            if (modalImo || modalName) {
+                window.__ACTIVE_SESSION_VESSEL__ = {
+                    imo: modalImo,
+                    vesselName: modalName,
+                    source: source || 'databridge'
+                };
+            }
             const previous = getPdaEstimatedVesselSnapshot();
             const previousPol = calculatePdaPortPreview('pol', previous, pdaReadNumber('pda-pol'));
             const previousPod = calculatePdaPortPreview('pod', previous, pdaReadNumber('pda-pod'), previousPol.pdaTotal);
@@ -38660,15 +38835,50 @@ function createRouteAnchorElement(type) {
             const totalDays = Number(State.totalDays) || 0;
             const previousDwt = Number(previous.dwt) || 1;
             const actualDwt = Number(actual.dwt) || previousDwt;
+
+            // Días de navegación y totales
+            const rawMilesEl = document.getElementById('sync-miles-label');
+            const rawMiles = rawMilesEl ? (rawMilesEl.value ?? rawMilesEl.textContent) : (State.totalMiles || State.miles || 0);
+            const miles = parseFirstNumber(rawMiles) || parseFirstNumber(State.totalMiles) || parseFirstNumber(State.miles) || 0;
+            const prevSpd = parseFirstNumber(previous.spd_laden || previous.spd_ballast || State.spdLaden || State.spdBallast) || 11;
+            const actSpd = parseFirstNumber(actual.service_speed_knots ?? actual.spd_laden ?? actual.spd_ballast) || prevSpd;
+            const prevSeaDays = miles > 0 && prevSpd > 0 ? (miles / (prevSpd * 24)) : 0;
+            const actSeaDays = miles > 0 && actSpd > 0 ? (miles / (actSpd * 24)) : 0;
+            const portDays = (previousPol.daysInPort || 0) + (previousPod.daysInPort || 0);
+            const prevTotalDays = totalDays > 0 ? totalDays : (prevSeaDays + portDays);
+            const actTotalDays = prevSeaDays > 0 ? Math.max(0, prevTotalDays + (actSeaDays - prevSeaDays)) : prevTotalDays;
+
+            // Búnker
+            const priceSea = pdaReadNumber('price-sea') || Number(State.priceSea) || 600;
+            const pricePort = pdaReadNumber('price-port') || Number(State.pricePort) || 600;
+            const prevConsSea = parseFirstNumber(previous.cons_sea || State.consSea) || 0;
+            const actConsSea = parseFirstNumber(actual.fuel_consumption_laden ?? actual.cons_sea ?? actual.fuel_consumption_ballast) || prevConsSea;
+            const prevConsPort = parseFirstNumber(previous.cons_port || State.consPort) || 0;
+            const actConsPort = parseFirstNumber(actual.port_consumption ?? actual.fuel_consumption_port ?? actual.cons_port) || prevConsPort;
+            const prevBunkerCost = Math.round((prevSeaDays * prevConsSea * priceSea) + (portDays * prevConsPort * pricePort));
+            const actBunkerCost = Math.round((actSeaDays * actConsSea * priceSea) + (portDays * actConsPort * pricePort));
+            let bunkerImpact = actBunkerCost - prevBunkerCost;
+
+            // OPEX
             const currentDailyOpex = pdaReadNumber('opex-daily') || Number(State.opex) || 0;
             const actualDailyOpex = typeof calculateFixedOpex === 'function'
                 ? calculateFixedOpex(actualDwt, actual.specialty_type || actual.vessel_type || '', actual.vessel_name || '')
                 : currentDailyOpex;
+            const prevTotalOpex = Math.round(currentDailyOpex * prevTotalDays);
+            const actTotalOpex = Math.round(actualDailyOpex * actTotalDays);
+            let opexImpact = actTotalOpex - prevTotalOpex;
+
+            // CAPEX
             const currentCapexDaily = Number(State.capexDaily || State.ownerNetBreakdown?.capexDaily) || 0;
             const actualCapexDaily = currentCapexDaily > 0 ? currentCapexDaily * (actualDwt / previousDwt) : 0;
+            const prevTotalCapex = Math.round(currentCapexDaily * prevTotalDays);
+            const actTotalCapex = Math.round(actualCapexDaily * actTotalDays);
+            let capexImpact = actTotalCapex - prevTotalCapex;
+
             const shipments = typeof getOperacionModo === 'function' && getOperacionModo() === 'COA'
                 ? Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1)
                 : 1;
+
             const concepts = ['Entrada / salida', 'Atraque y amarre', 'Muellaje y estadía', 'Practicaje', 'Remolcadores', 'Estiba'];
             const toMoneyCents = (value) => Math.round((Number(value) || 0) * 100);
             const financialRows = concepts.map((concept) => {
@@ -38690,15 +38900,40 @@ function createRouteAnchorElement(type) {
             const previousPortTotal = previousPortTotalCents / 100;
             const recalculatedPortTotal = recalculatedPortTotalCents / 100;
             const portDelta = portDeltaCents / 100;
-            const opexImpact = portDelta + ((actualDailyOpex - currentDailyOpex) * totalDays);
-            const capexImpact = (actualCapexDaily - currentCapexDaily) * totalDays;
+            let effectivePortDelta = portDelta;
+
+            // Detección de estado neutro (si todos los deltas reales son 0)
+            const hasRealVariation = (Math.abs(portDelta) >= 0.01) || (Math.abs(bunkerImpact) >= 0.01) || (Math.abs(opexImpact) >= 0.01) || (Math.abs(capexImpact) >= 0.01);
+            if (!hasRealVariation) {
+                bunkerImpact = 0;
+                opexImpact = 0;
+                capexImpact = 0;
+                effectivePortDelta = 0;
+            }
+
+            const impactoNetoPorViaje = effectivePortDelta + bunkerImpact + opexImpact + capexImpact;
+            const proyeccionContrato = impactoNetoPorViaje * shipments;
             const freightPerTon = calculatePdaFreightPerTon(previous, actual);
+
             const financialBreakdown = {
                 previous: { pol: previousPol, pod: previousPod, total: previousPortTotal },
                 recalculated: { pol: actualPol, pod: actualPod, total: recalculatedPortTotal },
                 rows: financialRows,
                 freightPerTon,
-                impact: { portDelta, opexImpact, capexImpact, contractImpact: (opexImpact + capexImpact) * shipments, shipments, totalDays, previousDailyOpex: currentDailyOpex, actualDailyOpex, previousCapexDaily: currentCapexDaily, actualCapexDaily }
+                impact: {
+                    portDelta,
+                    bunkerImpact,
+                    opexImpact,
+                    capexImpact,
+                    impactoNetoPorViaje,
+                    contractImpact: proyeccionContrato,
+                    shipments,
+                    totalDays: actTotalDays,
+                    previousDailyOpex: currentDailyOpex,
+                    actualDailyOpex,
+                    previousCapexDaily: currentCapexDaily,
+                    actualCapexDaily
+                }
             };
             pendingPdaVesselConfirmation = { previous, actual, operationalValidation, financialBreakdown, source };
 
@@ -38717,22 +38952,60 @@ function createRouteAnchorElement(type) {
 
             const checks = [...operationalValidation.pol.checks, ...operationalValidation.pod.checks];
             document.getElementById('pda-port-compliance-body').innerHTML = [operationalValidation.pol, operationalValidation.pod].flatMap((port) => port.checks.map((check) => `<tr><td class="px-3 py-2.5 font-black text-white">${escapeHtml(port.portName)}</td><td class="px-3 py-2.5 text-slate-300">${check.control}</td><td class="px-3 py-2.5 text-right">${check.actualLabel || pdaMetric(check.actual, check.unit || '', 2)}</td><td class="px-3 py-2.5 text-right text-slate-400">${check.limitLabel || pdaMetric(check.limit, check.unit || '', 2)}</td><td class="px-3 py-2.5 text-center">${renderPdaStatus(check.status)}</td></tr>`)).join('');
-            const failed = checks.filter((check) => check.status === 'fail').length;
+            const failed = checks.filter((check) => check.status === 'fail' || check.status === 'exceeds').length;
+            const attention = checks.filter((check) => check.status === 'attention' || check.status === 'warning').length;
             const pending = checks.filter((check) => check.status === 'pending').length;
             const complianceSummary = document.getElementById('pda-compliance-summary');
-            complianceSummary.className = `rounded-full px-3 py-1 text-[10px] font-black ${failed ? 'bg-red-500/15 text-red-300' : pending ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`;
-            complianceSummary.textContent = failed ? `${failed} restricción(es) no conformes` : pending ? `Conforme con ${pending} dato(s) pendiente(s)` : 'Cumplimiento verificado';
+            if (failed > 0) {
+                complianceSummary.className = 'rounded-full px-3 py-1 text-[10px] font-black bg-red-500/15 text-red-300';
+                complianceSummary.textContent = `${failed} restricción(es) no conformes`;
+            } else if (attention > 0) {
+                complianceSummary.className = 'rounded-full px-3 py-1 text-[10px] font-black bg-amber-500/15 text-amber-300';
+                complianceSummary.textContent = `Atención: ${attention} parámetro(s) cerca del límite (<5%)`;
+            } else if (pending > 0) {
+                complianceSummary.className = 'rounded-full px-3 py-1 text-[10px] font-black bg-amber-500/15 text-amber-300';
+                complianceSummary.textContent = `Conforme con ${pending} dato(s) pendiente(s)`;
+            } else {
+                complianceSummary.className = 'rounded-full px-3 py-1 text-[10px] font-black bg-emerald-500/15 text-emerald-300';
+                complianceSummary.textContent = 'Cumplimiento verificado (100% OK)';
+            }
 
-            document.getElementById('pda-financial-breakdown-body').innerHTML = financialRows.map((row) => {
-                return `<tr><td class="px-3 py-2.5 font-bold text-slate-300">${row.concept}</td><td class="px-3 py-2.5 text-right text-slate-400">${pdaMoney(row.previous)}</td><td class="px-3 py-2.5 text-right font-black text-white">${pdaMoney(row.recalculated)}</td><td class="px-3 py-2.5 text-right font-black ${row.impact > 0 ? 'text-red-300' : row.impact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${row.impact > 0 ? '+' : ''}${pdaMoney(row.impact)}</td></tr>`;
-            }).join('') + `<tr class="bg-slate-900/70"><td class="px-3 py-3 font-black text-white">TOTAL PORTUARIO</td><td class="px-3 py-3 text-right font-black text-slate-300">${pdaMoney(financialBreakdown.previous.total)}</td><td class="px-3 py-3 text-right font-black text-cyan-300">${pdaMoney(financialBreakdown.recalculated.total)}</td><td class="px-3 py-3 text-right font-black ${portDelta > 0 ? 'text-red-300' : 'text-emerald-300'}">${portDelta > 0 ? '+' : ''}${pdaMoney(portDelta)}</td></tr>`;
+            // Renderizado de tabla de desglose portuario y financiero reconciliada
+            const portRowsHtml = financialRows.map((row) => {
+                return `<tr><td class="px-3 py-2 font-bold text-slate-300">${row.concept}</td><td class="px-3 py-2 text-right text-slate-400">${formatUSD(row.previous)}</td><td class="px-3 py-2 text-right font-black text-white">${formatUSD(row.recalculated)}</td><td class="px-3 py-2 text-right font-black ${row.impact > 0 ? 'text-red-300' : row.impact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${row.impact > 0 ? '+' : ''}${formatUSD(row.impact)}</td></tr>`;
+            }).join('');
+
+            const portSubtotalRow = `<tr class="bg-slate-900/60 font-semibold"><td class="px-3 py-2 text-slate-200">Subtotal Tasas Portuarias (POL + POD)</td><td class="px-3 py-2 text-right text-slate-300">${formatUSD(financialBreakdown.previous.total)}</td><td class="px-3 py-2 text-right text-cyan-300 font-bold">${formatUSD(financialBreakdown.recalculated.total)}</td><td class="px-3 py-2 text-right font-black ${portDelta > 0 ? 'text-red-300' : portDelta < 0 ? 'text-emerald-300' : 'text-slate-500'}">${portDelta > 0 ? '+' : ''}${formatUSD(portDelta)}</td></tr>`;
+
+            const bunkerRow = `<tr><td class="px-3 py-2 font-bold text-slate-300">Consumo / Búnker (mar + puerto)</td><td class="px-3 py-2 text-right text-slate-400">${formatUSD(prevBunkerCost)}</td><td class="px-3 py-2 text-right font-black text-white">${formatUSD(actBunkerCost)}</td><td class="px-3 py-2 text-right font-black ${bunkerImpact > 0 ? 'text-red-300' : bunkerImpact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${bunkerImpact > 0 ? '+' : ''}${formatUSD(bunkerImpact)}</td></tr>`;
+
+            const opexRow = `<tr><td class="px-3 py-2 font-bold text-slate-300">Coste operativo buque (OPEX)</td><td class="px-3 py-2 text-right text-slate-400">${formatUSD(prevTotalOpex)}</td><td class="px-3 py-2 text-right font-black text-white">${formatUSD(actTotalOpex)}</td><td class="px-3 py-2 text-right font-black ${opexImpact > 0 ? 'text-red-300' : opexImpact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${opexImpact > 0 ? '+' : ''}${formatUSD(opexImpact)}</td></tr>`;
+
+            const capexRow = (prevTotalCapex > 0 || actTotalCapex > 0) ? `<tr><td class="px-3 py-2 font-bold text-slate-300">Coste financiero (CAPEX)</td><td class="px-3 py-2 text-right text-slate-400">${formatUSD(prevTotalCapex)}</td><td class="px-3 py-2 text-right font-black text-white">${formatUSD(actTotalCapex)}</td><td class="px-3 py-2 text-right font-black ${capexImpact > 0 ? 'text-red-300' : capexImpact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${capexImpact > 0 ? '+' : ''}${formatUSD(capexImpact)}</td></tr>` : '';
+
+            const grandTotalPrevious = previousPortTotal + prevBunkerCost + prevTotalOpex + prevTotalCapex;
+            const grandTotalRecalculated = recalculatedPortTotal + actBunkerCost + actTotalOpex + actTotalCapex;
+            const grandTotalRow = `<tr class="bg-slate-900/90 border-t-2 border-slate-700"><td class="px-3 py-3 font-black text-white">TOTAL IMPACTO VIAJE</td><td class="px-3 py-3 text-right font-black text-slate-300">${formatUSD(grandTotalPrevious)}</td><td class="px-3 py-3 text-right font-black text-cyan-300">${formatUSD(grandTotalRecalculated)}</td><td class="px-3 py-3 text-right font-black ${impactoNetoPorViaje > 0 ? 'text-red-300' : impactoNetoPorViaje < 0 ? 'text-emerald-300' : 'text-slate-500'}">${impactoNetoPorViaje > 0 ? '+' : ''}${formatUSD(impactoNetoPorViaje)}</td></tr>`;
+
+            document.getElementById('pda-financial-breakdown-body').innerHTML = portRowsHtml + portSubtotalRow + bunkerRow + opexRow + capexRow + grandTotalRow;
+
+            const contractShipmentsLabel = shipments === 1 ? 'Basado en 1 viaje' : `Basado en ${shipments} viajes`;
+            const opexAndBunkerImpact = opexImpact + bunkerImpact + portDelta;
+
             document.getElementById('pda-financial-impact-cards').innerHTML = [
-                ['Impacto OPEX viaje', opexImpact, `PDAs + ${totalDays.toFixed(2)} días operativos`],
-                ['Impacto CAPEX viaje', capexImpact, `${pdaMoney(actualCapexDaily)}/día recalculado`],
-                ['Proyección contrato', financialBreakdown.impact.contractImpact, `${shipments} embarque(s)`]
-            ].map(([label, value, detail]) => `<div class="rounded-xl border ${Number(value) > 0 ? 'border-red-500/25 bg-red-500/5' : 'border-emerald-500/25 bg-emerald-500/5'} p-4"><div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${label}</div><div class="mt-1 text-xl font-black ${Number(value) > 0 ? 'text-red-300' : 'text-emerald-300'}">${Number(value) > 0 ? '+' : ''}${pdaMoney(value)}</div><div class="mt-1 text-[10px] text-slate-500">${detail}</div></div>`).join('');
+                ['Impacto Operativo viaje', opexAndBunkerImpact, `Tasas (${formatUSD(portDelta)}) + Búnker (${formatUSD(bunkerImpact)}) + OPEX (${formatUSD(opexImpact)})`],
+                ['Impacto CAPEX viaje', capexImpact, `${formatUSD(actualCapexDaily)}/día (${actTotalDays.toFixed(1)} días)`],
+                ['Proyección contrato', proyeccionContrato, contractShipmentsLabel]
+            ].map(([label, value, detail]) => {
+                const numVal = Number(value) || 0;
+                const borderClass = numVal > 0 ? 'border-red-500/25 bg-red-500/5' : (numVal < 0 ? 'border-emerald-500/25 bg-emerald-500/5' : 'border-slate-800 bg-slate-900/40');
+                const textClass = numVal > 0 ? 'text-red-300' : (numVal < 0 ? 'text-emerald-300' : 'text-slate-300');
+                return `<div class="rounded-xl border ${borderClass} p-4"><div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${label}</div><div class="mt-1 text-xl font-black ${textClass}">${numVal > 0 ? '+' : ''}${formatUSD(numVal)}</div><div class="mt-1 text-[10px] text-slate-500">${detail}</div></div>`;
+            }).join('');
+
             const freightTonnageBasis = document.getElementById('pda-freight-tonnage-basis');
-            freightTonnageBasis.textContent = `${pdaMetric(freightPerTon.previousCapacity.tons, ' t')} → ${pdaMetric(freightPerTon.actualCapacity.tons, ' t')} · ${freightPerTon.actualCapacity.source}`;
+            freightTonnageBasis.textContent = `${pdaMetric(freightPerTon.billingTons, ' t')} · Base: ${freightPerTon.actualCapacity.source}`;
+
             document.getElementById('pda-freight-per-ton-cards').innerHTML = [
                 {
                     label: 'Perspectiva Armador',
@@ -38741,7 +39014,7 @@ function createRouteAnchorElement(type) {
                     border: 'border-gray-200 bg-white',
                     value: freightPerTon.owner.recalculated,
                     previousValue: freightPerTon.owner.previous,
-                    detail: `Neto tras ${freightPerTon.commissionPct.toFixed(2).replace(/\.00$/, '')}% de comisión`
+                    detail: `Flete neto tras ${freightPerTon.commissionPct.toFixed(2).replace(/\.00$/, '')}% de comisión (${formatUSD(freightPerTon.owner.netTotal)} total)`
                 },
                 {
                     label: 'Perspectiva Fletador',
@@ -38750,12 +39023,12 @@ function createRouteAnchorElement(type) {
                     border: 'border-gray-200 bg-white',
                     value: freightPerTon.charterer.recalculated,
                     previousValue: freightPerTon.charterer.previous,
-                    detail: 'Coste bruto total por tonelada transportada'
+                    detail: `Coste bruto total por tonelada transportada (${formatUSD(freightPerTon.charterer.total)} total)`
                 }
             ].map((card) => {
                 const delta = card.value - card.previousValue;
                 const deltaClass = delta > 0 ? 'text-red-600' : delta < 0 ? 'text-emerald-600' : 'text-gray-500';
-                return `<div class="rounded-lg border ${card.border} p-3 shadow-sm"><div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500"><i class="fa-solid ${card.icon} ${card.color}"></i>${card.label}</div><div class="mt-2 flex items-end justify-between gap-3"><div class="text-2xl font-bold ${card.color}">${pdaMoney(card.value)}<span class="ml-1 text-[10px] text-gray-500">/t</span></div><div class="text-right text-[9px] text-gray-500">Antes ${pdaMoney(card.previousValue)}/t<br><span class="font-bold ${deltaClass}">${delta > 0 ? '+' : ''}${pdaMoney(delta)}/t</span></div></div><div class="mt-2 text-xs leading-4 text-gray-500">${card.detail}</div></div>`;
+                return `<div class="rounded-lg border ${card.border} p-3 shadow-sm"><div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500"><i class="fa-solid ${card.icon} ${card.color}"></i>${card.label}</div><div class="mt-2 flex items-end justify-between gap-3"><div class="text-2xl font-bold ${card.color}">${formatUSD(card.value)}<span class="ml-1 text-[10px] text-gray-500">/t</span></div><div class="text-right text-[9px] text-gray-500">Antes ${formatUSD(card.previousValue)}/t<br><span class="font-bold ${deltaClass}">${delta > 0 ? '+' : ''}${formatUSD(delta)}/t</span></div></div><div class="mt-2 text-xs leading-4 text-gray-500">${card.detail}</div></div>`;
             }).join('');
             document.getElementById('pda-vessel-confirmation-subtitle').textContent = `${actual.vessel_name || actual.vesselName || 'Buque'} · IMO ${actual.imo || actual.imo_number || 'N/D'} · Fuente ${source === 'global-store-fallback' ? 'Store local' : 'Data Bridge'}`;
             document.getElementById('pda-confirmation-error').classList.add('hidden');
@@ -38797,6 +39070,15 @@ function createRouteAnchorElement(type) {
                 if (!response.ok || !result.success) throw new Error(result.error || 'No se pudo registrar la confirmación.');
 
                 const vessel = applyResolvedVesselToCalculator(pending.actual, pending.actual.vessel_name || '');
+                const acceptImo = String(pending.actual.imo || pending.actual.imo_number || '').replace(/\D/g, '');
+                const acceptName = pending.actual.vessel_name || pending.actual.vesselName || '';
+                if (acceptImo || acceptName) {
+                    window.__ACTIVE_SESSION_VESSEL__ = {
+                        imo: acceptImo,
+                        vesselName: acceptName,
+                        source: pending.source || 'databridge'
+                    };
+                }
                 const fieldBindings = [
                     ['vessel-flag', vessel.flag], ['spd-ballast', vessel.spd_ballast], ['spd-laden', vessel.spd_laden],
                     ['cons-sea', vessel.cons_sea], ['cons-port', vessel.cons_port], ['vessel-draft', vessel.draft || vessel.draft_meters],
@@ -38895,6 +39177,15 @@ function createRouteAnchorElement(type) {
 
                 if (data.success && data.vessel) {
                     const vessel = normalizeCalculatorStoreVessel(data.vessel) || data.vessel;
+                    const loadedImo = String(vessel.imo || vessel.imo_number || '').replace(/\D/g, '');
+                    const loadedName = vessel.vessel_name || vessel.vesselName || '';
+                    if (loadedImo || loadedName) {
+                        window.__ACTIVE_SESSION_VESSEL__ = {
+                            imo: loadedImo,
+                            vesselName: loadedName,
+                            source: data.source || 'databridge'
+                        };
+                    }
                     openPdaVesselConfirmationModal(vessel, data.source || 'databridge');
                 } else {
                     // Aviso local exclusivo sin buscar fuera
