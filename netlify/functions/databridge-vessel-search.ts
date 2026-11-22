@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
+import comparatorHandler from "./vessel-comparator-search.js";
 
 type VesselMasterRow = QueryResultRow & {
   id?: number | string;
@@ -299,6 +300,10 @@ export default async (req: Request) => {
     ? Object.fromEntries(Array.from(new URL(req.url).searchParams.entries()).sort(([left], [right]) => left.localeCompare(right)))
     : await req.clone().json().catch(() => ({}));
   try {
+    const url = req.method === "GET" ? new URL(req.url) : null;
+    if (url && (url.searchParams.get("similarTo") || url.searchParams.get("mode") === "similar" || url.searchParams.get("comparator"))) {
+      return comparatorHandler(req);
+    }
     const cached = await getOrSetCachedJson({
       namespace: "databridge-vessel-search-v1",
       key: { method: req.method, request: requestKey },

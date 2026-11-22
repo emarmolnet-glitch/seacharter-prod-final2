@@ -5045,16 +5045,62 @@
             color: #94A3B8 !important;
         }
 
-        /* Keep action buttons readable with white text */
+        /* High-contrast action buttons in comparison modal (Immune to light-mode overrides) */
+        #comparison-modal .btn-comp-primary,
+        #comparison-modal button.btn-comp-primary,
         #comparison-modal button.bg-indigo-600,
         #comparison-modal button.bg-emerald-600,
         #comparison-modal button.bg-gradient-to-r {
-            color: #FFFFFF !important;
+            background-color: #1e3a8a !important;
+            background-image: none !important;
+            color: #ffffff !important;
+            border: 1px solid #1e3a8a !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
         }
+        #comparison-modal .btn-comp-primary:hover,
+        #comparison-modal button.btn-comp-primary:hover,
+        #comparison-modal button.bg-indigo-600:hover,
+        #comparison-modal button.bg-emerald-600:hover,
+        #comparison-modal button.bg-gradient-to-r:hover {
+            background-color: #1d4ed8 !important;
+            background-image: none !important;
+            color: #ffffff !important;
+            border-color: #1d4ed8 !important;
+        }
+        #comparison-modal .btn-comp-secondary,
+        #comparison-modal button.btn-comp-secondary,
+        #comparison-modal button.bg-slate-800 {
+            background-color: #f1f5f9 !important;
+            background-image: none !important;
+            color: #0f172a !important;
+            border: 1px solid #cbd5e1 !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }
+        #comparison-modal .btn-comp-secondary:hover,
+        #comparison-modal button.btn-comp-secondary:hover,
+        #comparison-modal button.bg-slate-800:hover {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+            border-color: #94a3b8 !important;
+        }
+        #comparison-modal button:disabled,
+        #comparison-modal .btn-comp-primary:disabled,
+        #comparison-modal .btn-comp-secondary:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+        }
+        #comparison-modal .btn-comp-primary i,
+        #comparison-modal .btn-comp-primary span,
         #comparison-modal button.bg-indigo-600 i,
         #comparison-modal button.bg-emerald-600 i,
         #comparison-modal button.bg-gradient-to-r i {
-            color: #FFFFFF !important;
+            color: #ffffff !important;
+        }
+        #comparison-modal .btn-comp-secondary i,
+        #comparison-modal .btn-comp-secondary span,
+        #comparison-modal button.bg-slate-800 i,
+        #comparison-modal button.bg-slate-800 span {
+            color: #0f172a !important;
         }
 
         /* Styling for the close icon in modal header */
@@ -16959,13 +17005,49 @@
                     <!-- Beautiful User-Friendly Ship Selector List -->
                     <div class="space-y-3 bg-slate-950 p-4 rounded-lg border border-slate-800">
                         <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
-                            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <i class="fa-solid fa-ship text-indigo-400"></i> Mis Buques / My Vessels
+                            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-ship text-indigo-600"></i> Mis Buques / My Vessels
                             </h4>
                             <div class="flex gap-1.5">
-                                <button onclick="toggleAddVesselForm()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1">
-                                    <i class="fa-solid fa-plus"></i> Añadir Buque
+                                <button id="btn-comp-toggle-add" onclick="toggleAddVesselForm()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1 shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;">
+                                    <i class="fa-solid fa-plus text-white"></i> Añadir Buque
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- Búsqueda rápida de buques reales y buscador de gemelos más nuevos en Neon -->
+                        <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2 mb-3">
+                            <div class="flex gap-1.5 items-center">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+                                    <input type="text" id="comp-quick-search-input" class="w-full pl-8 pr-2 py-1.5 text-xs bg-white text-slate-900 border border-slate-300 rounded focus:outline-none focus:border-indigo-600" placeholder="Buscar buque real en Neon (Nombre o IMO)..." onkeydown="if(event.key==='Enter') searchRealVesselsForComp()">
+                                </div>
+                                <button id="btn-comp-search-real" onclick="searchRealVesselsForComp()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-xs font-bold px-3 py-1.5 rounded transition flex items-center gap-1 shadow-sm whitespace-nowrap" style="background-color: #1e3a8a !important; color: #ffffff !important;">
+                                    <i class="fa-solid fa-search text-white"></i> Buscar
+                                </button>
+                            </div>
+                            
+                            <!-- Control compacto: Buscar similares reales con selector de año mínimo -->
+                            <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200 text-[11px]">
+                                <div class="flex items-center gap-1.5 text-slate-700">
+                                    <span class="font-semibold text-[10px] uppercase text-slate-600"><i class="fa-solid fa-calendar-days text-indigo-600"></i> Año Mínimo:</span>
+                                    <select id="comp-similar-min-year" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-900">
+                                        <option value="2015">≥ 2015</option>
+                                        <option value="2018">≥ 2018</option>
+                                        <option value="2019" selected>≥ 2019 (Moderno)</option>
+                                        <option value="2020">≥ 2020 (Eco Tier III)</option>
+                                        <option value="2022">≥ 2022</option>
+                                        <option value="2024">≥ 2024 (Última Gen)</option>
+                                    </select>
+                                </div>
+                                <button id="btn-comp-find-similar" onclick="findSimilarNewerVesselsForComp()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[11px] font-bold px-2.5 py-1 rounded transition flex items-center gap-1 shadow-sm whitespace-nowrap" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Buscar gemelos reales más nuevos en Neon">
+                                    <i class="fa-solid fa-clone text-white"></i> Buscar Similares Reales
+                                </button>
+                            </div>
+
+                            <!-- Contenedor dinámico de resultados de búsqueda / similares encontrados -->
+                            <div id="comp-search-results-container" class="hidden space-y-1.5 max-h-52 overflow-y-auto pt-1.5 border-t border-slate-200">
+                                <!-- Cards generadas dinámicamente -->
                             </div>
                         </div>
                         
@@ -16977,14 +17059,18 @@
                                     <label class="block text-[9px] font-semibold text-slate-400 uppercase">Nombre / Name</label>
                                     <div class="flex gap-1.5 mt-1">
                                         <input type="text" id="add-v-name" class="flex-1 bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. Ocean Star">
-                                        <button onclick="autoFillVesselSpecsForComparison()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1" title="Extraer datos con IA / AI Extract Data">
-                                            <i class="fa-solid fa-wand-magic-sparkles"></i> Extraer Datos
+                                        <button id="btn-comp-autofill-specs" onclick="autoFillVesselSpecsForComparison()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1 shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Extraer datos con IA / AI Extract Data">
+                                            <i class="fa-solid fa-wand-magic-sparkles text-white"></i> Extraer Datos
                                         </button>
                                     </div>
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-semibold text-slate-400 uppercase">DWT</label>
                                     <input type="number" id="add-v-dwt" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 15000">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase">Año Construcción / Built</label>
+                                    <input type="number" id="add-v-year-built" class="w-full bg-slate-950 border border-slate-700 rounded p-1 text-xs text-white" placeholder="e.g. 2020">
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-semibold text-slate-400 uppercase">Clase / Class</label>
@@ -17008,8 +17094,8 @@
                                 </div>
                             </div>
                             <div class="flex justify-end gap-2 pt-2">
-                                <button onclick="toggleAddVesselForm()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2.5 py-1 rounded transition">Cancelar</button>
-                                <button onclick="saveNewVesselFromUI()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded transition">Guardar</button>
+                                <button id="btn-comp-cancel-add" onclick="toggleAddVesselForm()" class="btn-comp-secondary bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] border border-[#cbd5e1] text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #f1f5f9 !important; color: #0f172a !important; border: 1px solid #cbd5e1 !important;">Cancelar</button>
+                                <button id="btn-comp-save-vessel" onclick="saveNewVesselFromUI()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2.5 py-1 rounded transition shadow-sm" style="background-color: #1e3a8a !important; color: #ffffff !important;">Guardar</button>
                             </div>
                         </div>
 
@@ -17037,9 +17123,10 @@
                                     <span class="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Activo / Active</span>
                                 </div>
                                 <div class="grid grid-cols-4 gap-1 pt-2 border-t border-slate-800 text-[9px] font-mono text-slate-600">
+                                    <div>Año: <span id="current-v-ui-year" class="text-slate-900 font-bold">--</span></div>
                                     <div>Spd: <span id="current-v-ui-spd" class="text-slate-900 font-bold">12/11</span></div>
                                     <div>Cons: <span id="current-v-ui-cons" class="text-slate-900 font-bold">10/1</span></div>
-                                    <div class="col-span-2 text-right text-indigo-400">Seleccionado para comparar</div>
+                                    <div class="text-right text-indigo-600 font-bold">Activo en Estimador</div>
                                 </div>
                             </div>
                         </div>
@@ -17047,7 +17134,7 @@
                         <!-- Instructions / Summary card -->
                         <div class="bg-slate-900/50 border border-slate-800 rounded-lg p-3 space-y-1.5 text-xs text-slate-600 mt-3">
                             <p class="font-semibold text-slate-800 flex items-center gap-1"><i class="fa-solid fa-circle-question text-indigo-400"></i> ¿Cómo funciona?</p>
-                            <p class="text-[11px] leading-relaxed">Seleccione los buques que desea comparar marcando sus casillas. El comparador de IA evaluará el viaje para cada buque seleccionado utilizando los parámetros definidos abajo y clasificará las mejores opciones financieras.</p>
+                            <p class="text-[11px] leading-relaxed">Seleccione los buques que desea comparar marcando sus casillas. Puede añadir buques reales directamente desde Neon o buscar gemelos más nuevos (≥ 2019) para evaluar alternativas con mayor eficiencia y menores costes de búnker.</p>
                         </div>
                     </div>
                 </div>
@@ -17075,12 +17162,12 @@
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-3 border-t border-slate-800 pt-4">
-                    <button onclick="fillComparisonDefaults()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-2 px-4 rounded-lg shadow transition">
-                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Cargar Datos del Estimador
+                <div id="comparison-action-buttons" class="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                    <button id="btn-comp-fill-defaults" onclick="fillComparisonDefaults()" class="btn-comp-secondary bg-[#f1f5f9] hover:bg-[#e2e8f0] border border-[#cbd5e1] text-[#0f172a] text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition" style="background-color: #f1f5f9 !important; color: #0f172a !important; border: 1px solid #cbd5e1 !important;">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1 text-[#0f172a]"></i> Cargar Datos del Estimador
                     </button>
-                    <button onclick="runVesselComparison()" class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black py-2 px-6 rounded-lg shadow transition">
-                        <i class="fa-solid fa-circle-play mr-1"></i> Calcular y Comparar con IA
+                    <button id="btn-comp-run" onclick="runVesselComparison()" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-xs font-black py-2 px-6 rounded-lg shadow-sm transition flex items-center gap-1" style="background-color: #1e3a8a !important; color: #ffffff !important;">
+                        <i class="fa-solid fa-circle-play mr-1 text-white"></i> Calcular y Comparar con IA
                     </button>
                 </div>
 
@@ -51185,8 +51272,8 @@ function scheduleReactiveEngine() {
             const originPort = document.getElementById('port-pol')?.value || '';
             const destinationPort = document.getElementById('port-pod')?.value || '';
             const cargoType = document.getElementById('cargo-type')?.value || '';
-            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
-            const freightRate = parseFloat(document.getElementById('freight-rate')?.value) || 0;
+            const cargoQty = parseFirstNumber(document.getElementById('cargo-qty')?.value) || 0;
+            const freightRate = parseFirstNumber(document.getElementById('freight-rate')?.value) || 0;
             
             document.getElementById('comp-origin').value = originPort;
             document.getElementById('comp-destination').value = destinationPort;
@@ -51194,23 +51281,40 @@ function scheduleReactiveEngine() {
             document.getElementById('comp-cargo-qty').value = cargoQty;
             document.getElementById('comp-total-freight').value = Math.round(freightRate * cargoQty);
 
-            // Fetch current vessel specs
+            // Fetch current vessel specs using parseFirstNumber for robust descriptive extraction
             const vName = document.getElementById('vessel-name')?.value || 'TBN';
-            const vDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+            const vDwt = parseFirstNumber(document.getElementById('vessel-dwt')?.value) || 0;
             const vClass = State.class || document.getElementById('vessel-badge')?.innerText || 'Unknown';
-            const vSpdBallast = parseFloat(document.getElementById('spd-ballast')?.value) || 12.0;
-            const vSpdLaden = parseFloat(document.getElementById('spd-laden')?.value) || 11.0;
-            const vConsSea = parseFloat(document.getElementById('cons-sea')?.value) || 10.0;
-            const vConsPort = parseFloat(document.getElementById('cons-port')?.value) || 1.0;
+            const vSpdBallast = parseFirstNumber(document.getElementById('spd-ballast')?.value) || 12.0;
+            const vSpdLaden = parseFirstNumber(document.getElementById('spd-laden')?.value) || 11.0;
+            const vConsSea = parseFirstNumber(document.getElementById('cons-sea')?.value) || 10.0;
+            const vConsPort = parseFirstNumber(document.getElementById('cons-port')?.value) || 1.0;
+
+            let vYear = parseFirstNumber(State.year_built || State.built_year || window.GlobalStore?.activeVessel?.year_built || window.GlobalStore?.activeVessel?.built_year || window.GlobalStore?.calculatorVessel?.year_built || window.GlobalStore?.calculatorVessel?.built_year || document.getElementById('vessel-built-year')?.value) || 0;
+            if (!vYear) {
+                const ym = vName.match(/\b(19\d{2}|20\d{2})\b/);
+                if (ym) vYear = parseInt(ym[1], 10);
+            }
+            let vImo = State.imo || window.GlobalStore?.activeVessel?.imo || window.GlobalStore?.activeVessel?.imo_number || '';
+            if (!vImo) {
+                const im = vName.match(/IMO:\s*(\d{7})/i);
+                if (im) vImo = im[1];
+            }
 
             const currentVessel = {
                 "vessel_name": vName,
+                "imo": vImo || null,
+                "imo_number": vImo || null,
                 "dwt": vDwt,
+                "year_built": vYear > 1800 ? vYear : null,
+                "built_year": vYear > 1800 ? vYear : null,
                 "vessel_class": vClass,
+                "vessel_type": vClass,
                 "spd_ballast": vSpdBallast,
                 "spd_laden": vSpdLaden,
                 "cons_sea": vConsSea,
-                "cons_port": vConsPort
+                "cons_port": vConsPort,
+                "is_active_vessel": true
             };
 
             document.getElementById('comp-new-vessel').value = JSON.stringify(currentVessel, null, 2);
@@ -51226,6 +51330,7 @@ function scheduleReactiveEngine() {
             document.getElementById('comparison-loader').classList.add('hidden');
             document.getElementById('comparison-inputs').classList.remove('hidden');
             document.getElementById('comparison-trip-params').classList.remove('hidden');
+            document.getElementById('comparison-action-buttons')?.classList.remove('hidden');
 
             document.getElementById('comparison-modal').classList.remove('hidden', 'pointer-events-none');
         }
@@ -51816,24 +51921,34 @@ function scheduleReactiveEngine() {
             if (listDiv) {
                 listDiv.innerHTML = '';
                 if (savedVessels.length === 0) {
-                    listDiv.innerHTML = `<p class="text-xs text-slate-500 italic p-3 text-center">No hay buques guardados. Añada uno usando el botón superior.</p>`;
+                    listDiv.innerHTML = `<p class="text-xs text-slate-500 italic p-3 text-center">No hay buques guardados. Añada uno desde Neon o use el formulario manual.</p>`;
                 } else {
                     savedVessels.forEach((v, index) => {
                         const vName = v.vessel_name || v.Name || `Buque #${index + 1}`;
-                        const vDwt = v.dwt || v.DWT || 0;
-                        const vClass = v.vessel_class || v.Class || 'Unknown';
+                        const vDwt = parseFirstNumber(v.dwt || v.DWT) || 0;
+                        const vClass = v.vessel_class || v.vessel_type || v.Class || 'Unknown';
+                        const vYear = v.year_built || v.built_year || null;
+                        const vImo = v.imo_number || v.imo || null;
+                        const vSpd = parseFirstNumber(v.spd_laden || v.service_speed_knots || v.spd_ballast || 11.5);
+                        const vCons = parseFirstNumber(v.cons_sea || 12.0);
+                        const vPortCons = parseFirstNumber(v.cons_port || 1.5);
                         
                         listDiv.innerHTML += `
                             <div class="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition">
                                 <label class="flex items-center gap-2.5 cursor-pointer flex-1 select-none">
                                     <input type="checkbox" data-index="${index}" class="saved-vessel-checkbox rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4 bg-slate-950" checked>
                                     <div class="flex flex-col">
-                                        <span class="text-xs font-bold text-white">${vName}</span>
-                                        <span class="text-[10px] text-slate-400">${vDwt.toLocaleString('en-US')} DWT • ${vClass}</span>
+                                        <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                            ${vName}
+                                            ${vYear ? `<span class="text-[9px] font-black px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">Año ${vYear}</span>` : ''}
+                                        </span>
+                                        <span class="text-[10px] text-slate-500 font-mono">
+                                            ${vDwt.toLocaleString('en-US')} DWT • ${vImo ? 'IMO ' + vImo + ' • ' : ''}${vSpd.toFixed(1)} kt • ${vCons.toFixed(1)}/${vPortCons.toFixed(1)} t/d • ${vClass}
+                                        </span>
                                     </div>
                                 </label>
-                                <button onclick="deleteVesselFromUI(${index})" class="text-slate-500 hover:text-red-400 p-1.5 rounded transition" title="Eliminar Buque">
-                                    <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                <button onclick="deleteVesselFromUI(${index})" class="text-slate-400 hover:text-red-500 p-1.5 rounded transition" title="Eliminar Buque">
+                                    <i class="fa-solid fa-trash-can text-[11px]"></i>
                                 </button>
                             </div>
                         `;
@@ -51844,22 +51959,158 @@ function scheduleReactiveEngine() {
             // Render current active vessel card details
             const currentNameEl = document.getElementById('current-vessel-ui-name');
             const currentDetailsEl = document.getElementById('current-vessel-ui-details');
+            const currentYearEl = document.getElementById('current-v-ui-year');
             const currentSpdEl = document.getElementById('current-v-ui-spd');
             const currentConsEl = document.getElementById('current-v-ui-cons');
 
             if (newVessel) {
                 const name = newVessel.vessel_name || newVessel.Name || 'TBN';
-                const dwt = newVessel.dwt || newVessel.DWT || 0;
+                const dwt = parseFirstNumber(newVessel.dwt || newVessel.DWT) || 0;
                 const vClass = newVessel.vessel_class || newVessel.Class || 'Unknown';
-                const spdBallast = newVessel.spd_ballast || 12.0;
-                const spdLaden = newVessel.spd_laden || 11.0;
-                const consSea = newVessel.cons_sea || 10.0;
-                const consPort = newVessel.cons_port || 1.0;
+                const vYear = newVessel.year_built || newVessel.built_year || null;
+                const vImo = newVessel.imo_number || newVessel.imo || null;
+                const spdBallast = parseFirstNumber(newVessel.spd_ballast) || 12.0;
+                const spdLaden = parseFirstNumber(newVessel.spd_laden) || 11.0;
+                const consSea = parseFirstNumber(newVessel.cons_sea) || 10.0;
+                const consPort = parseFirstNumber(newVessel.cons_port) || 1.0;
 
                 if (currentNameEl) currentNameEl.innerText = name;
-                if (currentDetailsEl) currentDetailsEl.innerText = `${dwt.toLocaleString('en-US')} DWT • Clase: ${vClass}`;
-                if (currentSpdEl) currentSpdEl.innerText = `${spdBallast}/${spdLaden} kt`;
-                if (currentConsEl) currentConsEl.innerText = `${consSea}/${consPort} t/d`;
+                if (currentDetailsEl) currentDetailsEl.innerText = `${dwt.toLocaleString('en-US')} DWT • ${vImo ? 'IMO ' + vImo + ' • ' : ''}Clase: ${vClass}`;
+                if (currentYearEl) currentYearEl.innerText = vYear ? String(vYear) : '--';
+                if (currentSpdEl) currentSpdEl.innerText = `${spdBallast.toFixed(1)}/${spdLaden.toFixed(1)} kt`;
+                if (currentConsEl) currentConsEl.innerText = `${consSea.toFixed(1)}/${consPort.toFixed(1)} t/d`;
+            }
+        }
+
+        async function searchRealVesselsForComp() {
+            const input = document.getElementById('comp-quick-search-input');
+            const q = (input?.value || '').trim();
+            if (!q) {
+                showToast('⚠️ Introduce un nombre o número IMO para buscar en Neon');
+                return;
+            }
+            const btn = document.getElementById('btn-comp-search-real');
+            const origHtml = btn ? btn.innerHTML : 'Buscar';
+            if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
+            const container = document.getElementById('comp-search-results-container');
+            container.classList.remove('hidden');
+            container.innerHTML = '<div class="text-center py-3 text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Buscando buques reales en Neon...</div>';
+            try {
+                const res = await fetch(`/api/vessel-comparator-search?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                if (data.success && Array.isArray(data.vessels) && data.vessels.length > 0) {
+                    renderCompCandidates(data.vessels, `Resultados para "${q}" (${data.vessels.length}):`);
+                } else {
+                    container.innerHTML = `<div class="text-center py-3 text-xs text-slate-500">No se encontraron buques reales para "${q}".</div>`;
+                }
+            } catch (err) {
+                console.error('Error buscando buques reales:', err);
+                container.innerHTML = '<div class="text-center py-3 text-xs text-red-500">Error al conectar con la base de datos Neon.</div>';
+            } finally {
+                if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+            }
+        }
+
+        async function findSimilarNewerVesselsForComp() {
+            let activeVessel = null;
+            try {
+                activeVessel = JSON.parse(document.getElementById('comp-new-vessel')?.value || '{}');
+            } catch (e) {}
+            const dwt = parseFirstNumber(activeVessel?.dwt) || parseFirstNumber(document.getElementById('vessel-dwt')?.value) || 15000;
+            const vesselType = activeVessel?.vessel_type || activeVessel?.vessel_class || State.class || '';
+            const excludeImo = activeVessel?.imo || activeVessel?.imo_number || State.imo || '';
+            const minYear = parseInt(document.getElementById('comp-similar-min-year')?.value, 10) || 2019;
+
+            const btn = document.getElementById('btn-comp-find-similar');
+            const origHtml = btn ? btn.innerHTML : 'Buscar Similares Reales';
+            if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Buscando...'; btn.disabled = true; }
+            const container = document.getElementById('comp-search-results-container');
+            container.classList.remove('hidden');
+            container.innerHTML = `<div class="text-center py-3 text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Buscando gemelos en Neon (${dwt.toLocaleString()} DWT, año ≥ ${minYear})...</div>`;
+            try {
+                const url = `/api/vessel-comparator-search?similarTo=true&dwt=${dwt}&minYear=${minYear}&excludeImo=${encodeURIComponent(excludeImo)}&vesselType=${encodeURIComponent(vesselType)}&tolerancePct=0.25`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success && Array.isArray(data.vessels) && data.vessels.length > 0) {
+                    renderCompCandidates(data.vessels, `Gemelos reales encontrados (DWT ~${dwt.toLocaleString()} t, ≥ ${minYear}):`);
+                } else {
+                    container.innerHTML = `<div class="text-center py-3 text-xs text-slate-500">No se encontraron buques similares con año ≥ ${minYear}. Prueba con ≥ 2015 o 2018.</div>`;
+                }
+            } catch (err) {
+                console.error('Error buscando buques similares:', err);
+                container.innerHTML = '<div class="text-center py-3 text-xs text-red-500">Error al consultar buques similares en Neon.</div>';
+            } finally {
+                if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+            }
+        }
+
+        function renderCompCandidates(vessels, headerTitle) {
+            const container = document.getElementById('comp-search-results-container');
+            if (!container) return;
+            let html = `
+                <div class="flex justify-between items-center px-1 pb-1">
+                    <span class="text-[10px] font-bold text-slate-700 uppercase">${headerTitle}</span>
+                    <button onclick="document.getElementById('comp-search-results-container').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-[10px]"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `;
+            vessels.forEach(v => {
+                const escaped = encodeURIComponent(JSON.stringify(v));
+                const yearBadge = v.year_built ? `<span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1 py-0.2 rounded text-[9px] font-black">Año ${v.year_built}</span>` : `<span class="bg-slate-100 text-slate-600 px-1 py-0.2 rounded text-[9px]">Año --</span>`;
+                const spd = (v.spd_laden || v.service_speed_knots || 12).toFixed(1);
+                const consSea = (v.cons_sea || 12).toFixed(1);
+                const consPort = (v.cons_port || 1.5).toFixed(1);
+                html += `
+                    <div class="flex items-center justify-between p-2 bg-white border border-slate-200 hover:border-indigo-400 rounded-lg shadow-sm transition gap-2">
+                        <div class="flex flex-col min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-xs font-bold text-slate-900 truncate">${v.vessel_name}</span>
+                                ${yearBadge}
+                                ${v.has_h15 ? '<span class="bg-blue-50 text-blue-700 border border-blue-200 px-1 py-0.2 rounded text-[8px] font-bold" title="Saneado con Ficha Hija 15">H15</span>' : ''}
+                            </div>
+                            <span class="text-[10px] text-slate-500 font-mono mt-0.5">
+                                IMO: ${v.imo_number || '--'} • ${Number(v.dwt || 0).toLocaleString()} DWT • Vel: ${spd} kt • Cons: ${consSea}/${consPort} t/d
+                            </span>
+                        </div>
+                        <button onclick="addVesselToComparisonFromNeon('${escaped}')" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1 shadow-sm whitespace-nowrap" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Añadir este buque a la lista para comparar">
+                            <i class="fa-solid fa-plus text-white"></i> Comparar
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            container.classList.remove('hidden');
+        }
+
+        function addVesselToComparisonFromNeon(vesselEscaped) {
+            try {
+                const vessel = JSON.parse(decodeURIComponent(vesselEscaped));
+                const savedVesselsVal = document.getElementById('comp-saved-vessels').value.trim();
+                let saved = [];
+                try {
+                    saved = JSON.parse(savedVesselsVal) || [];
+                } catch (e) {
+                    saved = [];
+                }
+
+                // Check for duplicate by IMO or Name
+                const exists = saved.some(s => {
+                    if (vessel.imo_number && s.imo_number && String(vessel.imo_number) === String(s.imo_number)) return true;
+                    if (vessel.vessel_name && s.vessel_name && vessel.vessel_name.toLowerCase() === s.vessel_name.toLowerCase()) return true;
+                    return false;
+                });
+
+                if (exists) {
+                    showToast(`ℹ️ "${vessel.vessel_name}" ya está en Mis Buques.`);
+                    return;
+                }
+
+                saved.push(vessel);
+                document.getElementById('comp-saved-vessels').value = JSON.stringify(saved, null, 2);
+                localStorage.setItem('rodahmar_saved_vessels', JSON.stringify(saved, null, 2));
+                renderVesselSelector();
+                showToast(`🚢 Buque real "${vessel.vessel_name}" (${vessel.year_built || 'Real'}) añadido a la comparativa!`);
+            } catch (err) {
+                console.error("Error adding vessel to comparison from Neon:", err);
             }
         }
 
@@ -51952,12 +52203,13 @@ function scheduleReactiveEngine() {
 
         function saveNewVesselFromUI() {
             const name = document.getElementById('add-v-name').value.trim();
-            const dwt = parseFloat(document.getElementById('add-v-dwt').value) || 0;
+            const dwt = parseFirstNumber(document.getElementById('add-v-dwt').value) || 0;
+            const yearBuilt = parseFirstNumber(document.getElementById('add-v-year-built')?.value) || null;
             const vClass = document.getElementById('add-v-class').value.trim() || 'Handysize';
-            const spdBallast = parseFloat(document.getElementById('add-v-spd-ballast').value) || 12.0;
-            const spdLaden = parseFloat(document.getElementById('add-v-spd-laden').value) || 11.0;
-            const consSea = parseFloat(document.getElementById('add-v-cons-sea').value) || 10.0;
-            const consPort = parseFloat(document.getElementById('add-v-cons-port').value) || 1.0;
+            const spdBallast = parseFirstNumber(document.getElementById('add-v-spd-ballast').value) || 12.0;
+            const spdLaden = parseFirstNumber(document.getElementById('add-v-spd-laden').value) || 11.0;
+            const consSea = parseFirstNumber(document.getElementById('add-v-cons-sea').value) || 10.0;
+            const consPort = parseFirstNumber(document.getElementById('add-v-cons-port').value) || 1.0;
 
             if (!name) {
                 alert("Por favor, ingrese un nombre para el buque.");
@@ -51967,6 +52219,8 @@ function scheduleReactiveEngine() {
             const newVesselObj = {
                 "vessel_name": name,
                 "dwt": dwt,
+                "year_built": yearBuilt,
+                "built_year": yearBuilt,
                 "vessel_class": vClass,
                 "spd_ballast": spdBallast,
                 "spd_laden": spdLaden,
@@ -51989,6 +52243,7 @@ function scheduleReactiveEngine() {
             // Reset inputs
             document.getElementById('add-v-name').value = '';
             document.getElementById('add-v-dwt').value = '';
+            if (document.getElementById('add-v-year-built')) document.getElementById('add-v-year-built').value = '';
             document.getElementById('add-v-class').value = '';
             document.getElementById('add-v-spd-ballast').value = '';
             document.getElementById('add-v-spd-laden').value = '';
@@ -52021,12 +52276,12 @@ function scheduleReactiveEngine() {
         }
 
         function fillComparisonDefaults() {
-            // Reload from active estimator State
+            // Reload from active estimator State using parseFirstNumber
             const originPort = document.getElementById('port-pol')?.value || '';
             const destinationPort = document.getElementById('port-pod')?.value || '';
             const cargoType = document.getElementById('cargo-type')?.value || '';
-            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
-            const freightRate = parseFloat(document.getElementById('freight-rate')?.value) || 0;
+            const cargoQty = parseFirstNumber(document.getElementById('cargo-qty')?.value) || 0;
+            const freightRate = parseFirstNumber(document.getElementById('freight-rate')?.value) || 0;
             
             document.getElementById('comp-origin').value = originPort;
             document.getElementById('comp-destination').value = destinationPort;
@@ -52035,21 +52290,38 @@ function scheduleReactiveEngine() {
             document.getElementById('comp-total-freight').value = Math.round(freightRate * cargoQty);
 
             const vName = document.getElementById('vessel-name')?.value || 'TBN';
-            const vDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+            const vDwt = parseFirstNumber(document.getElementById('vessel-dwt')?.value) || 0;
             const vClass = State.class || document.getElementById('vessel-badge')?.innerText || 'Unknown';
-            const vSpdBallast = parseFloat(document.getElementById('spd-ballast')?.value) || 12.0;
-            const vSpdLaden = parseFloat(document.getElementById('spd-laden')?.value) || 11.0;
-            const vConsSea = parseFloat(document.getElementById('cons-sea')?.value) || 10.0;
-            const vConsPort = parseFloat(document.getElementById('cons-port')?.value) || 1.0;
+            const vSpdBallast = parseFirstNumber(document.getElementById('spd-ballast')?.value) || 12.0;
+            const vSpdLaden = parseFirstNumber(document.getElementById('spd-laden')?.value) || 11.0;
+            const vConsSea = parseFirstNumber(document.getElementById('cons-sea')?.value) || 10.0;
+            const vConsPort = parseFirstNumber(document.getElementById('cons-port')?.value) || 1.0;
+
+            let vYear = parseFirstNumber(State.year_built || State.built_year || window.GlobalStore?.activeVessel?.year_built || window.GlobalStore?.activeVessel?.built_year || window.GlobalStore?.calculatorVessel?.year_built || window.GlobalStore?.calculatorVessel?.built_year || document.getElementById('vessel-built-year')?.value) || 0;
+            if (!vYear) {
+                const ym = vName.match(/\b(19\d{2}|20\d{2})\b/);
+                if (ym) vYear = parseInt(ym[1], 10);
+            }
+            let vImo = State.imo || window.GlobalStore?.activeVessel?.imo || window.GlobalStore?.activeVessel?.imo_number || '';
+            if (!vImo) {
+                const im = vName.match(/IMO:\s*(\d{7})/i);
+                if (im) vImo = im[1];
+            }
 
             const currentVessel = {
                 "vessel_name": vName,
+                "imo": vImo || null,
+                "imo_number": vImo || null,
                 "dwt": vDwt,
+                "year_built": vYear > 1800 ? vYear : null,
+                "built_year": vYear > 1800 ? vYear : null,
                 "vessel_class": vClass,
+                "vessel_type": vClass,
                 "spd_ballast": vSpdBallast,
                 "spd_laden": vSpdLaden,
                 "cons_sea": vConsSea,
-                "cons_port": vConsPort
+                "cons_port": vConsPort,
+                "is_active_vessel": true
             };
 
             document.getElementById('comp-new-vessel').value = JSON.stringify(currentVessel, null, 2);
@@ -52064,32 +52336,28 @@ function scheduleReactiveEngine() {
             const originPort = document.getElementById('comp-origin').value.trim();
             const destinationPort = document.getElementById('comp-destination').value.trim();
             const cargoType = document.getElementById('comp-cargo-type').value.trim();
-            const cargoQty = document.getElementById('comp-cargo-qty').value.trim();
-            const totalFreight = document.getElementById('comp-total-freight').value.trim();
+            const cargoQtyVal = document.getElementById('comp-cargo-qty').value.trim();
+            const totalFreightVal = document.getElementById('comp-total-freight').value.trim();
 
-            // Basic validation
             let savedVessels, newVessel;
             try {
                 savedVessels = JSON.parse(savedVesselsVal);
                 if (!Array.isArray(savedVessels)) {
-                    throw new Error("El JSON de buques guardados debe ser un Array / Saved vessels must be a JSON Array");
+                    throw new Error("El JSON de buques guardados debe ser un Array");
                 }
             } catch (e) {
-                alert("Error en JSON de buques guardados / Error in Saved Vessels JSON:\n" + e.message);
+                alert("Error en JSON de buques guardados:\n" + e.message);
                 return;
             }
 
             try {
                 newVessel = JSON.parse(newVesselVal);
             } catch (e) {
-                alert("Error en JSON de buque a evaluar / Error in New Vessel JSON:\n" + e.message);
+                alert("Error en JSON de buque del estimador:\n" + e.message);
                 return;
             }
 
-            // Save vessels back to localStorage if user edited them
-            localStorage.setItem('rodahmar_saved_vessels', JSON.stringify(savedVessels, null, 2));
-
-            // Filter saved vessels based on UI checkboxes, falling back to all if none or no checkboxes exist
+            // Filter saved vessels based on UI checkboxes
             const checkedCheckboxes = document.querySelectorAll('.saved-vessel-checkbox');
             let selectedSavedVessels = [];
             if (checkedCheckboxes.length > 0) {
@@ -52101,246 +52369,187 @@ function scheduleReactiveEngine() {
                         }
                     }
                 });
-                if (selectedSavedVessels.length === 0) {
-                    alert("Por favor, seleccione al menos un buque guardado para comparar.");
-                    return;
-                }
             } else {
                 selectedSavedVessels = savedVessels;
             }
 
-            // Check if we can find a ship to compare according to the required DWT
-            const dwtReqInput = document.getElementById('gc-add-dwt-req')?.value || '';
-            let minDwtReq = 0;
-            let maxDwtReq = Infinity;
-
-            if (dwtReqInput.trim()) {
-                const numbers = dwtReqInput.replace(/,/g, '').match(/\d+/g);
-                if (numbers && numbers.length >= 2) {
-                    minDwtReq = parseFloat(numbers[0]) || 0;
-                    maxDwtReq = parseFloat(numbers[1]) || Infinity;
-                } else if (numbers && numbers.length === 1) {
-                    const singleVal = parseFloat(numbers[0]) || 0;
-                    minDwtReq = singleVal * 0.85;
-                    maxDwtReq = singleVal * 1.15;
-                }
-            }
-
-            if (minDwtReq === 0 || maxDwtReq === Infinity) {
-                const baseVal = parseFloat(cargoQty) || parseFloat(newVessel.dwt) || 10000;
-                minDwtReq = baseVal * 0.9;
-                maxDwtReq = baseVal * 1.3;
-            }
-
-            const hasMatchingDwtShip = selectedSavedVessels.some(v => {
-                const d = parseFloat(v.dwt) || 0;
-                return d >= minDwtReq && d <= maxDwtReq;
-            });
-
-            if (!hasMatchingDwtShip) {
-                const getVesselClass = (d) => {
-                    if (d <= 5000) return "Coaster";
-                    else if (d > 5000 && d <= 15000) return "Mini-Bulker";
-                    else if (d > 15000 && d <= 40000) return "Handysize";
-                    else if (d > 40000 && d <= 65000) return "Supramax";
-                    else if (d > 65000 && d <= 85000) return "Panamax";
-                    else return "Capesize";
-                };
-
-                const baseDwt = parseFloat(newVessel.dwt) || parseFloat(cargoQty) || 10000;
-
-                const tbnEco = {
-                    vessel_name: "TBN Eco-Efficient",
-                    dwt: Math.round(baseDwt * 0.95),
-                    vessel_class: getVesselClass(baseDwt * 0.95),
-                    spd_ballast: 11.5,
-                    spd_laden: 10.5,
-                    cons_sea: Math.round(Math.max(3, (parseFloat(newVessel.cons_sea) || 12.0) * 0.8) * 10) / 10,
-                    cons_port: Math.round(Math.max(0.5, (parseFloat(newVessel.cons_port) || 1.5) * 0.8) * 10) / 10
-                };
-
-                const tbnSpeed = {
-                    vessel_name: "TBN High-Speed",
-                    dwt: Math.round(baseDwt * 1.05),
-                    vessel_class: getVesselClass(baseDwt * 1.05),
-                    spd_ballast: Math.round((parseFloat(newVessel.spd_ballast) || 12.0) * 1.15 * 10) / 10,
-                    spd_laden: Math.round((parseFloat(newVessel.spd_laden) || 11.0) * 1.15 * 10) / 10,
-                    cons_sea: Math.round((parseFloat(newVessel.cons_sea) || 12.0) * 1.3 * 10) / 10,
-                    cons_port: Math.round((parseFloat(newVessel.cons_port) || 1.5) * 1.2 * 10) / 10
-                };
-
-                const tbnStandard = {
-                    vessel_name: "TBN Standard",
-                    dwt: Math.round(baseDwt),
-                    vessel_class: getVesselClass(baseDwt),
-                    spd_ballast: Math.round((parseFloat(newVessel.spd_ballast) || 12.0) * 10) / 10,
-                    spd_laden: Math.round((parseFloat(newVessel.spd_laden) || 11.0) * 10) / 10,
-                    cons_sea: Math.round((parseFloat(newVessel.cons_sea) || 12.0) * 1.0 * 10) / 10,
-                    cons_port: Math.round((parseFloat(newVessel.cons_port) || 1.5) * 1.0 * 10) / 10
-                };
-
-                selectedSavedVessels = [tbnEco, tbnSpeed, tbnStandard];
-                showToast("⚠️ No saved vessels match required DWT. Comparing with similar DWT TBN ships.");
+            if (selectedSavedVessels.length === 0) {
+                alert("Por favor, seleccione o añada al menos un buque en 'Mis Buques' para comparar con el buque activo.");
+                return;
             }
 
             // Show loader, hide inputs
             document.getElementById('comparison-inputs').classList.add('hidden');
             document.getElementById('comparison-trip-params').classList.add('hidden');
+            document.getElementById('comparison-action-buttons')?.classList.add('hidden');
             document.getElementById('comparison-loader').classList.remove('hidden');
             document.getElementById('comparison-results').classList.add('hidden');
 
-            // Retrieve precise active values from the calculator section to avoid AI estimation discrepancies
-            const distBallast = readEffectiveBallastDistance();
-            const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
-            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
-            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
-            const marginDays = getTotalPortRiskDays('factor-clima', 'factor-clima-pod');
-
-            const priceSea = parseFloat(document.getElementById('price-sea')?.value) || 600;
-            const pricePort = parseFloat(document.getElementById('price-port')?.value) || 750;
-            const opexDaily = parseFloat(document.getElementById('opex-daily')?.value) || 5000;
-            const pdaPol = parseFloat(document.getElementById('pda-pol')?.value) || 0;
-            const pdaPod = parseFloat(document.getElementById('pda-pod')?.value) || 0;
-            const stevedoring = parseFloat(document.getElementById('stevedoring-costs')?.value) || 0;
-            const pdaMisc = parseFloat(document.getElementById('pda-misc')?.value) || 0;
-            const cargoSurcharge = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
-            const euCarbonPrice = readEuCarbonPrice();
-            const etsRouteFactor = typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 1;
-
-            const totalPDAs = pdaPol + pdaPod + stevedoring + pdaMisc + cargoSurcharge;
-
-            // Determine if POL or POD are in SECA zones using active port values from index mapping
-            const idxLoad = document.getElementById('port-pol')?.value || "";
-            const idxDisch = document.getElementById('port-pod')?.value || "";
-            if (typeof syncEtsRouteSelectorFromPorts === 'function') {
-                syncEtsRouteSelectorFromPorts();
-            }
-            const polData = PORT_DB[idxLoad] ? { country: getCountryFromPort(idxLoad), lat: PORT_DB[idxLoad].lat, lon: PORT_DB[idxLoad].lon } : null;
-            const podData = PORT_DB[idxDisch] ? { country: getCountryFromPort(idxDisch), lat: PORT_DB[idxDisch].lat, lon: PORT_DB[idxDisch].lon } : null;
-
-            const isPolSeca = isSecaZone(polData);
-            const isPodSeca = isSecaZone(podData);
-
-            const prompt = `You are an expert maritime chartering and financial analyst.
-Evaluate the following vessel options for a specific trip and calculate the required voyage parameters.
-
-SAVED VESSELS (JSON Array):
-${JSON.stringify(selectedSavedVessels, null, 2)}
-
-NEW VESSEL TO EVALUATE (JSON Object):
-${JSON.stringify(newVessel, null, 2)}
-
-TRIP PARAMETERS:
-- Origin Port: ${originPort} (Is SECA Zone: ${isPolSeca})
-- Destination Port: ${destinationPort} (Is SECA Zone: ${isPodSeca})
-- Cargo Type: ${cargoType}
-- Cargo Quantity: ${cargoQty} MT
-- Total Agreed Freight: $${totalFreight} USD
-
-CALCULATOR REFERENCE PARAMETERS (USE THESE EXACT VALUES):
-- Ballast Distance: ${distBallast} NM
-- Laden Distance: ${distLaden} NM
-- Loading Rate (POL): ${rateLoad} MT/day
-- Discharging Rate (POD): ${rateDisch} MT/day
-- Weather Margin Days: ${marginDays} days
-- Fuel Price (Sea / VLSFO): $${priceSea} / MT
-- Fuel Price (Port / LSMGO / MGO): $${pricePort} / MT
-- Daily OPEX: $${opexDaily} / day
-- Total PDA / Tariffs / Port Costs: $${totalPDAs} USD
-- CO2 Emissions Price (EU ETS): $${euCarbonPrice} / MT of CO2
-- EU ETS Route Factor: ${(etsRouteFactor * 100).toFixed(0)}%
-
-TASK & FORMULAS (MUST MATCH THE CALCULATOR SECTION EXACTLY):
-For each vessel (both from the saved list and the new vessel), you MUST calculate using these exact math steps:
-1. Travel_Days:
-   Calculate each components as:
-   - dBal (Ballast days) = Ballast Distance / (vessel.spd_ballast * 24)
-   - dLaden (Laden days) = Laden Distance / (vessel.spd_laden * 24)
-   - dPortLoad (Load port days) = Cargo Quantity / Loading Rate
-   - dPortDisch (Discharge port days) = Cargo Quantity / Discharging Rate
-   - dPort = dPortLoad + dPortDisch
-   - T_sea = dBal + dLaden + Weather Margin Days
-   - T_port = dPort
-   - Travel_Days = T_sea + T_port
-   
-   Note: All divisions must be done accurately without rough rounding. Round final Travel_Days to 2 decimal places.
-
-2. Total_Cost:
-   Calculate fuel consumption cost, daily OPEX cost, port/PDA cost, and EU ETS cost:
-   - routeConsumptionCost = T_sea * vessel.cons_sea * ${priceSea}
-   - portConsumptionCost = T_port * vessel.cons_port * ${pricePort}
-   
-   - T_eca_sea = (if Origin Port is SECA Zone, add 1.0) + (if Destination Port is SECA Zone, add 1.0)
-   - extraEcaCost = T_eca_sea * vessel.cons_sea * (${pricePort} - ${priceSea})
-   
-   - totalBunkers = routeConsumptionCost + portConsumptionCost + extraEcaCost
-   - totalOpex = Travel_Days * ${opexDaily}
-   
-   - totalFuelConsumption = (T_sea * vessel.cons_sea) + (T_port * vessel.cons_port)
-   - emissionsCO2 = totalFuelConsumption * 3.11
-   - etsCost = emissionsCO2 * ${euCarbonPrice} * ${etsRouteFactor}
-   
-   - Total_Cost = totalBunkers + totalOpex + ${totalPDAs} + etsCost
-   
-   Note: Do all calculations with the calculated Travel_Days and components. Round final Total_Cost to 2 decimal places.
-
-3. TCO (Total Cost of Ownership):
-   - TCO = (Total Agreed Freight - Total_Cost) / Travel_Days
-   
-   Round final TCO to 2 decimal places.
-
-4. Margin (Profit Margin %):
-   - Margin = ((Total Agreed Freight - Total_Cost) / Total Agreed Freight) * 100
-   
-   Round final Margin to 2 decimal places.
-
-5. Ranking: Rank the vessels from 1 to N (1 being the absolute best option, based primarily on Profit Margin and suitability).
-
-6. Status: Traffic Light status:
-   - 'GREEN' if Margin > 15
-   - 'YELLOW' if Margin is between 5 and 15 (inclusive)
-   - 'RED' if Margin < 5
-
-OUTPUT FORMAT (STRICT JSON):
-Return ONLY a valid JSON array of objects, with NO backticks, NO markdown, and NO extra text of any kind. It must be directly parseable by JSON.parse().
-Example:
-[
-  {
-    "Name": "Ship Name",
-    "Travel_Days": 12.55,
-    "Total_Cost": 50000.12,
-    "TCO": 18000.34,
-    "Margin": 18.52,
-    "Ranking": 1,
-    "Status": "GREEN"
-  }
-]`;
-
             try {
-                const payload = { contents: [{ parts: [{ text: prompt }] }] };
-                const dataResponse = await executeGeminiRequest(payload);
-                const responseText = dataResponse.candidates[0].content.parts[0].text;
-                
-                // Parse AI response
-                const cleanedText = responseText.replace(/```json|```html|```/g, '').trim();
-                const results = JSON.parse(cleanedText);
-
-                if (!Array.isArray(results)) {
-                    throw new Error("La respuesta de la IA no es un Array / AI response is not an Array");
+                // Robust numeric parser handling thousand separators and currency formats
+                function parseCleanParam(val, fallback = 0) {
+                    if (typeof val === 'number') return Number.isFinite(val) ? val : fallback;
+                    if (!val) return fallback;
+                    const str = String(val).replace(/[$€£\s]/g, '').trim();
+                    if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
+                        const n = parseFloat(str.replace(/,/g, ''));
+                        return Number.isFinite(n) && n > 0 ? n : fallback;
+                    }
+                    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
+                        const n = parseFloat(str.replace(/\./g, '').replace(',', '.'));
+                        return Number.isFinite(n) && n > 0 ? n : fallback;
+                    }
+                    const parsed = parseFirstNumber(str);
+                    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
                 }
 
-                // Render Results
-                renderComparisonResults(results, selectedSavedVessels.concat([newVessel]));
-            } catch (e) {
-                console.error(e);
-                document.getElementById('comparison-loader').classList.add('hidden');
-                document.getElementById('comparison-inputs').classList.remove('hidden');
-                document.getElementById('comparison-trip-params').classList.remove('hidden');
-                alert("Error al realizar la comparación con IA / Error in AI Comparison:\n" + e.message);
+                // Retrieve operational reference parameters from estimator
+                const cargoQty = parseCleanParam(cargoQtyVal, parseCleanParam(document.getElementById('cargo-qty')?.value, 10000));
+                const freightRate = parseCleanParam(document.getElementById('freight-rate')?.value, 0);
+                const totalFreight = parseCleanParam(totalFreightVal, Math.round(freightRate * cargoQty));
+
+                const distBallast = typeof readEffectiveBallastDistance === 'function' ? readEffectiveBallastDistance() : parseCleanParam(document.getElementById('dist-ballast')?.value, 0);
+                const distLaden = parseCleanParam(document.getElementById('dist-laden')?.value, 0);
+                const rateLoad = parseCleanParam(document.getElementById('rate-load')?.value, 1000);
+                const rateDisch = parseCleanParam(document.getElementById('rate-disch')?.value, 1500);
+                const marginDays = typeof getTotalPortRiskDays === 'function' ? getTotalPortRiskDays('factor-clima', 'factor-clima-pod') : parseCleanParam(document.getElementById('dias-margen-total')?.value, 0);
+
+                const priceSea = parseCleanParam(document.getElementById('price-sea')?.value, 600);
+                const pricePort = parseCleanParam(document.getElementById('price-port')?.value, 750);
+                const opexDaily = parseCleanParam(document.getElementById('opex-daily')?.value, 5000);
+                const pdaPol = parseCleanParam(document.getElementById('pda-pol')?.value, 0);
+                const pdaPod = parseCleanParam(document.getElementById('pda-pod')?.value, 0);
+                const stevedoring = parseCleanParam(document.getElementById('stevedoring-costs')?.value, 0);
+                const pdaMisc = parseCleanParam(document.getElementById('pda-misc')?.value, 0);
+                const cargoSurcharge = parseCleanParam(document.getElementById('cargo-surcharge')?.value, 0);
+                const euCarbonPrice = typeof readEuCarbonPrice === 'function' ? readEuCarbonPrice() : 0;
+                const etsRouteFactor = typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 1;
+
+                const totalPDAs = pdaPol + pdaPod + stevedoring + pdaMisc + cargoSurcharge;
+
+                // Seca zones detection
+                const idxLoad = document.getElementById('port-pol')?.value || "";
+                const idxDisch = document.getElementById('port-pod')?.value || "";
+                const polData = (typeof PORT_DB !== 'undefined' && PORT_DB[idxLoad]) ? { country: typeof getCountryFromPort === 'function' ? getCountryFromPort(idxLoad) : '', lat: PORT_DB[idxLoad].lat, lon: PORT_DB[idxLoad].lon } : null;
+                const podData = (typeof PORT_DB !== 'undefined' && PORT_DB[idxDisch]) ? { country: typeof getCountryFromPort === 'function' ? getCountryFromPort(idxDisch) : '', lat: PORT_DB[idxDisch].lat, lon: PORT_DB[idxDisch].lon } : null;
+                const isPolSeca = typeof isSecaZone === 'function' && isSecaZone(polData);
+                const isPodSeca = typeof isSecaZone === 'function' && isSecaZone(podData);
+
+                // Compute rigorous deterministic calculations for each vessel
+                newVessel.is_active_vessel = true;
+                const allToEvaluate = [newVessel, ...selectedSavedVessels];
+
+                const evaluated = allToEvaluate.map((v, i) => {
+                    const vName = v.vessel_name || v.Name || (i === 0 ? 'Buque del Estimador (Activo)' : `Buque #${i}`);
+                    const vImo = v.imo_number || v.imo || null;
+                    const vYear = parseFirstNumber(v.year_built || v.built_year) || null;
+                    const vDwt = parseCleanParam(v.dwt || v.DWT, 15000);
+                    const dwcc = parseCleanParam(v.dwcc, Math.round(vDwt * 0.95));
+                    const spdBallast = parseCleanParam(v.spd_ballast || v.service_speed_knots, 12.0);
+                    const spdLaden = parseCleanParam(v.spd_laden || v.service_speed_knots, 11.0);
+                    const consSea = parseCleanParam(v.cons_sea || v.vlsfo_sea_design_mt_day, 12.0);
+                    const consPort = parseCleanParam(v.cons_port || v.mgo_port_working_mt_day, 1.5);
+                    const isActive = Boolean(v.is_active_vessel || i === 0);
+
+                    const dBal = distBallast / (spdBallast * 24);
+                    const dLaden = distLaden / (spdLaden * 24);
+                    const dPortLoad = rateLoad > 0 ? cargoQty / rateLoad : 0;
+                    const dPortDisch = rateDisch > 0 ? cargoQty / rateDisch : 0;
+                    const portDays = dPortLoad + dPortDisch;
+                    const seaDays = dBal + dLaden + marginDays;
+                    const travelDays = Math.max(0.1, seaDays + portDays);
+
+                    const routeConsumptionCost = seaDays * consSea * priceSea;
+                    const portConsumptionCost = portDays * consPort * pricePort;
+                    const extraEcaCost = ((isPolSeca ? 1 : 0) + (isPodSeca ? 1 : 0)) * consSea * Math.max(0, pricePort - priceSea);
+                    const seaBunkersCost = routeConsumptionCost + extraEcaCost;
+                    const portBunkersCost = portConsumptionCost;
+                    const totalBunkers = seaBunkersCost + portBunkersCost;
+
+                    const totalOpex = travelDays * opexDaily;
+                    const totalFuelCons = (seaDays * consSea) + (portDays * consPort);
+                    const totalEtsCost = totalFuelCons * 3.114 * euCarbonPrice * etsRouteFactor;
+                    const totalCost = totalBunkers + totalOpex + totalPDAs + totalEtsCost;
+
+                    const breakEvenFreight = cargoQty > 0 ? totalCost / cargoQty : 0;
+                    const grossRevenue = totalFreight > 0 ? totalFreight : (cargoQty * freightRate);
+                    const netProfit = grossRevenue - totalCost;
+                    const marginPct = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+                    const tceEstimated = travelDays > 0 ? (grossRevenue - (totalBunkers + totalPDAs + totalEtsCost)) / travelDays : 0;
+
+                    return {
+                        vessel: v,
+                        Name: vName,
+                        vImo,
+                        vYear,
+                        vDwt,
+                        dwcc,
+                        isActive,
+                        spdBallast,
+                        spdLaden,
+                        consSea,
+                        consPort,
+                        seaDays,
+                        portDays,
+                        Travel_Days: travelDays,
+                        Total_Bunkers: totalBunkers,
+                        seaBunkersCost,
+                        portBunkersCost,
+                        Total_Opex: totalOpex,
+                        Total_Cost: totalCost,
+                        breakEvenFreight,
+                        grossRevenue,
+                        netProfit,
+                        Margin: marginPct,
+                        TCE: tceEstimated,
+                        TCO: tceEstimated,
+                        Status: marginPct > 15 ? 'GREEN' : (marginPct >= 5 ? 'YELLOW' : 'RED')
+                    };
+                });
+
+                // Find reference active vessel
+                const activeRef = evaluated.find(r => r.isActive) || evaluated[0];
+
+                // Compute savings & differences vs Active Vessel
+                evaluated.forEach(r => {
+                    r.costSavings = activeRef.Total_Cost - r.Total_Cost;
+                    r.freightSavingsPerTon = activeRef.breakEvenFreight - r.breakEvenFreight;
+                    r.bunkerSavings = activeRef.Total_Bunkers - r.Total_Bunkers;
+                    r.profitDiff = r.netProfit - activeRef.netProfit;
+                    r.tceDiff = r.TCE - activeRef.TCE;
+                    r.ageDiff = (r.vYear && activeRef.vYear) ? (r.vYear - activeRef.vYear) : null;
+                });
+
+                // Rank vessels: Rank 1 is the best financial option (highest TCE / lowest Total Cost)
+                const sortedForRank = [...evaluated].sort((a, b) => b.TCE - a.TCE);
+                sortedForRank.forEach((r, idx) => {
+                    r.Ranking = idx + 1;
+                });
+
+                // Brief delay for visual calculation polish
+                await new Promise(res => setTimeout(res, 400));
+
+                const tripMeta = {
+                    originPort: originPort || (document.getElementById('port-pol')?.value || 'POL'),
+                    destinationPort: destinationPort || (document.getElementById('port-pod')?.value || 'POD'),
+                    cargoQty,
+                    priceSea,
+                    pricePort,
+                    opexDaily
+                };
+
+                renderComparisonResults(evaluated, allToEvaluate, tripMeta);
+            } catch (err) {
+                console.error("Error en comparativa de buques:", err);
+                document.getElementById('comparison-loader')?.classList.add('hidden');
+                document.getElementById('comparison-inputs')?.classList.remove('hidden');
+                document.getElementById('comparison-trip-params')?.classList.remove('hidden');
+                document.getElementById('comparison-action-buttons')?.classList.remove('hidden');
+                alert("Error al ejecutar la comparativa de buques: " + (err?.message || err));
             }
         }
 
-        function renderComparisonResults(results, allVessels) {
+        function renderComparisonResults(results, allVessels, tripMeta) {
             document.getElementById('comparison-loader').classList.add('hidden');
             const resultsDiv = document.getElementById('comparison-results');
             resultsDiv.innerHTML = '';
@@ -52349,61 +52558,139 @@ Example:
             results.sort((a, b) => a.Ranking - b.Ranking);
 
             let tableHTML = `
-                <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-950">
+                <div class="px-3 py-2 bg-slate-50 rounded-lg border border-slate-300 text-slate-700 text-[11px] font-mono flex items-center justify-between flex-wrap gap-2 shadow-xs mb-3">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="font-bold text-slate-900"><i class="fa-solid fa-route mr-1 text-blue-600"></i>Ruta:</span>
+                        <span class="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-bold text-slate-800">${tripMeta?.originPort || 'POL'} → ${tripMeta?.destinationPort || 'POD'}</span>
+                        <span class="text-slate-400">·</span>
+                        <span class="font-bold text-slate-900">Carga:</span>
+                        <span class="font-bold text-blue-800">${Number(tripMeta?.cargoQty || 0).toLocaleString('en-US')} t</span>
+                        <span class="text-slate-400">·</span>
+                        <span class="font-bold text-slate-900">Precios búnker:</span>
+                        <span>Mar $${Math.round(tripMeta?.priceSea || 600)}/t | Puerto $${Math.round(tripMeta?.pricePort || 750)}/t</span>
+                        <span class="text-slate-400">·</span>
+                        <span class="font-bold text-slate-900">OPEX:</span>
+                        <span>$${Math.round(tripMeta?.opexDaily || 5000).toLocaleString('en-US')}/d</span>
+                    </div>
+                    <button onclick="backToComparisonInputs()" class="btn-comp-secondary bg-white hover:bg-slate-200 border border-slate-300 text-slate-800 text-[10px] font-bold py-1 px-2.5 rounded transition shadow-xs flex items-center gap-1" title="Volver a los parámetros para modificar">
+                        <i class="fa-solid fa-pen-to-square text-slate-600"></i> Modificar
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
                     <table class="w-full text-left border-collapse text-xs">
                         <thead>
-                            <tr class="bg-slate-800 text-slate-300 font-bold uppercase text-[10px] border-b border-slate-700">
-                                <th class="p-3">Rank</th>
-                                <th class="p-3">Nombre Buque / Vessel</th>
-                                <th class="p-3 text-right">Días Viaje / Days</th>
-                                <th class="p-3 text-right">Costo Total / Cost</th>
-                                <th class="p-3 text-right">TCO ($/día)</th>
-                                <th class="p-3 text-right">Margen (%)</th>
-                                <th class="p-3 text-center">Estado / Status</th>
-                                <th class="p-3 text-center">Acción / Action</th>
+                            <tr class="bg-slate-50 text-slate-800 font-bold uppercase text-[10px] border-b border-slate-200">
+                                <th class="p-2.5 text-center">Rank</th>
+                                <th class="p-2.5">Buque / IMO / Año</th>
+                                <th class="p-2.5 text-right">DWT / Útil</th>
+                                <th class="p-2.5 text-right">Días Viaje</th>
+                                <th class="p-2.5 text-right">Búnker ($)</th>
+                                <th class="p-2.5 text-right">Coste Total ($)</th>
+                                <th class="p-2.5 text-right">Break-Even ($/t)</th>
+                                <th class="p-2.5 text-right">TCE ($/día)</th>
+                                <th class="p-2.5 text-right">Margen / Ahorro vs Activo</th>
+                                <th class="p-2.5 text-center">Acción</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-800 text-slate-300">
+                        <tbody class="divide-y divide-slate-200 text-slate-800">
             `;
 
             results.forEach(row => {
-                let badgeColor = 'bg-slate-800 text-slate-400';
-                if (row.Status === 'GREEN') badgeColor = 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30';
-                else if (row.Status === 'YELLOW') badgeColor = 'bg-amber-900/40 text-amber-400 border border-amber-500/30';
-                else if (row.Status === 'RED') badgeColor = 'bg-red-900/40 text-red-400 border border-red-500/30';
+                let badgeColor = 'bg-slate-100 text-slate-700 border border-slate-300';
+                if (row.Status === 'GREEN') badgeColor = 'bg-emerald-50 text-emerald-800 border border-emerald-300';
+                else if (row.Status === 'YELLOW') badgeColor = 'bg-amber-50 text-amber-800 border border-amber-300';
+                else if (row.Status === 'RED') badgeColor = 'bg-red-50 text-red-800 border border-red-300';
 
-                let rankBadge = 'bg-slate-800 text-slate-300';
-                if (row.Ranking === 1) rankBadge = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 font-black';
-                else if (row.Ranking === 2) rankBadge = 'bg-slate-300/20 text-slate-300 border border-slate-300/40';
-                else if (row.Ranking === 3) rankBadge = 'bg-amber-700/20 text-amber-600 border border-amber-700/40';
+                let rankBadge = 'bg-slate-100 text-slate-700 border border-slate-300';
+                if (row.Ranking === 1) rankBadge = 'bg-amber-100 text-amber-900 border border-amber-400 font-black';
+                else if (row.Ranking === 2) rankBadge = 'bg-slate-200 text-slate-800 border border-slate-400 font-bold';
+                else if (row.Ranking === 3) rankBadge = 'bg-orange-100 text-orange-900 border border-orange-300 font-bold';
 
                 // Look up matching vessel specs in input data to allow autofill
-                const matchingVessel = allVessels.find(v => v.vessel_name && v.vessel_name.toLowerCase() === row.Name.toLowerCase()) || 
-                                     allVessels.find(v => v.Name && v.Name.toLowerCase() === row.Name.toLowerCase()) || null;
-
+                const matchingVessel = allVessels.find(v => (v.vessel_name && v.vessel_name.toLowerCase() === row.Name.toLowerCase()) || (v.Name && v.Name.toLowerCase() === row.Name.toLowerCase())) || row.vessel || null;
                 const matchingVesselEscaped = matchingVessel ? encodeURIComponent(JSON.stringify(matchingVessel)) : '';
 
-                const tcoVal = row.TCO !== undefined ? row.TCO : (row.TCE !== undefined ? row.TCE : 0);
+                // Age difference display
+                let ageBadge = '';
+                if (row.isActive) {
+                    ageBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-300 whitespace-nowrap">Activo Estimador</span>`;
+                } else if (row.ageDiff !== null) {
+                    if (row.ageDiff > 0) {
+                        ageBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">+${row.ageDiff}a más nuevo</span>`;
+                    } else if (row.ageDiff < 0) {
+                        ageBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-slate-100 text-slate-700 border border-slate-300 whitespace-nowrap">${row.ageDiff}a más antiguo</span>`;
+                    } else {
+                        ageBadge = `<span class="px-1.5 py-0.2 rounded text-[9px] bg-slate-100 text-slate-600 whitespace-nowrap">Misma edad</span>`;
+                    }
+                }
+
+                // Savings vs Active Vessel column formatting
+                let savingsDisplay = '';
+                if (row.isActive) {
+                    savingsDisplay = `<div class="font-bold text-slate-600 text-[11px]">${row.Margin.toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal">(Base)</span></div>`;
+                } else {
+                    const isSaving = row.costSavings >= 0;
+                    const savingSign = isSaving ? '+' : '-';
+                    const colorClass = isSaving ? 'text-emerald-700' : 'text-red-600';
+                    savingsDisplay = `
+                        <div class="flex flex-col items-end">
+                            <span class="font-bold text-xs ${colorClass}">${savingSign}$${Math.round(Math.abs(row.costSavings)).toLocaleString('en-US')}</span>
+                            <span class="text-[10px] font-mono ${colorClass}">(${savingSign}$${Math.abs(row.freightSavingsPerTon).toFixed(2)}/t)</span>
+                            <span class="text-[9px] text-slate-500 font-semibold mt-0.5">Margen: ${row.Margin.toFixed(1)}%</span>
+                        </div>
+                    `;
+                }
+
+                const spdText = (row.spdLaden || 12).toFixed(1);
+                const consText = `${(row.consSea || 12).toFixed(1)}/${(row.consPort || 1.5).toFixed(1)} t/d`;
 
                 tableHTML += `
-                    <tr class="hover:bg-slate-900/50 transition">
-                        <td class="p-3">
-                            <span class="px-2.5 py-1 rounded text-[10px] uppercase font-bold ${rankBadge}">#${row.Ranking}</span>
+                    <tr class="hover:bg-slate-50 transition ${row.isActive ? 'bg-sky-50/40' : ''}">
+                        <td class="p-2.5 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold ${rankBadge}">#${row.Ranking}</span>
                         </td>
-                        <td class="p-3 font-bold text-slate-900 comp-vessel-name">${row.Name}</td>
-                        <td class="p-3 text-right font-mono text-blue-400">${row.Travel_Days.toFixed(1)}</td>
-                        <td class="p-3 text-right font-mono text-red-400">$${row.Total_Cost.toLocaleString('en-US')}</td>
-                        <td class="p-3 text-right font-mono text-indigo-400">$${tcoVal.toLocaleString('en-US')}</td>
-                        <td class="p-3 text-right font-mono font-bold ${row.Margin > 15 ? 'text-emerald-400' : (row.Margin >= 5 ? 'text-amber-400' : 'text-red-400')}">${row.Margin.toFixed(1)}%</td>
-                        <td class="p-3 text-center">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider ${badgeColor}">${row.Status}</span>
+                        <td class="p-2.5">
+                            <div class="flex flex-col">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="font-bold text-slate-900">${row.Name}</span>
+                                    ${row.vYear ? `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-800 border border-slate-300 font-mono">${row.vYear}</span>` : ''}
+                                    ${ageBadge}
+                                </div>
+                                <span class="text-[10px] text-slate-500 font-mono">IMO: ${row.vImo || '--'} · ${spdText} kn · ${consText}</span>
+                            </div>
                         </td>
-                        <td class="p-3 text-center">
+                        <td class="p-2.5 text-right font-mono">
+                            <div class="font-bold text-slate-900">${Number(row.vDwt).toLocaleString('en-US')} t</div>
+                            <div class="text-[10px] text-slate-500">DWCC: ${Number(row.dwcc).toLocaleString('en-US')} t</div>
+                        </td>
+                        <td class="p-2.5 text-right font-mono">
+                            <div class="font-bold text-blue-700">${row.Travel_Days.toFixed(1)} d</div>
+                            <div class="text-[9px] text-slate-500">Mar: ${row.seaDays.toFixed(1)}d | Pto: ${row.portDays.toFixed(1)}d</div>
+                        </td>
+                        <td class="p-2.5 text-right font-mono">
+                            <div class="font-bold text-slate-900">$${Math.round(row.Total_Bunkers).toLocaleString('en-US')}</div>
+                            <div class="text-[9px] text-slate-500">M: $${Math.round(row.seaBunkersCost).toLocaleString('en-US')} | P: $${Math.round(row.portBunkersCost).toLocaleString('en-US')}</div>
+                            <div class="text-[9px] text-blue-700 font-semibold mt-0.5">${spdText} kn · ${consText}</div>
+                        </td>
+                        <td class="p-2.5 text-right font-mono">
+                            <div class="font-bold text-red-700">$${Math.round(row.Total_Cost).toLocaleString('en-US')}</div>
+                            <div class="text-[9px] text-slate-500">OPEX: $${Math.round(row.Total_Opex).toLocaleString('en-US')}</div>
+                        </td>
+                        <td class="p-2.5 text-right font-mono font-bold text-slate-900">
+                            $${row.breakEvenFreight.toFixed(2)}
+                        </td>
+                        <td class="p-2.5 text-right font-mono font-bold text-indigo-700">
+                            $${Math.round(row.TCE).toLocaleString('en-US')}
+                        </td>
+                        <td class="p-2.5 text-right">
+                            ${savingsDisplay}
+                        </td>
+                        <td class="p-2.5 text-center">
                             ${matchingVessel ? `
-                                <button onclick="applyVesselSpecsFromComp('${matchingVesselEscaped}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-2.5 py-1 rounded transition" title="Aplicar este buque al Estimador / Apply to Estimator">
-                                    <i class="fa-solid fa-check"></i> Aplicar / Use
+                                <button onclick="applyVesselSpecsFromComp('${matchingVesselEscaped}')" class="btn-comp-primary bg-[#1e3a8a] hover:bg-[#1d4ed8] text-white font-bold text-[10px] px-2.5 py-1 rounded transition shadow-sm whitespace-nowrap" style="background-color: #1e3a8a !important; color: #ffffff !important;" title="Cargar este buque en el Estimador">
+                                    <i class="fa-solid fa-check text-white"></i> Aplicar
                                 </button>
-                            ` : `<span class="text-slate-500">-</span>`}
+                            ` : `<span class="text-slate-400">-</span>`}
                         </td>
                     </tr>
                 `;
@@ -52414,9 +52701,9 @@ Example:
                     </table>
                 </div>
                 <div class="flex justify-between items-center mt-4">
-                    <p class="text-[10px] text-slate-500 italic"><i class="fa-solid fa-circle-info mr-1"></i> Haga clic en "Aplicar" para cargar las especificaciones técnicas del buque seleccionado en el Estimador.</p>
-                    <button onclick="backToComparisonInputs()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold py-2 px-4 rounded-lg shadow transition">
-                        <i class="fa-solid fa-arrow-left mr-1"></i> Volver / Edit
+                    <p class="text-[10px] text-slate-500 italic"><i class="fa-solid fa-circle-info mr-1 text-indigo-600"></i> Haga clic en "Aplicar" para transferir las especificaciones técnicas del buque seleccionado al Estimador principal.</p>
+                    <button onclick="backToComparisonInputs()" class="btn-comp-secondary bg-[#f1f5f9] hover:bg-[#e2e8f0] border border-[#cbd5e1] text-[#0f172a] text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition" style="background-color: #f1f5f9 !important; color: #0f172a !important; border: 1px solid #cbd5e1 !important;">
+                        <i class="fa-solid fa-arrow-left mr-1 text-[#0f172a]"></i> Volver / Edit
                     </button>
                 </div>
             `;
@@ -52466,6 +52753,17 @@ Example:
                 }
                 State.vessel = identity.vesselName;
                 State.dwt = Number(vessel.dwt ?? vessel.DWT) || 0;
+                const builtYear = parseFirstNumber(vessel.year_built || vessel.built_year) || null;
+                if (builtYear) {
+                    State.year_built = builtYear;
+                    State.built_year = builtYear;
+                    const builtEl = document.getElementById('vessel-built-year');
+                    if (builtEl) builtEl.value = builtYear;
+                }
+                const imoNum = vessel.imo_number || vessel.imo || null;
+                if (imoNum) {
+                    State.imo = imoNum;
+                }
                 if (window.GlobalStore) {
                     window.GlobalStore.activeVessel = vessel;
                     window.GlobalStore.calculatorVessel = vessel;
@@ -52485,6 +52783,7 @@ Example:
             document.getElementById('comparison-results').classList.add('hidden');
             document.getElementById('comparison-inputs').classList.remove('hidden');
             document.getElementById('comparison-trip-params').classList.remove('hidden');
+            document.getElementById('comparison-action-buttons')?.classList.remove('hidden');
         }
 
         async function generateMarketReport() {
