@@ -4,7 +4,7 @@ export const NOMINATIM_USER_AGENT = "SeaCharterCorePRO/1.0";
 
 type UnknownRecord = Record<string, unknown>;
 
-export type GeoSource = "DATALASTIC" | "NOMINATIM";
+export type GeoSource = "DATALASTIC" | "NOMINATIM" | "NEON_H16";
 
 export interface GeoResolutionRecord {
   lat: number;
@@ -22,6 +22,15 @@ export interface GeoResolutionRecord {
   longitude: number;
   maxOperationalDraftMeters: number | null;
   draftSourceField: string | null;
+  wpiIndex?: number | null;
+  channelDraftLowM?: number | null;
+  channelDraftHighM?: number | null;
+  berthDraftM?: number | null;
+  tidalRangeM?: number | null;
+  tidalWindowRequired?: boolean | null;
+  waterDensity?: number | null;
+  gearedVesselRequired?: boolean | null;
+  h16Sheet?: unknown;
 }
 
 export type DatalasticPortRecord = GeoResolutionRecord;
@@ -249,26 +258,185 @@ export async function findNominatimLocations(query: string, limit = 12): Promise
     .slice(0, Math.max(1, Math.min(20, limit)));
 }
 
+async function getNeonPool() {
+  const globalMock = (globalThis as unknown as { __mockDbPool?: unknown }).__mockDbPool;
+  if (globalMock) return globalMock as { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> };
+  try {
+    const { getPool } = await import("../../../db/index.js");
+    return getPool();
+  } catch (error) {
+    console.warn("[geo-resolver] Neon DB pool no disponible:", error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
+export function normalizeNeonPort(value: unknown): GeoResolutionRecord | null {
+  const record = asRecord(value);
+  const portName = cleanText(record.port_name ?? record.portName ?? record.name);
+  const lat = Number(record.lat ?? record.latitude);
+  const lon = Number(record.lon ?? record.lng ?? record.longitude);
+  if (!portName || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const countryCode = cleanText(record.country_code ?? record.countryCode).toUpperCase();
+  const unlocode = cleanText(record.unlocode).toUpperCase();
+  const officialLabel = countryCode ? `${portName} (${countryCode})` : portName;
+  const displayName = cleanText(record.display_name ?? record.displayName) || officialLabel;
+
+  const maxDraft = positiveNumber(record.berth_draft_m ?? record.channel_draft_high_m ?? record.channel_draft_low_m);
+  const draftSource = record.berth_draft_m
+    ? "berth_draft_m"
+    : record.channel_draft_high_m
+      ? "channel_draft_high_m"
+      : record.channel_draft_low_m
+        ? "channel_draft_low_m"
+        : null;
+
+  const wpiIndex = record.wpi_index !== null && record.wpi_index !== undefined ? Number(record.wpi_index) : null;
+
+  return {
+    uuid: cleanText(record.uuid) || unlocode || (wpiIndex ? `wpi-${wpiIndex}` : `neon-${portName.toLowerCase().replace(/\s+/g, "-")}`),
+    portName,
+    officialLabel,
+    countryCode,
+    countryName: cleanText(record.country_name ?? record.countryName),
+    unlocode,
+    portType: "port",
+    latitude: lat,
+    longitude: lon,
+    maxOperationalDraftMeters: maxDraft !== null ? Number(maxDraft.toFixed(3)) : null,
+    draftSourceField: draftSource,
+    lat,
+    lon,
+    displayName,
+    source: "NEON_H16",
+    wpiIndex,
+    channelDraftLowM: record.channel_draft_low_m !== null && record.channel_draft_low_m !== undefined ? Number(record.channel_draft_low_m) : null,
+    channelDraftHighM: record.channel_draft_high_m !== null && record.channel_draft_high_m !== undefined ? Number(record.channel_draft_high_m) : null,
+    berthDraftM: record.berth_draft_m !== null && record.berth_draft_m !== undefined ? Number(record.berth_draft_m) : null,
+    tidalRangeM: record.tidal_range_m !== null && record.tidal_range_m !== undefined ? Number(record.tidal_range_m) : null,
+    tidalWindowRequired: typeof record.tidal_window_required === "boolean" ? record.tidal_window_required : null,
+    waterDensity: record.water_density !== null && record.water_density !== undefined ? Number(record.water_density) : null,
+    gearedVesselRequired: typeof record.geared_vessel_required === "boolean" ? record.geared_vessel_required : null,
+    h16Sheet: record.h16_sheet ?? record.h16Sheet ?? null,
+  };
+}
+
+export async function findNeonPorts(query: string, limit = 12): Promise<GeoResolutionRecord[]> {
+  const trimmed = cleanText(query);
+  if (trimmed.length < 2) return [];
+
+  const pool = await getNeonPool();
+  if (!pool) return [];
+
+  try {
+    const sql = `
+      SELECT wpi_index, unlocode, port_name, country_code, lat, lon,
+             channel_draft_low_m, channel_draft_high_m, berth_draft_m,
+             tidal_range_m, tidal_window_required, water_density,
+             geared_vessel_required, source_payload->'h16_port_sheet' AS h16_sheet
+      FROM ports_master
+      WHERE LOWER(port_name) LIKE LOWER($1)
+         OR LOWER(COALESCE(unlocode, '')) = LOWER($2)
+      ORDER BY
+        CASE WHEN LOWER(port_name) = LOWER($2) THEN 0 ELSE 1 END,
+        priority_tier ASC,
+        port_name ASC
+      LIMIT $3;
+    `;
+    const searchPattern = `%${trimmed}%`;
+    const exactQuery = trimmed;
+    const safeLimit = Math.max(1, Math.min(50, limit));
+
+    const result = await pool.query(sql, [searchPattern, exactQuery, safeLimit]);
+    return ((result as { rows?: unknown[] })?.rows || [])
+      .map(normalizeNeonPort)
+      .filter((port): port is GeoResolutionRecord => Boolean(port));
+  } catch (error) {
+    console.warn(
+      `[geo-resolver] Falló la consulta a Neon ports_master para "${trimmed}":`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
+  }
+}
+
+export async function autoLearnPortInNeon(ports: GeoResolutionRecord[]): Promise<boolean> {
+  const candidate = (Array.isArray(ports) ? ports : []).find((p) => (
+    cleanText(p?.portName) &&
+    cleanText(p?.countryCode) &&
+    Number.isFinite(Number(p?.lat ?? p?.latitude)) &&
+    Number.isFinite(Number(p?.lon ?? p?.longitude))
+  ));
+  if (!candidate) return false;
+
+  const pool = await getNeonPool();
+  if (!pool) return false;
+
+  const portName = cleanText(candidate.portName);
+  const countryCode = cleanText(candidate.countryCode).toUpperCase();
+  const lat = Number(candidate.lat ?? candidate.latitude);
+  const lon = Number(candidate.lon ?? candidate.longitude);
+
+  const payload = JSON.stringify({
+    auto_learned_at: new Date().toISOString(),
+    source: candidate.source || "NOMINATIM",
+    uuid: candidate.uuid || null,
+    display_name: candidate.displayName || candidate.officialLabel || null,
+    unlocode: candidate.unlocode || null,
+  });
+
+  const sql = `
+    INSERT INTO ports_master (
+      port_name, country_code, port_type, lat, lon,
+      priority_tier, process_status, audit_status, source_payload, fecha_ultima_actualizacion
+    )
+    SELECT $1, $2, 'AUTO_LEARNED', $3, $4, 1, 'PENDING', 'AUTO_LEARNED', $5::jsonb, NOW()
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ports_master
+      WHERE LOWER(port_name) = LOWER($1) AND country_code = $2
+    );
+  `;
+
+  try {
+    await pool.query(sql, [portName, countryCode, lat, lon, payload]);
+    return true;
+  } catch (error) {
+    console.warn(
+      `[geo-resolver] No se pudo auto-aprender el puerto "${portName}" (${countryCode}) en ports_master:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+}
+
 export async function resolvePortsWithFailover(query: string, limit = 12): Promise<GeoResolutionRecord[]> {
   const trimmed = cleanText(query);
   if (trimmed.length < 2) return [];
 
-  // Proveedor Primario: Datalastic
+  // Prioridad 1: Neon PostgreSQL (tabla ports_master alimentada por Hija 16)
   try {
-    const datalasticResults = await findDatalasticPorts(trimmed, limit);
-    if (datalasticResults.length > 0) {
-      return datalasticResults;
+    const neonResults = await findNeonPorts(trimmed, limit);
+    if (neonResults.length > 0) {
+      return neonResults;
     }
-    console.warn(`[geo-resolver] Datalastic devolvió 0 resultados para "${trimmed}". Conmutando automáticamente a Nominatim.`);
+    console.warn(`[geo-resolver] Neon ports_master devolvió 0 resultados para "${trimmed}". Conmutando automáticamente a Nominatim.`);
   } catch (error) {
     console.warn(
-      `[geo-resolver] Datalastic falló para "${trimmed}" (${error instanceof Error ? error.message : String(error)}). Conmutando automáticamente a Nominatim (OpenStreetMap).`,
+      `[geo-resolver] Error consultando Neon ports_master para "${trimmed}" (${error instanceof Error ? error.message : String(error)}). Conmutando a Nominatim.`,
     );
   }
 
-  // Proveedor Secundario Gratuito: Nominatim (OpenStreetMap)
+  // Prioridad 2 (Fallback): Nominatim (OpenStreetMap) para localidades interiores o sin registro portuario
   try {
-    return await findNominatimLocations(trimmed, limit);
+    const nominatimResults = await findNominatimLocations(trimmed, limit);
+    if (nominatimResults.length > 0) {
+      try {
+        await autoLearnPortInNeon(nominatimResults);
+      } catch (learnErr) {
+        console.warn("[geo-resolver] Error no bloqueante en autoLearnPortInNeon:", learnErr);
+      }
+    }
+    return nominatimResults;
   } catch (osmError) {
     console.error(
       `[geo-resolver] Falló la conmutación a Nominatim para "${trimmed}":`,
@@ -288,7 +456,7 @@ export async function getDatalasticPort(options: { uuid?: string; unlocode?: str
     const matches = await resolvePortsWithFailover(options.name, 1);
     uuid = matches[0]?.uuid || "";
     unlocode = matches[0]?.unlocode || "";
-    if (matches[0] && (!uuid || uuid.startsWith("osm-"))) {
+    if (matches[0] && (!uuid || uuid.startsWith("osm-") || matches[0].source === "NEON_H16")) {
       return matches[0];
     }
   }

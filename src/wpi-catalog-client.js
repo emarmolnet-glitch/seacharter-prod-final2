@@ -32,10 +32,10 @@ export function normalizeWpiPortRecord(value) {
     countryCode,
     latitude,
     longitude,
-    maxOperationalDraftMeters: 0,
-    maxVesselLengthLabel: "N/A",
-    engineeringSource: "N/A",
-    source: "DATALASTIC",
+    maxOperationalDraftMeters: Number(value.maxOperationalDraftMeters) || 0,
+    maxVesselLengthLabel: value.maxVesselLengthLabel || "N/A",
+    engineeringSource: value.engineeringSource || "N/A",
+    source: value.source || "DATALASTIC",
   };
 }
 
@@ -43,9 +43,15 @@ export function prioritizeDatalasticPortRecords(ports = []) {
   const normalizedPorts = (Array.isArray(ports) ? ports : [])
     .map(normalizeWpiPortRecord)
     .filter(Boolean);
-  const commercialPorts = normalizedPorts.filter((port) => cleanText(port.portType).toLowerCase() === "port");
+  const commercialPorts = normalizedPorts.filter((port) => {
+    const type = cleanText(port.portType).toLowerCase();
+    const src = cleanText(port.source).toUpperCase();
+    return type === "port" || src === "NEON_H16" || src === "NOMINATIM";
+  });
   return commercialPorts.length ? commercialPorts : normalizedPorts;
 }
+
+export const prioritizeDatalasticPortResults = prioritizeDatalasticPortRecords;
 
 export async function ensureGlobalWpiCatalog() {
   return window.ensureWpiEngineeringCatalog?.() || window.WpiCatalogStore?.getState?.() || null;
@@ -75,7 +81,7 @@ async function findPort(query) {
     ensureGlobalWpiCatalog(),
   ]);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.error || "Datalastic no está disponible.");
+  if (!response.ok) throw new Error(payload?.error || "Servicio de puertos temporalmente no disponible");
   return enrichPortWithWpi(prioritizeDatalasticPortRecords(payload?.ports)[0] || null);
 }
 
