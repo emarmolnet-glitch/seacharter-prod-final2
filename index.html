@@ -34700,6 +34700,7 @@ function createRouteAnchorElement(type) {
                     }))
                 };
                 if (typeof State !== 'undefined' && window.SeaCharterVoyageCostEngine?.renderAutomaticRiskMatrix) {
+                    if (State.sensitivityAnalysis) delete State.sensitivityAnalysis;
                     State.sensitivityAnalysis = window.SeaCharterVoyageCostEngine.renderAutomaticRiskMatrix(State);
                 }
 
@@ -43655,6 +43656,7 @@ function scheduleReactiveEngine() {
                 updateCBAMModuleView();
             }
             if (window.SeaCharterVoyageCostEngine?.renderAutomaticRiskMatrix) {
+                if (typeof State !== 'undefined' && State?.sensitivityAnalysis) delete State.sensitivityAnalysis;
                 State.sensitivityAnalysis = window.SeaCharterVoyageCostEngine.renderAutomaticRiskMatrix(State);
             } else if (typeof renderStressTestScenario === 'function') {
                 renderStressTestScenario(State);
