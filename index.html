@@ -30370,9 +30370,13 @@ function createRouteAnchorElement(type) {
 
         function prioritizeDatalasticPortResults(ports = []) {
             const validPorts = (Array.isArray(ports) ? ports : []).filter(port => (
-                Number.isFinite(Number(port?.latitude)) && Number.isFinite(Number(port?.longitude))
+                Number.isFinite(Number(port?.latitude ?? port?.lat)) && Number.isFinite(Number(port?.longitude ?? port?.lon))
             ));
-            const commercialPorts = validPorts.filter(port => String(port?.portType || '').trim().toLowerCase() === 'port');
+            const commercialPorts = validPorts.filter(port => {
+                const type = String(port?.portType || '').trim().toLowerCase();
+                const src = String(port?.source || '').trim().toUpperCase();
+                return type === 'port' || src === 'NEON_H16' || src === 'NOMINATIM';
+            });
             return commercialPorts.length ? commercialPorts : validPorts;
         }
 
@@ -30789,8 +30793,8 @@ function createRouteAnchorElement(type) {
                 return;
             }
 
-            setPortSearchState(input, true, 'Buscando en Datalastic...');
-            renderPortAutocomplete(input, [], 'Buscando en Datalastic...');
+            setPortSearchState(input, true, 'Buscando puertos...');
+            renderPortAutocomplete(input, [], 'Buscando puertos...');
             try {
                 const [response] = await Promise.all([
                     fetch(`/api/v1/ports/search?q=${encodeURIComponent(query)}`, {
@@ -30799,7 +30803,7 @@ function createRouteAnchorElement(type) {
                     ensureWpiEngineeringCatalog()
                 ]);
                 const payload = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(payload?.error || 'Datalastic no disponible');
+                if (!response.ok) throw new Error(payload?.error || 'Servicio de puertos temporalmente no disponible');
                 if (input.value !== query) {
                     if (input.dataset.selectedPortLabel === input.value) setPortSearchState(input, false);
                     return;
@@ -30814,11 +30818,11 @@ function createRouteAnchorElement(type) {
                         countryCode,
                         lat: port.latitude,
                         lon: port.longitude,
-                        source: 'Datalastic',
+                        source: port.source || 'Datalastic',
                         uuid: port.uuid,
                         unlocode: port.unlocode,
                         indexNo: engineering?.indexNo || null,
-                        maxOperationalDraftMeters: engineering?.maxOperationalDraftMeters || 0,
+                        maxOperationalDraftMeters: engineering?.maxOperationalDraftMeters || port.maxOperationalDraftMeters || 0,
                         maxVesselLengthLabel: engineering?.maxVesselLengthLabel || 'N/A',
                         cargoDepth: engineering?.cargoDepth || '',
                         channelDepth: engineering?.channelDepth || '',
@@ -30828,11 +30832,11 @@ function createRouteAnchorElement(type) {
                     };
                 }));
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, localResults, localResults.length ? '' : 'Sin coincidencias en Datalastic');
+                renderPortAutocomplete(input, localResults, localResults.length ? '' : 'Sin coincidencias');
             } catch (error) {
-                console.warn('[Input Geográfico] No se pudo consultar Datalastic.', error);
+                console.warn('[Input Geográfico] No se pudo consultar el servicio de puertos.', error);
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, [], 'Datalastic no disponible');
+                renderPortAutocomplete(input, [], 'Servicio de puertos temporalmente no disponible');
             }
         }
 

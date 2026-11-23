@@ -19,6 +19,7 @@ type ResponseCacheOptions<T> = {
   ttlMs: number;
   staleTtlMs?: number;
   bypassRead?: boolean;
+  shouldCache?: (value: T) => boolean;
   producer: () => Promise<T>;
 };
 
@@ -79,7 +80,9 @@ export async function getOrSetCachedJson<T>(options: ResponseCacheOptions<T>): P
   }
 
   if (!options.bypassRead && envelope && envelope.expiresAt > now) {
-    return { value: envelope.value, cacheStatus: "HIT", ageMs: Math.max(0, now - envelope.storedAt) };
+    if (!options.shouldCache || options.shouldCache(envelope.value)) {
+      return { value: envelope.value, cacheStatus: "HIT", ageMs: Math.max(0, now - envelope.storedAt) };
+    }
   }
 
   const existingRequest = inFlightRequests.get(cacheKey) as Promise<ResponseCacheResult<T>> | undefined;
@@ -88,10 +91,14 @@ export async function getOrSetCachedJson<T>(options: ResponseCacheOptions<T>): P
   const request = (async () => {
     try {
       const value = await options.producer();
+      const shouldCache = options.shouldCache ? options.shouldCache(value) : true;
+      const effectiveTtlMs = shouldCache ? ttlMs : 30_000;
       const storedAt = Date.now();
-      const nextEnvelope: CacheEnvelope<T> = { value, storedAt, expiresAt: storedAt + ttlMs };
+      const nextEnvelope: CacheEnvelope<T> = { value, storedAt, expiresAt: storedAt + effectiveTtlMs };
       memoryCache.set(cacheKey, nextEnvelope);
-      await writePersistentEnvelope(cacheKey, nextEnvelope);
+      if (shouldCache) {
+        await writePersistentEnvelope(cacheKey, nextEnvelope);
+      }
       return { value, cacheStatus: "MISS" as const, ageMs: 0 };
     } catch (error) {
       if (envelope && now - envelope.storedAt <= staleTtlMs) {

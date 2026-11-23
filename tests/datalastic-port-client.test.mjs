@@ -185,75 +185,69 @@ test("Nominatim requests obligatorily include User-Agent: SeaCharterCorePRO/1.0 
   assert.equal(capturedHeaders?.["User-Agent"], "SeaCharterCorePRO/1.0");
 });
 
-test("resolvePortsWithFailover uses Datalastic as primary provider when available", async (t) => {
+test("resolvePortsWithFailover uses Neon ports_master as primary provider (Priority 1)", async (t) => {
   const originalFetch = globalThis.fetch;
-  const originalEnv = process.env.DATALASTIC_API_KEY;
-  process.env.DATALASTIC_API_KEY = "test-datalastic-key";
-
-  let datalasticCalled = false;
   let nominatimCalled = false;
 
-  globalThis.fetch = async (url, options) => {
-    const urlString = String(url);
-    if (urlString.includes("datalastic")) {
-      datalasticCalled = true;
-      return new Response(JSON.stringify({
-        meta: { success: true },
-        data: [
-          {
-            uuid: "dl-praia",
-            port_name: "PRAIA",
-            country_iso: "CV",
-            lat: 14.9167,
-            lon: -23.5167,
-            port_type: "port",
-          },
-        ],
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (urlString.includes("nominatim") || urlString.includes("openstreetmap")) {
-      nominatimCalled = true;
-      return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response("[]", { status: 200 });
+  globalThis.__mockDbPool = {
+    query: async () => ({
+      rows: [
+        {
+          wpi_index: 46280,
+          unlocode: null,
+          port_name: "DOUALA",
+          country_code: "CM",
+          lat: 4.05,
+          lon: 9.683333,
+          channel_draft_low_m: 6.4,
+          channel_draft_high_m: 7.62,
+          berth_draft_m: 13.11,
+          tidal_range_m: 0.91,
+          tidal_window_required: true,
+          water_density: 1.005,
+          geared_vessel_required: false,
+          h16_sheet: { h16_version: "1.0" },
+        },
+      ],
+    }),
+  };
+
+  globalThis.fetch = async (url) => {
+    nominatimCalled = true;
+    return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
   };
 
   t.after(() => {
     globalThis.fetch = originalFetch;
-    if (originalEnv !== undefined) process.env.DATALASTIC_API_KEY = originalEnv;
-    else delete process.env.DATALASTIC_API_KEY;
+    delete globalThis.__mockDbPool;
   });
 
   const { resolvePortsWithFailover } = await loadPortClientModule();
-  const results = await resolvePortsWithFailover("Praia");
+  const results = await resolvePortsWithFailover("Douala");
 
-  assert.equal(datalasticCalled, true);
-  assert.equal(nominatimCalled, false, "Nominatim should not be called when Datalastic succeeds");
+  assert.equal(nominatimCalled, false, "Nominatim should not be called when Neon ports_master succeeds");
   assert.equal(results.length, 1);
-  assert.equal(results[0].source, "DATALASTIC");
-  assert.equal(results[0].lat, 14.9167);
-  assert.equal(results[0].lon, -23.5167);
-  assert.equal(results[0].displayName, "PRAIA (CV)");
+  assert.equal(results[0].source, "NEON_H16");
+  assert.equal(results[0].portType, "port");
+  assert.equal(results[0].portName, "DOUALA");
+  assert.equal(results[0].countryCode, "CM");
+  assert.equal(results[0].lat, 4.05);
+  assert.equal(results[0].lon, 9.683333);
+  assert.equal(results[0].maxOperationalDraftMeters, 13.11);
+  assert.equal(results[0].displayName, "DOUALA (CM)");
 });
 
-test("resolvePortsWithFailover automatically switches to Nominatim when Datalastic throws credit error or fails", async (t) => {
+test("resolvePortsWithFailover automatically switches to Nominatim when ports_master returns 0 results", async (t) => {
   const originalFetch = globalThis.fetch;
-  const originalEnv = process.env.DATALASTIC_API_KEY;
-  process.env.DATALASTIC_API_KEY = "test-key";
-
-  let datalasticCalled = false;
   let nominatimCalled = false;
   let capturedNominatimUserAgent = "";
 
+  globalThis.__mockDbPool = {
+    query: async () => ({ rows: [] }),
+  };
+
   globalThis.fetch = async (url, options) => {
     const urlString = String(url);
-    if (urlString.includes("datalastic")) {
-      datalasticCalled = true;
-      // Simulate Datalastic credit exhaustion / 402 Payment Required error
-      return new Response(JSON.stringify({
-        meta: { success: false, status: 402, message: "Credit balance exhausted" },
-      }), { status: 402, headers: { "content-type": "application/json" } });
-    }
     if (urlString.includes("nominatim") || urlString.includes("openstreetmap")) {
       nominatimCalled = true;
       capturedNominatimUserAgent = options?.headers?.["User-Agent"] || "";
@@ -274,15 +268,13 @@ test("resolvePortsWithFailover automatically switches to Nominatim when Datalast
 
   t.after(() => {
     globalThis.fetch = originalFetch;
-    if (originalEnv !== undefined) process.env.DATALASTIC_API_KEY = originalEnv;
-    else delete process.env.DATALASTIC_API_KEY;
+    delete globalThis.__mockDbPool;
   });
 
   const { resolvePortsWithFailover } = await loadPortClientModule();
-  const results = await resolvePortsWithFailover("Praia, Cabo Verde");
+  const results = await resolvePortsWithFailover("Interior Town, Cabo Verde");
 
-  assert.equal(datalasticCalled, true, "Datalastic must be primary provider");
-  assert.equal(nominatimCalled, true, "System must switch to Nominatim on Datalastic credit error");
+  assert.equal(nominatimCalled, true, "System must switch to Nominatim when ports_master has 0 results");
   assert.equal(capturedNominatimUserAgent, "SeaCharterCorePRO/1.0");
   assert.equal(results.length, 1);
   assert.equal(results[0].source, "NOMINATIM");
@@ -291,35 +283,115 @@ test("resolvePortsWithFailover automatically switches to Nominatim when Datalast
   assert.equal(results[0].displayName, "Praia, Cabo Verde");
 });
 
-test("resolvePortsWithFailover automatically switches to Nominatim when Datalastic does not respond or throws network exception", async (t) => {
+test("resolvePortsWithFailover automatically switches to Nominatim when Neon DB throws an error", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let nominatimCalled = false;
+
+  globalThis.__mockDbPool = {
+    query: async () => {
+      throw new Error("Neon connection timed out");
+    },
+  };
+
+  globalThis.fetch = async (url) => {
+    nominatimCalled = true;
+    return new Response(JSON.stringify([
+      {
+        place_id: 5678,
+        lat: "14.9315",
+        lon: "-23.5125",
+        name: "Praia",
+        display_name: "Praia, Ilha de Santiago, Cabo Verde",
+        address: { country_code: "cv" },
+      },
+    ]), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__mockDbPool;
+  });
+
+  const { resolvePortsWithFailover } = await loadPortClientModule();
+  const results = await resolvePortsWithFailover("Praia, Cabo Verde");
+
+  assert.equal(nominatimCalled, true);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].source, "NOMINATIM");
+  assert.equal(results[0].displayName, "Praia, Ilha de Santiago, Cabo Verde");
+});
+
+test("autoLearnPortInNeon inserts newly resolved Nominatim location into ports_master with priority_tier = 1 and process_status = 'PENDING'", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let capturedInsertSql = "";
+  let capturedInsertParams = [];
+
+  globalThis.__mockDbPool = {
+    query: async (sql, params) => {
+      if (sql.includes("SELECT wpi_index")) {
+        // findNeonPorts returns 0 results
+        return { rows: [] };
+      }
+      if (sql.includes("INSERT INTO ports_master")) {
+        capturedInsertSql = sql;
+        capturedInsertParams = params;
+        return { rowCount: 1 };
+      }
+      return { rows: [] };
+    },
+  };
+
+  globalThis.fetch = async () => {
+    return new Response(JSON.stringify([
+      {
+        place_id: 4321,
+        lat: "12.3456",
+        lon: "-15.6789",
+        name: "Puerto Nuevo",
+        display_name: "Puerto Nuevo, Cabo Verde",
+        type: "city",
+        address: { country_code: "cv", country: "Cabo Verde" },
+      },
+    ]), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__mockDbPool;
+  });
+
+  const { resolvePortsWithFailover } = await loadPortClientModule();
+  const results = await resolvePortsWithFailover("Puerto Nuevo");
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].source, "NOMINATIM");
+  assert.ok(capturedInsertSql.includes("INSERT INTO ports_master"), "Must trigger INSERT INTO ports_master");
+  assert.ok(capturedInsertSql.includes("priority_tier, process_status, audit_status"), "Columns must include priority_tier and process_status");
+  assert.ok(capturedInsertSql.includes("1, 'PENDING', 'AUTO_LEARNED'"), "Must set priority_tier = 1 and process_status = 'PENDING'");
+  assert.equal(capturedInsertParams[0], "Puerto Nuevo");
+  assert.equal(capturedInsertParams[1], "CV");
+  assert.equal(capturedInsertParams[2], 12.3456);
+  assert.equal(capturedInsertParams[3], -15.6789);
+});
+
+test("findDatalasticPorts remains functional for direct calls", async (t) => {
   const originalFetch = globalThis.fetch;
   const originalEnv = process.env.DATALASTIC_API_KEY;
   process.env.DATALASTIC_API_KEY = "test-key";
 
-  let datalasticCalled = false;
-  let nominatimCalled = false;
-
-  globalThis.fetch = async (url, options) => {
-    const urlString = String(url);
-    if (urlString.includes("datalastic")) {
-      datalasticCalled = true;
-      throw new Error("Network timeout or connection refused");
-    }
-    if (urlString.includes("nominatim") || urlString.includes("openstreetmap")) {
-      nominatimCalled = true;
-      return new Response(JSON.stringify([
-        {
-          place_id: 5678,
-          lat: "14.9315",
-          lon: "-23.5125",
-          name: "Praia",
-          display_name: "Praia, Ilha de Santiago, Cabo Verde",
-          address: { country_code: "cv" },
-        },
-      ]), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response("[]", { status: 200 });
-  };
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    meta: { success: true },
+    data: [
+      {
+        uuid: "dl-praia",
+        port_name: "PRAIA",
+        country_iso: "CV",
+        lat: 14.9167,
+        lon: -23.5167,
+        port_type: "port",
+      },
+    ],
+  }), { status: 200, headers: { "content-type": "application/json" } });
 
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -327,14 +399,10 @@ test("resolvePortsWithFailover automatically switches to Nominatim when Datalast
     else delete process.env.DATALASTIC_API_KEY;
   });
 
-  const { resolvePortsWithFailover } = await loadPortClientModule();
-  const results = await resolvePortsWithFailover("Praia, Cabo Verde");
-
-  assert.equal(datalasticCalled, true);
-  assert.equal(nominatimCalled, true);
+  const { findDatalasticPorts } = await loadPortClientModule();
+  const results = await findDatalasticPorts("Praia");
   assert.equal(results.length, 1);
-  assert.equal(results[0].source, "NOMINATIM");
-  assert.equal(results[0].displayName, "Praia, Ilha de Santiago, Cabo Verde");
+  assert.equal(results[0].source, "DATALASTIC");
 });
 
 test("ports-search handler returns normalized {lat, lon, displayName, source} and supports failover", async (t) => {
