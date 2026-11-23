@@ -1156,35 +1156,35 @@
     }
 
     function pickSensitivityBase(baseResult = {}) {
-        const fuelBreakdown = baseResult.fuelBreakdown || {};
-        const ownerBreakdown = baseResult.ownerNetBreakdown || {};
-        const voyageFinancials = baseResult.voyageFinancials || {};
-        const daysSea = Math.max(0, toNumber(baseResult.daysSea));
-        const daysPort = Math.max(0, toNumber(baseResult.daysPort));
-        const totalDays = Math.max(0, toNumber(baseResult.totalDays) || (daysSea + daysPort));
-        const totalBunkers = Math.max(0, toNumber(baseResult.totalBunkers || fuelBreakdown.totalCost));
-        const dailyOpex = Math.max(0, toNumber(baseResult.opex || baseResult.smartAdjustments?.opexDaily));
-        const dailyCapex = Math.max(0, toNumber(baseResult.capexDaily || ownerBreakdown.capexDaily || baseResult.smartAdjustments?.capexDaily));
-        const cargo = Math.max(0, toNumber(baseResult.cargo || voyageFinancials.cargoQty));
-        const breakEven = Math.max(0, toNumber(baseResult.breakEvenArmador || voyageFinancials.breakEvenArmador || baseResult.breakEven));
-        const loadRate = Math.max(0, toNumber(baseResult.loadRate));
-        const dischargeRate = Math.max(0, toNumber(baseResult.dischRate));
+        const { sensitivityAnalysis: _discardSensitivity, ...cleanBaseResult } = baseResult || {};
+        const fuelBreakdown = cleanBaseResult.fuelBreakdown || {};
+        const ownerBreakdown = cleanBaseResult.ownerNetBreakdown || {};
+        const voyageFinancials = cleanBaseResult.voyageFinancials || {};
+        const daysSea = Math.max(0, toNumber(cleanBaseResult.daysSea));
+        const daysPort = Math.max(0, toNumber(cleanBaseResult.daysPort));
+        const totalDays = Math.max(0, toNumber(cleanBaseResult.totalDays) || (daysSea + daysPort));
+        const totalBunkers = Math.max(0, toNumber(cleanBaseResult.totalBunkers || fuelBreakdown.totalCost));
+        const dailyOpex = Math.max(0, toNumber(cleanBaseResult.opex || cleanBaseResult.smartAdjustments?.opexDaily));
+        const dailyCapex = Math.max(0, toNumber(cleanBaseResult.capexDaily || ownerBreakdown.capexDaily || cleanBaseResult.smartAdjustments?.capexDaily));
+        const cargo = Math.max(0, toNumber(cleanBaseResult.cargo || voyageFinancials.cargoQty));
+        const breakEven = Math.max(0, toNumber(cleanBaseResult.breakEvenArmador || voyageFinancials.breakEvenArmador || cleanBaseResult.breakEven));
+        const loadRate = Math.max(0, toNumber(cleanBaseResult.loadRate));
+        const dischargeRate = Math.max(0, toNumber(cleanBaseResult.dischRate));
         const calculatedPortOperationDays = cargo > 0
             ? ((loadRate > 0 ? cargo / loadRate : 0) + (dischargeRate > 0 ? cargo / dischargeRate : 0))
             : 0;
         const portOperationDays = calculatedPortOperationDays > 0
             ? Math.min(daysPort || calculatedPortOperationDays, calculatedPortOperationDays)
             : daysPort;
-        const grossFreight = readCurrentFreightRevenue(baseResult);
+        const grossFreight = readCurrentFreightRevenue(cleanBaseResult);
         const knownVoyageCosts = Math.max(0, toNumber(ownerBreakdown.bunkerAndPortCosts));
         const knownOperatingCosts = Math.max(0, toNumber(ownerBreakdown.operatingCapitalCosts));
         const knownBaseCosts = knownVoyageCosts + knownOperatingCosts;
         const calculatedNetProfit = knownBaseCosts > 0
             ? grossFreight - knownBaseCosts
-            : toNumber(baseResult.netProfitOwner ?? baseResult.beneficioNeto);
+            : toNumber(cleanBaseResult.netProfitOwner ?? cleanBaseResult.beneficioNeto);
 
         return {
-            ...baseResult,
             daysSea,
             daysPort,
             totalDays,
@@ -1204,9 +1204,10 @@
         const base = pickSensitivityBase(baseResult);
         if (scenario.key === 'base') {
             return {
-                ...base,
                 key: scenario.key,
                 label: scenario.label,
+                cargo: roundMoney(base.cargo),
+                breakEven: roundMoney(base.breakEven),
                 projectedBreakEven: roundMoney(base.breakEven),
                 breakEvenDelta: 0,
                 savedPortDays: 0,
@@ -1216,6 +1217,7 @@
                 deltaBeneficio: 0,
                 totalBunkers: roundMoney(base.totalBunkers),
                 totalDays: roundMoney(base.totalDays),
+                fleteBruto: roundMoney(base.fleteBruto),
                 stressImpact: { bunkerDelta: 0, portDelayOperatingCost: 0, lostProfit: 0, total: 0, addedPortDelayDays: 0, offHireDays: 0 }
             };
         }
@@ -1246,9 +1248,10 @@
         const netProfitOwner = base.netProfitOwner - totalCostDelta;
 
         return {
-            ...base,
             key: scenario.key,
             label: scenario.label,
+            cargo: roundMoney(base.cargo),
+            breakEven: roundMoney(base.breakEven),
             projectedBreakEven: roundMoney(projectedBreakEven),
             breakEvenDelta: roundMoney(projectedBreakEven - base.breakEven),
             savedPortDays: roundMoney(savedPortDays),
@@ -1258,6 +1261,7 @@
             deltaBeneficio: roundMoney(netProfitOwner - base.netProfitOwner),
             totalBunkers: roundMoney(projectedBunkerCost),
             totalDays: roundMoney(base.totalDays + dayDelta),
+            fleteBruto: roundMoney(base.fleteBruto),
             stressImpact: {
                 bunkerDelta: roundMoney(bunkerDelta),
                 portDelayOperatingCost: roundMoney(operatingCostDelta),
@@ -1482,11 +1486,12 @@
 
     function renderAutomaticRiskMatrix(baseResult, documentRef = root.document) {
         if (!documentRef || !baseResult) return null;
-        const currentFreightRevenue = readCurrentFreightRevenue(baseResult, documentRef);
+        const { sensitivityAnalysis: _discardSensitivity, ...cleanBaseResult } = baseResult;
+        const currentFreightRevenue = readCurrentFreightRevenue(cleanBaseResult, documentRef);
         const hydratedBaseResult = {
-            ...baseResult,
+            ...cleanBaseResult,
             ownerNetBreakdown: {
-                ...(baseResult.ownerNetBreakdown || {}),
+                ...(cleanBaseResult.ownerNetBreakdown || {}),
                 grossRevenue: currentFreightRevenue
             }
         };

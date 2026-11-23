@@ -742,6 +742,112 @@ function formatMotherVerdict(data, fallbackState = {}) {
 }
 
 /**
+ * Helper compacto que corta referencias circulares, limita la profundidad máxima a 12
+ * y descarta nodos DOM, Window, Event, File/Blob y funciones.
+ */
+export function safeCloneForJson(value, maxDepth = 12, currentDepth = 0, seen = new WeakSet()) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  // Descartar funciones y símbolos
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    return undefined;
+  }
+
+  // Tipos primitivos seguros
+  if (typeof value !== 'object') {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+    return value;
+  }
+
+  // Límite de profundidad máxima
+  if (currentDepth >= maxDepth) {
+    return undefined;
+  }
+
+  // Descartar Window
+  if (
+    (typeof window !== 'undefined' && value === window) ||
+    value.window === value ||
+    (typeof Window !== 'undefined' && value instanceof Window)
+  ) {
+    return undefined;
+  }
+
+  // Descartar Nodos DOM (Element, Document, DocumentFragment, etc.)
+  if (
+    (typeof Node !== 'undefined' && value instanceof Node) ||
+    typeof value.nodeType === 'number' ||
+    value.tagName !== undefined
+  ) {
+    return undefined;
+  }
+
+  // Descartar Eventos
+  if (
+    (typeof Event !== 'undefined' && value instanceof Event) ||
+    (typeof value.preventDefault === 'function' && typeof value.stopPropagation === 'function')
+  ) {
+    return undefined;
+  }
+
+  // Descartar File / Blob
+  if (
+    (typeof Blob !== 'undefined' && value instanceof Blob) ||
+    (typeof File !== 'undefined' && value instanceof File) ||
+    (typeof value.arrayBuffer === 'function' && typeof value.slice === 'function')
+  ) {
+    return undefined;
+  }
+
+  // Control de referencias circulares
+  if (seen.has(value)) {
+    return undefined;
+  }
+  seen.add(value);
+
+  // Arrays
+  if (Array.isArray(value)) {
+    const arr = [];
+    for (let i = 0; i < value.length; i++) {
+      const cloned = safeCloneForJson(value[i], maxDepth, currentDepth + 1, seen);
+      arr.push(cloned === undefined ? null : cloned);
+    }
+    seen.delete(value);
+    return arr;
+  }
+
+  // Objetos planos
+  const result = {};
+  const keys = Object.keys(value);
+  for (const key of keys) {
+    let propVal;
+    try {
+      propVal = value[key];
+    } catch (_) {
+      continue;
+    }
+    if (typeof propVal === 'function' || typeof propVal === 'symbol') {
+      continue;
+    }
+    const cloned = safeCloneForJson(propVal, maxDepth, currentDepth + 1, seen);
+    if (cloned !== undefined) {
+      result[key] = cloned;
+    }
+  }
+
+  seen.delete(value);
+  return result;
+}
+
+if (typeof window !== 'undefined') {
+  window.safeCloneForJson = safeCloneForJson;
+}
+
+/**
  * Arquitectura "Dos Tiempos" para MADRE:
  * - Fase 1: Digerir y validar el contexto_ui estructurado en backend sin bloquear la respuesta.
  * - Fase 2: Ejecutar el análisis profundo o veredicto estratégico con la sesión consolidada.
@@ -763,7 +869,7 @@ async function ejecutarEscaneoDosTiempos(basePayload) {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify(payloadFase1),
+    body: JSON.stringify(safeCloneForJson(payloadFase1)),
   });
 
   if (!responseFase1.ok) {
@@ -787,7 +893,7 @@ async function ejecutarEscaneoDosTiempos(basePayload) {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify(payloadFase2),
+    body: JSON.stringify(safeCloneForJson(payloadFase2)),
   });
 
   if (!responseFase2.ok) {
@@ -1163,6 +1269,168 @@ function extractDynamicAuditContext() {
     }
   }
 
+/**
+ * Construye activeScreenContext con una lista blanca estricta de campos operativos planos del viaje.
+ * Excluye explícitamente sensitivityAnalysis, rawDocumentText, madreUltimaAuditoria,
+ * reporte_estrategico, reporteEstrategico y fullAuditData.
+ */
+function buildFlatActiveScreenContext(liveContext = {}, state = {}) {
+  const moduloActual = typeof detectarModuloActual === 'function'
+    ? detectarModuloActual()
+    : (liveContext.modulo_actual || 'calculadora');
+  const vistaActiva = liveContext.vista_activa || moduloActual;
+
+  const pol = String(
+    liveContext.pol ||
+    state.pol ||
+    state.port_pol ||
+    (typeof document !== 'undefined' ? document.getElementById('port-pol')?.value : '') ||
+    ''
+  ).trim();
+
+  const pod = String(
+    liveContext.pod ||
+    state.pod ||
+    state.port_pod ||
+    (typeof document !== 'undefined' ? document.getElementById('port-pod')?.value : '') ||
+    ''
+  ).trim();
+
+  const commodity = String(
+    state.commodity ||
+    liveContext.commodity ||
+    state.cargoProduct ||
+    state.cargoType ||
+    (typeof document !== 'undefined' ? document.getElementById('commodity-select')?.value || document.getElementById('commodity')?.value : '') ||
+    ''
+  ).trim();
+
+  const cargoType = String(
+    state.cargoType ||
+    liveContext.cargoType ||
+    commodity ||
+    ''
+  ).trim();
+
+  const cargoQty = Number(
+    (Number(state.cargoQty ?? state.cargo ?? state.tonnage) > 0 ? (state.cargoQty ?? state.cargo ?? state.tonnage) : null) ??
+    (Number(liveContext.cargoQty ?? liveContext.tonnage) > 0 ? (liveContext.cargoQty ?? liveContext.tonnage) : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('cargo-qty')?.value : null) ??
+    state.cargoQty ??
+    liveContext.cargoQty ??
+    0
+  ) || 0;
+
+  const loadRate = Number(
+    (Number(state.loadRate ?? state.ratePOL ?? state.loading_rate) > 0 ? (state.loadRate ?? state.ratePOL ?? state.loading_rate) : null) ??
+    (Number(liveContext.loadRate ?? liveContext.ratePOL) > 0 ? (liveContext.loadRate ?? liveContext.ratePOL) : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('rate-load')?.value : null) ??
+    state.loadRate ??
+    liveContext.loadRate ??
+    0
+  ) || 0;
+
+  const dischargeRate = Number(
+    (Number(state.dischargeRate ?? state.ratePOD ?? state.discharge_rate) > 0 ? (state.dischargeRate ?? state.ratePOD ?? state.discharge_rate) : null) ??
+    (Number(liveContext.dischargeRate ?? liveContext.ratePOD) > 0 ? (liveContext.dischargeRate ?? liveContext.ratePOD) : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('rate-disch')?.value : null) ??
+    state.dischargeRate ??
+    liveContext.dischargeRate ??
+    0
+  ) || 0;
+
+  const breakEven = Number(
+    (Number(state.breakEven ?? state.breakEvenArmador) > 0 ? (state.breakEven ?? state.breakEvenArmador) : null) ??
+    (Number(liveContext.breakEven ?? liveContext.breakEvenUnitario) > 0 ? (liveContext.breakEven ?? liveContext.breakEvenUnitario) : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('break-even-val')?.innerText || document.getElementById('break-even')?.value : null) ??
+    state.breakEven ??
+    liveContext.breakEven ??
+    0
+  ) || 0;
+
+  const fleteUnitario = Number(
+    (Number(state.fleteUnitario ?? state.freightRate ?? state.flete) > 0 ? (state.fleteUnitario ?? state.freightRate ?? state.flete) : null) ??
+    (Number(liveContext.fleteUnitario) > 0 ? liveContext.fleteUnitario : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('freight-rate')?.value : null) ??
+    state.fleteUnitario ??
+    liveContext.fleteUnitario ??
+    0
+  ) || 0;
+
+  const tceDiario = Number(
+    (Number(state.tceDiario ?? state.tce) > 0 ? (state.tceDiario ?? state.tce) : null) ??
+    (Number(liveContext.tceDiario) > 0 ? liveContext.tceDiario : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('tce-daily')?.innerText || document.getElementById('tce')?.value : null) ??
+    state.tceDiario ??
+    liveContext.tceDiario ??
+    0
+  ) || 0;
+
+  const freightTerms = String(
+    state.freightTerms ||
+    state.terms ||
+    liveContext.freightTerms ||
+    (typeof document !== 'undefined' ? document.getElementById('freight-terms')?.value : '') ||
+    ''
+  ).trim();
+
+  const vesselType = String(
+    state.vesselType ||
+    state.buque_tipo ||
+    liveContext.vesselType ||
+    (typeof document !== 'undefined' ? document.getElementById('vessel-type')?.value : '') ||
+    ''
+  ).trim();
+
+  const estimatedVoyageDays = Number(
+    (Number(state.estimatedVoyageDays ?? state.totalDays ?? state.daysTotal) > 0 ? (state.estimatedVoyageDays ?? state.totalDays ?? state.daysTotal) : null) ??
+    (Number(liveContext.estimatedVoyageDays) > 0 ? liveContext.estimatedVoyageDays : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('voyage-days')?.value : null) ??
+    state.estimatedVoyageDays ??
+    liveContext.estimatedVoyageDays ??
+    0
+  ) || 0;
+
+  const ballastDays = Number(
+    (Number(state.ballastDays ?? state.daysBallast ?? state.diasLastre) > 0 ? (state.ballastDays ?? state.daysBallast ?? state.diasLastre) : null) ??
+    (Number(liveContext.ballastDays) > 0 ? liveContext.ballastDays : null) ??
+    (typeof document !== 'undefined' ? document.getElementById('input-ballastDays')?.value : null) ??
+    state.ballastDays ??
+    liveContext.ballastDays ??
+    0
+  ) || 0;
+
+  const flatContext = {
+    suite: "SeaCharter Core PRO",
+    modulo_actual: moduloActual,
+    vista_activa: vistaActiva,
+    pol,
+    pod,
+    commodity,
+    cargoType,
+    cargoQty,
+    loadRate,
+    dischargeRate,
+    breakEven,
+    fleteUnitario,
+    tceDiario,
+    freightTerms,
+    vesselType,
+    estimatedVoyageDays,
+    ballastDays
+  };
+
+  // Excluir explícitamente cualquier campo pesado o duplicado
+  delete flatContext.sensitivityAnalysis;
+  delete flatContext.rawDocumentText;
+  delete flatContext.madreUltimaAuditoria;
+  delete flatContext.reporte_estrategico;
+  delete flatContext.reporteEstrategico;
+  delete flatContext.fullAuditData;
+
+  return flatContext;
+}
+
   // 5. activeScreenContext: aislar cuando hay auditoría documental activa
   // Deja activeScreenContext vacío ({}) salvo que el usuario tenga datos reales introducidos en la calculadora
   let activeScreenContext = {};
@@ -1171,26 +1439,14 @@ function extractDynamicAuditContext() {
     if (hasRealCalculatorData()) {
       const liveContext = typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {};
       const liveState = typeof window !== 'undefined' ? (window.State || {}) : {};
-      activeScreenContext = {
-        ...liveContext,
-        ...liveState
-      };
-      if (activeScreenContext.captura_dom?.alertas) {
-        delete activeScreenContext.captura_dom.alertas;
-      }
-      if (typeof activeScreenContext.elementos_visibles === 'string') {
-        activeScreenContext.elementos_visibles = activeScreenContext.elementos_visibles
-          .replace(/.*NOTICE: THIS VESSEL IS NOT COMPATIBLE.*\n?/gi, '')
-          .replace(/.*Faltan datos operativos.*\n?/gi, '');
-      }
+      activeScreenContext = buildFlatActiveScreenContext(liveContext, liveState);
     } else {
       activeScreenContext = {};
     }
   } else {
-    activeScreenContext = {
-      ...(typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {}),
-      ...(typeof window !== 'undefined' ? (window.State || {}) : {})
-    };
+    const liveContext = typeof getCoreProUIContext === 'function' ? getCoreProUIContext() : {};
+    const liveState = typeof window !== 'undefined' ? (window.State || {}) : {};
+    activeScreenContext = buildFlatActiveScreenContext(liveContext, liveState);
   }
 
   return {
@@ -1958,6 +2214,14 @@ export function GlobalMadreDrawer({
 
     if (hasCriticalAudit && effectiveAudit) {
       payload.scanMode = "audit_critical";
+      if (effectiveAudit.activeScreenContext && typeof effectiveAudit.activeScreenContext === 'object') {
+        delete effectiveAudit.activeScreenContext.sensitivityAnalysis;
+        delete effectiveAudit.activeScreenContext.rawDocumentText;
+        delete effectiveAudit.activeScreenContext.madreUltimaAuditoria;
+        delete effectiveAudit.activeScreenContext.reporte_estrategico;
+        delete effectiveAudit.activeScreenContext.reporteEstrategico;
+        delete effectiveAudit.activeScreenContext.fullAuditData;
+      }
       payload.auditPayload = effectiveAudit;
       const focusQuestion = focusQuestionFromScan !== null
         ? focusQuestionFromScan
@@ -2177,7 +2441,7 @@ export function GlobalMadreDrawer({
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(safeCloneForJson(payload)),
       });
 
       try {
