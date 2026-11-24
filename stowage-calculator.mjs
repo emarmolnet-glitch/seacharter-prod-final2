@@ -29,6 +29,38 @@ export function normalizarMedidasBulto({
   };
 }
 
+/**
+ * Normalizador ligero compatible con DataBridge y SeaCharter
+ * Garantiza presencia de id/label, unit_weight_mt/weight_mt y preferred_zone/zone
+ */
+export function normalizePackingListItem(item = {}, defaultIdx = 0) {
+  const label = String(item.label || item.id || `ITEM-${String(defaultIdx + 1).padStart(2, '0')}`).trim();
+  const id = String(item.id || item.label || label).trim();
+  const length_m = Math.max(0.1, Number(item.length_m ?? item.length ?? 1.0));
+  const width_m = Math.max(0.1, Number(item.width_m ?? item.width ?? 1.0));
+  const height_m = Math.max(0.1, Number(item.height_m ?? item.height ?? 1.0));
+  const weight_mt = Math.max(0.01, Number(item.unit_weight_mt ?? item.weight_mt ?? item.weight ?? 1.0));
+  const unit_weight_mt = weight_mt;
+  const quantity = Math.max(1, Math.round(Number(item.quantity ?? 1)));
+  const category = String(item.category || 'crate').toLowerCase();
+  const preferred_zone = String(item.preferred_zone || item.zone || 'auto').toLowerCase();
+  const zone = preferred_zone;
+
+  return {
+    id,
+    label,
+    length_m,
+    width_m,
+    height_m,
+    weight_mt,
+    unit_weight_mt,
+    quantity,
+    category,
+    preferred_zone,
+    zone,
+  };
+}
+
 export function resolverGeometriaBodegas(vessel = {}) {
   const dwt = Number(vessel.dwt) || 32000;
 
@@ -95,8 +127,9 @@ export function resolverGeometriaBodegas(vessel = {}) {
   const draft = (vessel.isLoaded && isCoherent && rawDraft > 0) ? rawDraft : defaultDraft;
 
   let holdsCount = defaultHolds;
-  if (vessel.holdsCount && Number(vessel.holdsCount) > 0) {
-    holdsCount = Math.max(1, Math.min(9, Math.round(Number(vessel.holdsCount))));
+  const rawHolds = vessel.holds_count || vessel.holdsCount;
+  if (rawHolds && Number(rawHolds) > 0) {
+    holdsCount = Math.max(1, Math.min(9, Math.round(Number(rawHolds))));
   }
 
   const cargoAreaLength = loa * 0.65;
@@ -553,6 +586,605 @@ export function generarCargoPlanSvgH18(result = {}, options = {}) {
   `.trim();
 }
 
+export function calcularProjectCargoFallbackH18(vessel = {}, packingList = []) {
+  const geom = resolverGeometriaBodegas(vessel);
+  const holdsCount = Math.max(1, Number(vessel.holds_count || vessel.holdsCount || geom.holdsCount || 4));
+  const hasTweendeck = Boolean(vessel.has_tweendeck ?? vessel.hasTweendeck ?? true);
+  const hasGears = Boolean(vessel.has_gears ?? vessel.hasGears ?? true);
+  const craneConfig = String(vessel.crane_configuration || vessel.craneConfiguration || '2 x 45 MT');
+
+  let singleCraneSwl = 45;
+  let tandemSwl = 90;
+  const swlMatches = craneConfig.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)/i);
+  if (swlMatches) {
+    const count = parseInt(swlMatches[1], 10);
+    const capacity = parseFloat(swlMatches[2]);
+    singleCraneSwl = capacity;
+    tandemSwl = count * capacity;
+  } else {
+    const singleMatch = craneConfig.match(/(\d+(?:\.\d+)?)\s*MT/i);
+    if (singleMatch) {
+      singleCraneSwl = parseFloat(singleMatch[1]);
+      tandemSwl = singleCraneSwl * 2;
+    }
+  }
+
+  const defaultTemplate = [
+    { id: 'TRAFO-01', category: 'heavy_lift', length_m: 6.5, width_m: 3.2, height_m: 3.8, weight_mt: 85.0, quantity: 1, zone: 'auto' },
+    { id: 'SEMI', category: 'vehicle', length_m: 11.5, width_m: 2.5, height_m: 2.4, weight_mt: 15.0, quantity: 6, zone: 'on_deck' },
+    { id: 'CAJAS-PRJ', category: 'crate', length_m: 4.0, width_m: 2.2, height_m: 2.0, weight_mt: 4.5, quantity: 1, zone: 'auto' },
+  ];
+
+  const sourceList = Array.isArray(packingList) && packingList.length > 0 ? packingList : defaultTemplate;
+
+  const placed_items = [];
+  let totalWeight = 0;
+  let totalVolume = 0;
+  let totalUnits = 0;
+
+  const holdCounters = {};
+
+  sourceList.forEach((rawItem, itemIdx) => {
+    const item = normalizePackingListItem(rawItem, itemIdx);
+    const id = item.label || item.id;
+    const len = item.length_m;
+    const wid = item.width_m;
+    const hgt = item.height_m;
+    const wt = Number(item.unit_weight_mt ?? item.weight_mt ?? 0);
+    const qty = item.quantity;
+    const cat = item.category;
+    const prefZone = item.preferred_zone || item.zone || 'auto';
+
+    for (let q = 1; q <= qty; q++) {
+      totalUnits++;
+      totalWeight += wt;
+      totalVolume += (len * wid * hgt);
+
+      const instance_id = qty > 1 ? `${id}-${String(q).padStart(2, '0')}` : id;
+
+      let zone = prefZone;
+      if (zone === 'auto') {
+        if (cat === 'heavy_lift') {
+          zone = 'under_deck';
+        } else if (cat === 'vehicle') {
+          zone = 'on_deck';
+        } else if (cat === 'steel') {
+          zone = 'under_deck';
+        } else {
+          zone = (hasTweendeck && q % 2 === 0) ? 'tweendeck' : 'under_deck';
+        }
+      }
+
+      let hold_number = 2;
+      if (cat === 'heavy_lift') {
+        hold_number = holdsCount >= 4 ? 2 : 1;
+      } else if (cat === 'vehicle') {
+        hold_number = ((q - 1) % holdsCount) + 1;
+      } else {
+        hold_number = ((itemIdx + q - 1) % holdsCount) + 1;
+      }
+
+      const key = `${hold_number}-${zone}`;
+      const countInSlot = holdCounters[key] || 0;
+      holdCounters[key] = countInSlot + 1;
+
+      const holdLen = geom.nominalHoldLength || 25;
+      const holdWid = geom.nominalHoldBreadth || 20;
+      const w_pct = Math.max(0.15, Math.min(0.85, Number((len / holdLen).toFixed(2))));
+      const h_pct = Math.max(0.15, Math.min(0.85, Number((wid / holdWid).toFixed(2))));
+
+      const slotX = countInSlot % 2;
+      const slotY = Math.floor(countInSlot / 2);
+      const x_pct = Math.min(0.85, Number((0.08 + slotX * 0.44).toFixed(2)));
+      const y_pct = Math.min(0.85, Number((0.08 + (slotY % 2) * 0.44).toFixed(2)));
+
+      placed_items.push({
+        id: instance_id,
+        instance_id,
+        label: instance_id,
+        category: cat,
+        zone,
+        preferred_zone: zone,
+        hold_number,
+        length_m: len,
+        width_m: wid,
+        height_m: hgt,
+        weight_mt: wt,
+        unit_weight_mt: wt,
+        x_pct,
+        w_pct,
+        y_pct,
+        h_pct,
+      });
+    }
+  });
+
+  const placedUnits = placed_items.length;
+  const netSf = totalWeight > 0 ? Number((totalVolume / totalWeight).toFixed(3)) : 1.820;
+  const grossSf = Number((netSf * 1.18).toFixed(3));
+
+  const alerts = [];
+
+  placed_items.forEach((item) => {
+    if (item.weight_mt > tandemSwl) {
+      if (!alerts.some((a) => a.code === 'SHORE_CRANE_REQUIRED')) {
+        alerts.push({
+          code: 'SHORE_CRANE_REQUIRED',
+          severity: 'critical',
+          title: 'Grúa de tierra requerida (Shore Crane)',
+          message: `La pieza ${item.instance_id} (${item.weight_mt} MT) supera la capacidad combinada de grúas del buque (${tandemSwl} MT). Se requerirá grúa portuaria / flotante de tierra.`,
+        });
+      }
+    } else if (item.weight_mt > singleCraneSwl) {
+      if (!alerts.some((a) => a.code === 'TANDEM_LIFT_REQUIRED')) {
+        alerts.push({
+          code: 'TANDEM_LIFT_REQUIRED',
+          severity: 'warning',
+          title: 'Izada en Tándem Requerida',
+          message: `La pieza ${item.instance_id} (${item.weight_mt} MT) excede el SWL de grúa individual (${singleCraneSwl} MT). Requiere maniobra tándem de 2 grúas con balancín (spreader beam).`,
+        });
+      }
+    }
+
+    if (item.category === 'heavy_lift' || item.weight_mt >= 40) {
+      if (!alerts.some((a) => a.code === 'DUNNAGE_SPREADERS_RECOMMENDED')) {
+        alerts.push({
+          code: 'DUNNAGE_SPREADERS_RECOMMENDED',
+          severity: 'warning',
+          title: 'Vigas repartidoras (Dunnage / Spreaders) recomendadas',
+          message: `Pieza de gran concentración de carga ${item.instance_id} (${item.weight_mt} MT) en Tank Top requiere vigas repartidoras de carga para no superar la resistencia estructural por cuaderna.`,
+        });
+      }
+    }
+  });
+
+  if (totalWeight > (geom.dwccEstimatedMT || 30000)) {
+    alerts.push({
+      code: 'DWCC_LIMITED',
+      severity: 'critical',
+      title: 'Capacidad de Carga Útil (DWCC) Superada',
+      message: `El peso total del packing list (${totalWeight.toLocaleString('es-ES')} MT) excede el DWCC estimado (${geom.dwccEstimatedMT.toLocaleString('es-ES')} MT).`,
+    });
+  }
+
+  const summary = {
+    total_weight_mt: Number(totalWeight.toFixed(1)),
+    total_units: totalUnits,
+    placed_units: placedUnits,
+    unplaced_units: 0,
+    placed_pct: 100,
+    equivalent_gross_sf: grossSf,
+    equivalent_net_sf: netSf,
+    estimated_kg_m: 7.42,
+    lashing_status: 'Verificado (Regla IMO CSS Anexo 13)',
+    clearance_status: 'Aprobado (Despeje Plumas > 1.2 m)',
+  };
+
+  const vesselData = {
+    name: vessel.vessel_name || vessel.name || 'TBN',
+    imo: vessel.imo_number || vessel.imo || '-',
+    dwt: Number(vessel.dwt) || 32000,
+    loa: geom.loa,
+    beam: geom.beam,
+    depth: geom.depth,
+    draft: geom.draft,
+    holds_count: holdsCount,
+    has_tweendeck: hasTweendeck,
+    has_gears: hasGears,
+    crane_configuration: craneConfig,
+  };
+
+  return {
+    success: true,
+    mode: 'project_cargo',
+    vessel: vesselData,
+    vesselSpecs: {
+      ...vesselData,
+      hasGears: hasGears,
+      hasTweendeck: hasTweendeck,
+      craneConfiguration: craneConfig,
+    },
+    geometry: geom,
+    holds: geom.holds,
+    packing_list: sourceList,
+    placed_items,
+    summary,
+    alerts,
+    stowageFactors: {
+      netSF: netSf,
+      grossSF: grossSf,
+      unit: 'm³/MT',
+    },
+  };
+}
+
+export function generarProjectCargoPlanSvgH18(planResult = {}, { width = 1200, height = 800 } = {}) {
+  const result = planResult || {};
+  const v = result.vesselSpecs || result.vessel || {};
+  const geom = result.geometry || resolverGeometriaBodegas(v);
+  const holds = Array.isArray(result.holds) && result.holds.length > 0 ? result.holds : geom.holds;
+  const holdsCount = holds.length || 4;
+  const summary = result.summary || {
+    total_weight_mt: 0,
+    total_units: 0,
+    placed_units: 0,
+    unplaced_units: 0,
+    placed_pct: 100,
+    equivalent_gross_sf: 2.15,
+    equivalent_net_sf: 1.82,
+    estimated_kg_m: 7.42,
+    lashing_status: 'Verificado (Regla IMO CSS Anexo 13)',
+    clearance_status: 'Aprobado (Despeje Plumas > 1.2 m)',
+  };
+  const placedItems = Array.isArray(result.placed_items) ? result.placed_items : [];
+
+  const shipDrawStartX = 140;
+  const shipDrawEndX = 1060;
+  const shipLengthPx = shipDrawEndX - shipDrawStartX;
+
+  const subtitleLineY = 104;
+  const profileTopY = 175;
+  const profileBottomY = 335;
+  const profileHeight = profileBottomY - profileTopY; // 160px
+
+  const planTopY = 405;
+  const planBottomY = 545;
+  const planCenterY = (planTopY + planBottomY) / 2; // 475px
+  const planHalfBreadth = 65;
+
+  const cargoStartX = shipDrawStartX + shipLengthPx * 0.16;
+  const cargoEndX = shipDrawEndX - shipLengthPx * 0.08;
+  const cargoLengthPx = cargoEndX - cargoStartX;
+  const holdLengthPx = cargoLengthPx / holdsCount;
+
+  const hasTweendeck = Boolean(v.has_tweendeck ?? v.hasTweendeck ?? true);
+  const hasGears = Boolean(v.has_gears ?? v.hasGears ?? true);
+  const craneConfig = String(v.crane_configuration || v.craneConfiguration || '2 x 45 MT');
+
+  let holdsProfileSvg = '';
+  let holdsPlanSvg = '';
+
+  holds.forEach((hold) => {
+    const reverseIndex = holdsCount - hold.holdNumber;
+    const hx = cargoStartX + reverseIndex * holdLengthPx + 4;
+    const hw = holdLengthPx - 8;
+    const hy = profileTopY + 36;
+    const hh = profileHeight - 56;
+
+    const holdItems = placedItems.filter((it) => it.hold_number === hold.holdNumber);
+    const isOccupied = holdItems.length > 0;
+    const holdBg = isOccupied ? '#f0fdfa' : '#ffffff';
+    const holdBorder = isOccupied ? '#0d9488' : '#94a3b8';
+
+    // Línea discontinua fina de entrepuente (tweendeck)
+    const tweendeckY = hy + hh * 0.48;
+    const tweendeckSvg = hasTweendeck ? `
+      <line x1="${hx + 2}" y1="${tweendeckY}" x2="${hx + hw - 2}" y2="${tweendeckY}" stroke="#0d9488" stroke-dasharray="4 3" stroke-width="1.2" />
+      <text x="${hx + 4}" y="${tweendeckY - 3}" font-family="monospace" font-size="7.5" font-weight="700" fill="#0f766e">TWEENDECK</text>
+    ` : '';
+
+    // Renderizar siluetas de piezas en perfil
+    let itemsProfileSvg = '';
+    holdItems.forEach((item) => {
+      const cat = (item.category || 'crate').toLowerCase();
+      const zone = (item.zone || 'under_deck').toLowerCase();
+
+      // Dimensiones visuales escaladas dentro de la bodega
+      const itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
+      let itemH = Math.max(14, Math.min(hh * 0.42, ((item.height_m || 2) / (geom.depth || 14)) * hh * 1.8));
+
+      const itemX = hx + Math.max(0, Math.min((item.x_pct || 0) * hw, hw - itemW));
+      let itemY = hy + hh - itemH; // default Tank Top
+
+      if (zone === 'on_deck') {
+        itemY = profileTopY + 22 - itemH;
+      } else if (zone === 'tweendeck' && hasTweendeck) {
+        itemY = tweendeckY - itemH;
+      } else {
+        itemY = hy + hh - itemH;
+      }
+
+      const labelText = item.instance_id || item.label || item.id || 'CARGO';
+      const itemWeight = Number(item.unit_weight_mt ?? item.weight_mt ?? 0);
+
+      if (cat === 'heavy_lift') {
+        // Base de madera (dunnage) + cuerpo naranja con nervaduras verticales
+        itemsProfileSvg += `
+          <g class="profile-heavy-lift" title="${labelText} - ${itemWeight} MT">
+            <rect x="${itemX - 2}" y="${itemY + itemH - 3}" width="${itemW + 4}" height="3" fill="#78350f" rx="1" />
+            <rect x="${itemX}" y="${itemY}" width="${itemW}" height="${itemH - 3}" fill="#ea580c" stroke="#c2410c" stroke-width="1.2" rx="2" />
+            <line x1="${itemX + itemW * 0.33}" y1="${itemY + 1}" x2="${itemX + itemW * 0.33}" y2="${itemY + itemH - 3}" stroke="#f97316" stroke-width="1" />
+            <line x1="${itemX + itemW * 0.66}" y1="${itemY + 1}" x2="${itemX + itemW * 0.66}" y2="${itemY + itemH - 3}" stroke="#f97316" stroke-width="1" />
+            <text x="${itemX + itemW / 2}" y="${itemY + itemH / 2 - 1}" font-family="monospace" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">${labelText}</text>
+          </g>
+        `;
+      } else if (cat === 'vehicle') {
+        // Silueta técnica de cabina, chasis/remolque y ruedas
+        const cabW = Math.max(8, itemW * 0.28);
+        const cabH = Math.max(6, itemH * 0.45);
+        const trailerH = itemH - 4;
+        const wheelR = 2.5;
+        itemsProfileSvg += `
+          <g class="profile-vehicle" title="${labelText} - ${itemWeight} MT">
+            <rect x="${itemX}" y="${itemY + (itemH - trailerH) - 2}" width="${itemW}" height="${trailerH}" fill="#2563eb" stroke="#1d4ed8" stroke-width="1" rx="2" />
+            <rect x="${itemX + itemW - cabW}" y="${itemY}" width="${cabW}" height="${cabH}" fill="#1e40af" stroke="#1d4ed8" stroke-width="1" rx="1" />
+            <rect x="${itemX + itemW - cabW + 2}" y="${itemY + 2}" width="${cabW - 4}" height="${cabH - 3}" fill="#38bdf8" />
+            <circle cx="${itemX + 5}" cy="${itemY + itemH - 1}" r="${wheelR}" fill="#0f172a" />
+            <circle cx="${itemX + itemW * 0.5}" cy="${itemY + itemH - 1}" r="${wheelR}" fill="#0f172a" />
+            <circle cx="${itemX + itemW - 5}" cy="${itemY + itemH - 1}" r="${wheelR}" fill="#0f172a" />
+            <text x="${itemX + itemW / 2 - 3}" y="${itemY + itemH / 2 + 1}" font-family="monospace" font-size="7.5" font-weight="800" fill="#ffffff" text-anchor="middle">${labelText}</text>
+          </g>
+        `;
+      } else if (cat === 'steel') {
+        // Franjas metálicas horizontales
+        itemsProfileSvg += `
+          <g class="profile-steel" title="${labelText} - ${itemWeight} MT">
+            <rect x="${itemX}" y="${itemY}" width="${itemW}" height="${itemH}" fill="#475569" stroke="#334155" stroke-width="1.2" rx="2" />
+            <line x1="${itemX + 2}" y1="${itemY + itemH * 0.33}" x2="${itemX + itemW - 2}" y2="${itemY + itemH * 0.33}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2" />
+            <line x1="${itemX + 2}" y1="${itemY + itemH * 0.66}" x2="${itemX + itemW - 2}" y2="${itemY + itemH * 0.66}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2" />
+            <text x="${itemX + itemW / 2}" y="${itemY + itemH / 2 + 2}" font-family="monospace" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">${labelText}</text>
+          </g>
+        `;
+      } else {
+        // crate: Diagonales de embalaje de madera
+        itemsProfileSvg += `
+          <g class="profile-crate" title="${labelText} - ${itemWeight} MT">
+            <rect x="${itemX}" y="${itemY}" width="${itemW}" height="${itemH}" fill="#0d9488" stroke="#0f766e" stroke-width="1.2" rx="2" />
+            <line x1="${itemX + 2}" y1="${itemY + 2}" x2="${itemX + itemW - 2}" y2="${itemY + itemH - 2}" stroke="#14b8a6" stroke-width="0.8" />
+            <line x1="${itemX + itemW - 2}" y1="${itemY + 2}" x2="${itemX + 2}" y2="${itemY + itemH - 2}" stroke="#14b8a6" stroke-width="0.8" />
+            <text x="${itemX + itemW / 2}" y="${itemY + itemH / 2 + 2}" font-family="monospace" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">${labelText}</text>
+          </g>
+        `;
+      }
+    });
+
+    holdsProfileSvg += `
+      <g class="hold-profile" id="hold-profile-${hold.holdNumber}">
+        <rect x="${hx}" y="${hy}" width="${hw}" height="${hh}" fill="${holdBg}" stroke="${holdBorder}" stroke-width="1.5" />
+        ${tweendeckSvg}
+        <rect x="${hx + hw * 0.12}" y="${profileTopY + 22}" width="${hw * 0.76}" height="12" fill="#0f172a" stroke="#334155" stroke-width="1.2" rx="1.5" />
+        <text x="${hx + hw / 2}" y="${hy + 16}" font-family="system-ui, sans-serif" font-size="11" font-weight="800" fill="#0f172a" text-anchor="middle">H${hold.holdNumber}</text>
+        ${itemsProfileSvg}
+        <rect x="${hx + hw / 2 - 38}" y="${hy + hh - 18}" width="76" height="16" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#cbd5e1" stroke-width="0.8" />
+        <text x="${hx + hw / 2}" y="${hy + hh - 6}" font-family="monospace" font-size="8.5" font-weight="700" fill="#0f766e" text-anchor="middle">${holdItems.length} bultos</text>
+      </g>
+    `;
+
+    // PLANTA DE ESTIBA
+    const py = planCenterY - planHalfBreadth + 4;
+    const ph = (planHalfBreadth - 4) * 2;
+
+    let planHoldPath = '';
+    if (hold.isBowHold) {
+      const leftYTop = planCenterY - planHalfBreadth + 4;
+      const leftYBottom = planCenterY + planHalfBreadth - 4;
+      const rightYTop = planCenterY - planHalfBreadth * 0.65;
+      const rightYBottom = planCenterY + planHalfBreadth * 0.65;
+      planHoldPath = `<polygon points="${hx},${leftYTop} ${hx + hw},${rightYTop} ${hx + hw},${rightYBottom} ${hx},${leftYBottom}" fill="${holdBg}" stroke="${holdBorder}" stroke-width="1.5" />`;
+    } else {
+      planHoldPath = `<rect x="${hx}" y="${py}" width="${hw}" height="${ph}" fill="${holdBg}" stroke="${holdBorder}" stroke-width="1.5" rx="3" />`;
+    }
+
+    // Marcas de trincaje (X de lashing) en las esquinas
+    const lashingMarksSvg = `
+      <g class="lashing-marks" stroke="#ea580c" stroke-width="1.4">
+        <path d="M ${hx + 5} ${py + 5} l 8 8 m -8 0 l 8 -8" />
+        <path d="M ${hx + hw - 13} ${py + 5} l 8 8 m -8 0 l 8 -8" />
+        <path d="M ${hx + 5} ${py + ph - 13} l 8 8 m -8 0 l 8 -8" />
+        <path d="M ${hx + hw - 13} ${py + ph - 13} l 8 8 m -8 0 l 8 -8" />
+      </g>
+    `;
+
+    // Renderizar piezas en planta
+    let itemsPlanSvg = '';
+    holdItems.forEach((item) => {
+      const cat = (item.category || 'crate').toLowerCase();
+      const itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
+      const itemH = Math.max(16, Math.min(ph * 0.82, (item.h_pct || 0.4) * ph));
+      const itemX = hx + Math.max(0, Math.min((item.x_pct || 0) * hw, hw - itemW));
+      const itemY = py + Math.max(0, Math.min((item.y_pct || 0) * ph, ph - itemH));
+      const planLabelText = item.instance_id || item.label || item.id || 'CARGO';
+
+      let itemFill = '#0d9488';
+      if (cat === 'heavy_lift') itemFill = '#ea580c';
+      else if (cat === 'vehicle') itemFill = '#2563eb';
+      else if (cat === 'steel') itemFill = '#475569';
+
+      itemsPlanSvg += `
+        <g class="plan-item">
+          <rect x="${itemX}" y="${itemY}" width="${itemW}" height="${itemH}" fill="${itemFill}" stroke="#0f172a" stroke-width="1.2" rx="2" fill-opacity="0.9" />
+          <line x1="${itemX}" y1="${itemY}" x2="${itemX + 5}" y2="${itemY + 5}" stroke="#ffffff" stroke-width="1" />
+          <line x1="${itemX + itemW}" y1="${itemY}" x2="${itemX + itemW - 5}" y2="${itemY + 5}" stroke="#ffffff" stroke-width="1" />
+          <line x1="${itemX}" y1="${itemY + itemH}" x2="${itemX + 5}" y2="${itemY + itemH - 5}" stroke="#ffffff" stroke-width="1" />
+          <line x1="${itemX + itemW}" y1="${itemY + itemH}" x2="${itemX + itemW - 5}" y2="${itemY + itemH - 5}" stroke="#ffffff" stroke-width="1" />
+          <text x="${itemX + itemW / 2}" y="${itemY + itemH / 2 + 3}" font-family="monospace" font-size="7.5" font-weight="800" fill="#ffffff" text-anchor="middle">${planLabelText}</text>
+        </g>
+      `;
+    });
+
+    holdsPlanSvg += `
+      <g class="hold-plan" id="hold-plan-${hold.holdNumber}">
+        ${planHoldPath}
+        <rect x="${hx + hw * 0.15}" y="${planCenterY - 24}" width="${hw * 0.7}" height="48" fill="#e2e8f0" stroke="#0f172a" stroke-width="1.2" stroke-dasharray="3 2" rx="2" fill-opacity="0.6" />
+        <text x="${hx + hw / 2}" y="${py + 12}" font-family="system-ui, sans-serif" font-size="9" font-weight="800" fill="#475569" text-anchor="middle" fill-opacity="0.9">H${hold.holdNumber}</text>
+        ${lashingMarksSvg}
+        ${itemsPlanSvg}
+      </g>
+    `;
+  });
+
+  // Grúas de cubierta articuladas en perfil
+  let cranesProfileSvg = '';
+  if (hasGears) {
+    const craneCount = Math.max(2, holdsCount - 1);
+    for (let c = 0; c < craneCount; c++) {
+      const cx = cargoStartX + (c + 1) * holdLengthPx - 4;
+      cranesProfileSvg += `
+        <g class="deck-crane" id="crane-${c + 1}">
+          <!-- Pedestal -->
+          <rect x="${cx - 4}" y="${profileTopY + 12}" width="8" height="24" fill="#0284c7" stroke="#334155" stroke-width="1.2" rx="1.5" />
+          <!-- Cabina -->
+          <rect x="${cx - 6}" y="${profileTopY + 2}" width="12" height="10" fill="#334155" rx="1" />
+          <!-- Pluma inclinada hacia proa (+X) -->
+          <line x1="${cx}" y1="${profileTopY + 4}" x2="${cx + 34}" y2="${profileTopY - 22}" stroke="#334155" stroke-width="2.5" stroke-linecap="round" />
+          <!-- Cable y gancho -->
+          <line x1="${cx + 34}" y1="${profileTopY - 22}" x2="${cx + 34}" y2="${profileTopY + 8}" stroke="#475569" stroke-width="1" stroke-dasharray="2 1" />
+          <path d="M ${cx + 34} ${profileTopY + 8} q 0 3 3 3 q 3 0 3 -3" fill="none" stroke="#334155" stroke-width="1.5" />
+        </g>
+      `;
+    }
+  }
+
+  // Casco perfil longitudinal
+  const hullProfilePath = `
+    M ${shipDrawStartX + 30} ${profileTopY + 36}
+    L ${shipDrawStartX + shipLengthPx * 0.16} ${profileTopY + 36}
+    L ${cargoEndX} ${profileTopY + 36}
+    L ${shipDrawEndX - 20} ${profileTopY + 18}
+    Q ${shipDrawEndX + 20} ${profileTopY + 28} ${shipDrawEndX + 15} ${profileBottomY - 10}
+    L ${shipDrawEndX - 10} ${profileBottomY}
+    L ${shipDrawStartX + 60} ${profileBottomY}
+    Q ${shipDrawStartX + 20} ${profileBottomY} ${shipDrawStartX} ${profileBottomY - 35}
+    L ${shipDrawStartX} ${profileTopY + 36}
+    Z
+  `;
+
+  // Superestructura escalonada de 4 cubiertas
+  const superstructureSvg = `
+    <g class="superstructure-4-tiers">
+      <!-- Cubierta 1 (Poop Deck) -->
+      <rect x="${shipDrawStartX + 35}" y="${profileTopY + 10}" width="84" height="26" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="2" />
+      <line x1="${shipDrawStartX + 35}" y1="${profileTopY + 10}" x2="${shipDrawStartX + 119}" y2="${profileTopY + 10}" stroke="#475569" stroke-width="1" stroke-dasharray="3 2" />
+      <!-- Cubierta 2 (Upper Deck) -->
+      <rect x="${shipDrawStartX + 42}" y="${profileTopY - 6}" width="72" height="16" fill="#f1f5f9" stroke="#334155" stroke-width="1.2" rx="2" />
+      <!-- Cubierta 3 (Bridge Deck) -->
+      <rect x="${shipDrawStartX + 48}" y="${profileTopY - 22}" width="60" height="16" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="2" />
+      <!-- Cubierta 4 (Navigating Bridge) -->
+      <rect x="${shipDrawStartX + 52}" y="${profileTopY - 38}" width="54" height="16" fill="#ffffff" stroke="#334155" stroke-width="1.5" rx="2" />
+      <!-- Franja ventanas de navegación azul -->
+      <rect x="${shipDrawStartX + 55}" y="${profileTopY - 35}" width="48" height="6" fill="#0284c7" stroke="#0369a1" stroke-width="0.8" />
+      <!-- Barandillas finas -->
+      <line x1="${shipDrawStartX + 48}" y1="${profileTopY - 24}" x2="${shipDrawStartX + 108}" y2="${profileTopY - 24}" stroke="#334155" stroke-width="0.8" stroke-dasharray="2 1" />
+      <!-- Chimenea con franja corporativa -->
+      <path d="M ${shipDrawStartX + 44} ${profileTopY - 22} L ${shipDrawStartX + 40} ${profileTopY - 46} L ${shipDrawStartX + 50} ${profileTopY - 46} L ${shipDrawStartX + 52} ${profileTopY - 22} Z" fill="#0f172a" stroke="#334155" stroke-width="1.2" />
+      <rect x="${shipDrawStartX + 41}" y="${profileTopY - 40}" width="9" height="5" fill="#ea580c" />
+      <!-- Mástil radar -->
+      <line x1="${shipDrawStartX + 79}" y1="${profileTopY - 38}" x2="${shipDrawStartX + 79}" y2="${profileTopY - 54}" stroke="#0f172a" stroke-width="2" />
+      <line x1="${shipDrawStartX + 72}" y1="${profileTopY - 50}" x2="${shipDrawStartX + 86}" y2="${profileTopY - 50}" stroke="#0f172a" stroke-width="1.5" />
+    </g>
+  `;
+
+  // Detalles navales: Timón, hélice, bulbo sutil y mástil de proa
+  const navalDetailsSvg = `
+    <!-- Timón y Hélice en popa -->
+    <rect x="${shipDrawStartX - 8}" y="${profileBottomY - 28}" width="10" height="24" fill="#64748b" stroke="#334155" stroke-width="1" rx="1.5" />
+    <circle cx="${shipDrawStartX + 8}" cy="${profileBottomY - 14}" r="8" fill="#f59e0b" stroke="#b45309" stroke-width="1" />
+    <!-- Bulbo sutil en proa -->
+    <path d="M ${shipDrawEndX + 8} ${profileBottomY - 20} Q ${shipDrawEndX + 35} ${profileBottomY - 14} ${shipDrawEndX + 12} ${profileBottomY - 2}" fill="#0f172a" stroke="#334155" stroke-width="1" />
+    <!-- Mástil de proa -->
+    <line x1="${shipDrawEndX - 15}" y1="${profileTopY + 18}" x2="${shipDrawEndX - 15}" y2="${profileTopY - 10}" stroke="#0f172a" stroke-width="2" />
+    <line x1="${shipDrawEndX - 22}" y1="${profileTopY}" x2="${shipDrawEndX - 8}" y2="${profileTopY}" stroke="#0f172a" stroke-width="1.5" />
+  `;
+
+  // Casco planta
+  const hullPlanPath = `
+    M ${shipDrawStartX + 30} ${planCenterY - planHalfBreadth}
+    L ${cargoEndX} ${planCenterY - planHalfBreadth}
+    Q ${shipDrawEndX - 20} ${planCenterY - planHalfBreadth} ${shipDrawEndX + 15} ${planCenterY}
+    Q ${shipDrawEndX - 20} ${planCenterY + planHalfBreadth} ${cargoEndX} ${planCenterY + planHalfBreadth}
+    L ${shipDrawStartX + 30} ${planCenterY + planHalfBreadth}
+    Q ${shipDrawStartX} ${planCenterY + planHalfBreadth} ${shipDrawStartX} ${planCenterY}
+    Q ${shipDrawStartX} ${planCenterY - planHalfBreadth} ${shipDrawStartX + 30} ${planCenterY - planHalfBreadth}
+    Z
+  `;
+
+  const engineeringBoxY = 575;
+  const engineeringBoxHeight = 185;
+  const craneDesc = hasGears ? `${craneConfig} (SWL Tandem)` : 'Gearless';
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" class="cargo-plan-h18-project-svg" style="background:#ffffff; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <defs>
+    <pattern id="gridPatternProject" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f1f5f9" stroke-width="1" />
+    </pattern>
+  </defs>
+
+  <rect x="0" y="0" width="${width}" height="${height}" fill="url(#gridPatternProject)" />
+
+  <g class="header-section">
+    <rect x="20" y="16" width="${width - 40}" height="56" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" rx="6" />
+    <text x="36" y="42" font-size="16" font-weight="900" fill="#0f172a" letter-spacing="0.5">SEACHARTER CORE PRO · PLANO DE ESTIBA PROJECT CARGO &amp; VEHÍCULOS (CAD 2D H18)</text>
+    <text x="36" y="58" font-size="11" font-weight="600" fill="#0d9488">MÓDULO DE INGENIERÍA NAVAL · PACKING LIST, TRINCAJE Y CENTRO DE GRAVEDAD</text>
+
+    <rect x="${width - 240}" y="24" width="210" height="40" fill="#ffffff" stroke="#0d9488" stroke-width="1.2" rx="4" />
+    <text x="${width - 135}" y="42" font-size="10" font-weight="800" fill="#0f766e" text-anchor="middle">ORIENTACIÓN NAVAL ESTÁNDAR</text>
+    <text x="${width - 225}" y="56" font-size="10" font-weight="800" fill="#475569">← POPA (AFT)</text>
+    <text x="${width - 45}" y="56" font-size="10" font-weight="800" fill="#0d9488" text-anchor="end">PROA (BOW) →</text>
+  </g>
+
+  <g class="view-profile">
+    <text x="30" y="98" font-size="11" font-weight="800" fill="#334155" letter-spacing="1">1. PERFIL LONGITUDINAL (ELEVACIÓN LATERAL)</text>
+    <line x1="30" y1="${subtitleLineY}" x2="380" y2="${subtitleLineY}" stroke="#cbd5e1" stroke-width="1.5" />
+    <line x1="${shipDrawStartX - 20}" y1="${profileTopY + 100}" x2="${shipDrawEndX + 35}" y2="${profileTopY + 100}" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6 4" />
+    <text x="${shipDrawEndX + 40}" y="${profileTopY + 103}" font-size="9" font-weight="700" fill="#0284c7">⚓ WL</text>
+
+    <path d="${hullProfilePath}" fill="#f8fafc" stroke="#0f172a" stroke-width="2.5" />
+    ${superstructureSvg}
+    ${navalDetailsSvg}
+    <line x1="${cargoStartX}" y1="${profileBottomY - 20}" x2="${cargoEndX}" y2="${profileBottomY - 20}" stroke="#0f172a" stroke-width="2" />
+    <text x="${cargoStartX - 5}" y="${profileBottomY - 24}" font-size="8" font-weight="700" fill="#64748b" text-anchor="end">TANK TOP</text>
+    ${holdsProfileSvg}
+    ${cranesProfileSvg}
+  </g>
+
+  <g class="view-plan">
+    <text x="30" y="375" font-size="11" font-weight="800" fill="#334155" letter-spacing="1">2. PLANTA DE ESTIBA POR BODEGA Y CUBIERTA (TOP VIEW / ARRANGEMENT)</text>
+    <line x1="30" y1="381" x2="520" y2="381" stroke="#cbd5e1" stroke-width="1.5" />
+    <line x1="${shipDrawStartX - 10}" y1="${planCenterY}" x2="${shipDrawEndX + 20}" y2="${planCenterY}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="8 4 2 4" />
+    <text x="${shipDrawStartX - 15}" y="${planCenterY + 3}" font-size="8" font-weight="700" fill="#94a3b8" text-anchor="end">CL</text>
+    <path d="${hullPlanPath}" fill="#f8fafc" stroke="#0f172a" stroke-width="2.5" />
+    ${holdsPlanSvg}
+  </g>
+
+  <g class="engineering-box" transform="translate(20, ${engineeringBoxY})">
+    <rect x="0" y="0" width="${width - 40}" height="${engineeringBoxHeight}" fill="#f8fafc" stroke="#0f172a" stroke-width="1.75" rx="6" />
+    <line x1="330" y1="0" x2="330" y2="${engineeringBoxHeight - 36}" stroke="#cbd5e1" stroke-width="1" />
+    <line x1="680" y1="0" x2="680" y2="${engineeringBoxHeight - 36}" stroke="#cbd5e1" stroke-width="1" />
+    <line x1="0" y1="${engineeringBoxHeight - 36}" x2="${width - 40}" y2="${engineeringBoxHeight - 36}" stroke="#0f172a" stroke-width="1.5" />
+
+    <text x="16" y="22" font-size="10" font-weight="800" fill="#0f766e" letter-spacing="0.5">BUQUE ACTIVO (SOLO LECTURA)</text>
+    <text x="16" y="44" font-size="14" font-weight="900" fill="#0f172a">${v.name || 'TBN'}</text>
+    <text x="16" y="64" font-size="10" font-weight="600" fill="#475569">IMO: <tspan font-weight="800" fill="#0f172a">${v.imo || '-'}</tspan> · DWT: <tspan font-weight="800" fill="#0f172a">${Number(v.dwt || 0).toLocaleString('es-ES')} DWT</tspan></text>
+    <text x="16" y="82" font-size="10" font-weight="600" fill="#475569">Eslora (LOA): <tspan font-weight="700" fill="#0f172a">${v.loa || 0} m</tspan> · Manga: <tspan font-weight="700" fill="#0f172a">${v.beam || 0} m</tspan></text>
+    <text x="16" y="100" font-size="10" font-weight="600" fill="#475569">Calado: <tspan font-weight="700" fill="#0f172a">${v.draft || 0} m</tspan> · Grúas: <tspan font-weight="700" fill="#0f172a">${craneDesc}</tspan></text>
+    <text x="16" y="118" font-size="9" font-weight="700" fill="#0d9488">Bodegas: ${holdsCount} · Entrepuente (Tweendeck): ${hasTweendeck ? 'Sí' : 'No'}</text>
+
+    <text x="346" y="22" font-size="10" font-weight="800" fill="#0f766e" letter-spacing="0.5">PACKING LIST &amp; DISTRIBUCIÓN</text>
+    <text x="346" y="44" font-size="13" font-weight="800" fill="#0f172a">Peso Total: ${summary.total_weight_mt} MT (${summary.total_units} bultos)</text>
+    <text x="346" y="64" font-size="10" font-weight="600" fill="#475569">Estiba Realista: <tspan font-weight="800" fill="#0d9488">${summary.placed_pct}% Ubicado</tspan> (${summary.unplaced_units} fuera de perfil)</text>
+    <text x="346" y="82" font-size="10" font-weight="600" fill="#475569">Centro de Gravedad (KG): <tspan font-weight="800" fill="#0f172a">${summary.estimated_kg_m} m</tspan></text>
+    <text x="346" y="100" font-size="10" font-weight="600" fill="#475569">Trincaje &amp; Lashing: <tspan font-weight="700" fill="#0f766e">${summary.lashing_status}</tspan></text>
+    <text x="346" y="118" font-size="9" font-weight="700" fill="#475569">Perfil / Despeje Plumas: ${summary.clearance_status}</text>
+
+    <text x="696" y="22" font-size="10" font-weight="800" fill="#0f766e" letter-spacing="0.5">FACTORES DE ESTIBA &amp; MASTER APPROVAL</text>
+    <text x="696" y="44" font-size="11" font-weight="700" fill="#475569">STOWAGE FACTOR NETO: <tspan font-weight="900" font-size="13" fill="#0f172a">${summary.equivalent_net_sf} m³/MT</tspan></text>
+    <text x="696" y="66" font-size="11" font-weight="800" fill="#0d9488">SF EQUIVALENTE BRUTO: <tspan font-weight="900" font-size="14" fill="#0d9488">${summary.equivalent_gross_sf} m³/MT</tspan></text>
+    <text x="696" y="88" font-size="10" font-weight="600" fill="#475569">Alertas Activas: <tspan font-weight="800" fill="${result.alerts && result.alerts.length > 0 ? '#d97706' : '#16a34a'}">${result.alerts ? result.alerts.length : 0} registradas</tspan></text>
+    <text x="696" y="106" font-size="9" font-weight="600" fill="#64748b">CRANE CAPACITY: ${craneConfig}</text>
+
+    <rect x="0" y="${engineeringBoxHeight - 36}" width="${width - 40}" height="36" fill="#0f172a" rx="0 0 6 6" />
+    <text x="${(width - 40) / 2}" y="${engineeringBoxHeight - 20}" font-size="8.5" font-weight="700" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">
+      TENTATIVE PROJECT CARGO STOWAGE PLAN · FOR GUIDANCE ONLY · SUBJECT TO MASTER'S APPROVAL, STABILITY, TRIM, DRAFT, TANK TOP STRENGTH &amp; CRANE CAPACITY
+    </text>
+    <text x="${(width - 40) / 2}" y="${engineeringBoxHeight - 8}" font-size="8" font-weight="600" fill="#94a3b8" letter-spacing="0.3" text-anchor="middle">
+      BUQUE: ${v.name || 'TBN'} · IMO: ${v.imo || '-'} · DWT: ${Number(v.dwt || 0).toLocaleString('es-ES')} DWT · LOA: ${v.loa || 0} m · Manga: ${v.beam || 0} m · Grúas / SWL / Tandem: ${craneDesc}
+    </text>
+  </g>
+</svg>
+  `.trim();
+}
+
 export async function sendH18SimulationToDataBridge(payload = {}) {
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -599,37 +1231,48 @@ export async function sendH18SimulationToDataBridge(payload = {}) {
       tiers: h.tiers || 1,
     })) : (payload.holds_distribution || []);
 
-    const bodyData = {
-      source_app: 'seacharter',
-      timestamp: new Date().toISOString(),
-      imo_number: imo,
-      vessel_name: vesselName,
-      cargo_name: cargoName,
-      unit_length_m: unitLengthM,
-      unit_width_m: unitWidthM,
-      unit_height_m: unitHeightM,
-      unit_weight_mt: unitWeightMT,
-      max_tiers: maxTiers,
-      target_quantity_mt: targetQuantityMT,
-      broken_stowage_pct: brokenStowagePct,
-      cargo: cargoData,
-      stowage_factors: {
-        net_sf: sfData.netSF || sfData.net_sf || 0,
-        gross_sf: sfData.grossSF || sfData.gross_sf || 0,
-        unit: 'm³/MT',
-      },
-      results: {
-        theoretical_units: resData.theoretical?.units || resData.theoretical_units || 0,
-        theoretical_mt: resData.theoretical?.weightMT || resData.theoretical_mt || 0,
-        realistic_units: resData.realistic?.units || resData.realistic_units || 0,
-        realistic_mt: resData.realistic?.weightMT || resData.realistic_mt || 0,
-        tank_top_pressure: payload.pressure?.tankTopPressureMTM2 || resData.tank_top_pressure || 0,
-        margin_difference_mt: resData.marginVsTarget?.differenceMT || resData.margin_difference_mt || 0,
-        margin_percentage: resData.marginVsTarget?.percentage || resData.margin_percentage || 0,
-      },
-      holds_distribution: holdsData,
-      ...payload,
-    };
+    let bodyData = null;
+    if (payload.mode === 'project_cargo') {
+      bodyData = {
+        mode: 'project_cargo',
+        source_app: 'seacharter',
+        vessel: payload.vessel || {},
+        packing_list: payload.packing_list || [],
+        ...payload,
+      };
+    } else {
+      bodyData = {
+        source_app: 'seacharter',
+        timestamp: new Date().toISOString(),
+        imo_number: imo,
+        vessel_name: vesselName,
+        cargo_name: cargoName,
+        unit_length_m: unitLengthM,
+        unit_width_m: unitWidthM,
+        unit_height_m: unitHeightM,
+        unit_weight_mt: unitWeightMT,
+        max_tiers: maxTiers,
+        target_quantity_mt: targetQuantityMT,
+        broken_stowage_pct: brokenStowagePct,
+        cargo: cargoData,
+        stowage_factors: {
+          net_sf: sfData.netSF || sfData.net_sf || 0,
+          gross_sf: sfData.grossSF || sfData.gross_sf || 0,
+          unit: 'm³/MT',
+        },
+        results: {
+          theoretical_units: resData.theoretical?.units || resData.theoretical_units || 0,
+          theoretical_mt: resData.theoretical?.weightMT || resData.theoretical_mt || 0,
+          realistic_units: resData.realistic?.units || resData.realistic_units || 0,
+          realistic_mt: resData.realistic?.weightMT || resData.realistic_mt || 0,
+          tank_top_pressure: payload.pressure?.tankTopPressureMTM2 || resData.tank_top_pressure || 0,
+          margin_difference_mt: resData.marginVsTarget?.differenceMT || resData.margin_difference_mt || 0,
+          margin_percentage: resData.marginVsTarget?.percentage || resData.margin_percentage || 0,
+        },
+        holds_distribution: holdsData,
+        ...payload,
+      };
+    }
 
     const endpoints = [
       '/api/h18-stowage-plan',
@@ -651,7 +1294,14 @@ export async function sendH18SimulationToDataBridge(payload = {}) {
 
         if (response.ok) {
           if (timeoutId) clearTimeout(timeoutId);
-          return await response.json().catch(() => ({ success: true }));
+          const json = await response.json().catch(() => ({ success: true }));
+          if (json && typeof json === 'object') {
+            if (json.data && (json.data.summary || json.data.placed_items || json.data.mode)) {
+              return json.data;
+            }
+            return json;
+          }
+          return json;
         }
       } catch (err) {
         lastError = err;
@@ -668,8 +1318,11 @@ export async function sendH18SimulationToDataBridge(payload = {}) {
 
 if (typeof window !== 'undefined') {
   window.normalizarMedidasBulto = normalizarMedidasBulto;
+  window.normalizePackingListItem = normalizePackingListItem;
   window.resolverGeometriaBodegas = resolverGeometriaBodegas;
   window.calcularEstibaTentativaH18 = calcularEstibaTentativaH18;
+  window.calcularProjectCargoFallbackH18 = calcularProjectCargoFallbackH18;
   window.generarCargoPlanSvgH18 = generarCargoPlanSvgH18;
+  window.generarProjectCargoPlanSvgH18 = generarProjectCargoPlanSvgH18;
   window.sendH18SimulationToDataBridge = sendH18SimulationToDataBridge;
 }

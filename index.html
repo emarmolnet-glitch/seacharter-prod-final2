@@ -17741,12 +17741,18 @@
                     padding-top: 88px !important;
                 }
             }
+            #view-stowage-h18 #tab-h18-project-cargo.active-teal,
+            #view-stowage-h18 #tab-h18-homogeneous.active-teal,
             #view-stowage-h18 #btn-h18-calculate,
             #view-stowage-h18 #btn-h18-calculate *,
+            #view-stowage-h18 #btn-h18-pc-calculate,
+            #view-stowage-h18 #btn-h18-pc-calculate *,
             #view-stowage-h18 #btn-h18-open-3d,
             #view-stowage-h18 #btn-h18-open-3d *,
             #view-stowage-h18 #btn-h18-apply-sf,
-            #view-stowage-h18 #btn-h18-apply-sf * {
+            #view-stowage-h18 #btn-h18-apply-sf *,
+            #view-stowage-h18 #btn-h18-pc-apply-sf,
+            #view-stowage-h18 #btn-h18-pc-apply-sf * {
                 color: #ffffff !important;
             }
         </style>
@@ -17812,137 +17818,274 @@
                                 <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">Paramétrico</span>
                             </div>
 
-                            <!-- Selector de plantilla rápida -->
-                            <div class="space-y-1">
-                                <label for="h18-template-select" class="block text-[11px] font-bold text-slate-700">Plantilla rápida de carga</label>
-                                <select id="h18-template-select" onchange="applyStowageH18Template(this.value)" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition cursor-pointer">
-                                    <option value="big_bags" selected>Big Bags 1.00×1.00×1.30 m · 1.50 MT</option>
-                                    <option value="europallet">Europallet 1.20×0.80×1.20 m · 1.50 MT</option>
-                                    <option value="bobinas">Bobinas 1.50×1.50×1.20 m · 5.00 MT</option>
-                                    <option value="cajas">Cajas 0.80×0.60×0.60 m · 0.25 MT</option>
-                                    <option value="personalizado">Personalizado (Medidas a medida)</option>
-                                </select>
+                            <!-- Selector limpio de dos pestañas H18 -->
+                            <div class="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200" id="h18-mode-tabs" role="tablist">
+                                <button type="button" id="tab-h18-homogeneous" onclick="switchStowageH18SubTab('homogeneous')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs" role="tab" aria-selected="true">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    <span>Carga Homogénea</span>
+                                </button>
+                                <button type="button" id="tab-h18-project-cargo" onclick="switchStowageH18SubTab('project_cargo')" style="background-color: transparent; color: #475569;" class="flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer hover:text-slate-900" role="tab" aria-selected="false">
+                                    <i class="fa-solid fa-truck-ramp-box"></i>
+                                    <span>Project Cargo / Vehículos (Packing List)</span>
+                                </button>
                             </div>
 
-                            <!-- Nombre de carga -->
-                            <div class="space-y-1">
-                                <label for="h18-input-name" class="block text-[11px] font-bold text-slate-700">Nombre de la mercancía / bulto</label>
-                                <input type="text" id="h18-input-name" value="Big Bags de Cemento / Mineral" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 transition">
-                            </div>
+                            <!-- PANEL 1: CARGA HOMOGÉNEA -->
+                            <div id="h18-panel-homogeneous" class="space-y-4">
+                                <!-- Selector de plantilla rápida -->
+                                <div class="space-y-1">
+                                    <label for="h18-template-select" class="block text-[11px] font-bold text-slate-700">Plantilla rápida de carga</label>
+                                    <select id="h18-template-select" onchange="applyStowageH18Template(this.value)" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition cursor-pointer">
+                                        <option value="big_bags" selected>Big Bags 1.00×1.00×1.30 m · 1.50 MT</option>
+                                        <option value="europallet">Europallet 1.20×0.80×1.20 m · 1.50 MT</option>
+                                        <option value="bobinas">Bobinas 1.50×1.50×1.20 m · 5.00 MT</option>
+                                        <option value="cajas">Cajas 0.80×0.60×0.60 m · 0.25 MT</option>
+                                        <option value="personalizado">Personalizado (Medidas a medida)</option>
+                                    </select>
+                                </div>
 
-                            <!-- Dimensiones del bulto con Toggle m/cm -->
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[11px] font-bold text-slate-700">Dimensiones unitarias</span>
-                                    <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
-                                        <button type="button" id="h18-unit-m" onclick="toggleStowageH18Length('m')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">m</button>
-                                        <button type="button" id="h18-unit-cm" onclick="toggleStowageH18Length('cm')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">cm</button>
+                                <!-- Nombre de carga -->
+                                <div class="space-y-1">
+                                    <label for="h18-input-name" class="block text-[11px] font-bold text-slate-700">Nombre de la mercancía / bulto</label>
+                                    <input type="text" id="h18-input-name" value="Big Bags de Cemento / Mineral" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 transition">
+                                </div>
+
+                                <!-- Dimensiones del bulto con Toggle m/cm -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-bold text-slate-700">Dimensiones unitarias</span>
+                                        <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
+                                            <button type="button" id="h18-unit-m" onclick="toggleStowageH18Length('m')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">m</button>
+                                            <button type="button" id="h18-unit-cm" onclick="toggleStowageH18Length('cm')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">cm</button>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label for="h18-input-length" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Largo</label>
+                                            <input type="number" id="h18-input-length" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        </div>
+                                        <div>
+                                            <label for="h18-input-width" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Ancho</label>
+                                            <input type="number" id="h18-input-width" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        </div>
+                                        <div>
+                                            <label for="h18-input-height" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Alto</label>
+                                            <input type="number" id="h18-input-height" value="1.30" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        </div>
                                     </div>
                                 </div>
+
+                                <!-- Peso unitario con Toggle MT/kg -->
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <label for="h18-input-weight" class="text-[11px] font-bold text-slate-700">Peso unitario</label>
+                                        <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
+                                            <button type="button" id="h18-unit-mt" onclick="toggleStowageH18Weight('MT')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">MT</button>
+                                            <button type="button" id="h18-unit-kg" onclick="toggleStowageH18Weight('kg')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">kg</button>
+                                        </div>
+                                    </div>
+                                    <input type="number" id="h18-input-weight" value="1.50" step="any" min="0.001" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                </div>
+
+                                <!-- Tiers (Capas), Objetivo MT y % Broken Stowage -->
                                 <div class="grid grid-cols-3 gap-2">
                                     <div>
-                                        <label for="h18-input-length" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Largo</label>
-                                        <input type="number" id="h18-input-length" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        <label for="h18-input-tiers" class="block text-[10px] font-bold text-slate-700 mb-0.5">Tiers (1–8)</label>
+                                        <input type="number" id="h18-input-tiers" value="4" min="1" max="8" step="1" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
                                     </div>
                                     <div>
-                                        <label for="h18-input-width" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Ancho</label>
-                                        <input type="number" id="h18-input-width" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        <label for="h18-input-broken" class="block text-[10px] font-bold text-slate-700 mb-0.5">% Broken St.</label>
+                                        <input type="number" id="h18-input-broken" value="5" min="0" max="25" step="0.5" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
                                     </div>
                                     <div>
-                                        <label for="h18-input-height" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Alto</label>
-                                        <input type="number" id="h18-input-height" value="1.30" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Peso unitario con Toggle MT/kg -->
-                            <div class="space-y-1">
-                                <div class="flex items-center justify-between">
-                                    <label for="h18-input-weight" class="text-[11px] font-bold text-slate-700">Peso unitario</label>
-                                    <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
-                                        <button type="button" id="h18-unit-mt" onclick="toggleStowageH18Weight('MT')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">MT</button>
-                                        <button type="button" id="h18-unit-kg" onclick="toggleStowageH18Weight('kg')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">kg</button>
-                                    </div>
-                                </div>
-                                <input type="number" id="h18-input-weight" value="1.50" step="any" min="0.001" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
-                            </div>
-
-                            <!-- Tiers (Capas), Objetivo MT y % Broken Stowage -->
-                            <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label for="h18-input-tiers" class="block text-[10px] font-bold text-slate-700 mb-0.5">Tiers (1–8)</label>
-                                    <input type="number" id="h18-input-tiers" value="4" min="1" max="8" step="1" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
-                                </div>
-                                <div>
-                                    <label for="h18-input-broken" class="block text-[10px] font-bold text-slate-700 mb-0.5">% Broken St.</label>
-                                    <input type="number" id="h18-input-broken" value="5" min="0" max="25" step="0.5" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
-                                </div>
-                                <div>
-                                    <label for="h18-input-target" class="block text-[10px] font-bold text-slate-700 mb-0.5">Objetivo MT</label>
-                                    <input type="number" id="h18-input-target" value="25000" min="0" step="100" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
-                                </div>
-                            </div>
-
-                            <!-- Botón principal de cálculo naranja -->
-                            <button type="button" id="btn-h18-calculate" onclick="calculateStowageH18()" style="background-color: #ea580c !important; color: #ffffff !important;" class="w-full min-h-11 hover:opacity-95 text-white text-xs font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500">
-                                <i class="fa-solid fa-calculator text-white"></i>
-                                <span class="text-white">Calcular Estiba (H18)</span>
-                            </button>
-
-                            <!-- TARJETAS DE RESULTADOS -->
-                            <div class="space-y-2.5 pt-2 border-t border-slate-100">
-                                <!-- Fila 1: Total teórico vs Realista -->
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Total Teórico</span>
-                                        <span id="h18-res-theoretical" class="text-xs font-black text-slate-800 block">-</span>
-                                    </div>
-                                    <div class="p-3 bg-teal-50/60 border border-teal-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-teal-700 mb-0.5">Estiba Realista</span>
-                                        <span id="h18-res-realistic" class="text-xs font-black text-teal-900 block">-</span>
+                                        <label for="h18-input-target" class="block text-[10px] font-bold text-slate-700 mb-0.5">Objetivo MT</label>
+                                        <input type="number" id="h18-input-target" value="25000" min="0" step="100" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
                                     </div>
                                 </div>
 
-                                <!-- Fila 2: Stowage Factors (Neto y Bruto) -->
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">SF Neto</span>
-                                        <span id="h18-res-sf-net" class="text-xs font-black text-slate-800 block">-</span>
-                                    </div>
-                                    <div class="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-emerald-800 mb-0.5">SF Bruto (c/ BS)</span>
-                                        <span id="h18-res-sf-gross" class="text-xs font-black text-emerald-950 block">-</span>
-                                    </div>
-                                </div>
-
-                                <!-- Fila 3: Presión Tank Top y Margen vs Objetivo -->
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Presión Tank Top</span>
-                                        <span id="h18-res-pressure" class="text-xs font-black text-slate-800 block">-</span>
-                                    </div>
-                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Margen vs Objetivo</span>
-                                        <span id="h18-res-margin" class="text-xs font-black text-slate-800 block">-</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- BLOQUE DE ALERTAS COMERCIALES -->
-                            <div id="h18-alerts-container" class="pt-1">
-                                <!-- Inyectado dinámicamente -->
-                            </div>
-
-                            <!-- PIE DE COLUMNA: DOS BOTONES LIMPIOS -->
-                            <div class="pt-3 border-t border-slate-200 space-y-2">
-                                <button type="button" id="btn-h18-apply-sf" onclick="applyStowageH18SF()" disabled style="background-color: #0d9488 !important; color: #ffffff !important; opacity: 0.5;" class="w-full min-h-11 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-not-allowed">
-                                    <i class="fa-solid fa-arrow-down-long text-white"></i>
-                                    <span class="text-white">Aplicar SF a Calculadora</span>
+                                <!-- Botón principal de cálculo naranja -->
+                                <button type="button" id="btn-h18-calculate" onclick="calculateStowageH18()" style="background-color: #ea580c !important; color: #ffffff !important;" class="w-full min-h-11 hover:opacity-95 text-white text-xs font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                    <i class="fa-solid fa-calculator text-white"></i>
+                                    <span class="text-white">Calcular Estiba (H18)</span>
                                 </button>
-                                <button type="button" id="btn-h18-back-calc" onclick="switchTab('estimator')" class="w-full min-h-10 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
-                                    <i class="fa-solid fa-calculator text-teal-600"></i>
-                                    <span>Volver a Calculadora</span>
+
+                                <!-- TARJETAS DE RESULTADOS -->
+                                <div class="space-y-2.5 pt-2 border-t border-slate-100">
+                                    <!-- Fila 1: Total teórico vs Realista -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Total Teórico</span>
+                                            <span id="h18-res-theoretical" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                        <div class="p-3 bg-teal-50/60 border border-teal-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-teal-700 mb-0.5">Estiba Realista</span>
+                                            <span id="h18-res-realistic" class="text-xs font-black text-teal-900 block">-</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fila 2: Stowage Factors (Neto y Bruto) -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">SF Neto</span>
+                                            <span id="h18-res-sf-net" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                        <div class="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-emerald-800 mb-0.5">SF Bruto (c/ BS)</span>
+                                            <span id="h18-res-sf-gross" class="text-xs font-black text-emerald-950 block">-</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fila 3: Presión Tank Top y Margen vs Objetivo -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Presión Tank Top</span>
+                                            <span id="h18-res-pressure" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Margen vs Objetivo</span>
+                                            <span id="h18-res-margin" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- BLOQUE DE ALERTAS COMERCIALES -->
+                                <div id="h18-alerts-container" class="pt-1">
+                                    <!-- Inyectado dinámicamente -->
+                                </div>
+
+                                <!-- PIE DE COLUMNA: DOS BOTONES LIMPIOS -->
+                                <div class="pt-3 border-t border-slate-200 space-y-2">
+                                    <button type="button" id="btn-h18-apply-sf" onclick="applyStowageH18SF()" disabled style="background-color: #0d9488 !important; color: #ffffff !important; opacity: 0.5;" class="w-full min-h-11 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-not-allowed">
+                                        <i class="fa-solid fa-arrow-down-long text-white"></i>
+                                        <span class="text-white">Aplicar SF a Calculadora</span>
+                                    </button>
+                                    <button type="button" id="btn-h18-back-calc" onclick="switchTab('estimator')" class="w-full min-h-10 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                                        <i class="fa-solid fa-calculator text-teal-600"></i>
+                                        <span>Volver a Calculadora</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- PANEL 2: PROJECT CARGO / VEHÍCULOS (PACKING LIST) -->
+                            <div id="h18-panel-project-cargo" class="hidden space-y-4">
+                                <!-- Insignia Sincronizado desde Cerebro IA -->
+                                <div id="h18-pc-sync-badge" class="hidden rounded-lg bg-teal-50 border border-teal-300 p-2 text-xs text-teal-800 flex items-center gap-2 shadow-xs">
+                                    <i class="fa-solid fa-brain text-teal-600"></i>
+                                    <span class="font-bold">Sincronizado desde Cerebro IA</span>
+                                    <span class="text-[10px] text-teal-600 font-medium ml-auto">Packing list importado</span>
+                                </div>
+
+                                <!-- Selector opcional de configuración buque multipropósito TBN -->
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-bold text-slate-700">Configuración Buque Multipropósito</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">TBN / Local</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="flex items-center gap-2 pt-1">
+                                            <input type="checkbox" id="h18-pc-tweendeck" checked onchange="calculateProjectCargoStowageH18()" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer">
+                                            <label for="h18-pc-tweendeck" class="text-[11px] font-bold text-slate-700 cursor-pointer select-none">Entrepuente (Tweendeck)</label>
+                                        </div>
+                                        <div>
+                                            <label for="h18-pc-cranes" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Grúas Buque</label>
+                                            <input type="text" id="h18-pc-cranes" value="2 x 45 MT" onchange="calculateProjectCargoStowageH18()" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabla compacta editable Packing List -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-bold text-slate-700">Packing List de Carga</span>
+                                        <button type="button" id="btn-h18-pc-add-item" onclick="addPackingListItemH18()" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-teal-50 hover:bg-teal-100 border border-teal-300 text-teal-800 text-[11px] font-bold cursor-pointer transition shadow-xs">
+                                            <i class="fa-solid fa-plus text-xs"></i>
+                                            <span>+ Añadir Ítem</span>
+                                        </button>
+                                    </div>
+                                    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
+                                        <table class="w-full text-left border-collapse" id="h18-pc-table">
+                                            <thead>
+                                                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold uppercase text-slate-600">
+                                                    <th class="py-1.5 px-1.5">ID / Descr.</th>
+                                                    <th class="py-1.5 px-1 text-center">L (m)</th>
+                                                    <th class="py-1.5 px-1 text-center">A (m)</th>
+                                                    <th class="py-1.5 px-1 text-center">Alto</th>
+                                                    <th class="py-1.5 px-1 text-center">Peso MT</th>
+                                                    <th class="py-1.5 px-1 text-center">Cant.</th>
+                                                    <th class="py-1.5 px-1">Categoría</th>
+                                                    <th class="py-1.5 px-1">Zona</th>
+                                                    <th class="py-1.5 px-1 text-center">Acc.</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="h18-pc-table-body">
+                                                <!-- Inyectado dinámicamente -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Botón naranja CALCULAR ESTIBA (H18) -->
+                                <button type="button" id="btn-h18-pc-calculate" onclick="calculateProjectCargoStowageH18()" style="background-color: #ea580c !important; color: #ffffff !important;" class="w-full min-h-11 hover:opacity-95 text-white text-xs font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                    <i class="fa-solid fa-calculator text-white"></i>
+                                    <span class="text-white">Calcular Estiba (H18)</span>
                                 </button>
+
+                                <!-- Tarjetas de resultados pintadas desde response.summary -->
+                                <div class="space-y-2.5 pt-2 border-t border-slate-100">
+                                    <!-- Fila 1: Peso Total y Estiba Realista -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Peso Total</span>
+                                            <span id="h18-pc-res-weight" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                        <div class="p-3 bg-teal-50/60 border border-teal-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-teal-700 mb-0.5">Estiba Realista</span>
+                                            <span id="h18-pc-res-realistic" class="text-xs font-black text-teal-900 block">-</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fila 2: SF Equivalente Bruto y Centro de Gravedad -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-emerald-800 mb-0.5">SF Equivalente Bruto</span>
+                                            <span id="h18-pc-res-sf-gross" class="text-xs font-black text-emerald-950 block">-</span>
+                                            <span id="h18-pc-res-sf-net" class="text-[10px] text-slate-500 font-semibold block mt-0.5">-</span>
+                                        </div>
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Centro Gravedad (KG)</span>
+                                            <span id="h18-pc-res-kg" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fila 3: Lashing & Trinca y Perfil / Giro -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Lashing &amp; Trinca</span>
+                                            <span id="h18-pc-res-lashing" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Perfil / Giro</span>
+                                            <span id="h18-pc-res-clearance" class="text-xs font-black text-slate-800 block">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bloque de alertas Project Cargo -->
+                                <div id="h18-pc-alerts-container" class="pt-1">
+                                    <!-- Inyectado dinámicamente -->
+                                </div>
+
+                                <!-- Pie de columna: Aplicar SF y Volver -->
+                                <div class="pt-3 border-t border-slate-200 space-y-2">
+                                    <button type="button" id="btn-h18-pc-apply-sf" onclick="applyProjectCargoStowageH18SF()" style="background-color: #0d9488 !important; color: #ffffff !important;" class="w-full min-h-11 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                                        <i class="fa-solid fa-arrow-down-long text-white"></i>
+                                        <span class="text-white">Aplicar SF a Calculadora</span>
+                                    </button>
+                                    <button type="button" id="btn-h18-pc-back-calc" onclick="switchTab('estimator')" class="w-full min-h-10 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                                        <i class="fa-solid fa-calculator text-teal-600"></i>
+                                        <span>Volver a Calculadora</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
