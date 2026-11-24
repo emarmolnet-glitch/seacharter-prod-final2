@@ -4,6 +4,7 @@ import VisualStowagePlan, { resolveVesselProfile, MemoizedVisualStowagePlan } fr
 import { buildVoyageStowagePlan } from '../voyage-stowage-builder.mjs';
 import { getStipulatedClauses } from '../dry-bulk-clause-matrix.mjs';
 import { formatMadreStrategicReportEnglish } from '../madre-report-translator.mjs';
+import { buildPortRestrictionReportModel, resolveReportPortRestrictions } from '../report-port-restrictions.mjs';
 
 export { buildVoyageStowagePlan };
 
@@ -26,6 +27,12 @@ export default function VoyageExecutiveReportModal({
   );
   const [printPending, setPrintPending] = useState(false);
   const isPrintingRef = useRef(false);
+
+  // Re-mounting with a new mode (window.setExecutiveClientMode) must switch the open modal too,
+  // otherwise "Reporte Cliente" opened from outside would keep showing internal data.
+  useEffect(() => {
+    setIsClientMode(Boolean(initialClientMode));
+  }, [initialClientMode]);
 
   const handleLanguageChange = (lang) => {
     const target = lang === 'en' ? 'en' : 'es';
@@ -105,6 +112,17 @@ export default function VoyageExecutiveReportModal({
     }
     return madreReporteEstrategico;
   }, [madreReporteEstrategico, currentLang, isClientMode, data]);
+
+  // H16 port restrictions (ports_master.source_payload.h16_port_sheet). The client model is
+  // built from a whitelist: no costs, break-even, margin, TCE, internal buffer or $/MT.
+  const portRestrictionSnapshot = resolveReportPortRestrictions(
+    data,
+    typeof window !== 'undefined' && (!voyageData || voyageData === window.State) ? window.SeaCharterPortH16 : null,
+  );
+  const portRestrictionModel = buildPortRestrictionReportModel(portRestrictionSnapshot, {
+    audience: isClientMode ? 'client' : 'internal',
+    lang: currentLang === 'en' ? 'en' : 'es',
+  });
 
   const reportVessel = resolveReportVessel(data);
   const vesselName = reportVessel.name;
@@ -576,10 +594,14 @@ export default function VoyageExecutiveReportModal({
                 <span><i className="fa-solid fa-circle-exclamation text-emerald-600 mr-1.5 print:hidden"></i> RESTRICCIONES PORTUARIAS Y CONDICIONES OPERATIVAS</span>
                 <i className="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform print:hidden"></i>
               </summary>
-              <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
-                <p><strong>Puerto de Carga (POL):</strong> {pol} · Calado y eslora validados conforme a carta náutica.</p>
-                <p><strong>Puerto de Descarga (POD):</strong> {pod} · {operationalProfile === 'PNEUMATIC' ? 'Conexiones neumáticas, compatibilidad de terminal y calado a confirmar.' : operationalProfile === 'RORO' ? 'Acceso por rampas, superficie de cubierta y límites por eje a confirmar.' : 'Medios de manipulación y calado operativo a confirmar.'}</p>
-              </div>
+              {portRestrictionModel ? (
+                <PortRestrictionReportSection model={portRestrictionModel} />
+              ) : (
+                <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
+                  <p><strong>Puerto de Carga (POL):</strong> {pol} · Calado y eslora validados conforme a carta náutica.</p>
+                  <p><strong>Puerto de Descarga (POD):</strong> {pod} · {operationalProfile === 'PNEUMATIC' ? 'Conexiones neumáticas, compatibilidad de terminal y calado a confirmar.' : operationalProfile === 'RORO' ? 'Acceso por rampas, superficie de cubierta y límites por eje a confirmar.' : 'Medios de manipulación y calado operativo a confirmar.'}</p>
+                </div>
+              )}
             </details>
           </section>
 
@@ -718,6 +740,83 @@ export default function VoyageExecutiveReportModal({
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function PortRestrictionReportSection({ model }) {
+  const isInternal = model.audience === 'internal';
+  return (
+    <div
+      id="executive-port-restrictions"
+      data-report-audience={model.audience}
+      className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-700 space-y-3"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 print:grid-cols-2">
+        {model.ports.map((port) => (
+          <div
+            key={port.role}
+            data-port-role={port.role}
+            className={`rounded-lg border bg-white p-3 break-inside-avoid ${port.status?.critical ? 'border-red-300' : 'border-slate-200'}`}
+          >
+            <h5 className="font-black text-slate-900 text-[11px] uppercase tracking-wide mb-1.5">{port.role} · {port.name}</h5>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+              {port.lines.map((line) => (
+                <React.Fragment key={line.key}>
+                  <dt className="text-slate-500 font-semibold">{line.label}</dt>
+                  <dd className="font-bold text-slate-800">{line.value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+            {isInternal && port.status && (
+              <p className={`mt-2 rounded-md px-2 py-1 font-bold ${port.status.critical ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>
+                {port.status.text}
+              </p>
+            )}
+            {port.warnings.length > 0 && (
+              <div className="mt-2">
+                <span className="block text-[10px] font-black uppercase tracking-wider text-amber-700">{model.labels.warnings}</span>
+                <ul className="list-disc pl-4 mt-0.5 space-y-0.5 text-slate-700">
+                  {port.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {isInternal && model.summary && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <span><span className="text-slate-500 font-semibold">{model.summary.totalBufferLabel}:</span> <strong className="font-mono">{model.summary.totalBuffer}</strong></span>
+          {model.summary.cargoCut && (
+            <span><span className="text-slate-500 font-semibold">{model.summary.cargoCutLabel}:</span> <strong className="font-mono">{model.summary.cargoCut}</strong></span>
+          )}
+          {model.summary.breakEvenImpact && (
+            <span><span className="text-slate-500 font-semibold">{model.summary.breakEvenImpactLabel}:</span> <strong className="font-mono text-red-700">{model.summary.breakEvenImpact}</strong></span>
+          )}
+        </div>
+      )}
+
+      {isInternal ? (
+        model.clauses?.length > 0 && (
+          <div>
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">{model.labels.clauses}</span>
+            <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+              {model.clauses.map((clause, index) => <li key={index}>{clause}</li>)}
+            </ul>
+          </div>
+        )
+      ) : (
+        model.ports.some((port) => port.conditions.length) && (
+          <div>
+            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">{model.labels.conditions}</span>
+            <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+              {model.ports.flatMap((port) => port.conditions).map((condition, index) => <li key={index}>{condition}</li>)}
+            </ul>
+          </div>
+        )
+      )}
+      <p className="text-[10px] text-slate-400">{model.labels.source}</p>
     </div>
   );
 }

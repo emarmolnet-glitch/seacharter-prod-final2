@@ -70,7 +70,7 @@ test('later nested defaults and empty fields cannot replace the selected Recap i
 
 test('full executive report uses the clean cement Recap despite live Handysize state and a stale plan', async () => {
   const dependencies = Object.fromEntries(await Promise.all(
-    ['report-vessel.mjs', 'voyage-stowage-builder.mjs', 'dry-bulk-clause-matrix.mjs'].map(async file => [file, await import(`../src/${file}`)]),
+    ['report-vessel.mjs', 'voyage-stowage-builder.mjs', 'dry-bulk-clause-matrix.mjs', 'report-port-restrictions.mjs'].map(async file => [file, await import(`../src/${file}`)]),
   ));
   const modalCode = transformSync(fs.readFileSync('src/components/VoyageExecutiveReportModal.jsx', 'utf8'), { loader: 'jsx', format: 'cjs' }).code;
   const modalModule = { exports: {} };
@@ -135,7 +135,7 @@ test('schematic inherits the pneumatic plan when no explicit vessel type is supp
 
 test('executive annex keeps operational clauses, narrative and SVG synchronized for every contract profile', async () => {
   const dependencies = Object.fromEntries(await Promise.all(
-    ['report-vessel.mjs', 'voyage-stowage-builder.mjs', 'dry-bulk-clause-matrix.mjs'].map(async file => [file, await import(`../src/${file}`)]),
+    ['report-vessel.mjs', 'voyage-stowage-builder.mjs', 'dry-bulk-clause-matrix.mjs', 'report-port-restrictions.mjs'].map(async file => [file, await import(`../src/${file}`)]),
   ));
   const compiledModal = transformSync(fs.readFileSync('src/components/VoyageExecutiveReportModal.jsx', 'utf8'), { loader: 'jsx', format: 'cjs' }).code;
   const modal = { exports: {} };

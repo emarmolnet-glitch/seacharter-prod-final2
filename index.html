@@ -971,6 +971,7 @@
     <script defer src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script src="./project-cargo-engine.js"></script>
+    <script type="module" src="./src/port-h16-entry.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
@@ -19525,29 +19526,21 @@
                 }
             });
 
-            // Update the Max Draft input (id: vessel-draft) if limits were found
-            const draftInput = document.getElementById('vessel-draft');
-            if (draftInput) {
-                if (draftLimits.length > 0) {
-                    const minDraft = Math.min(...draftLimits);
-                    draftInput.value = minDraft.toFixed(1);
-                } else {
-                    // Default fallback if no ports specify a limit
-                    draftInput.value = "12.5";
-                }
-            }
-
-            // Update the Max Length input (id: vessel-loa) if limits were found
-            const loaInput = document.getElementById('vessel-loa');
-            if (loaInput) {
-                if (loaLimits.length > 0) {
-                    const minLoa = Math.min(...loaLimits);
-                    loaInput.value = minLoa.toFixed(1);
-                } else {
-                    // Default fallback if no ports specify a limit
-                    loaInput.value = "200.0";
-                }
-            }
+            // vessel-draft / vessel-loa also carry the real vessel dimensions (hydrated from the
+            // vessel master). Only auto-fill them with route limits when they are empty or still
+            // hold a previous auto-filled value, so a loaded vessel (e.g. 9.91 m) is never replaced.
+            const applyRouteLimitAutofill = (input, limits, fallback) => {
+                if (!input) return;
+                const current = parseFloat(input.value) || 0;
+                const previousAutofill = parseFloat(input.dataset.routeLimitAutofill);
+                const holdsVesselValue = current > 0 && !(Number.isFinite(previousAutofill) && Math.abs(previousAutofill - current) < 1e-6);
+                if (holdsVesselValue) return;
+                const nextValue = limits.length > 0 ? Math.min(...limits).toFixed(1) : fallback;
+                input.value = nextValue;
+                input.dataset.routeLimitAutofill = String(parseFloat(nextValue));
+            };
+            applyRouteLimitAutofill(document.getElementById('vessel-draft'), draftLimits, "12.5");
+            applyRouteLimitAutofill(document.getElementById('vessel-loa'), loaLimits, "200.0");
 
             // Update port-specific Max Draft and Max Length information under their inputs
             const portsToUpdate = [
@@ -19580,6 +19573,13 @@
                     if (el) el.textContent = notFoundText;
                     if (draftEl) draftEl.value = 'N/A';
                     if (lengthEl) lengthEl.value = 'N/A';
+                    return;
+                }
+
+                // Official H16 sheet (ports_master.source_payload.h16_port_sheet) takes precedence
+                // over the legacy WPI depth-code estimate.
+                const portRole = item.id === 'port-ballast-limits' ? 'BALLAST' : (item.id === 'port-pol-limits' ? 'POL' : 'POD');
+                if (window.SeaCharterPortH16?.renderPortCard?.(el, item.data, portRole)) {
                     return;
                 }
 
@@ -31165,7 +31165,7 @@ function createRouteAnchorElement(type) {
             const countryCode = String(result.countryCode || 'XX').toUpperCase();
             const label = toPortTitleCase(result.label || `${result.placeName} (${countryCode})`);
             const selectedPortDraft = Number(result.maxOperationalDraftMeters) || 0;
-            const selectedPortMaxVessel = String(result.maxVesselLengthLabel || 'N/A');
+            const selectedPortMaxVessel = String(result.h16MaxLoaLabel || result.maxVesselLengthLabel || 'N/A');
             const engineeringSource = result.engineeringSource === 'WPI' ? 'WPI' : 'N/A';
             PORT_DB[label] = {
                 ...(PORT_DB[label] || {}),
@@ -31298,8 +31298,10 @@ function createRouteAnchorElement(type) {
                         uuid: port.uuid,
                         unlocode: port.unlocode,
                         indexNo: engineering?.indexNo || null,
-                        maxOperationalDraftMeters: engineering?.maxOperationalDraftMeters || port.maxOperationalDraftMeters || 0,
+                        maxOperationalDraftMeters: (port.source === 'NEON_H16' && Number(port.effectiveDraftM) > 0 ? Number(port.effectiveDraftM) : 0)
+                            || engineering?.maxOperationalDraftMeters || port.maxOperationalDraftMeters || 0,
                         maxVesselLengthLabel: engineering?.maxVesselLengthLabel || 'N/A',
+                        h16MaxLoaLabel: Number(port.maxLoaM) > 0 ? `${Number(port.maxLoaM)} m` : '',
                         cargoDepth: engineering?.cargoDepth || '',
                         channelDepth: engineering?.channelDepth || '',
                         depthCode: engineering?.depthCode || '',
