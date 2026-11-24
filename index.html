@@ -962,6 +962,11 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script type="module" src="./stowage-calculator.js"></script>
+    <script type="module" src="./vessel-3d-viewer.js"></script>
+    <script type="module" src="./stowage-h18-module.js"></script>
     <script src="./public/components.js"></script>
     <script defer src="/contract-reference.js"></script>
     <script defer src="./npl-data-analysis-engine.js"></script>
@@ -10306,6 +10311,20 @@
                         </div>
                         <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Informe Master</span></span>
                     </button>
+
+                    <button
+                        type="button"
+                        id="btn-stowage-h18-nav"
+                        onclick="openStowagePlanH18View(event)"
+                        class="tools-dropdown-trigger flex items-center justify-center sidebar-nav-item h-10 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors p-2 cursor-pointer w-full text-left"
+                        title="Estiba &amp; Cargo Plan (H18)"
+                        aria-label="Estiba &amp; Cargo Plan (H18)"
+                    >
+                        <div class="sidebar-icon flex items-center justify-center w-6 h-6 shrink-0">
+                            <i class="fa-solid fa-boxes-stacked w-4 h-4 text-sm flex items-center justify-center text-slate-600" aria-hidden="true"></i>
+                        </div>
+                        <span class="sidebar-text hidden ml-2 text-xs font-semibold truncate"><span>Estiba &amp; Cargo Plan (H18)</span></span>
+                    </button>
                 </div>
             </div>
 
@@ -11859,8 +11878,8 @@
                             <button id="btn-executive-report" data-executive-report-action onclick="generateExecutiveReport()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
                                 <i class="fa-solid fa-eye mr-1"></i> Reporte Ejecutivo
                             </button>
-                            <button id="btn-list-vessels" onclick="openListVesselsModal()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
-                                <i class="fa-solid fa-anchor mr-1"></i> Historial de Buques
+                            <button id="btn-list-vessels" onclick="openStowagePlanH18View(event)" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition" title="Estiba &amp; Cargo Plan (H18)">
+                                <i class="fa-solid fa-boxes-stacked mr-1"></i> Estiba &amp; Cargo Plan (H18)
                             </button>
                             <button id="btn-comparison" onclick="openComparisonModal()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
                                 <i class="fa-solid fa-scale-balanced mr-1"></i> Comparar Buques
@@ -17220,7 +17239,7 @@
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh]">
             <div class="flex justify-between items-center p-4 border-b border-slate-800">
                 <h3 class="font-bold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-anchor text-indigo-400"></i> Historial de Buques Auditados / Audited Vessels
+                    <i class="fa-solid fa-anchor text-indigo-400"></i> Buques Auditados / Audited Vessels
                 </h3>
                 <button onclick="closeListVesselsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
@@ -17704,6 +17723,319 @@
             </div>
         </div>
 
+        <!-- ========================================== -->
+        <!-- VIEW: ESTIBA & CARGO PLAN (H18) Y CAD 2D/3D-->
+        <!-- ========================================== -->
+        <!-- ESTILOS EXPLÍCITOS PARA ESTIBA & CARGO PLAN (H18) -->
+        <style id="stowage-h18-custom-styles">
+            #view-stowage-h18 {
+                padding-top: 96px !important;
+                padding-left: 84px !important;
+                padding-right: 28px !important;
+                padding-bottom: 48px !important;
+                box-sizing: border-box !important;
+            }
+            @media (max-width: 768px) {
+                #view-stowage-h18 {
+                    padding-left: 68px !important;
+                    padding-top: 88px !important;
+                }
+            }
+            #view-stowage-h18 #btn-h18-calculate,
+            #view-stowage-h18 #btn-h18-calculate *,
+            #view-stowage-h18 #btn-h18-open-3d,
+            #view-stowage-h18 #btn-h18-open-3d *,
+            #view-stowage-h18 #btn-h18-apply-sf,
+            #view-stowage-h18 #btn-h18-apply-sf * {
+                color: #ffffff !important;
+            }
+        </style>
+        <div id="view-stowage-h18" class="view-section absolute inset-0 overflow-y-auto pl-6 sm:pl-10 md:pl-14 lg:pl-16 pr-4 sm:pr-6 md:pr-8 pt-24 md:pt-28 pb-16 scroll-smooth bg-[#F8FAFC] hidden" aria-label="Módulo de Estiba y Cargo Plan H18">
+            <div class="w-full max-w-[1560px] mx-auto space-y-6">
+                <!-- HEADER DE VISTA H18 -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-teal-600 text-white shadow-xs">
+                                <i class="fa-solid fa-boxes-stacked text-sm"></i>
+                            </span>
+                            <h2 class="text-xl font-black text-slate-800 tracking-tight">Estiba &amp; Cargo Plan (H18)</h2>
+                            <span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">H18 Core</span>
+                        </div>
+                        <p class="text-xs text-slate-500 max-w-2xl">
+                            Simulador de estiba homogénea en bodegas, cálculo determinista de Stowage Factor (SF neto y bruto), verificación de presiones admisibles en Tank Top y visor CAD 2D / 3D naval.
+                        </p>
+                    </div>
+
+                    <!-- Insignia del buque activo (Solo lectura) -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div id="h18-vessel-badge">
+                            <!-- Inyectado dinámicamente -->
+                        </div>
+                        <button type="button" onclick="switchTab('estimator')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer transition">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Volver a Calculadora</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Aviso si no hay buque seleccionado -->
+                <div id="h18-vessel-warning" class="hidden mb-6 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs shadow-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-base"></i>
+                            <div>
+                                <p class="font-bold">No hay ningún buque cargado en la calculadora principal.</p>
+                                <p class="text-amber-800 text-[11px]">Se están utilizando dimensiones de referencia para un buque Handysize estándar (32.000 DWT). Puedes seleccionar un buque real en la calculadora o buscar por IMO aquí:</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="h18-quick-imo-search" placeholder="Buscar IMO (ej. 9234567)..." class="bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 w-44 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            <button type="button" onclick="const imo = document.getElementById('h18-quick-imo-search')?.value; if(imo && typeof fetchVesselByImo === 'function') { fetchVesselByImo(imo).then(() => stowageH18Manager.openView()); }" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1 rounded-lg text-xs cursor-pointer transition">
+                                Cargar Buque
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GRID PRINCIPAL DE DOS COLUMNAS -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                    <!-- COLUMNA IZQUIERDA (~35% -> lg:col-span-5 xl:col-span-4) — SIMULADOR DE ESTIBA (H18) -->
+                    <div class="lg:col-span-5 xl:col-span-4 space-y-5">
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-sliders text-teal-600"></i>
+                                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-800">Simulador de Estiba (H18)</h3>
+                                </div>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">Paramétrico</span>
+                            </div>
+
+                            <!-- Selector de plantilla rápida -->
+                            <div class="space-y-1">
+                                <label for="h18-template-select" class="block text-[11px] font-bold text-slate-700">Plantilla rápida de carga</label>
+                                <select id="h18-template-select" onchange="applyStowageH18Template(this.value)" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition cursor-pointer">
+                                    <option value="big_bags" selected>Big Bags 1.00×1.00×1.30 m · 1.50 MT</option>
+                                    <option value="europallet">Europallet 1.20×0.80×1.20 m · 1.50 MT</option>
+                                    <option value="bobinas">Bobinas 1.50×1.50×1.20 m · 5.00 MT</option>
+                                    <option value="cajas">Cajas 0.80×0.60×0.60 m · 0.25 MT</option>
+                                    <option value="personalizado">Personalizado (Medidas a medida)</option>
+                                </select>
+                            </div>
+
+                            <!-- Nombre de carga -->
+                            <div class="space-y-1">
+                                <label for="h18-input-name" class="block text-[11px] font-bold text-slate-700">Nombre de la mercancía / bulto</label>
+                                <input type="text" id="h18-input-name" value="Big Bags de Cemento / Mineral" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 transition">
+                            </div>
+
+                            <!-- Dimensiones del bulto con Toggle m/cm -->
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-bold text-slate-700">Dimensiones unitarias</span>
+                                    <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
+                                        <button type="button" id="h18-unit-m" onclick="toggleStowageH18Length('m')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">m</button>
+                                        <button type="button" id="h18-unit-cm" onclick="toggleStowageH18Length('cm')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">cm</button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label for="h18-input-length" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Largo</label>
+                                        <input type="number" id="h18-input-length" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                    </div>
+                                    <div>
+                                        <label for="h18-input-width" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Ancho</label>
+                                        <input type="number" id="h18-input-width" value="1.00" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                    </div>
+                                    <div>
+                                        <label for="h18-input-height" class="block text-[10px] font-semibold text-slate-500 mb-0.5">Alto</label>
+                                        <input type="number" id="h18-input-height" value="1.30" step="any" min="0.01" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Peso unitario con Toggle MT/kg -->
+                            <div class="space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <label for="h18-input-weight" class="text-[11px] font-bold text-slate-700">Peso unitario</label>
+                                    <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold">
+                                        <button type="button" id="h18-unit-mt" onclick="toggleStowageH18Weight('MT')" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-2 py-0.5 rounded-md cursor-pointer transition">MT</button>
+                                        <button type="button" id="h18-unit-kg" onclick="toggleStowageH18Weight('kg')" style="background-color: transparent !important; color: #475569 !important;" class="px-2 py-0.5 rounded-md hover:text-slate-900 cursor-pointer transition">kg</button>
+                                    </div>
+                                </div>
+                                <input type="number" id="h18-input-weight" value="1.50" step="any" min="0.001" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                            </div>
+
+                            <!-- Tiers (Capas), Objetivo MT y % Broken Stowage -->
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label for="h18-input-tiers" class="block text-[10px] font-bold text-slate-700 mb-0.5">Tiers (1–8)</label>
+                                    <input type="number" id="h18-input-tiers" value="4" min="1" max="8" step="1" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                </div>
+                                <div>
+                                    <label for="h18-input-broken" class="block text-[10px] font-bold text-slate-700 mb-0.5">% Broken St.</label>
+                                    <input type="number" id="h18-input-broken" value="5" min="0" max="25" step="0.5" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                </div>
+                                <div>
+                                    <label for="h18-input-target" class="block text-[10px] font-bold text-slate-700 mb-0.5">Objetivo MT</label>
+                                    <input type="number" id="h18-input-target" value="25000" min="0" step="100" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                                </div>
+                            </div>
+
+                            <!-- Botón principal de cálculo naranja -->
+                            <button type="button" id="btn-h18-calculate" onclick="calculateStowageH18()" style="background-color: #ea580c !important; color: #ffffff !important;" class="w-full min-h-11 hover:opacity-95 text-white text-xs font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                <i class="fa-solid fa-calculator text-white"></i>
+                                <span class="text-white">Calcular Estiba (H18)</span>
+                            </button>
+
+                            <!-- TARJETAS DE RESULTADOS -->
+                            <div class="space-y-2.5 pt-2 border-t border-slate-100">
+                                <!-- Fila 1: Total teórico vs Realista -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Total Teórico</span>
+                                        <span id="h18-res-theoretical" class="text-xs font-black text-slate-800 block">-</span>
+                                    </div>
+                                    <div class="p-3 bg-teal-50/60 border border-teal-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-teal-700 mb-0.5">Estiba Realista</span>
+                                        <span id="h18-res-realistic" class="text-xs font-black text-teal-900 block">-</span>
+                                    </div>
+                                </div>
+
+                                <!-- Fila 2: Stowage Factors (Neto y Bruto) -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">SF Neto</span>
+                                        <span id="h18-res-sf-net" class="text-xs font-black text-slate-800 block">-</span>
+                                    </div>
+                                    <div class="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-emerald-800 mb-0.5">SF Bruto (c/ BS)</span>
+                                        <span id="h18-res-sf-gross" class="text-xs font-black text-emerald-950 block">-</span>
+                                    </div>
+                                </div>
+
+                                <!-- Fila 3: Presión Tank Top y Margen vs Objetivo -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Presión Tank Top</span>
+                                        <span id="h18-res-pressure" class="text-xs font-black text-slate-800 block">-</span>
+                                    </div>
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Margen vs Objetivo</span>
+                                        <span id="h18-res-margin" class="text-xs font-black text-slate-800 block">-</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- BLOQUE DE ALERTAS COMERCIALES -->
+                            <div id="h18-alerts-container" class="pt-1">
+                                <!-- Inyectado dinámicamente -->
+                            </div>
+
+                            <!-- PIE DE COLUMNA: DOS BOTONES LIMPIOS -->
+                            <div class="pt-3 border-t border-slate-200 space-y-2">
+                                <button type="button" id="btn-h18-apply-sf" onclick="applyStowageH18SF()" disabled style="background-color: #0d9488 !important; color: #ffffff !important; opacity: 0.5;" class="w-full min-h-11 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-not-allowed">
+                                    <i class="fa-solid fa-arrow-down-long text-white"></i>
+                                    <span class="text-white">Aplicar SF a Calculadora</span>
+                                </button>
+                                <button type="button" id="btn-h18-back-calc" onclick="switchTab('estimator')" class="w-full min-h-10 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                                    <i class="fa-solid fa-calculator text-teal-600"></i>
+                                    <span>Volver a Calculadora</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMNA DERECHA (~65% -> lg:col-span-7 xl:col-span-8) — PLANO CAD 2D Y VISOR 3D -->
+                    <div class="lg:col-span-7 xl:col-span-8 space-y-4">
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                            <!-- Barra superior de herramientas CAD / 3D -->
+                            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 text-slate-700">
+                                        <i class="fa-solid fa-compass-drafting text-xs"></i>
+                                    </span>
+                                    <div>
+                                        <h3 class="text-xs font-black uppercase tracking-wider text-slate-800">Plano Tentativo de Estiba (CAD 2D)</h3>
+                                        <p class="text-[10px] text-slate-500">Corte esquemático longitudinal y planta por bodega con orientación naval estándar (Proa +X)</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" id="btn-h18-view-cad" class="px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-300 text-teal-800 text-xs font-bold shadow-xs">
+                                        <i class="fa-solid fa-file-image mr-1"></i> Vista CAD 2D
+                                    </button>
+                                    <button type="button" id="btn-h18-open-3d" onclick="openStowageH183D()" style="background-color: #1e3a8a !important; color: #ffffff !important;" class="px-3 py-1.5 rounded-lg hover:opacity-95 text-white text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5">
+                                        <i class="fa-solid fa-cube text-white"></i>
+                                        <span class="text-white">Abrir Visor 3D (Escotillas y Tiers)</span>
+                                    </button>
+                                    <button type="button" id="btn-h18-export" onclick="exportStowageH18CargoPlan()" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5" title="Exportar plano vectorial en SVG">
+                                        <i class="fa-solid fa-download"></i>
+                                        <span>Exportar Cargo Plan</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Área principal del plano CAD 2D -->
+                            <div class="w-full overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-inner p-2 min-h-[460px] flex items-center justify-center">
+                                <div id="h18-cad-container" class="w-full flex justify-center">
+                                    <!-- Renderizado SVG vectorial H18 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODAL 3D FULLSCREEN: VISOR DE CASCO & TIERS-->
+        <!-- ========================================== -->
+        <div id="h18-3d-modal" style="z-index: 9999;" class="fixed inset-0 z-[500] bg-slate-900/60 backdrop-blur-md hidden flex flex-col no-print" role="dialog" aria-modal="true" aria-label="Visor 3D Naval de Estiba y Tiers">
+            <!-- Header Modal 3D -->
+            <div class="px-6 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-white shadow-sm">
+                        <i class="fa-solid fa-cube text-sm"></i>
+                    </span>
+                    <div>
+                        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+                            <span>Visor 3D Naval · Bodegas, Tiers y Grúas (H18)</span>
+                            <span class="rounded bg-teal-100 border border-teal-300 px-2 py-0.5 text-[10px] font-bold text-teal-800 uppercase">WebGL 60 FPS</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500">Inspección volumétrica diurna de capas apiladas con casco translúcido y despeje de escotillas.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2.5">
+                    <!-- Botón mágico: Abrir / Cerrar Escotillas -->
+                    <button type="button" id="btn-h18-3d-hatches" onclick="toggleStowageH18Hatches3D()" style="background-color: #0d9488 !important; color: #ffffff !important;" class="px-3.5 py-2 rounded-lg text-white text-xs font-bold shadow-sm cursor-pointer transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-eye text-white"></i>
+                        <span class="text-white">Abrir Escotillas (Tiers &amp; Casco Translúcido)</span>
+                    </button>
+
+                    <!-- Presets de cámara rápida -->
+                    <div class="hidden sm:inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs font-semibold text-slate-700">
+                        <button type="button" onclick="setStowageH18Camera3D('threeQuarter')" class="px-2.5 py-1 rounded hover:bg-white text-slate-700 cursor-pointer">3/4 Proa</button>
+                        <button type="button" onclick="setStowageH18Camera3D('profile')" class="px-2.5 py-1 rounded hover:bg-white text-slate-700 cursor-pointer">Perfil</button>
+                        <button type="button" onclick="setStowageH18Camera3D('top')" class="px-2.5 py-1 rounded hover:bg-white text-slate-700 cursor-pointer">Planta</button>
+                        <button type="button" onclick="setStowageH18Camera3D('stern')" class="px-2.5 py-1 rounded hover:bg-white text-slate-700 cursor-pointer">Popa</button>
+                    </div>
+
+                    <!-- Cerrar modal -->
+                    <button type="button" onclick="closeStowageH183D()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg hover:bg-slate-100 transition cursor-pointer" aria-label="Cerrar visor 3D">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Viewport 3D Three.js -->
+            <div id="h18-3d-viewport" class="flex-1 w-full min-h-0 relative overflow-hidden bg-[#cbd5e1]">
+                <!-- Canvas WebGL generado dinámicamente -->
+            </div>
+        </div>
+
     <!-- ASISTENTE CORE: MODO BROKER BANNER -->
     <aside id="asistente-core-broker-banner" class="hidden fixed top-24 right-8 z-[50] max-w-[400px] rounded-xl border border-blue-200 bg-white p-4 shadow-xl transition-all duration-300 transform" role="status" aria-live="polite">
         <div class="flex items-start gap-3">
@@ -18125,7 +18457,8 @@
             "3. Estructura de Costes (OPEX, Bunkers, PDAs)": { en: "3. Cost Structure (OPEX, Bunkers, PDAs)", fr: "3. Structure des coûts (OPEX, soutes, PDAs)" },
             "2. Especificaciones del Buque y Carga / Ship Requirements": { en: "2. Vessel & Cargo Specifications / Ship Requirements", fr: "2. Spécifications du navire et de la cargaison / Exigences" },
             "Reporte Ejecutivo": { en: "Executive Report", fr: "Rapport Exécutif" },
-            "Historial de Buques": { en: "Vessel History", fr: "Historique des Navires" },
+            "Estiba & Cargo Plan (H18)": { en: "Stowage & Cargo Plan (H18)", fr: "Arrimage et Plan de Chargement (H18)" },
+            "Historial de Buques": { en: "Stowage & Cargo Plan (H18)", fr: "Arrimage et Plan de Chargement (H18)" },
             "Comparar Buques": { en: "Compare Vessels", fr: "Comparer les Navires" },
             "Analizar Viabilidad (IA)": { en: "Analyze Feasibility (AI)", fr: "Analyser la Faisabilité (IA)" },
             "Buscar Cotización": { en: "Search Quote", fr: "Rechercher un devis" },
