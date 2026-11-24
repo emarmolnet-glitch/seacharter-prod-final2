@@ -206,7 +206,7 @@ test('4. sendH18SimulationToDataBridge prepara payload seguro con source_app: "s
     };
 
     const res = await sendH18SimulationToDataBridge(payload);
-    assert.equal(interceptedUrl, '/api/h18-stowage-plan');
+    assert.equal(interceptedUrl, 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/h18-stowage-plan');
     assert.equal(interceptedBody.source_app, 'seacharter');
     assert.equal(interceptedBody.imo_number, '9234567');
     assert.equal(interceptedBody.vessel_name, 'PACIFIC BULKER');

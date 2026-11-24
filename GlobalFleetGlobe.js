@@ -325,11 +325,13 @@
     function createFallbackGlobeMaterial() {
         const THREE = window.THREE;
         if (!THREE || typeof THREE.MeshPhongMaterial !== 'function') return null;
-        return new THREE.MeshPhongMaterial({
+        const mat = new THREE.MeshPhongMaterial({
             color: GLOBE_FALLBACK_COLOR,
-            shininess: 6,
-            specular: '#123447'
+            shininess: 15,
+            specular: new THREE.Color(0x0a1c2a)
         });
+        if (mat.bumpScale !== undefined) mat.bumpScale = 0.05;
+        return mat;
     }
 
     function getCameraAltitude(view) {
@@ -381,7 +383,9 @@
         const altitude = toFiniteNumber(pointOfView?.altitude);
         updatePortDetailForAltitude(view, altitude);
         const detailActive = Boolean(view?.portDetailActive);
-        console.log('Altitud:', altitude, 'Modo LOD:', detailActive);
+        if (Boolean(window?.DEBUG_LOD_LOGS)) {
+            console.log('Altitud:', altitude, 'Modo LOD:', detailActive);
+        }
     }
 
     function getCentralRadarVessels() {
@@ -800,7 +804,20 @@
     }
 
     function applyRoutes(view) {
-        const renderableRoutePaths = view.routePaths.filter((coordinates) => {
+        if (!view?.globe || typeof view.globe.pathsData !== 'function') return;
+        const rawPaths = Array.isArray(view.routePaths) ? view.routePaths : [];
+        const renderableRoutePaths = rawPaths.map((path) => {
+            const rawPoints = Array.isArray(path)
+                ? path
+                : (Array.isArray(path?.points) ? path.points : (Array.isArray(path?.coordinates) ? path.coordinates : []));
+            const sanitizedPoints = rawPoints
+                .map(normalizeRoutePoint)
+                .filter((pt) => pt && Number.isFinite(pt.lat) && Number.isFinite(pt.lng));
+            if (sanitizedPoints.length < 2) return null;
+            sanitizedPoints.routeType = path.routeType || 'laden';
+            sanitizedPoints.ballastPortName = String(path.ballastPortName || '').trim();
+            return sanitizedPoints;
+        }).filter(Boolean).filter((coordinates) => {
             if (coordinates?.routeType !== 'ballast') return true;
             const ballastPortName = String(coordinates?.ballastPortName || '').trim().toUpperCase();
             const origin = coordinates?.[0];
@@ -809,21 +826,68 @@
             const originIsZero = origin === 0 || (originLatitude === 0 && originLongitude === 0);
             return Boolean(ballastPortName) && !ballastPortName.includes('TBA') && !originIsZero;
         });
-        view.globe
-            .arcsData(typeof buildVesselPolArcs === 'function' ? buildVesselPolArcs(view) : [])
-            .pathPoints((coordinates) => coordinates)
-            .pathPointLat('lat')
-            .pathPointLng('lng')
-            .pathPointAlt(() => 0.012)
-            .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
-            .pathStroke(() => PATH_STYLE.width)
-            .pathTransitionDuration(0)
-            .pathsData(renderableRoutePaths)
-            .labelsData(getTacticalLabels(view));
+
+        const rawLabels = getTacticalLabels(view);
+        const validLabels = (Array.isArray(rawLabels) ? rawLabels : []).filter((label) =>
+            label &&
+            typeof label === 'object' &&
+            Number.isFinite(Number(label.lat)) &&
+            Number.isFinite(Number(label.lng)) &&
+            typeof label.text === 'string' &&
+            label.text.trim().length > 0
+        ).map((label) => ({
+            ...label,
+            lat: Number(label.lat),
+            lng: Number(label.lng),
+            altitude: Number.isFinite(Number(label.altitude)) ? Number(label.altitude) : 0.018,
+            size: Number.isFinite(Number(label.size)) ? Number(label.size) : 1.05,
+            dotRadius: Number.isFinite(Number(label.dotRadius)) ? Number(label.dotRadius) : 0.32
+        }));
+
+        try {
+            view.globe
+                .pathPoints((d) => Array.isArray(d) ? d : (d?.points || []))
+                .pathPointLat((pt) => {
+                    const lat = Number(pt?.lat ?? pt?.latitude ?? (Array.isArray(pt) ? pt[0] : 0));
+                    return Number.isFinite(lat) ? lat : 0;
+                })
+                .pathPointLng((pt) => {
+                    const lng = Number(pt?.lng ?? pt?.lon ?? pt?.longitude ?? (Array.isArray(pt) ? pt[1] : 0));
+                    return Number.isFinite(lng) ? lng : 0;
+                })
+                .pathPointAlt(() => 0.016)
+                .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
+                .pathStroke(() => PATH_STYLE.width)
+                .pathTransitionDuration(0)
+                .pathsData(renderableRoutePaths);
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] Error al aplicar pathsData en globo:', error);
+        }
+
+        try {
+            view.globe
+                .labelLat((l) => Number(l?.lat ?? 0))
+                .labelLng((l) => Number(l?.lng ?? 0))
+                .labelText((l) => String(l?.text ?? ''))
+                .labelAltitude((l) => Number(l?.altitude ?? 0.018))
+                .labelSize((l) => Number(l?.size ?? 1.05))
+                .labelDotRadius((l) => Number(l?.dotRadius ?? 0.32))
+                .labelsTransitionDuration(0)
+                .labelsData(validLabels);
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] Error al aplicar labelsData en globo:', error);
+        }
+
+        try {
+            view.globe.arcsData(typeof buildVesselPolArcs === 'function' ? buildVesselPolArcs(view) : []);
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] Error al aplicar arcsData en globo:', error);
+        }
     }
 
     function saveGlobalRouteState(ports, routePaths, ballastPortName = '') {
-        if (!window.GlobalStore || !routePaths.length) return;
+        if (!window.GlobalStore) window.GlobalStore = {};
+        if (!routePaths.length) return;
         window.GlobalStore.globeRouteState = {
             ports: { ballast: ports?.ballast || null, pol: ports?.pol || null, pod: ports?.pod || null },
             ballastPortName: String(ballastPortName || ports?.ballast?.name || '').trim(),
@@ -979,20 +1043,41 @@
     }
 
     function fitRoute(view) {
-        const points = view.routePaths.flat();
+        if (!view?.globe || typeof view.globe.pointOfView !== 'function') return;
+        const validPaths = (view.routePaths || []).filter((path) => Array.isArray(path) && path.length >= 2);
+        const points = validPaths.flat().filter((pt) => pt && Number.isFinite(pt.lat) && Number.isFinite(pt.lng));
         if (!points.length) return;
         const center = points[Math.floor(points.length / 2)];
-        const latSpan = Math.max(...points.map((point) => point.lat)) - Math.min(...points.map((point) => point.lat));
-        const altitude = Math.min(2.8, Math.max(2.0, 2.2 + latSpan / 60));
-        view.globe.pointOfView({ lat: center.lat, lng: center.lng, altitude }, CAMERA_TRANSITION_MS);
+        if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
+        let minLat = center.lat;
+        let maxLat = center.lat;
+        for (let i = 0; i < points.length; i++) {
+            const lat = points[i].lat;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+        }
+        const latSpan = Math.abs(maxLat - minLat);
+        const altitude = Math.min(2.8, Math.max(1.8, 2.0 + latSpan / 60));
+        try {
+            view.globe.pointOfView({ lat: center.lat, lng: center.lng, altitude }, CAMERA_TRANSITION_MS);
+        } catch (_) {}
     }
 
     function setRouteSegments(ports, key = DEFAULT_KEY, options = {}, routes = {}) {
         const view = getView(key);
         if (!view) return [];
-        const ballast = normalizeRoutePoint(ports?.ballast);
-        const pol = normalizeRoutePoint(ports?.pol);
-        const pod = normalizeRoutePoint(ports?.pod);
+        let ballast = normalizeRoutePoint(ports?.ballast);
+        let pol = normalizeRoutePoint(ports?.pol);
+        let pod = normalizeRoutePoint(ports?.pod);
+
+        if (!pol && routes?.laden) {
+            const ladenCoords = Array.isArray(routes.laden?.coordinates)
+                ? routes.laden.coordinates
+                : (Array.isArray(routes.laden) ? routes.laden : []);
+            if (ladenCoords.length > 0) pol = normalizeRoutePoint(ladenCoords[0]);
+            if (!pod && ladenCoords.length > 1) pod = normalizeRoutePoint(ladenCoords[ladenCoords.length - 1]);
+        }
+
         const ballastPath = ballast && pol ? simplifyMaritimePath(prepareRoutePoints(routes?.ballast, ballast, pol)) : [];
         const maritimePath = pol && pod ? simplifyMaritimePath(prepareRoutePoints(routes?.laden, pol, pod)) : [];
         if (ballastPath.length > 1) {
@@ -1000,8 +1085,12 @@
             ballastPath.ballastPortName = String(options?.ballastPortName || ports?.ballast?.name || '').trim();
         }
         if (maritimePath.length > 1) maritimePath.routeType = 'laden';
-        view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1);
-        view.portLabels = [createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
+        view.routePaths = [ballastPath, maritimePath].filter((path) => Array.isArray(path) && path.length > 1);
+        view.portLabels = [
+            createPortLabel('LASTRE', ports?.ballast || (ballastPath.length > 1 ? ballastPath[0] : null), options?.ballastPortName),
+            createPortLabel('POL', ports?.pol || pol),
+            createPortLabel('POD', ports?.pod || pod)
+        ].filter(Boolean);
         if (options?.persist !== false) saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName);
         applyRoutes(view);
         if (view.routePaths.length) setAutoRotate(false, key);
@@ -1014,14 +1103,30 @@
     }
 
     function setRouteResult(result, key = DEFAULT_KEY, options = {}) {
-        const ballastPort = typeof result?.portBallast === 'string' ? result.portBallast.trim() : '';
+        if (!result) return [];
+        const ballastPort = typeof result?.portBallast === 'string'
+            ? result.portBallast.trim()
+            : String(result?.ballastPortName || '').trim();
         const hasBallastPort = ballastPort !== '' && ballastPort !== 'TBA';
+        const rawCoords = result?.coordinates || result?.ports || {};
         const coordinates = hasBallastPort
-            ? (result?.coordinates || {})
-            : { ...(result?.coordinates || {}), ballast: null };
+            ? rawCoords
+            : { ...rawCoords, ballast: null };
+        let rawRoutes = result?.routes;
+        if (!rawRoutes && Array.isArray(result?.paths)) {
+            const rTypes = Array.isArray(result.routeTypes) ? result.routeTypes : [];
+            const ballastIdx = result.paths.findIndex((p, idx) => p?.routeType === 'ballast' || rTypes[idx] === 'ballast');
+            const ladenIdx = result.paths.findIndex((p, idx) => p?.routeType === 'laden' || rTypes[idx] === 'laden');
+            rawRoutes = {
+                ballast: ballastIdx >= 0 ? result.paths[ballastIdx] : null,
+                laden: ladenIdx >= 0 ? result.paths[ladenIdx] : (result.paths[0] || null)
+            };
+        } else if (!rawRoutes) {
+            rawRoutes = {};
+        }
         const routes = hasBallastPort
-            ? (result?.routes || {})
-            : { ...(result?.routes || {}), ballast: null };
+            ? rawRoutes
+            : { ...rawRoutes, ballast: null };
         return setRouteSegments(coordinates, key, { ...options, ballastPortName: ballastPort }, routes);
     }
 
@@ -1032,9 +1137,10 @@
     function resize(key = DEFAULT_KEY) {
         const view = getView(key);
         if (!view || view.resizeFrameId) return;
+        if (!view.globe) return;
         view.resizeFrameId = requestAnimationFrame(() => {
             view.resizeFrameId = null;
-            if (!isViewVisible(view)) return;
+            if (!isViewVisible(view) || !view.globe || typeof view.globe.width !== 'function') return;
             const size = getContainerSize(view.container);
             if (size.width <= 1 || size.height <= 1) return;
             if (view.pendingVesselSync) {
@@ -1198,6 +1304,12 @@
             wrapper.appendChild?.(title);
             wrapper.appendChild?.(desc);
             wrapper.appendChild?.(badge);
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.className = 'global-fleet-fallback-canvas';
+                canvas.style.cssText = 'position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0.15; pointer-events: none;';
+                container.appendChild?.(canvas);
+            } catch (_) {}
             container.appendChild?.(wrapper);
         } catch (_err) {
             // Silently fallback if mock elements don't support DOM manipulation
@@ -1262,9 +1374,12 @@
         container.style.display = 'block';
         container.style.width = '100%';
         container.style.height = '100%';
-        container.style.minHeight = container.style.minHeight || '280px';
+        container.style.minHeight = container.style.minHeight || '600px';
         container.style.position = container.style.position || 'relative';
         container.style.zIndex = container.style.zIndex === '-1' ? '0' : container.style.zIndex;
+        if (!container.style.background) {
+            container.style.background = 'radial-gradient(circle at 50% 42%, rgba(13, 127, 143, 0.34), transparent 38%), linear-gradient(155deg, #071a32 0%, #0a2947 48%, #07182c 100%)';
+        }
     }
 
     function mount(options = {}) {
@@ -1362,12 +1477,24 @@
         };
         views.set(key, view);
         try {
+            const THREE = window.THREE;
             const fallbackGlobeMaterial = createFallbackGlobeMaterial();
             const globe = window.Globe({ animateIn: false, waitForGlobeReady: false })(container)
                 .width(size.width)
                 .height(size.height)
                 .backgroundColor('rgba(0,0,0,0)');
             if (fallbackGlobeMaterial) globe.globeMaterial(fallbackGlobeMaterial);
+            if (THREE && typeof THREE.AmbientLight === 'function' && typeof THREE.DirectionalLight === 'function' && typeof globe.lights === 'function') {
+                globe.lights([
+                    new THREE.AmbientLight(0xffffff, 0.38),
+                    (() => {
+                        const d = new THREE.DirectionalLight(0xffffff, 0.65);
+                        if (d.position && typeof d.position.set === 'function') d.position.set(1, 1, 1);
+                        return d;
+                    })()
+                ]);
+            }
+            if (typeof globe.bumpScale === 'function') globe.bumpScale(0.05);
             view.globe = globe
                 .globeImageUrl(EARTH_IMAGE_URL)
                 .bumpImageUrl(EARTH_TOPOLOGY_URL)
@@ -1389,26 +1516,39 @@
                 .arcLabel((arc) => getVesselTacticalLabel(view, arc?.vessel))
                 .arcsTransitionDuration(0)
                 .arcsData([])
-                .pathPoints((coordinates) => coordinates)
-                .pathPointLat('lat')
-                .pathPointLng('lng')
-                .pathPointAlt(() => 0.012)
+                .pathPoints((coordinates) => Array.isArray(coordinates) ? coordinates : (coordinates?.points || []))
+                .pathPointLat((pt) => {
+                    const lat = Number(pt?.lat ?? pt?.latitude ?? (Array.isArray(pt) ? pt[0] : 0));
+                    return Number.isFinite(lat) ? lat : 0;
+                })
+                .pathPointLng((pt) => {
+                    const lng = Number(pt?.lng ?? pt?.lon ?? pt?.longitude ?? (Array.isArray(pt) ? pt[1] : 0));
+                    return Number.isFinite(lng) ? lng : 0;
+                })
+                .pathPointAlt(() => 0.016)
                 .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
                 .pathStroke(() => PATH_STYLE.width)
                 .pathTransitionDuration(0)
                 .pathsData([])
-                .labelLat('lat')
-                .labelLng('lng')
-                .labelText('text')
+                .labelLat((l) => Number(l?.lat ?? 0))
+                .labelLng((l) => Number(l?.lng ?? 0))
+                .labelText((l) => String(l?.text ?? ''))
                 .labelColor(() => '#FFFFFF')
-                .labelSize((label) => label?.size || 1.05)
-                .labelDotRadius((label) => label?.dotRadius || 0)
-                .labelAltitude((label) => Number.isFinite(Number(label?.altitude)) ? Number(label.altitude) : SURFACE_ALTITUDE)
+                .labelSize((label) => Number(label?.size || 1.05))
+                .labelDotRadius((label) => Number(label?.dotRadius ?? 0.32))
+                .labelAltitude((label) => Number.isFinite(Number(label?.altitude)) ? Number(label.altitude) : 0.018)
                 .labelRotation((label) => Number.isFinite(Number(label?.rotation)) ? Number(label.rotation) : 0)
                 .labelResolution(8)
                 .labelLabel((label) => label?.text || '')
                 .labelsTransitionDuration(0)
                 .labelsData([]);
+            const renderer = typeof view.globe?.renderer === 'function' ? view.globe.renderer() : null;
+            if (renderer && THREE) {
+                if (THREE.ACESFilmicToneMapping !== undefined) {
+                    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                }
+                renderer.toneMappingExposure = 0.82;
+            }
             configurePortTileEngine(view);
             configureVesselHtmlLayer(view);
             view.globe.pointOfView(view.initialView, view.initialViewDuration);
