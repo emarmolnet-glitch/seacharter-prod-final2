@@ -10,7 +10,10 @@ async function loadPortClientModule() {
   );
   const transpiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
+  }).outputText.replace(
+    /(["'])\.\.\/\.\.\/\.\.\/shared\/port-h16-sheet\.mjs\1/,
+    JSON.stringify(new URL("../shared/port-h16-sheet.mjs", import.meta.url).href),
+  );
   return import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 }
 
@@ -233,7 +236,11 @@ test("resolvePortsWithFailover uses Neon ports_master as primary provider (Prior
   assert.equal(results[0].countryCode, "CM");
   assert.equal(results[0].lat, 4.05);
   assert.equal(results[0].lon, 9.683333);
-  assert.equal(results[0].maxOperationalDraftMeters, 13.11);
+  // Effective draft = min(berth 13.11, channel high-water 7.62).
+  assert.equal(results[0].maxOperationalDraftMeters, 7.62);
+  assert.equal(results[0].effectiveDraftM, 7.62);
+  assert.equal(results[0].effectiveDraftSource, "channel_high");
+  assert.equal(results[0].lowWaterDraftM, 6.4);
   assert.equal(results[0].displayName, "DOUALA (CM)");
 });
 

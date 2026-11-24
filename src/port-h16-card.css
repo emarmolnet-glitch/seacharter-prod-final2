@@ -1,0 +1,83 @@
+/* H16 port sheet cards (Section 1 POL/POD) and Risk Matrix port-restriction block. */
+.h16-port-card {
+  display: grid;
+  gap: 3px;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #059669;
+}
+/* Colours chosen to stay legible on both the light and the dark calculator themes. */
+.h16-port-card strong { color: inherit; font-weight: 900; font-size: 11px; }
+.h16-port-card__muted { color: #64748b; font-weight: 600; }
+.h16-port-card__badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.h16-port-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid;
+  padding: 1px 7px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.h16-port-badge--warning { color: #92400e; border-color: #f59e0b; background: #fef3c7; }
+.h16-port-badge--info { color: #075985; border-color: #38bdf8; background: #e0f2fe; }
+.h16-port-card__ok { color: #16a34a; font-weight: 700; }
+.h16-port-alert {
+  margin-top: 3px;
+  border: 1px solid #f87171;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+.h16-port-alert strong { color: #7f1d1d; display: flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.02em; }
+.h16-port-alert ul { margin: 3px 0 0; padding-left: 14px; list-style: disc; }
+.h16-port-card--critical { color: #dc2626; }
+.h16-port-card__warnings summary { cursor: pointer; color: #b45309; font-weight: 700; }
+.h16-port-card__warnings ul { margin: 2px 0 0; padding-left: 14px; list-style: disc; color: #475569; }
+
+/* Risk Matrix block (light theme panel) */
+.port-restriction-impact {
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+.port-restriction-impact--critical { border-color: #fca5a5; background: #fef2f2; }
+.port-restriction-impact__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.port-restriction-impact__eyebrow { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.12em; color: #64748b; }
+.port-restriction-impact h3 { margin: 2px 0 0; font-size: 13px; font-weight: 900; color: #0f172a; }
+.port-restriction-impact__badge {
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #334155;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+.port-restriction-impact--critical .port-restriction-impact__badge { border-color: #f87171; color: #991b1b; background: #fff; }
+.port-restriction-impact__ports { display: grid; gap: 8px; margin-top: 10px; }
+@media (min-width: 768px) { .port-restriction-impact__ports { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.port-restriction-impact__port { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background: #fff; font-size: 11px; color: #334155; }
+.port-restriction-impact__port--critical { border-color: #f87171; }
+.port-restriction-impact__port h4 { margin: 0 0 4px; font-size: 11px; font-weight: 900; color: #0f172a; }
+.port-restriction-impact__port ul { margin: 4px 0 0; padding-left: 16px; list-style: disc; }
+.port-restriction-impact__port .is-critical { color: #b91c1c; font-weight: 800; }
+.port-restriction-impact__metrics { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; font-size: 11px; color: #334155; }
+.port-restriction-impact__metrics strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #0f172a; }
+.port-restriction-impact__metrics label { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.port-restriction-impact__metrics input {
+  width: 64px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

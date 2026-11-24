@@ -1,3 +1,5 @@
+import { resolvePortH16Profile, parseH16PortSheet } from "../../../shared/port-h16-sheet.mjs";
+
 const DEFAULT_DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
 const DEFAULT_NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
 export const NOMINATIM_USER_AGENT = "SeaCharterCorePRO/1.0";
@@ -30,6 +32,14 @@ export interface GeoResolutionRecord {
   tidalWindowRequired?: boolean | null;
   waterDensity?: number | null;
   gearedVesselRequired?: boolean | null;
+  nightNavigationAllowed?: boolean | null;
+  effectiveDraftM?: number | null;
+  effectiveDraftSource?: string | null;
+  effectiveDraftLabel?: string | null;
+  lowWaterDraftM?: number | null;
+  maxLoaM?: number | null;
+  maxBeamM?: number | null;
+  operationalWarnings?: string[];
   h16Sheet?: unknown;
 }
 
@@ -282,12 +292,19 @@ export function normalizeNeonPort(value: unknown): GeoResolutionRecord | null {
   const officialLabel = countryCode ? `${portName} (${countryCode})` : portName;
   const displayName = cleanText(record.display_name ?? record.displayName) || officialLabel;
 
-  const maxDraft = positiveNumber(record.berth_draft_m ?? record.channel_draft_high_m ?? record.channel_draft_low_m);
-  const draftSource = record.berth_draft_m
+  const rawH16Sheet = record.h16_sheet ?? record.h16Sheet ?? record.h16_port_sheet ?? null;
+  // ports_master may store the sheet as JSONB object or as a serialized JSON string.
+  const h16Sheet = parseH16PortSheet(rawH16Sheet)
+    ?? (rawH16Sheet && typeof rawH16Sheet === "object" ? rawH16Sheet : null);
+  // Effective port draft = min(berth_draft_m, channel_draft_high_m) from the H16 sheet,
+  // falling back to the flattened ports_master columns.
+  const h16 = resolvePortH16Profile({ ...record, h16Sheet });
+  const maxDraft = h16.effectiveDraftM;
+  const draftSource = h16.effectiveDraftSource === "berth"
     ? "berth_draft_m"
-    : record.channel_draft_high_m
+    : h16.effectiveDraftSource === "channel_high"
       ? "channel_draft_high_m"
-      : record.channel_draft_low_m
+      : h16.effectiveDraftSource === "channel_low"
         ? "channel_draft_low_m"
         : null;
 
@@ -310,14 +327,22 @@ export function normalizeNeonPort(value: unknown): GeoResolutionRecord | null {
     displayName,
     source: "NEON_H16",
     wpiIndex,
-    channelDraftLowM: record.channel_draft_low_m !== null && record.channel_draft_low_m !== undefined ? Number(record.channel_draft_low_m) : null,
-    channelDraftHighM: record.channel_draft_high_m !== null && record.channel_draft_high_m !== undefined ? Number(record.channel_draft_high_m) : null,
-    berthDraftM: record.berth_draft_m !== null && record.berth_draft_m !== undefined ? Number(record.berth_draft_m) : null,
-    tidalRangeM: record.tidal_range_m !== null && record.tidal_range_m !== undefined ? Number(record.tidal_range_m) : null,
-    tidalWindowRequired: typeof record.tidal_window_required === "boolean" ? record.tidal_window_required : null,
-    waterDensity: record.water_density !== null && record.water_density !== undefined ? Number(record.water_density) : null,
-    gearedVesselRequired: typeof record.geared_vessel_required === "boolean" ? record.geared_vessel_required : null,
-    h16Sheet: record.h16_sheet ?? record.h16Sheet ?? null,
+    channelDraftLowM: h16.channelDraftLowM,
+    channelDraftHighM: h16.channelDraftHighM,
+    berthDraftM: h16.berthDraftM,
+    tidalRangeM: h16.tidalRangeM,
+    tidalWindowRequired: h16.tidalWindowRequired,
+    waterDensity: h16.waterDensity,
+    gearedVesselRequired: h16.gearedVesselRequired,
+    nightNavigationAllowed: h16.nightNavigationAllowed,
+    effectiveDraftM: h16.effectiveDraftM,
+    effectiveDraftSource: h16.effectiveDraftSource,
+    effectiveDraftLabel: h16.effectiveDraftLabel,
+    lowWaterDraftM: h16.lowWaterDraftM,
+    maxLoaM: h16.maxLoaM,
+    maxBeamM: h16.maxBeamM,
+    operationalWarnings: h16.operationalWarnings,
+    h16Sheet,
   };
 }
 

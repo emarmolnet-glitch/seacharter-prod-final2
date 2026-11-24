@@ -10,7 +10,7 @@ export default async function portsSearchHandler(request: Request) {
 
   try {
     const cached = await getOrSetCachedJson({
-      namespace: "port-finder-v2",
+      namespace: "port-finder-v3",
       key: query.toLowerCase(),
       ttlMs: 7 * 24 * 60 * 60 * 1000,
       staleTtlMs: 30 * 24 * 60 * 60 * 1000,

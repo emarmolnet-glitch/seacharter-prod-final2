@@ -1202,7 +1202,7 @@
 
     function calculateSensitivityScenario(baseResult, scenario) {
         const base = pickSensitivityBase(baseResult);
-        if (scenario.key === 'base') {
+        if (scenario.key === 'base' && !(toNumber(scenario.portDelayDays) > 0)) {
             return {
                 key: scenario.key,
                 label: scenario.label,
@@ -1274,8 +1274,16 @@
         };
     }
 
-    function runSensitivityBatch(baseResult) {
-        const scenarios = RISK_SCENARIOS.map((scenario) => calculateSensitivityScenario(baseResult, scenario));
+    function runSensitivityBatch(baseResult, options = {}) {
+        // H16 port restrictions (tidal window / no night navigation) add an operational
+        // buffer to the base and stress port days.
+        const portRestrictions = options.portRestrictions || null;
+        const portBufferDays = Math.max(0, toNumber(options.portBufferDays ?? portRestrictions?.totalBufferDays));
+        const scenarios = RISK_SCENARIOS.map((scenario) => calculateSensitivityScenario(baseResult, (
+            portBufferDays > 0 && (scenario.key === 'base' || scenario.key === 'stress')
+                ? { ...scenario, portDelayDays: toNumber(scenario.portDelayDays) + portBufferDays }
+                : scenario
+        )));
         const best = scenarios.find((scenario) => scenario.key === 'best');
         const base = scenarios.find((scenario) => scenario.key === 'base');
         const stress = scenarios.find((scenario) => scenario.key === 'stress');
@@ -1286,7 +1294,9 @@
             moderate: stress,
             critical: stress,
             scenarios,
-            risk: evaluateRisk(base, stress, stress)
+            portBufferDays,
+            portRestrictions,
+            risk: evaluateRisk(base, stress, stress, portRestrictions)
         };
     }
 
@@ -1363,10 +1373,34 @@
         panel.classList.remove('hidden');
     }
 
-    function evaluateRisk(baseResult, moderateResult, criticalResult) {
+    function describePortRestrictionBreaches(portRestrictions) {
+        return (portRestrictions?.ports || [])
+            .filter((entry) => entry?.fit?.isCritical)
+            .map((entry) => {
+                const parts = (entry.fit.breaches || []).map((breach) => {
+                    if (breach.type === 'draft') return `calado +${toNumber(breach.excess).toFixed(2)} m`;
+                    if (breach.type === 'loa') return `eslora +${toNumber(breach.excess).toFixed(2)} m`;
+                    return `manga +${toNumber(breach.excess).toFixed(2)} m`;
+                });
+                return `${entry.role}${entry.name ? ` ${entry.name}` : ''}: ${parts.join(', ')}`;
+            });
+    }
+
+    function evaluateRisk(baseResult, moderateResult, criticalResult, portRestrictions = null) {
         const fleteBruto = Math.max(0, toNumber(baseResult?.fleteBruto || moderateResult?.fleteBruto || criticalResult?.fleteBruto));
         const moderateProfit = toNumber(moderateResult?.beneficioNeto ?? moderateResult?.netProfitOwner);
         const marginRatio = fleteBruto > 0 ? moderateProfit / fleteBruto : 0;
+        if (portRestrictions?.hasCritical) {
+            const details = describePortRestrictionBreaches(portRestrictions);
+            return {
+                status: 'red',
+                label: 'RESTRICCIÓN DE PUERTO · NO VIABLE A PLENA CARGA',
+                severity: 'critical',
+                blocksSave: moderateProfit <= 0,
+                portRestricted: true,
+                message: `Restricción de puerto (H16): ${details.join(' · ')}. El buque no puede operar a plena carga; revise cantidad, buque o puerto.${moderateProfit <= 0 ? ' Además, el escenario de estrés entra en pérdida.' : ''}`
+            };
+        }
         if (moderateProfit <= 0) {
             return {
                 status: 'red',
@@ -1475,13 +1509,118 @@
         };
     }
 
-    function buildFixtureClauseAdvice(baseResult, forecast) {
+    function buildPortRestrictionClauseAdvice(portRestrictions) {
+        const ports = portRestrictions?.ports || [];
+        if (!ports.length) return '';
+        const clauses = [];
+        ports.forEach((entry) => {
+            const label = escapeHtml(`${entry.role}${entry.name ? ` ${entry.name}` : ''}`);
+            const profile = entry.profile || {};
+            const fit = entry.fit || {};
+            if (fit.isCritical) {
+                const draftBreach = (fit.breaches || []).find((breach) => breach.type === 'draft');
+                clauses.push(`${label}: restricción de puerto${draftBreach ? ` (calado efectivo ${toNumber(profile.effectiveDraftM).toFixed(2)} m)` : ''}. Pactar cantidad "max. cargo permitted by port draft" / opción de cantidad del armador (MOLOO) y cláusula "always safely afloat" (NAABSA sólo si el puerto lo admite).`);
+            }
+            if (profile.tidalWindowRequired === true) {
+                clauses.push(`${label}: ventana de marea obligatoria. Incluir "time lost waiting for tide to count as laytime" (o excluirlo si el riesgo es del armador).`);
+            }
+            if (profile.nightNavigationAllowed === false) {
+                clauses.push(`${label}: sin navegación nocturna. Prever pérdida de turno de practicaje y NOR WIBON/WIPON.`);
+            }
+            if (toNumber(fit.bufferDays) > 0) {
+                clauses.push(`${label}: buffer operativo de +${toNumber(fit.bufferDays).toFixed(2)} días incluido en el escenario base y de estrés.`);
+            }
+            if (fit.densityCorrectionApplied && profile.waterDensity) {
+                clauses.push(`${label}: agua de densidad ${toNumber(profile.waterDensity).toFixed(3)} t/m³ — declarar calado de llegada corregido por FWA.`);
+            }
+        });
+        return clauses.length ? ` <strong>Restricciones H16:</strong> ${clauses.join(' ')}` : '';
+    }
+
+    function buildFixtureClauseAdvice(baseResult, forecast, portRestrictions = null) {
         const pod = escapeHtml(baseResult.pod || 'POD no informado');
         const referenceWave = forecast.podWaveHeight || forecast.maxWaveHeight;
+        const portAdvice = buildPortRestrictionClauseAdvice(portRestrictions);
+        const stressDays = 2 + Math.max(0, toNumber(portRestrictions?.totalBufferDays));
         if (forecast.weatherRiskDetected) {
-            return `Riesgo climático detectado en POD (${pod})${referenceWave > 0 ? `, con oleaje previsto de hasta ${referenceWave.toFixed(1)} m` : ''}. Sugerencia: añadir cláusula WWD (Weather Working Days) estricta, protección WIPON/WIBON y BAF para absorber la variación del bunker.`;
+            return `Riesgo climático detectado en POD (${pod})${referenceWave > 0 ? `, con oleaje previsto de hasta ${referenceWave.toFixed(1)} m` : ''}. Sugerencia: añadir cláusula WWD (Weather Working Days) estricta, protección WIPON/WIBON y BAF para absorber la variación del bunker.${portAdvice}`;
         }
-        return `Escenario preventivo para POD (${pod}): reservar +2 días por demora portuaria y +5% de bunker. Sugerencia: incorporar BAF y definir WWD/WIPON-WIBON antes de cerrar el Fixture Recap.`;
+        return `Escenario preventivo para POD (${pod}): reservar +${stressDays.toFixed(stressDays % 1 ? 1 : 0)} días por demora portuaria y +5% de bunker. Sugerencia: incorporar BAF y definir WWD/WIPON-WIBON antes de cerrar el Fixture Recap.${portAdvice}`;
+    }
+
+    function resolveLivePortRestrictions(baseResult) {
+        const bridge = root.SeaCharterPortH16;
+        if (bridge && typeof bridge.evaluateCurrentRoute === 'function') {
+            try {
+                return bridge.evaluateCurrentRoute(baseResult);
+            } catch (error) {
+                console.warn('[VoyageCostEngine] No se pudieron evaluar las restricciones H16 de puerto.', error);
+            }
+        }
+        return baseResult?.portRestrictions && typeof baseResult.portRestrictions === 'object' ? baseResult.portRestrictions : null;
+    }
+
+    function calculateCargoCutBreakEvenImpact(portRestrictions, batch) {
+        const cargo = Math.max(0, toNumber(batch?.base?.cargo));
+        const baseBreakEven = Math.max(0, toNumber(batch?.base?.projectedBreakEven));
+        const cut = Math.max(0, toNumber(portRestrictions?.maxCargoCutTons));
+        const reducedCargo = cargo - cut;
+        return cut > 0 && reducedCargo > 0 && baseBreakEven > 0
+            ? (baseBreakEven * cargo / reducedCargo) - baseBreakEven
+            : 0;
+    }
+
+    function renderPortRestrictionSection(portRestrictions, batch) {
+        if (!portRestrictions?.hasData) return '';
+        const bufferPerPort = Math.max(0, toNumber(portRestrictions.bufferDaysPerPort ?? 0.5));
+        const perMtImpact = calculateCargoCutBreakEvenImpact(portRestrictions, batch);
+        const portCards = portRestrictions.ports.map((entry) => {
+            const profile = entry.profile || {};
+            const fit = entry.fit || {};
+            const lines = [];
+            lines.push(`Calado efectivo: <strong>${profile.effectiveDraftM ? `${toNumber(profile.effectiveDraftM).toFixed(2)} m` : 'N/A'}</strong>${profile.effectiveDraftLabel ? ` (${escapeHtml(profile.effectiveDraftLabel)})` : ''}${profile.lowWaterDraftM ? ` · bajamar ${toNumber(profile.lowWaterDraftM).toFixed(2)} m` : ''}`);
+            if (fit.adjustedDraftM) {
+                lines.push(`Calado buque: ${toNumber(fit.vesselDraftM).toFixed(2)} m${fit.densityCorrectionApplied ? ` → ${toNumber(fit.adjustedDraftM).toFixed(2)} m (FWA, densidad ${toNumber(profile.waterDensity).toFixed(3)})` : ''}`);
+            } else {
+                lines.push('Calado buque: no informado');
+            }
+            lines.push(`Eslora máx.: ${profile.maxLoaM ? `${profile.maxLoaM} m` : 'N/A'} · Manga máx.: ${profile.maxBeamM ? `${profile.maxBeamM} m` : 'N/A'}`);
+            const breachItems = (fit.breaches || []).map((breach) => `<li class="is-critical">${escapeHtml(breach.message)}</li>`);
+            if (fit.isCritical && fit.cargoCutTons) {
+                breachItems.push(`<li class="is-critical">Recorte orientativo: ~${Math.round(fit.cargoCutTons).toLocaleString('en-US')} MT${fit.cargoCutPct ? ` (${toNumber(fit.cargoCutPct).toFixed(1)}%)` : ''} con TPC ${toNumber(fit.tpc).toFixed(1)} t/cm${fit.tpcEstimated ? ' estimado' : ''}.</li>`);
+            } else if (fit.isCritical && fit.draftOvercapacityPct) {
+                breachItems.push(`<li class="is-critical">Sobrecapacidad de calado: +${toNumber(fit.draftOvercapacityPct).toFixed(1)}% (sin TPC para estimar recorte de carga).</li>`);
+            }
+            if (fit.bufferDays > 0) breachItems.push(`<li>Buffer operativo: +${toNumber(fit.bufferDays).toFixed(2)} días (${escapeHtml(fit.bufferReasons.join(' · '))})</li>`);
+            const warnings = (profile.operationalWarnings || []).map((item) => `<li>${escapeHtml(item)}</li>`);
+            return `
+                <div class="port-restriction-impact__port ${fit.isCritical ? 'port-restriction-impact__port--critical' : ''}">
+                    <h4>${escapeHtml(entry.role)} · ${escapeHtml(entry.name || 'Puerto')} ${fit.isCritical ? '· <span class="is-critical">ALERTA CRÍTICA</span>' : ''}</h4>
+                    <div>${lines.join('<br>')}</div>
+                    ${breachItems.length ? `<ul>${breachItems.join('')}</ul>` : ''}
+                    ${warnings.length ? `<ul>${warnings.join('')}</ul>` : ''}
+                </div>
+            `;
+        }).join('');
+        return `
+            <section class="port-restriction-impact ${portRestrictions.hasCritical ? 'port-restriction-impact--critical' : ''}" aria-label="Restricciones de Puerto H16">
+                <div class="port-restriction-impact__heading">
+                    <div>
+                        <span class="port-restriction-impact__eyebrow">Ficha oficial WPI · H16</span>
+                        <h3>Restricciones de Puerto</h3>
+                    </div>
+                    <span class="port-restriction-impact__badge">${portRestrictions.hasCritical ? 'NO VIABLE A PLENA CARGA' : (portRestrictions.totalBufferDays > 0 ? 'Buffer activo' : 'Sin restricción')}</span>
+                </div>
+                <div class="port-restriction-impact__ports">${portCards}</div>
+                <div class="port-restriction-impact__metrics">
+                    <div><span>Buffer aplicado (base y estrés)</span> <strong>+${toNumber(portRestrictions.totalBufferDays).toFixed(2)} días</strong></div>
+                    ${perMtImpact > 0 ? `<div><span>Impacto en break-even por recorte</span> <strong>+${moneyFormatter.format(perMtImpact)}/MT</strong></div>` : ''}
+                    <label>Buffer por puerto afectado (días)
+                        <input type="number" id="port-restriction-buffer-days" min="0" max="10" step="0.25" value="${bufferPerPort}">
+                    </label>
+                </div>
+            </section>
+        `;
     }
 
     function renderAutomaticRiskMatrix(baseResult, documentRef = root.document) {
@@ -1495,7 +1634,8 @@
                 grossRevenue: currentFreightRevenue
             }
         };
-        const batch = runSensitivityBatch(hydratedBaseResult);
+        const portRestrictions = resolveLivePortRestrictions(hydratedBaseResult);
+        const batch = runSensitivityBatch(hydratedBaseResult, { portRestrictions });
         const risk = batch.risk;
         const badge = documentRef.getElementById('auto-risk-status');
         const alert = documentRef.getElementById('auto-risk-alert');
@@ -1537,7 +1677,9 @@
             const stressBreakEven = toNumber(batch.stress?.projectedBreakEven);
             const thermometerRange = Math.max(0.01, stressBreakEven - bestBreakEven);
             const basePosition = Math.min(92, Math.max(8, ((baseBreakEven - bestBreakEven) / thermometerRange) * 100));
-            const clauseAdvice = buildFixtureClauseAdvice(hydratedBaseResult, forecast);
+            const clauseAdvice = buildFixtureClauseAdvice(hydratedBaseResult, forecast, portRestrictions);
+            const portBufferDays = Math.max(0, toNumber(batch.portBufferDays));
+            const portBufferLabel = portBufferDays > 0 ? ` · +${portBufferDays.toFixed(2)} días buffer H16` : '';
             const meteoceanRiskItems = meteoceanRisk.risks.map((item) => `
                 <li class="meteocean-impact__risk-item">
                     <i class="fa-solid ${item.type === 'wind' ? 'fa-wind' : 'fa-cloud-showers-heavy'}" aria-hidden="true"></i>
@@ -1571,14 +1713,14 @@
                     scenario: batch.base,
                     variant: 'base',
                     eyebrow: 'Escenario Base · Base Case',
-                    formula: 'Datos validados actualmente · Break-even oficial',
-                    delta: 'Punto central de negociación'
+                    formula: `Datos validados actualmente · Break-even oficial${portBufferLabel}`,
+                    delta: portBufferDays > 0 ? `Incluye marea / navegación nocturna (${moneyFormatter.format(Math.max(0, batch.base.breakEvenDelta))}/MT)` : 'Punto central de negociación'
                 },
                 {
                     scenario: batch.stress,
                     variant: 'stress',
                     eyebrow: 'Escenario Estrés · Worst Case',
-                    formula: `+2 días en puerto · +5% bunker${forecast.weatherRiskDetected ? ' · alerta de oleaje' : ''}`,
+                    formula: `+2 días en puerto${portBufferLabel} · +5% bunker${forecast.weatherRiskDetected ? ' · alerta de oleaje' : ''}`,
                     delta: `+${moneyFormatter.format(Math.max(0, batch.stress.breakEvenDelta))}/MT vs. base`
                 }
             ];
@@ -1618,6 +1760,7 @@
                     </div>
                     ${meteoceanContent}
                 </section>
+                ${renderPortRestrictionSection(portRestrictions, batch)}
                 <aside class="fixture-clause-advice">
                     <span class="fixture-clause-advice__icon"><i class="fa-solid fa-file-signature" aria-hidden="true"></i></span>
                     <div>
@@ -1628,6 +1771,26 @@
             `;
         }
         renderSmartAdvisor(batch, hydratedBaseResult, documentRef);
+        // Snapshot consumed by the Executive Report (internal and client modes).
+        const portRestrictionSnapshot = portRestrictions?.hasData
+            ? {
+                ...portRestrictions,
+                breakEvenImpactPerMt: roundMoney(calculateCargoCutBreakEvenImpact(portRestrictions, batch)),
+                baseBreakEven: roundMoney(batch.base?.projectedBreakEven),
+                fixtureClauseAdvice: buildPortRestrictionClauseAdvice(portRestrictions).replace(/<[^>]+>/g, '').trim(),
+                evaluatedAt: new Date().toISOString()
+            }
+            : null;
+        batch.portRestrictions = portRestrictionSnapshot || batch.portRestrictions;
+        if (baseResult && typeof baseResult === 'object') baseResult.portRestrictions = portRestrictionSnapshot;
+        if (root.State && typeof root.State === 'object' && root.State !== baseResult) root.State.portRestrictions = portRestrictionSnapshot;
+        if (root.SeaCharterPortH16 && typeof root.SeaCharterPortH16.refreshPortCards === 'function') {
+            try {
+                root.SeaCharterPortH16.refreshPortCards(hydratedBaseResult);
+            } catch (error) {
+                console.warn('[VoyageCostEngine] No se pudieron refrescar las tarjetas H16 de POL/POD.', error);
+            }
+        }
         root.SeaCharterSensitivityAnalysis = batch;
         return batch;
     }
@@ -2116,6 +2279,7 @@
         analyzeStressFactor,
         renderSmartAdvisor,
         evaluateRisk,
+        buildFixtureClauseAdvice,
         calculateMeteoceanRisk,
         renderAutomaticRiskMatrix,
         VoyageCostDomController
