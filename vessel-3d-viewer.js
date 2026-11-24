@@ -35,6 +35,7 @@ export class Vessel3DViewer {
     // Colecciones de mallas
     this.hatchMeshes = [];
     this.cargoInstancedMesh = null;
+    this.projectCargoGroup = null;
     this.cranesGroup = null;
     this.hullGroup = null;
 
@@ -184,8 +185,11 @@ export class Vessel3DViewer {
     // Limpiar modelos anteriores
     if (this.hullGroup) this.scene.remove(this.hullGroup);
     if (this.cargoInstancedMesh) this.scene.remove(this.cargoInstancedMesh);
+    if (this.projectCargoGroup) this.scene.remove(this.projectCargoGroup);
     if (this.cranesGroup) this.scene.remove(this.cranesGroup);
 
+    this.projectCargoGroup = null;
+    this.cargoInstancedMesh = null;
     this.hatchMeshes = [];
     this.hatchesOpen = false;
     if (this.seaMesh) this.seaMesh.position.y = 0;
@@ -194,14 +198,14 @@ export class Vessel3DViewer {
       this.seaMat.depthWrite = true;
     }
 
-    const v = stowageResult?.vesselSpecs || {};
+    const v = stowageResult?.vessel || stowageResult?.vesselSpecs || {};
     const geom = stowageResult?.geometry || {};
     const holds = Array.isArray(stowageResult?.holds) ? stowageResult.holds : [];
 
-    const L = geom.loa || 180;
-    const B = geom.beam || 28;
-    const D = geom.depth || 15;
-    const draft = v.draft || 9.5;
+    const L = Number(v.loa || v.loa_meters || geom.loa || 180);
+    const B = Number(v.beam || v.beam_meters || geom.beam || 28);
+    const D = Number(v.depth || geom.depth || 15);
+    const draft = Number(v.draft || v.draft_meters || geom.draft || 9.5);
     this.vesselDimensions = { length: L, beam: B, depth: D, draft };
 
     // Materiales navales realistas
@@ -265,7 +269,7 @@ export class Vessel3DViewer {
     this.scene.add(this.hullGroup);
 
     // Grúas navales
-    const holdsCount = geom.holdsCount || holds.length || 4;
+    const holdsCount = Number(v.holds_count || v.holdsCount || geom.holdsCount || holds.length || 4);
     const craneCount = v.hasGears ? (geom.craneCount || holdsCount) : 0;
     this.cranesGroup = new THREE.Group();
     if (craneCount > 0) {
@@ -273,8 +277,12 @@ export class Vessel3DViewer {
     }
     this.scene.add(this.cranesGroup);
 
-    // Carga apilada en bodegas con InstancedMesh
-    this.buildInstancedCargo(THREE, stowageResult, L, B, D, draft);
+    // Carga en bodegas: InstancedMesh para homogéneo o ProjectCargoGroup para project_cargo
+    if (stowageResult?.mode === 'project_cargo') {
+      this.buildProjectCargo(THREE, stowageResult, L, B, D, draft);
+    } else {
+      this.buildInstancedCargo(THREE, stowageResult, L, B, D, draft);
+    }
 
     // Encuadre inicial en 3/4 Proa proporcional a L
     this.setViewPreset('threeQuarter');
@@ -674,6 +682,186 @@ export class Vessel3DViewer {
   }
 
   /**
+   * Construye el cargamento para modo Project Cargo / Vehículos:
+   * piezas individuales con dimensiones reales (length_m, width_m, height_m),
+   * soporte para zonas under_deck, tweendeck y on_deck,
+   * y colores por categoría: heavy_lift (#ea580c), vehicle (#2563eb), crate (#0d9488), steel (#475569).
+   */
+  buildProjectCargo(THREE, stowageResult, L, B, D, draft) {
+    this.projectCargoGroup = new THREE.Group();
+
+    const placedItems = Array.isArray(stowageResult?.placed_items) ? stowageResult.placed_items : [];
+    const v = stowageResult?.vessel || stowageResult?.vesselSpecs || {};
+    const holds = Array.isArray(stowageResult?.holds) ? stowageResult.holds : [];
+    const geom = stowageResult?.geometry || {};
+    const holdsCount = Number(v.holds_count || v.holdsCount || geom.holdsCount || holds.length || 4);
+    const cargoAreaL = L * 0.68;
+    const holdL = cargoAreaL / holdsCount;
+    const deckY = D - draft;
+    const tankTopY = -draft + 2.0;
+    const cargoStartZ = -cargoAreaL / 2 + 10;
+
+    // Plancha oscura de fondo de bodega (Tank Top)
+    const tankTopGeo = new THREE.BoxGeometry(B * 0.76, 0.3, cargoAreaL);
+    const tankTopMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.7,
+      metalness: 0.2,
+    });
+    const tankTopMesh = new THREE.Mesh(tankTopGeo, tankTopMat);
+    tankTopMesh.position.set(0, tankTopY - 0.15, cargoStartZ + cargoAreaL / 2);
+    tankTopMesh.receiveShadow = true;
+    this.hullGroup.add(tankTopMesh);
+
+    if (placedItems.length === 0) {
+      this.scene.add(this.projectCargoGroup);
+      return;
+    }
+
+    // Planchas translúcidas sutiles de entrepuente si hay carga en tweendeck
+    const hasTweendeckCargo = placedItems.some((it) => (it.zone || '').toLowerCase() === 'tweendeck');
+    const tweendeckY = tankTopY + (deckY - tankTopY) * 0.52;
+    if (hasTweendeckCargo) {
+      const tweendeckGeo = new THREE.BoxGeometry(B * 0.74, 0.2, cargoAreaL);
+      const tweendeckMat = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 0.42,
+        roughness: 0.6,
+        metalness: 0.15,
+      });
+      const tweendeckMesh = new THREE.Mesh(tweendeckGeo, tweendeckMat);
+      tweendeckMesh.position.set(0, tweendeckY - 0.1, cargoStartZ + cargoAreaL / 2);
+      tweendeckMesh.receiveShadow = true;
+      this.projectCargoGroup.add(tweendeckMesh);
+    }
+
+    // Materiales por categoría
+    const heavyLiftMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.45, metalness: 0.2 });
+    const vehicleMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.4, metalness: 0.3 });
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x0d9488, roughness: 0.55, metalness: 0.1 });
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.35, metalness: 0.5 });
+    const dunnageMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.8 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });
+
+    placedItems.forEach((item) => {
+      const cat = (item.category || 'crate').toLowerCase();
+      const zone = (item.zone || 'under_deck').toLowerCase();
+      const holdNum = item.hold_number || 1;
+
+      // Dimensiones reales
+      const len = Math.max(1.0, Number(item.length_m || item.length || 2.0));
+      const wid = Math.max(1.0, Number(item.width_m || item.width || 2.0));
+      const hgt = Math.max(1.0, Number(item.height_m || item.height || 2.0));
+
+      const holdZCenter = cargoStartZ + (holdsCount - holdNum) * holdL + holdL / 2;
+      const usableL = holdL * 0.82;
+      const usableB = B * 0.72;
+
+      const x_pct = Number(item.x_pct ?? 0.1);
+      const y_pct = Number(item.y_pct ?? 0.1);
+
+      // Eje +Z longitudinal de su bodega y eje X transversal en manga
+      const pz = holdZCenter - usableL / 2 + Math.min(x_pct * usableL, Math.max(0, usableL - len)) + len / 2;
+      const px = -usableB / 2 + Math.min(y_pct * usableB, Math.max(0, usableB - wid)) + wid / 2;
+
+      let py = tankTopY + hgt / 2;
+      if (zone === 'on_deck') {
+        py = (deckY + 1.65) + hgt / 2;
+      } else if (zone === 'tweendeck') {
+        py = (tankTopY + (deckY - tankTopY) * 0.52) + hgt / 2;
+      } else {
+        py = tankTopY + hgt / 2;
+      }
+
+      if (cat === 'vehicle') {
+        // Vehículo: carrocería + cabina simplificada + ruedas
+        const vehGroup = new THREE.Group();
+        const trailerH = hgt * 0.65;
+        const bodyGeo = new THREE.BoxGeometry(wid, trailerH, len);
+        const bodyMesh = new THREE.Mesh(bodyGeo, vehicleMat);
+        bodyMesh.position.set(0, -hgt / 2 + trailerH / 2, 0);
+        bodyMesh.castShadow = true;
+        bodyMesh.receiveShadow = true;
+        vehGroup.add(bodyMesh);
+
+        // Cabina
+        const cabL = Math.max(1.2, len * 0.28);
+        const cabH = hgt * 0.35;
+        const cabGeo = new THREE.BoxGeometry(wid * 0.95, cabH, cabL);
+        const cabMesh = new THREE.Mesh(cabGeo, vehicleMat);
+        cabMesh.position.set(0, -hgt / 2 + trailerH + cabH / 2, len / 2 - cabL / 2);
+        cabMesh.castShadow = true;
+        vehGroup.add(cabMesh);
+
+        // Parabrisas
+        const windshieldGeo = new THREE.BoxGeometry(wid * 0.88, cabH * 0.65, 0.15);
+        const windshieldMesh = new THREE.Mesh(windshieldGeo, glassMat);
+        windshieldMesh.position.set(0, -hgt / 2 + trailerH + cabH * 0.6, len / 2 + 0.08);
+        vehGroup.add(windshieldMesh);
+
+        // Ruedas simplificadas
+        const wheelR = Math.min(0.7, hgt * 0.22);
+        const wheelW = 0.4;
+        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 12);
+        wheelGeo.rotateZ(Math.PI / 2);
+
+        [-len * 0.35, 0, len * 0.35].forEach((wz) => {
+          const wLeft = new THREE.Mesh(wheelGeo, tireMat);
+          wLeft.position.set(-wid / 2, -hgt / 2 + wheelR * 0.6, wz);
+          vehGroup.add(wLeft);
+
+          const wRight = new THREE.Mesh(wheelGeo, tireMat);
+          wRight.position.set(wid / 2, -hgt / 2 + wheelR * 0.6, wz);
+          vehGroup.add(wRight);
+        });
+
+        vehGroup.position.set(px, py, pz);
+        this.projectCargoGroup.add(vehGroup);
+      } else if (cat === 'heavy_lift') {
+        // Heavy Lift: base de madera (dunnage) + cuerpo naranja sólido
+        const hlGroup = new THREE.Group();
+
+        // Base de madera dunnage
+        const dunnageH = 0.35;
+        const dunnageGeo = new THREE.BoxGeometry(wid + 0.5, dunnageH, len + 0.5);
+        const dunnageMesh = new THREE.Mesh(dunnageGeo, dunnageMat);
+        dunnageMesh.position.set(0, -hgt / 2 + dunnageH / 2, 0);
+        dunnageMesh.receiveShadow = true;
+        hlGroup.add(dunnageMesh);
+
+        // Cuerpo naranja
+        const bodyH = hgt - dunnageH;
+        const bodyGeo = new THREE.BoxGeometry(wid, bodyH, len);
+        const bodyMesh = new THREE.Mesh(bodyGeo, heavyLiftMat);
+        bodyMesh.position.set(0, -hgt / 2 + dunnageH + bodyH / 2, 0);
+        bodyMesh.castShadow = true;
+        bodyMesh.receiveShadow = true;
+        hlGroup.add(bodyMesh);
+
+        hlGroup.position.set(px, py, pz);
+        this.projectCargoGroup.add(hlGroup);
+      } else if (cat === 'steel') {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(wid, hgt, len), steelMat);
+        mesh.position.set(px, py, pz);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        this.projectCargoGroup.add(mesh);
+      } else {
+        // crate
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(wid, hgt, len), crateMat);
+        mesh.position.set(px, py, pz);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        this.projectCargoGroup.add(mesh);
+      }
+    });
+
+    this.scene.add(this.projectCargoGroup);
+  }
+
+  /**
    * Alterna entre escotillas abiertas (casco translúcido) y cerradas (sólido)
    * - Abiertas: Tapas al 0.04 (opacity: 0.04, depthWrite: false). Deck al 0.08, Casco al 0.22.
    *   Despeja el plano del mar (baja a -draft - 1.5 y opacidad 0.15) para que no tape la carga sumergida.
@@ -812,6 +1000,11 @@ export class Vessel3DViewer {
   destroy() {
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
     window.removeEventListener('resize', this.onWindowResize);
+
+    if (this.projectCargoGroup && this.scene) {
+      this.scene.remove(this.projectCargoGroup);
+      this.projectCargoGroup = null;
+    }
 
     if (this.renderer && this.renderer.domElement) {
       this.renderer.domElement.remove();

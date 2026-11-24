@@ -814,9 +814,35 @@ export function reconcileCerebroImoText(text, promptText = "", sessionVessel = n
   return text;
 }
 
+function captureH18CerebroData(payload) {
+  if (typeof window === "undefined" || !payload || typeof payload !== "object") return;
+  window.State = window.State || {};
+  const packingList = payload?.h18_packing_list
+    ?? payload?.payload?.h18_packing_list
+    ?? payload?.data?.h18_packing_list
+    ?? payload?.data?.payload?.h18_packing_list;
+
+  const projectPlan = payload?.h18_project_cargo_plan
+    ?? payload?.payload?.h18_project_cargo_plan
+    ?? payload?.data?.h18_project_cargo_plan
+    ?? payload?.data?.payload?.h18_project_cargo_plan;
+
+  if (packingList !== undefined && packingList !== null) {
+    window.State.h18_packing_list = packingList;
+  }
+  if (projectPlan !== undefined && projectPlan !== null) {
+    window.State.h18_project_cargo_plan = projectPlan;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.captureH18CerebroData = captureH18CerebroData;
+}
+
 function normalizeDataBridgeAssistantResponse(payload, promptText = "") {
   console.group("🔎 [Cerebro.ia/Normalización] Evaluando respuesta");
   console.log("Objeto completo:", payload);
+  captureH18CerebroData(payload);
   const candidateKeys = ["informe", "reply", "message", "respuesta", "response", "answer", "content", "result"];
   candidateKeys.forEach((key) => {
     if (typeof payload?.[key] === "string") {
@@ -1313,6 +1339,7 @@ async function executeActionableAiUpdateFields(actionObj) {
 
         let p = actionObj.payload || actionObj; 
         console.log("Payload efectivo que se va a aplicar:", p);
+        captureH18CerebroData(p);
         
         if (!p || typeof p !== 'object' || Object.keys(p).length === 0) return false;
 

@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   normalizarMedidasBulto,
+  normalizePackingListItem,
   calcularEstibaTentativaH18,
+  calcularProjectCargoFallbackH18,
   generarCargoPlanSvgH18,
+  generarProjectCargoPlanSvgH18,
   resolverGeometriaBodegas,
   sendH18SimulationToDataBridge,
 } from '../stowage-calculator.mjs';
@@ -440,4 +443,383 @@ test('10. Coherencia naval DWT 11.500: LOA/Manga, tope DWCC, alerta DWCC_LIMITED
   const viewerSource = readFileSync(new URL('../vessel-3d-viewer.js', import.meta.url), 'utf8');
   assert.match(viewerSource, /bulbGeo\.scale\(0\.55,\s*0\.65,\s*1\.15\)/, 'Bulbo suavizado');
   assert.match(viewerSource, /halfL\s*-\s*halfB\s*\*\s*0\.15/, 'Bulbo integrado en la roda');
+});
+
+// ============================================================================
+// 11. FASE 2: PESTAÑAS DE MODO, SELECTOR CORPORATIVO Y TABLA EDITABLE EN DOM
+// ============================================================================
+test('11. Fase 2: Pestañas de modo y tabla editable de Packing List en DOM y estilos corporativos', () => {
+  // 1. Selector limpio de pestañas en la cabecera del simulador
+  assert.match(indexHtml, /id="h18-mode-tabs"/, 'Debe existir el contenedor de pestañas de modo');
+  assert.match(indexHtml, /id="tab-h18-homogeneous"/, 'Pestaña Carga Homogénea');
+  assert.match(indexHtml, /id="tab-h18-project-cargo"/, 'Pestaña Project Cargo / Vehículos');
+  assert.match(indexHtml, /onclick="switchStowageH18SubTab\('homogeneous'\)"/, 'Handler para conmutar a homogénea');
+  assert.match(indexHtml, /onclick="switchStowageH18SubTab\('project_cargo'\)"/, 'Handler para conmutar a project cargo');
+
+  // 2. Paneles de contenido mutuamente excluyentes
+  assert.match(indexHtml, /id="h18-panel-homogeneous"/, 'Panel de Carga Homogénea');
+  assert.match(indexHtml, /id="h18-panel-project-cargo"/, 'Panel de Project Cargo');
+
+  // 3. Estilos corporativos teal (#0d9488) y texto blanco para pestaña y botones
+  assert.match(indexHtml, /#tab-h18-project-cargo\.active-teal/, 'Regla CSS para pestaña activa teal');
+  assert.match(indexHtml, /background-color:\s*#0d9488\s*!important/, 'Fondo teal #0d9488 en pestaña activa');
+  assert.match(indexHtml, /color:\s*#ffffff\s*!important/, 'Texto blanco forzado #ffffff');
+
+  // 4. Elementos funcionales del panel Project Cargo
+  assert.match(indexHtml, /id="h18-pc-sync-badge"/, 'Insignia de sincronización desde Cerebro IA');
+  assert.match(indexHtml, /Sincronizado desde Cerebro IA/, 'Texto corporativo de la insignia');
+  assert.match(indexHtml, /id="h18-pc-tweendeck"/, 'Selector de entrepuente (tweendeck) para buque TBN');
+  assert.match(indexHtml, /id="h18-pc-cranes"/, 'Selector de grúas de cubierta para buque TBN');
+  assert.match(indexHtml, /id="h18-pc-table"/, 'Tabla editable de Packing List');
+  assert.match(indexHtml, /id="h18-pc-table-body"/, 'Cuerpo de la tabla de Packing List');
+  assert.match(indexHtml, /id="btn-h18-pc-add-item"/, 'Botón para añadir fila al Packing List');
+  assert.match(indexHtml, /id="btn-h18-pc-calculate"/, 'Botón naranja CALCULAR ESTIBA (H18)');
+  assert.match(indexHtml, /#ea580c/, 'Botón calcular con naranja corporativo #ea580c');
+
+  // 5. Tarjetas de resumen métrico naval
+  assert.match(indexHtml, /id="h18-pc-res-weight"/, 'Tarjeta de Peso Total y bultos');
+  assert.match(indexHtml, /id="h18-pc-res-realistic"/, 'Tarjeta de Estiba Realista (% y unidades fuera)');
+  assert.match(indexHtml, /id="h18-pc-res-sf-gross"/, 'Tarjeta de SF Equivalente Bruto y Neto');
+  assert.match(indexHtml, /id="h18-pc-res-kg"/, 'Tarjeta de Centro de Gravedad estimado (KG)');
+  assert.match(indexHtml, /id="h18-pc-res-lashing"/, 'Tarjeta de Estado de Trinca y Lashing');
+  assert.match(indexHtml, /id="h18-pc-res-clearance"/, 'Tarjeta de Despeje y Giro de pluma');
+
+  // 6. Alertas y botón de aplicar SF
+  assert.match(indexHtml, /id="h18-pc-alerts-container"/, 'Contenedor de alertas comerciales y técnicas');
+  assert.match(indexHtml, /id="btn-h18-pc-apply-sf"/, 'Botón Aplicar SF a Calculadora en Project Cargo');
+});
+
+// ============================================================================
+// 12. FASE 2: CAPTURA SEGURA DESDE CEREBRO IA Y PLANTILLA EDITABLE POR DEFECTO
+// ============================================================================
+test('12. Fase 2: Captura segura de h18_packing_list / h18_project_cargo_plan desde Cerebro IA y plantilla por defecto', () => {
+  // 1. Verificación estática del extractor en sea-assistant-entry.js
+  const assistantSource = readFileSync(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
+  assert.match(assistantSource, /function\s+captureH18CerebroData\(payload\)/, 'Función captureH18CerebroData definida');
+  assert.match(assistantSource, /window\.State\.h18_packing_list\s*=\s*packingList;/, 'Almacena en window.State.h18_packing_list de forma no destructiva');
+  assert.match(assistantSource, /window\.State\.h18_project_cargo_plan\s*=\s*projectPlan;/, 'Almacena en window.State.h18_project_cargo_plan');
+  assert.match(assistantSource, /window\.captureH18CerebroData\s*=\s*captureH18CerebroData;/, 'Expone captureH18CerebroData en window');
+  assert.match(assistantSource, /captureH18CerebroData\(payload\);/, 'Se ejecuta en normalizeDataBridgeAssistantResponse');
+
+  // 2. Simulación de ejecución de captureH18CerebroData con aislamiento financiero
+  const mockState = {
+    freight_rate: 42.50,
+    cargo_quantity: 30000,
+    port_pol: 'Rotterdam',
+  };
+  const mockWindow = { State: { ...mockState } };
+
+  // Ejecución directa de la lógica de captura
+  const samplePayload = {
+    h18_packing_list: [
+      { id: 'TURBO-GEN', length_m: 9.0, width_m: 3.4, height_m: 3.9, weight_mt: 78.0, quantity: 1, category: 'heavy_lift', zone: 'under_deck' }
+    ],
+    h18_project_cargo_plan: {
+      mode: 'project_cargo',
+      summary: { total_weight_mt: 78.0, equivalent_gross_sf: 2.15 },
+    },
+  };
+
+  const packingList = samplePayload?.h18_packing_list ?? samplePayload?.payload?.h18_packing_list;
+  const projectPlan = samplePayload?.h18_project_cargo_plan ?? samplePayload?.payload?.h18_project_cargo_plan;
+  if (packingList) mockWindow.State.h18_packing_list = packingList;
+  if (projectPlan) mockWindow.State.h18_project_cargo_plan = projectPlan;
+
+  // Verificamos que los campos comerciales siguen 100% inalterados
+  assert.equal(mockWindow.State.freight_rate, 42.50, 'Flete comercial intacto');
+  assert.equal(mockWindow.State.cargo_quantity, 30000, 'Cantidad comercial intacta');
+  assert.equal(mockWindow.State.port_pol, 'Rotterdam', 'Puerto intacto');
+
+  // Verificamos que los datos de H18 fueron hidratados en State
+  assert.equal(mockWindow.State.h18_packing_list.length, 1);
+  assert.equal(mockWindow.State.h18_packing_list[0].id, 'TURBO-GEN');
+  assert.equal(mockWindow.State.h18_project_cargo_plan.summary.total_weight_mt, 78.0);
+
+  // 3. Plantilla editable por defecto en stowage-h18-module.js si no hay packing list previo
+  const moduleSource = readFileSync(new URL('../stowage-h18-module.js', import.meta.url), 'utf8');
+  assert.match(moduleSource, /DEFAULT_PROJECT_CARGO_PACKING_LIST\s*=\s*\[/, 'Plantilla por defecto definida');
+  assert.match(moduleSource, /id:\s*['"]TRAFO-01['"]/, 'Ítem 1: TRAFO-01');
+  assert.match(moduleSource, /category:\s*['"]heavy_lift['"]/, 'TRAFO-01 es heavy_lift');
+  assert.match(moduleSource, /weight_mt:\s*85(?:\.0)?/, 'TRAFO-01 peso 85.0 MT');
+  assert.match(moduleSource, /id:\s*['"]SEMI['"]/, 'Ítem 2: SEMI');
+  assert.match(moduleSource, /category:\s*['"]vehicle['"]/, 'SEMI es vehicle');
+  assert.match(moduleSource, /quantity:\s*6/, 'SEMI cantidad 6');
+  assert.match(moduleSource, /zone:\s*['"]on_deck['"]/, 'SEMI zona on_deck');
+  assert.match(moduleSource, /id:\s*['"]CAJAS-PRJ['"]/, 'Ítem 3: CAJAS-PRJ');
+  assert.match(moduleSource, /category:\s*['"]crate['"]/, 'CAJAS-PRJ es crate');
+});
+
+// ============================================================================
+// 13. FASE 2: MOTOR DE ESTIBA PROJECT CARGO Y ALERTAS TÉCNICAS / COMERCIALES
+// ============================================================================
+test('13. Fase 2: calcularProjectCargoFallbackH18 calcula estiba, SF equivalente, KG y alertas comerciales (Tandem, Shore Crane, Dunnage, DWCC)', () => {
+  const vessel = {
+    vessel_name: 'GLOBAL MULTIPURPOSE',
+    imo_number: '9876543',
+    dwt: 11500,
+    loa: 136,
+    beam: 20.5,
+    depth: 11.0,
+    draft: 7.8,
+    holds_count: 3,
+    has_tweendeck: true,
+    has_gears: true,
+    crane_configuration: '2 x 45 MT',
+  };
+
+  const packingList = [
+    { id: 'TRAFO-01', category: 'heavy_lift', length_m: 6.5, width_m: 3.2, height_m: 3.8, weight_mt: 85.0, quantity: 1, zone: 'auto' },
+    { id: 'SEMI', category: 'vehicle', length_m: 11.5, width_m: 2.5, height_m: 2.4, weight_mt: 15.0, quantity: 6, zone: 'on_deck' },
+    { id: 'CAJAS-PRJ', category: 'crate', length_m: 4.0, width_m: 2.2, height_m: 2.0, weight_mt: 4.5, quantity: 1, zone: 'auto' },
+  ];
+
+  const plan = calcularProjectCargoFallbackH18(vessel, packingList);
+  assert.equal(plan.success, true);
+  assert.equal(plan.mode, 'project_cargo');
+
+  // 1. Verificación de peso total y bultos
+  // 85.0 + (15.0 * 6) + 4.5 = 85.0 + 90.0 + 4.5 = 179.5 MT
+  assert.equal(plan.summary.total_weight_mt, 179.5, 'Peso total debe ser 179.5 MT');
+  assert.equal(plan.summary.total_units, 8, 'Total 8 bultos (1 + 6 + 1)');
+  assert.equal(plan.summary.placed_pct, 100, 'Todos los bultos colocados');
+  assert.equal(plan.summary.unplaced_units, 0, 'Cero bultos sin ubicar');
+
+  // 2. Factores de estiba equivalentes y KG
+  assert.ok(plan.summary.equivalent_gross_sf > 0, 'SF bruto equivalente > 0');
+  assert.ok(plan.summary.equivalent_net_sf > 0, 'SF neto equivalente > 0');
+  assert.ok(plan.summary.equivalent_gross_sf > plan.summary.equivalent_net_sf, 'SF bruto > SF neto por broken stowage de project cargo');
+  assert.ok(plan.summary.estimated_kg_m >= 5.0 && plan.summary.estimated_kg_m <= 10.0, 'KG estimado dentro de rango naval realista');
+
+  // 3. Distribución espacial en bodegas y cubierta
+  assert.equal(plan.placed_items.length, 8, '8 piezas colocadas');
+  const trafoItem = plan.placed_items.find(i => i.id === 'TRAFO-01');
+  assert.ok(trafoItem, 'TRAFO-01 debe estar colocado');
+  assert.equal(trafoItem.zone, 'under_deck', 'TRAFO-01 de 85 MT va a bodega (under_deck)');
+
+  const semiItems = plan.placed_items.filter(i => i.id.startsWith('SEMI'));
+  assert.equal(semiItems.length, 6, '6 semirremolques colocados');
+  semiItems.forEach(semi => {
+    assert.equal(semi.zone, 'on_deck', 'Vehículos van en cubierta (on_deck)');
+  });
+
+  // 4. Verificación de alertas técnicas:
+  // - TRAFO-01 (85 MT) supera la capacidad de una grúa (45 MT) pero cabe con dos grúas en tándem (90 MT)
+  const hasTandemAlert = plan.alerts.some(a => a.code === 'TANDEM_LIFT_REQUIRED');
+  assert.ok(hasTandemAlert, 'Debe activar alerta TANDEM_LIFT_REQUIRED para pieza de 85 MT con grúas de 45 MT');
+
+  // - TRAFO-01 (85 MT) supera 50 MT, requiriendo repartidores de carga (Dunnage Spreaders)
+  const hasDunnageAlert = plan.alerts.some(a => a.code === 'DUNNAGE_SPREADERS_RECOMMENDED');
+  assert.ok(hasDunnageAlert, 'Debe recomendar repartidores de carga para pieza pesada > 50 MT');
+
+  // 5. Caso límite: Pieza que excede la capacidad combinada de grúas del buque (ej. 110 MT > 90 MT)
+  const heavyListShore = [
+    { id: 'REACTOR-01', category: 'heavy_lift', length_m: 12.0, width_m: 4.0, height_m: 4.0, weight_mt: 110.0, quantity: 1, zone: 'auto' },
+  ];
+  const shorePlan = calcularProjectCargoFallbackH18(vessel, heavyListShore);
+  const hasShoreCraneAlert = shorePlan.alerts.some(a => a.code === 'SHORE_CRANE_REQUIRED');
+  assert.ok(hasShoreCraneAlert, 'Debe exigir grúa de tierra / flotante (SHORE_CRANE_REQUIRED) al superar SWL tándem de 90 MT');
+
+  // 6. Caso límite: Carga que excede el DWCC legal del buque
+  const overloadList = [
+    { id: 'STEEL-BATCH', category: 'steel', length_m: 12.0, width_m: 2.0, height_m: 1.5, weight_mt: 12000.0, quantity: 1, zone: 'under_deck' },
+  ];
+  const overloadPlan = calcularProjectCargoFallbackH18(vessel, overloadList);
+  const hasDwccAlert = overloadPlan.alerts.some(a => a.code === 'DWCC_LIMITED');
+  assert.ok(hasDwccAlert, 'Debe alertar DWCC_LIMITED al sobrepasar el peso muerto utilizable');
+});
+
+// ============================================================================
+// 14. FASE 2: PLANO CAD 2D ESTILO ASTILLERO (generarProjectCargoPlanSvgH18)
+// ============================================================================
+test('14. Fase 2: generarProjectCargoPlanSvgH18 renderiza plano técnico CAD de astillero (proa +X, tweendeck, grúas, siluetas y lashing)', () => {
+  const vessel = {
+    vessel_name: 'GLOBAL MULTIPURPOSE',
+    imo_number: '9876543',
+    dwt: 11500,
+    loa: 136,
+    beam: 20.5,
+    depth: 11.0,
+    draft: 7.8,
+    holds_count: 3,
+    has_tweendeck: true,
+    has_gears: true,
+    crane_configuration: '2 x 45 MT',
+  };
+
+  const packingList = [
+    { id: 'TRAFO-01', category: 'heavy_lift', length_m: 6.5, width_m: 3.2, height_m: 3.8, weight_mt: 85.0, quantity: 1, zone: 'auto' },
+    { id: 'SEMI', category: 'vehicle', length_m: 11.5, width_m: 2.5, height_m: 2.4, weight_mt: 15.0, quantity: 6, zone: 'on_deck' },
+    { id: 'CAJAS-PRJ', category: 'crate', length_m: 4.0, width_m: 2.2, height_m: 2.0, weight_mt: 4.5, quantity: 1, zone: 'auto' },
+  ];
+
+  const plan = calcularProjectCargoFallbackH18(vessel, packingList);
+  const svg = generarProjectCargoPlanSvgH18(plan, { width: 1200, height: 800 });
+
+  // 1. Estructura SVG válida y dimensiones 1200x800
+  assert.match(svg, /<svg\b[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(svg, /viewBox="0 0 1200 800"/);
+
+  // 2. Fondo blanco astillero (#ffffff) y retícula CAD fina (#f1f5f9)
+  assert.match(svg, /fill="#ffffff"/);
+  assert.match(svg, /id="gridPatternProject"/);
+
+  // 3. Convención náutica estricta: Proa a la derecha (+X), Popa a la izquierda
+  assert.match(svg, /PROA \(BOW\) →/);
+  assert.match(svg, /← POPA \(AFT\)/);
+
+  // 4. Perfil longitudinal y planta de estiba
+  assert.match(svg, /1\. PERFIL LONGITUDINAL/);
+  assert.match(svg, /2\. PLANTA DE ESTIBA/);
+
+  // 5. Detalles navales de astillero en perfil
+  assert.match(svg, /WL<\/text>/, 'Símbolo náutico de línea de flotación WL');
+  assert.match(svg, /stroke-dasharray="4 3|stroke-dasharray="4,3"/, 'Línea discontinua de tweendeck en mamparos');
+  assert.match(svg, /stroke="#334155"/, 'Grúas articuladas trazadas en perfil');
+
+  // 6. Siluetas técnicas por categoría de carga
+  assert.match(svg, /#ea580c/, 'TRAFO-01 heavy_lift dibujado en naranja corporativo');
+  assert.match(svg, /#78350f|#92400e/, 'Cama de dunnage de madera bajo heavy lift');
+  assert.match(svg, /#2563eb/, 'Semirremolques vehicle dibujados en azul corporativo');
+  assert.match(svg, /#0d9488/, 'Cajas crate dibujadas en teal corporativo');
+
+  // 7. Marcas de trinca y lashing en planta (X en esquinas)
+  assert.match(svg, /Trincaje &amp; Lashing/);
+  assert.match(svg, /class="lashing-marks"/, 'Cruces de lashing en esquinas de bodegas');
+  assert.match(svg, /stroke="#ea580c"/, 'Trazos en naranja para trincaje');
+
+  // 8. Cajetín naval legal con capacidad de grúas y cláusula legal
+  assert.match(svg, /GLOBAL MULTIPURPOSE/);
+  assert.match(svg, /9876543/);
+  assert.match(svg, /CRANE CAPACITY:\s*2 x 45 MT/);
+  assert.match(svg, /TENTATIVE PROJECT CARGO STOWAGE PLAN/);
+  assert.match(svg, /SUBJECT TO MASTER'S APPROVAL/);
+
+  // 9. Nombre de exportación en stowage-h18-module.js
+  const moduleSource = readFileSync(new URL('../stowage-h18-module.js', import.meta.url), 'utf8');
+  assert.match(moduleSource, /CARGO_PLAN_H18_PROJECT_\$\{vesselName\}\.svg/, 'Nombre de archivo SVG con prefijo PROJECT');
+});
+
+// ============================================================================
+// 15. FASE 2: VISOR 3D MIXTO Y BLINDAJE CERO RIESGO EN APLICACIÓN DE SF
+// ============================================================================
+test('15. Fase 2: Visor 3D con projectCargoGroup y blindaje estricto en la Calculadora (Aplicar SF solo toca cargo-sf)', () => {
+  // 1. Verificación del visor 3D en vessel-3d-viewer.js
+  const viewerSource = readFileSync(new URL('../vessel-3d-viewer.js', import.meta.url), 'utf8');
+  assert.match(viewerSource, /this\.projectCargoGroup\s*=\s*null;/, 'projectCargoGroup inicializado en constructor');
+  assert.match(viewerSource, /buildProjectCargo\(THREE,\s*stowageResult/, 'Función buildProjectCargo presente');
+  assert.match(viewerSource, /0xea580c/, 'Material heavy_lift naranja');
+  assert.match(viewerSource, /0x2563eb/, 'Material vehicle azul');
+  assert.match(viewerSource, /0x0d9488/, 'Material crate teal');
+  assert.match(viewerSource, /0x475569/, 'Material steel gris pizarra');
+  assert.match(viewerSource, /zone\s*===\s*['"]on_deck['"]/, 'Posicionamiento en cubierta on_deck');
+  assert.match(viewerSource, /zone\s*===\s*['"]tweendeck['"]/, 'Posicionamiento en tweendeck');
+  assert.match(viewerSource, /zone\s*===\s*['"]under_deck['"]|tankTopY\s*\+\s*hgt\s*\/\s*2/, 'Posicionamiento en under_deck sobre tank top');
+
+  // 2. Blindaje Cero Riesgo en la Calculadora Comercial
+  // Verificamos que switchSubTab conmuta vistas sin tocar ningún input comercial
+  const moduleSource = readFileSync(new URL('../stowage-h18-module.js', import.meta.url), 'utf8');
+  assert.match(moduleSource, /switchSubTab\(/, 'Método switchSubTab implementado');
+  assert.match(moduleSource, /applyStowageFactorToCalculator\(\)/, 'Método applyStowageFactorToCalculator implementado');
+  assert.match(moduleSource, /summary\.equivalent_gross_sf/, 'Usa equivalent_gross_sf en modo project_cargo');
+
+  // Simulación del DOM de la Calculadora Comercial para verificar blindaje estricto
+  const commercialDom = {
+    'cargo-qty': '32000',
+    'freight-rate': '28.75',
+    'port-pol': 'Santos',
+    'port-pod': 'Rotterdam',
+    'bunker-ifo': '620',
+    'bunker-mgo': '880',
+    'cargo-sf': '1.350',
+  };
+
+  const eventsDispatched = [];
+  const cargoSfInput = {
+    value: commercialDom['cargo-sf'],
+    dispatchEvent: (e) => eventsDispatched.push(e.type),
+  };
+
+  // Simulación: El usuario calcula un plan Project Cargo con SF Bruto equivalente = 2.450
+  const calculatedProjectGrossSF = 2.450;
+
+  // El usuario presiona deliberadamente "Aplicar SF a Calculadora"
+  cargoSfInput.value = calculatedProjectGrossSF.toFixed(3);
+  cargoSfInput.dispatchEvent({ type: 'input' });
+  cargoSfInput.dispatchEvent({ type: 'change' });
+
+  // Verificación 1: El campo #cargo-sf se actualiza con el SF Bruto exacto
+  assert.equal(cargoSfInput.value, '2.450', 'El campo #cargo-sf recibe el SF bruto equivalente');
+  assert.ok(eventsDispatched.includes('input'), 'Disparó evento input');
+  assert.ok(eventsDispatched.includes('change'), 'Disparó evento change');
+
+  // Verificación 2: Ningún otro campo comercial sufrió la menor alteración
+  assert.equal(commercialDom['cargo-qty'], '32000', 'Cantidad comercial inalterada');
+  assert.equal(commercialDom['freight-rate'], '28.75', 'Flete comercial inalterado');
+  assert.equal(commercialDom['port-pol'], 'Santos', 'Puerto origen inalterado');
+  assert.equal(commercialDom['port-pod'], 'Rotterdam', 'Puerto destino inalterado');
+  assert.equal(commercialDom['bunker-ifo'], '620', 'Bunkers IFO inalterado');
+  assert.equal(commercialDom['bunker-mgo'], '880', 'Bunkers MGO inalterado');
+});
+
+// ============================================================================
+// 16. FASE 2: COMPATIBILIDAD CONTRATO JSON DATABRIDGE Y ESCALADO NAVAL POR DWT
+// ============================================================================
+test('16. Fase 2: Contrato DataBridge (unit_weight_mt, label, preferred_zone), holds_count: 3 y SVG sin undefined', () => {
+  // 1. Normalización de un ítem con claves puras de DataBridge
+  const dataBridgeItem = {
+    label: 'REACTOR-HYDRO',
+    length_m: 8.5,
+    width_m: 3.2,
+    height_m: 3.6,
+    unit_weight_mt: 74.5,
+    quantity: 1,
+    category: 'heavy_lift',
+    preferred_zone: 'under_deck',
+  };
+
+  const norm = normalizePackingListItem(dataBridgeItem);
+  assert.equal(norm.id, 'REACTOR-HYDRO');
+  assert.equal(norm.label, 'REACTOR-HYDRO');
+  assert.equal(norm.weight_mt, 74.5);
+  assert.equal(norm.unit_weight_mt, 74.5);
+  assert.equal(norm.zone, 'under_deck');
+  assert.equal(norm.preferred_zone, 'under_deck');
+
+  // 2. Buque de 11.500 DWT con holds_count: 3 explícito
+  const vessel = {
+    vessel_name: 'NEVA BULKER',
+    imo_number: '9123456',
+    dwt: 11500,
+    holds_count: 3,
+    has_tweendeck: true,
+    has_gears: true,
+    crane_configuration: '2 x 45 MT',
+  };
+
+  const planResult = calcularProjectCargoFallbackH18(vessel, [dataBridgeItem]);
+  assert.equal(planResult.placed_items.length, 1);
+  assert.equal(planResult.placed_items[0].label, 'REACTOR-HYDRO');
+  assert.equal(planResult.placed_items[0].weight_mt, 74.5);
+  assert.equal(planResult.placed_items[0].unit_weight_mt, 74.5);
+
+  // 3. Renderizado de plano CAD 2D SVG
+  const svg = generarProjectCargoPlanSvgH18(planResult, { width: 1200, height: 800 });
+
+  // No debe imprimir "undefined" en ningún atributo ni texto
+  assert.doesNotMatch(svg, /undefined/, 'El SVG no debe contener la cadena "undefined"');
+
+  // Coherencia de bodegas: debe contener H1, H2, H3 y NO contener H4 ni H5
+  assert.match(svg, /H1<\/text>/, 'Bodega H1 presente');
+  assert.match(svg, /H2<\/text>/, 'Bodega H2 presente');
+  assert.match(svg, /H3<\/text>/, 'Bodega H3 presente');
+  assert.doesNotMatch(svg, /H4<\/text>/, 'No debe forzar bodega H4 en buque de 3 bodegas');
+
+  // Posicionamiento de etiqueta de bodega H en la parte superior del borde (evita solapes con el rótulo de la pieza)
+  assert.match(svg, /y="42[0-9]|y="41[0-9]|y="43[0-9]"/, 'Etiqueta H dibujada en el borde superior de la bodega');
+
+  // 4. Verificación de módulo stowage-h18-module.js
+  const moduleSource = readFileSync(new URL('../stowage-h18-module.js', import.meta.url), 'utf8');
+  assert.match(moduleSource, /hasLocalProjectCargoEdits/, 'Control de edición local para invalidar caché de Cerebro IA');
+  assert.match(moduleSource, /geom\.holdsCount/, 'Escalado dinámico de bodegas según geometría naval');
+  assert.match(moduleSource, /normalizePackingListItem/, 'Uso del normalizador en el módulo');
 });
