@@ -577,7 +577,7 @@ export function generarCargoPlanSvgH18(result = {}, options = {}) {
     <text x="696" y="106" font-size="10" font-weight="600" fill="#475569">Objetivo Comercial: <tspan font-weight="700" fill="#0f172a">${(result.targetCargoMT || 0).toLocaleString('es-ES')} MT</tspan> · Margen: <tspan font-weight="800" fill="${(result.results?.marginVsTarget?.differenceMT || 0) >= 0 ? '#16a34a' : '#dc2626'}">${(result.results?.marginVsTarget?.differenceMT || 0) >= 0 ? '+' : ''}${result.results?.marginVsTarget?.differenceMT || 0} MT (${result.results?.marginVsTarget?.percentage || 0}%)</tspan></text>
     <text x="696" y="122" font-size="9" font-weight="700" fill="#64748b">Total Teórico: ${(result.results?.theoretical?.weightMT || 0).toLocaleString('es-ES')} MT (${result.results?.theoretical?.units || 0} uds)</text>
 
-    <rect x="0" y="${engineeringBoxHeight - 36}" width="${width - 40}" height="36" fill="#0f172a" rx="0 0 6 6" />
+    <rect x="0" y="${engineeringBoxHeight - 36}" width="${width - 40}" height="36" fill="#0f172a" rx="6" />
     <text x="${(width - 40) / 2}" y="${engineeringBoxHeight - 14}" font-size="9.5" font-weight="700" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">
       TENTATIVE STOWAGE PLAN · FOR GUIDANCE ONLY · SUBJECT TO MASTER'S APPROVAL, STABILITY, TRIM, DRAFT &amp; TANK TOP STRENGTH
     </text>
@@ -869,9 +869,20 @@ export function generarProjectCargoPlanSvgH18(planResult = {}, { width = 1200, h
       const cat = (item.category || 'crate').toLowerCase();
       const zone = (item.zone || 'under_deck').toLowerCase();
 
-      // Dimensiones visuales escaladas dentro de la bodega
-      const itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
+      // Dimensiones visuales escaladas dentro de la bodega con proporciones técnicas
+      let itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
       let itemH = Math.max(14, Math.min(hh * 0.42, ((item.height_m || 2) / (geom.depth || 14)) * hh * 1.8));
+
+      if (cat === 'heavy_lift') {
+        itemW = Math.max(38, Math.min(hw * 0.58, hw * 0.48));
+        itemH = Math.max(28, Math.min(hh * 0.52, ((item.height_m || 3.8) / (geom.depth || 11)) * hh * 1.3));
+      } else if (cat === 'vehicle') {
+        itemW = Math.max(48, Math.min(hw * 0.82, hw * 0.65));
+        itemH = Math.max(16, Math.min(22, ((item.height_m || 2.4) / (geom.depth || 11)) * hh * 0.9));
+      } else if (cat === 'crate') {
+        itemW = Math.max(28, Math.min(hw * 0.42, hw * 0.35));
+        itemH = Math.max(18, Math.min(hh * 0.38, ((item.height_m || 2.0) / (geom.depth || 11)) * hh * 1.1));
+      }
 
       const itemX = hx + Math.max(0, Math.min((item.x_pct || 0) * hw, hw - itemW));
       let itemY = hy + hh - itemH; // default Tank Top
@@ -977,12 +988,47 @@ export function generarProjectCargoPlanSvgH18(planResult = {}, { width = 1200, h
 
     // Renderizar piezas en planta
     let itemsPlanSvg = '';
-    holdItems.forEach((item) => {
+    holdItems.forEach((item, itmIdx) => {
       const cat = (item.category || 'crate').toLowerCase();
-      const itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
-      const itemH = Math.max(16, Math.min(ph * 0.82, (item.h_pct || 0.4) * ph));
-      const itemX = hx + Math.max(0, Math.min((item.x_pct || 0) * hw, hw - itemW));
-      const itemY = py + Math.max(0, Math.min((item.y_pct || 0) * ph, ph - itemH));
+      const zone = (item.zone || 'under_deck').toLowerCase();
+      let itemW = Math.max(22, Math.min(hw * 0.85, (item.w_pct || 0.4) * hw));
+      let itemH = Math.max(16, Math.min(ph * 0.82, (item.h_pct || 0.4) * ph));
+
+      if (cat === 'heavy_lift') {
+        itemW = Math.max(38, Math.min(hw * 0.56, hw * 0.46));
+        itemH = Math.max(22, Math.min(ph * 0.32, 28));
+      } else if (cat === 'vehicle') {
+        itemW = Math.max(46, Math.min(hw * 0.80, hw * 0.62));
+        itemH = Math.max(12, Math.min(16, ph * 0.14));
+      } else if (cat === 'crate') {
+        itemW = Math.max(26, Math.min(hw * 0.40, hw * 0.32));
+        itemH = Math.max(16, Math.min(ph * 0.26, 22));
+      }
+
+      let itemX = hx + Math.max(2, Math.min((item.x_pct || 0.1) * hw, hw - itemW - 2));
+      let itemY = py + Math.max(2, Math.min((item.y_pct || 0.1) * ph, ph - itemH - 2));
+
+      // Asignación de ubicación en planta:
+      // La escotilla central se sitúa en planCenterY - 24 .. planCenterY + 24.
+      // - Vehículos / SEMI en cubierta: van a las bandas de babor o estribor (deck wings) sin pisar la escotilla
+      // - Cajas / CAJAS-PRJ: van a las bandas / tweendeck o laterales sin pisar el texto central
+      // - Cargas pesadas / TRAFO-01: centradas sobre tank top bajo escotilla con proporciones claras
+      if (zone === 'on_deck' || cat === 'vehicle') {
+        const isStarboard = (itmIdx % 2 === 1);
+        itemY = isStarboard ? (planCenterY + 26) : (planCenterY - 26 - itemH);
+        itemY = Math.max(py + 2, Math.min(py + ph - itemH - 2, itemY));
+      } else if (zone === 'tweendeck') {
+        const isStarboard = (itmIdx % 2 === 1);
+        itemY = isStarboard ? (planCenterY + 25) : (planCenterY - 25 - itemH);
+        itemY = Math.max(py + 4, Math.min(py + ph - itemH - 4, itemY));
+      } else if (cat === 'heavy_lift') {
+        itemX = hx + Math.max(2, (hw - itemW) / 2);
+        itemY = planCenterY - itemH / 2;
+      } else if (cat === 'crate') {
+        const isStarboard = (itmIdx % 2 === 1);
+        itemY = isStarboard ? (planCenterY + 25) : (planCenterY - 25 - itemH);
+        itemY = Math.max(py + 3, Math.min(py + ph - itemH - 3, itemY));
+      }
       const planLabelText = item.instance_id || item.label || item.id || 'CARGO';
 
       let itemFill = '#0d9488';
@@ -1173,7 +1219,7 @@ export function generarProjectCargoPlanSvgH18(planResult = {}, { width = 1200, h
     <text x="696" y="88" font-size="10" font-weight="600" fill="#475569">Alertas Activas: <tspan font-weight="800" fill="${result.alerts && result.alerts.length > 0 ? '#d97706' : '#16a34a'}">${result.alerts ? result.alerts.length : 0} registradas</tspan></text>
     <text x="696" y="106" font-size="9" font-weight="600" fill="#64748b">CRANE CAPACITY: ${craneConfig}</text>
 
-    <rect x="0" y="${engineeringBoxHeight - 36}" width="${width - 40}" height="36" fill="#0f172a" rx="0 0 6 6" />
+    <rect x="0" y="${engineeringBoxHeight - 36}" width="${width - 40}" height="36" fill="#0f172a" rx="6" />
     <text x="${(width - 40) / 2}" y="${engineeringBoxHeight - 20}" font-size="8.5" font-weight="700" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">
       TENTATIVE PROJECT CARGO STOWAGE PLAN · FOR GUIDANCE ONLY · SUBJECT TO MASTER'S APPROVAL, STABILITY, TRIM, DRAFT, TANK TOP STRENGTH &amp; CRANE CAPACITY
     </text>
@@ -1275,8 +1321,8 @@ export async function sendH18SimulationToDataBridge(payload = {}) {
     }
 
     const endpoints = [
-      '/api/h18-stowage-plan',
       'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/h18-stowage-plan',
+      '/api/h18-stowage-plan',
     ];
 
     let lastError = null;

@@ -962,8 +962,6 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script type="module" src="./stowage-calculator.js"></script>
     <script type="module" src="./vessel-3d-viewer.js"></script>
     <script type="module" src="./stowage-h18-module.js"></script>
@@ -1769,12 +1767,12 @@
             display: block;
             width: 100%;
             height: 100%;
-            min-height: 100%;
+            min-height: 600px;
             overflow: hidden;
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
-            background: #004e64 !important;
+            background: radial-gradient(circle at 50% 42%, rgba(13, 127, 143, 0.34), transparent 38%), linear-gradient(155deg, #071a32 0%, #0a2947 48%, #07182c 100%) !important;
         }
 
         #map-container {
@@ -10627,7 +10625,7 @@
         <!-- ========================================== -->
         <div id="view-map" class="view-section active-block absolute inset-0 min-h-[600px] xl:min-h-[800px] overflow-y-auto p-6 scroll-smooth">
             <div id="map-command-shell" class="map-command-shell input-collapsed is-input-collapsed relative w-full h-full min-h-[600px] xl:min-h-[800px] overflow-hidden">
-                <div id="map-host" class="density-globe-stage absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+                <div id="map-host" class="density-globe-stage absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-[#e0e0e0] bg-[#020617] overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
                     <div id="map-container" class="density-globe-canvas absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-slate-200 bg-slate-950 overflow-hidden" data-globe-renderer>
                         <div id="map-skeleton" class="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-slate-100" style="background-color: #0f172a; color: #f1f5f9;" role="status" aria-live="polite" aria-label="Iniciando visor cartogrÃ¡fico">
                             <div class="relative flex items-center justify-center mb-8" aria-hidden="true">
@@ -24023,7 +24021,7 @@ function createRouteAnchorElement(type) {
         window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
 
 	        window.SeaCharterStore?.subscribe?.(
-	            (state) => [state.pol, state.pod, state.laycanDate, state.cancellingDate, state.laydays, state.cancelling, state.laycan?.laydays, state.laycan?.cancelling],
+	            (state) => [state.pol, state.pod, state.laycanDate],
 	            () => {
 	            evaluateReactiveSyncStatus();
 	            syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
@@ -24495,10 +24493,12 @@ function createRouteAnchorElement(type) {
             const requestedVessels = strictTechnicalFilterActive
                 ? taxonomyCompatibleVessels.filter(vessel => vessel?.audit?.operationallyEligible !== false || isPendingLiveRadarAuditCandidate(vessel))
                 : taxonomyCompatibleVessels;
-            const renderedVessels = orderMatchingVesselsForDisplay(requestedVessels, strictTechnicalFilterActive);
-            const canonicalVessels = window.GlobalStore?.setCanonicalFleet?.(renderedVessels, {
-                source: String(metadata.source || 'matching-ui')
-            }) || renderedVessels;
+            const canonicalVessels = window.GlobalStore?.setMatchingFleet?.(requestedVessels, {
+                source: 'matching-ui'
+            }) || window.GlobalStore?.setCanonicalFleet?.(requestedVessels, {
+                source: 'matching-ui'
+            }) || requestedVessels;
+            const renderedVessels = Array.isArray(canonicalVessels) ? orderMatchingVesselsForDisplay(canonicalVessels, strictTechnicalFilterActive) : [];
             window.renderedMatchingVessels = canonicalVessels;
             const resultsList = document.getElementById('matching-results-list');
             if (resultsList) {
@@ -32136,6 +32136,9 @@ function createRouteAnchorElement(type) {
             if (typeof scheduleRouteMapRedraw === 'function') {
                 scheduleRouteMapRedraw(200);
             }
+            if (typeof window.GlobalFleetGlobe?.resize === 'function') {
+                window.GlobalFleetGlobe.resize('main');
+            }
             window.dispatchEvent(new Event('resize'));
         }
         window.toggleSidebarExpandCollapse = toggleSidebarExpandCollapse;
@@ -32962,6 +32965,13 @@ function createRouteAnchorElement(type) {
 
             if (tabId === 'map') {
                 ensureRouteMapReady('map-host');
+                if (typeof window.GlobalFleetGlobe?.resize === 'function') {
+                    window.GlobalFleetGlobe.resize('main');
+                }
+                const activeRoute = State?.routeGeometry || window.GlobalStore?.globeRouteState;
+                if (activeRoute && typeof renderMasterRouteMap === 'function') {
+                    scheduleRouteMapRedraw(60, () => renderMasterRouteMap(activeRoute));
+                }
             }
             if (tabId === 'ais') {
                 void ensureMapCartographyLoaded().then(() => {
@@ -33435,6 +33445,9 @@ function createRouteAnchorElement(type) {
             }
 
             window.isGeoPanelOpen = isGeoInputOpen;
+            if (typeof window.GlobalFleetGlobe?.resize === 'function') {
+                window.GlobalFleetGlobe.resize('main');
+            }
             window.dispatchEvent(new CustomEvent('map:geo-input-toggled', { detail: { isOpen: isGeoInputOpen, isGeoPanelOpen: isGeoInputOpen } }));
             window.dispatchEvent(new CustomEvent('map:geo-panel-toggled', { detail: { isOpen: isGeoInputOpen, isGeoPanelOpen: isGeoInputOpen } }));
         }
@@ -33576,13 +33589,91 @@ function createRouteAnchorElement(type) {
             window.map = null;
         }
 
+        function mountFallbackCartographicCanvas(container) {
+            if (!container) return null;
+            let canvas = container.querySelector('canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'fallback-cartographic-canvas';
+                canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;';
+                container.appendChild(canvas);
+            }
+            const rect = container.getBoundingClientRect ? container.getBoundingClientRect() : { width: 800, height: 600 };
+            const w = Math.max(rect.width || 800, 300);
+            const h = Math.max(rect.height || 600, 300);
+            canvas.width = w;
+            canvas.height = h;
+
+            let rendered = false;
+            try {
+                const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl && typeof gl.clearColor === 'function') {
+                    gl.viewport(0, 0, w, h);
+                    gl.clearColor(0.02, 0.04, 0.08, 1.0);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                    rendered = true;
+                }
+            } catch (_) {}
+
+            if (!rendered) {
+                try {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.fillStyle = '#020617';
+                        ctx.fillRect(0, 0, w, h);
+                        const grad = ctx.createRadialGradient(w / 2, h / 2, 20, w / 2, h / 2, Math.max(w, h) / 1.5);
+                        grad.addColorStop(0, '#0f172a');
+                        grad.addColorStop(1, '#020617');
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(0, 0, w, h);
+
+                        ctx.strokeStyle = 'rgba(14, 165, 233, 0.12)';
+                        ctx.lineWidth = 1;
+                        for (let x = 0; x < w; x += 80) {
+                            ctx.beginPath();
+                            ctx.moveTo(x, 0);
+                            ctx.lineTo(x, h);
+                            ctx.stroke();
+                        }
+                        for (let y = 0; y < h; y += 60) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, y);
+                            ctx.lineTo(w, y);
+                            ctx.stroke();
+                        }
+
+                        const cx = w / 2;
+                        const cy = h / 2;
+                        const r = Math.min(w, h) * 0.38;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r * 0.66, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.18)';
+                        ctx.stroke();
+                    }
+                } catch (_) {}
+            }
+
+            container.dataset.renderKey = 'mounted';
+            return canvas;
+        }
+
         async function initMap() {
             let mapView = document.getElementById('view-map');
             if (!mapView || mapView.classList.contains('hidden')) return;
             try {
                 await ensureMapCartographyLoaded();
-            } catch (_) {
-                return;
+            } catch (err) {
+                console.warn('[Map] ensureMapCartographyLoaded aviso:', err);
+                const mapContainer = document.getElementById('map-container');
+                if (mapContainer && !mapContainer.querySelector('canvas')) {
+                    mountFallbackCartographicCanvas(mapContainer);
+                }
             }
             mapView = document.getElementById('view-map');
             if (!mapView || mapView.classList.contains('hidden')) return;
@@ -33610,7 +33701,7 @@ function createRouteAnchorElement(type) {
                     : [];
                 const vessels = window.getCanonicalRadarRenderFleet?.(filteredVessels)
                     || (Array.isArray(filteredVessels) ? filteredVessels : []);
-                if (window.GlobalFleetGlobe) {
+                if (window.GlobalFleetGlobe && typeof window.Globe === 'function') {
                     map = window.GlobalFleetGlobe.mount({
                         containerId: 'map-container',
                         vesselsData: vessels,
@@ -33621,10 +33712,18 @@ function createRouteAnchorElement(type) {
                     window.map = map;
                     if (State?.routeGeometry) {
                         try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'main', { focus: false }); } catch (_) {}
+                    } else if (window.GlobalStore?.globeRouteState) {
+                        try { window.GlobalFleetGlobe.setRouteResult(window.GlobalStore.globeRouteState, 'main', { focus: false }); } catch (_) {}
                     }
+                } else {
+                    mountFallbackCartographicCanvas(mapContainer);
                 }
             } catch (err) {
                 console.error('Safe map initialization caught error:', err);
+                const mapContainer = document.getElementById('map-container');
+                if (mapContainer && !mapContainer.querySelector('canvas')) {
+                    mountFallbackCartographicCanvas(mapContainer);
+                }
             }
         }
 
@@ -34095,6 +34194,7 @@ function createRouteAnchorElement(type) {
             setInputValue('dist-ballast', result.distBallast);
             setInputValue('dist-laden', result.distLaden);
             setInputValue('dist-total', result.totalMiles);
+            State.routeGeometry = result;
             SeaCharterStore.set({
                 portBallast: result.portBallast,
                 pol: result.pol,
@@ -34106,6 +34206,33 @@ function createRouteAnchorElement(type) {
                 totalMiles: result.totalMiles,
                 routeGeometry: result
             });
+
+            if (!window.GlobalStore) window.GlobalStore = {};
+            const ballastPort = typeof result?.portBallast === 'string' ? result.portBallast.trim() : '';
+            const ballastCoords = ballastPort && ballastPort !== 'TBA' ? result?.coordinates?.ballast : null;
+            const polCoords = result?.coordinates?.pol || null;
+            const podCoords = result?.coordinates?.pod || null;
+            const ballastPathCoords = (result?.routes?.ballast?.coordinates || []).map((pt) => Array.isArray(pt) ? { lat: Number(pt[0]), lng: Number(pt[1]) } : pt).filter(Boolean);
+            const ladenPathCoords = (result?.routes?.laden?.coordinates || []).map((pt) => Array.isArray(pt) ? { lat: Number(pt[0]), lng: Number(pt[1]) } : pt).filter(Boolean);
+            const routePaths = [];
+            if (ballastCoords && polCoords && ballastPathCoords.length > 1) {
+                ballastPathCoords.routeType = 'ballast';
+                ballastPathCoords.ballastPortName = ballastPort;
+                routePaths.push(ballastPathCoords);
+            }
+            if (polCoords && podCoords && ladenPathCoords.length > 1) {
+                ladenPathCoords.routeType = 'laden';
+                routePaths.push(ladenPathCoords);
+            }
+            if (routePaths.length > 0) {
+                window.GlobalStore.globeRouteState = {
+                    ports: { ballast: ballastCoords, pol: polCoords, pod: podCoords },
+                    ballastPortName: ballastPort,
+                    routeTypes: routePaths.map((p) => p.routeType || 'laden'),
+                    paths: routePaths.map((p) => p.map((pt) => ({ ...pt })))
+                };
+            }
+
             if (typeof window.sendMapDataToDataBridge === 'function') {
                 window.sendMapDataToDataBridge(result);
             } else {
@@ -34547,7 +34674,7 @@ function createRouteAnchorElement(type) {
                     return false;
                 }
                 window.GlobalFleetGlobe.updateVessels();
-                window.GlobalFleetGlobe.setRouteResult(result);
+                window.GlobalFleetGlobe.setRouteResult(result, 'main', { focus: true });
                 if (window.GlobalFleetGlobe.getInstance('density')) {
                     window.GlobalFleetGlobe.setRouteResult(result, 'density', { focus: false });
                 }
@@ -34760,6 +34887,8 @@ function createRouteAnchorElement(type) {
             applyRouteServiceResult(result);
             if (isMasterRouteMapMounted()) {
                 renderMasterRouteMap(result);
+            } else {
+                scheduleRouteMapRedraw(200, () => renderMasterRouteMap(result));
             }
             if (result.routes.laden?.nodes) {
                 fetchMarineWeatherForRoute(result.routes.laden.nodes);
@@ -34926,6 +35055,9 @@ function createRouteAnchorElement(type) {
                 this.header.addEventListener('click', () => {
                     this.isOpen = !this.isOpen;
                     this.update();
+                    if (typeof window.GlobalFleetGlobe?.resize === 'function') {
+                        window.GlobalFleetGlobe.resize('main');
+                    }
                 });
 
                 this.headerActions?.addEventListener('click', (event) => event.stopPropagation());
@@ -60940,7 +61072,7 @@ ${allClauses.map((c, i) => `${i + 1}. ClÃ¡usula: ${c.clausula || ''} | DesviaciÃ
                 this.activeVesselsSource = source;
                 this.matchingVesselsWriteSource = 'canonical-fleet';
                 try {
-                    this.matchingVessels = normalizedVessels;
+                    this.matchingVessels = normalizedVessels.slice();
                 } finally {
                     this.matchingVesselsWriteSource = '';
                 }
@@ -61054,11 +61186,16 @@ ${allClauses.map((c, i) => `${i + 1}. ClÃ¡usula: ${c.clausula || ''} | DesviaciÃ
                     return this.radarVessels.slice();
                 }
                 this.radarVessels = normalizedVessels;
+                this.matchingVessels = normalizedVessels.slice();
                 this.radarSnapshotSource = String(metadata.source || 'matching-radar-sweep');
                 this.radarSnapshotAt = String(metadata.receivedAt || new Date().toISOString());
                 this.radarSnapshotPersistent = normalizedVessels.length > 0;
                 this.radarSnapshotStatus = this.radarSnapshotPersistent ? 'persistent' : 'empty';
                 this.radarSweepActive = false;
+                window.dispatchEvent(new CustomEvent('density-fleet-updated', {
+                    detail: { vessels: normalizedVessels.slice(), source: this.radarSnapshotSource }
+                }));
+                syncDensityDisplayConsumers({ updateGlobe: true });
                 window.dispatchEvent(new CustomEvent('radar-fleet-updated', {
                     detail: {
                         vessels: normalizedVessels.slice(),

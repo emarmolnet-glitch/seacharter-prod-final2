@@ -81,7 +81,7 @@ const GlobeCanvasContent = memo(function GlobeCanvasContent({ containerId, globe
     };
   }, [containerId, globeKey]);
 
-  return <div id={containerId} className="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" />;
+  return <div id={containerId} className="density-globe-canvas h-full w-full min-h-[600px] rounded-lg border border-slate-200 bg-slate-950" />;
 });
 
 const LazyGlobeMap = memo(function LazyGlobeMap({ containerId, globeKey = 'main' }: GlobeMapProps) {
@@ -89,7 +89,7 @@ const LazyGlobeMap = memo(function LazyGlobeMap({ containerId, globeKey = 'main'
 
   useEffect(() => {
     let idleCallbackId: number | undefined;
-    const timer = window.setTimeout(() => {
+    const checkTimer = window.setTimeout(() => {
       if ('requestIdleCallback' in window) {
         idleCallbackId = window.requestIdleCallback(() => setShowGlobe(true), { timeout: 1000 });
       } else {
@@ -98,7 +98,7 @@ const LazyGlobeMap = memo(function LazyGlobeMap({ containerId, globeKey = 'main'
     }, 800);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(checkTimer);
       if (idleCallbackId !== undefined && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleCallbackId);
       }

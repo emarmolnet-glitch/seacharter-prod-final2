@@ -49,32 +49,24 @@ export class Vessel3DViewer {
   }
 
   /**
-   * Carga dinámica de Three.js y OrbitControls si no están presentes globalmente
+   * Carga dinámica de Three.js y OrbitControls aislada en memoria sin pisar window.THREE
    */
   async ensureThreeLibraries() {
-    if (window.THREE && window.THREE.WebGLRenderer) {
-      return window.THREE;
+    if (this.THREE && this.OrbitControls) return this.THREE;
+    try {
+      const threeModule = await import(/* @vite-ignore */ 'https://esm.sh/three@0.160.0');
+      this.THREE = threeModule.default || threeModule;
+      const controlsModule = await import(/* @vite-ignore */ 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+      this.OrbitControls = controlsModule.OrbitControls || controlsModule.default?.OrbitControls || controlsModule.default;
+      return this.THREE;
+    } catch (err) {
+      if (typeof window !== 'undefined' && window.THREE && window.THREE.WebGLRenderer) {
+        this.THREE = window.THREE;
+        this.OrbitControls = window.THREE.OrbitControls || null;
+        return this.THREE;
+      }
+      throw err;
     }
-
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-
-    if (!window.THREE.OrbitControls) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js';
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-
-    return window.THREE;
   }
 
   /**
@@ -83,6 +75,7 @@ export class Vessel3DViewer {
   async init() {
     if (!this.container) return;
     const THREE = await this.ensureThreeLibraries();
+    this.THREE = THREE;
 
     const width = this.container.clientWidth || 800;
     const height = this.container.clientHeight || 550;
@@ -107,8 +100,9 @@ export class Vessel3DViewer {
     this.container.appendChild(this.renderer.domElement);
 
     // Controles orbitales
-    if (THREE.OrbitControls) {
-      this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    const OrbitControls = this.OrbitControls || THREE.OrbitControls || (typeof window !== 'undefined' ? window.THREE?.OrbitControls : null);
+    if (OrbitControls) {
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = true;
       this.controls.dampingFactor = 0.05;
       this.controls.maxPolarAngle = Math.PI / 2 + 0.08;
@@ -177,7 +171,7 @@ export class Vessel3DViewer {
    * Carga los datos de estiba simulados y construye el buque y paquetes
    */
   loadStowageData(stowageResult) {
-    const THREE = window.THREE;
+    const THREE = this.THREE || window.THREE;
     if (!THREE || !this.scene) return;
 
     this.stowageResult = stowageResult;
