@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
+import { copyMarkdownForOutlook, extractCounterproposalEmail } from '../utils/madreReportClipboard.mjs';
 import {
   triggerLaserScanEffect,
   ejecutarEscaneoVisual,
@@ -1530,23 +1531,17 @@ function hasActiveDocumentOrAudit(payload) {
 }
 
 /**
- * Botón sutil para copiar el informe de auditoría al portapapeles
+ * Botón sutil para copiar el informe de auditoría al portapapeles.
+ * Copia en doble formato: text/html con estilos inline (compatible con Outlook)
+ * y text/plain limpio (sin ###, ** ni backticks) para texto plano / WhatsApp.
  */
 function CopyReportButton({ text }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const el = document.createElement('textarea');
-        el.value = text;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-      }
+      const ok = await copyMarkdownForOutlook(text);
+      if (!ok) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (_) {}
@@ -1557,9 +1552,40 @@ function CopyReportButton({ text }) {
       type="button"
       onClick={handleCopy}
       className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 hover:bg-teal-50 px-2 py-0.5 rounded transition-all cursor-pointer"
-      title="Copiar informe al portapapeles"
+      title="Copiar informe al portapapeles (formato Outlook)"
     >
       <span>{copied ? '✓ Copiado' : '📋 Copiar informe'}</span>
+    </button>
+  );
+}
+
+/**
+ * Botón compacto que copia solo el borrador de correo de la sección 4
+ * (Asunto/saludo → firma), excluyendo bloques internos, break-even o margen.
+ * No se muestra si el mensaje no contiene un borrador de correo.
+ */
+function CopyCounterproposalEmailButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const email = React.useMemo(() => extractCounterproposalEmail(text), [text]);
+  if (!email) return null;
+
+  const handleCopy = async () => {
+    try {
+      const ok = await copyMarkdownForOutlook(email);
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (_) {}
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 px-2 py-0.5 rounded transition-all cursor-pointer"
+      title="Copiar solo el correo de contrapropuesta, listo para enviar"
+    >
+      <span>{copied ? '✓ Correo copiado' : '✉️ Copiar correo contrapropuesta'}</span>
     </button>
   );
 }
@@ -2605,7 +2631,8 @@ export function GlobalMadreDrawer({
                 {m.sender === 'assistant' && !m.isError ? (
                   <>
                     <MarkdownMessage content={m.text} />
-                    <div className="mt-2 pt-1 border-t border-gray-100 flex justify-end">
+                    <div className="mt-2 pt-1 border-t border-gray-100 flex flex-wrap justify-end gap-1">
+                      <CopyCounterproposalEmailButton text={m.text} />
                       <CopyReportButton text={m.text} />
                     </div>
                   </>
@@ -2660,7 +2687,8 @@ export {
   hasActiveDocumentOrAudit,
   isSimpleGreetingOrCourtesy,
   MarkdownMessage,
-  CopyReportButton
+  CopyReportButton,
+  CopyCounterproposalEmailButton
 };
 
 export default GlobalMadreDrawer;
